@@ -1,4 +1,4 @@
-# [Starcell]
+# Starcell
 
 Welcome to ** Starcell **! This is an open, simplified, game design playground intended to be a basic functional game usable by all levels of aspiring game makers to test ideas and gain practical game design experience. 
 Whether you are here to build your dream project, learn how things work, or contribute to a growing ecosystem, we are thrilled to have you!
