@@ -22,4 +22,4 @@ To keep things running smoothly and fairly, please review these before building 
 * **[CONTRIBUTING.md](contributing.md):** The Contributor License Agreement (CLA) and Reward Pool details.
 
 ## ❤️ Support the Ecosystem
-If you love what we are building, consider supporting the project on **https://patreon.com/starcellgame?utm_medium=unknown&utm_source=join_link&utm_campaign=creatorshare_creator&utm_content=copyLink **. Your support goes directly toward funding the community contributors!
+If you love what we are building, consider supporting the project on [https://patreon.com/starcellgame?utm_medium=unknown&utm_source=join_link&utm_campaign=creatorshare_creator&utm_content=copyLink]. Your support goes directly toward funding the community contributors!
