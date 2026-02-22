@@ -10,7 +10,7 @@ What does this mean for you?
 * **Build & Sell:** You are totally free to use this project to build and sell your own commercial games or applications. No mandatory royalties or profit-sharing.
 * **Keep Your IP:** Your original assets, story, and unique branding belong 100% to you.
 * **Share the Upgrades:** If you modify or improve the *base project code*, we require that you grant us the right to roll those improvements back into the main repository for the whole community to enjoy. 
-* **Official Branding:** Want to use our trademark, get official ecosystem integration, or be promoted on our channels? Check out our [Community Support Program (CSP)](COMMERCIAL_USE.md).
+* **Official Branding:** Want to use our trademark, get official ecosystem integration, or be promoted on our channels? Check out our [Community Support Program (CSP)](commercial_use.md).
 
 ## 💰 Get Paid to Contribute
 We believe that open-source contributors should be rewarded. That is why we run a **Community Contributor Reward Pool** funded by our Patreon and proceeds from commercial CSP partners. If you contribute code, art, or fixes that get merged into the base project, you may be eligible for a discretionary cash reward! See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
