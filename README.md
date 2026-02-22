@@ -13,13 +13,13 @@ What does this mean for you?
 * **Official Branding:** Want to use our trademark, get official ecosystem integration, or be promoted on our channels? Check out our [Community Support Program (CSP)](commercial_use.md).
 
 ## 💰 Get Paid to Contribute
-We believe that open-source contributors should be rewarded. That is why we run a **Community Contributor Reward Pool** funded by our Patreon and proceeds from commercial CSP partners. If you contribute code, art, or fixes that get merged into the base project, you may be eligible for a discretionary cash reward! See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
+We believe that open-source contributors should be rewarded. That is why we run a **Community Contributor Reward Pool** funded by our Patreon and proceeds from commercial CSP partners. If you contribute code, art, or fixes that get merged into the base project, you may be eligible for a discretionary cash reward! See [CONTRIBUTING.md](contributing.md) for details.
 
 ## 📚 Quick Links to Get Started
 To keep things running smoothly and fairly, please review these before building or contributing:
 * **[LICENSE.txt](LICENSE.txt):** The exact legal terms of what you can and cannot do.
-* **[COMMERCIAL_USE.md](COMMERCIAL_USE.md):** Rules for indie monetization vs. the Community Support Program.
-* **[CONTRIBUTING.md](CONTRIBUTING.md):** The Contributor License Agreement (CLA) and Reward Pool details.
+* **[COMMERCIAL_USE.md](commercial_use.md):** Rules for indie monetization vs. the Community Support Program.
+* **[CONTRIBUTING.md](contributing.md):** The Contributor License Agreement (CLA) and Reward Pool details.
 
 ## ❤️ Support the Ecosystem
 If you love what we are building, consider supporting the project on **[[](https://patreon.com/starcellgame?utm_medium=unknown&utm_source=join_link&utm_campaign=creatorshare_creator&utm_content=copyLink)]**. Your support goes directly toward funding the community contributors!
