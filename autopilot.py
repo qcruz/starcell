@@ -40,6 +40,8 @@ INVENTORY_SYNC_INTERVAL = 60  # every 1 second
 QUEST_NPC_TYPE = {
     'FARM':           'FARMER',
     'GATHER':         'LUMBERJACK',
+    'LUMBER':         'LUMBERJACK',
+    'MINE':           'MINER',
     'HUNT':           'WARRIOR',
     'SLAY':           'WARRIOR',
     'EXPLORE':        'TRADER',
@@ -147,11 +149,11 @@ class AutopilotMixin:
         proxy.props['drops'] = []            # dropping nothing on death/despawn
         proxy.props['edible'] = False        # wolves won't flag it as food
         proxy.props['is_autopilot_proxy'] = True  # invisible to inspection/idle/tree-clearing
-        # Neutralise attack AI params so the proxy only wanders/farms
+        # Neutralise attack AI but allow fleeing from threats
         proxy.props['ai_params'] = dict(proxy.props.get('ai_params', {}))
         proxy.props['ai_params']['aggressiveness'] = 0.0
         proxy.props['ai_params']['combat_chance']  = 0.0
-        proxy.props['ai_params']['flee_chance']    = 0.0
+        proxy.props['ai_params']['flee_chance']    = 0.95  # Almost always flee from hostiles
 
         # ── Invulnerability — proxy cannot die ────────────────────────────
         # Set stats to effectively infinite so decay_stats / combat never kill it
@@ -333,16 +335,24 @@ class AutopilotMixin:
     # ── Quest target steering ─────────────────────────────────────────────────
 
     def _autopilot_nudge_quest_target(self, proxy):
-        """Point the proxy at the current quest target so it spends time
-        working toward the quest goal rather than only wandering."""
+        """Periodically steer the autopilot proxy.
+
+        Design: the proxy should behave like its NPC type (farmer farms,
+        lumberjack chops, miner mines) 90% of the time.  Only 10% of
+        nudges set a cross-zone travel target to encourage exploration.
+
+        Never interrupts flee or combat states — the proxy should be able
+        to run from threats without getting overridden.
+        """
+        # ── Never override reactive states (flee, combat) ──────────────
+        if proxy.ai_state in ('flee', 'combat'):
+            return
+
         if not self.active_quest or self.active_quest not in self.quests:
             return
 
         # COMBAT_ALL requires friendly fire to be ON.
-        # If the player has FF off but selected COMBAT_ALL, skip to the next
-        # available quest type rather than attacking peaceful NPCs.
         if self.active_quest == 'COMBAT_ALL' and not self.player.get('friendly_fire', False):
-            # Find first quest that doesn't require FF
             safe_quests = [q for q in self.quests
                            if not QUEST_TYPES.get(q, {}).get('requires_friendly_fire', False)
                            and self.quests[q].status in ('active', 'inactive')]
@@ -350,7 +360,8 @@ class AutopilotMixin:
                 self.active_quest = safe_quests[0]
                 print(f"[Autopilot] COMBAT_ALL skipped (FF off) — switched to {self.active_quest}")
             else:
-                return   # nothing safe to do
+                return
+
         quest = self.quests[self.active_quest]
         if quest.status != 'active':
             self.loreEngine(quest)
@@ -359,40 +370,60 @@ class AutopilotMixin:
 
         screen_key = f"{proxy.screen_x},{proxy.screen_y}"
 
-        # ── Entity target ──────────────────────────────────────────────────
-        if quest.target_entity_id and quest.target_entity_id in self.entities:
-            target_entity = self.entities[quest.target_entity_id]
-            target_sk = f"{target_entity.screen_x},{target_entity.screen_y}"
-
-            if target_sk == screen_key:
-                # Same zone — set as direct entity target
-                proxy.current_target = quest.target_entity_id
-                # Both COMBAT quest types want the proxy to fight, not just follow
-                combat_quests = ('HUNT', 'SLAY', 'COMBAT_HOSTILE', 'COMBAT_ALL')
-                proxy.target_type = 'hostile' if self.active_quest in combat_quests else 'entity'
-                proxy.ai_state = 'targeting'
-                proxy.ai_state_timer = 3
-            else:
-                # Different zone — navigate toward an edge exit
-                self._nudge_toward_zone(proxy, target_entity.screen_x, target_entity.screen_y, screen_key)
+        # ── Combat quests always target entities ───────────────────────
+        combat_quests = ('HUNT', 'SLAY', 'COMBAT_HOSTILE', 'COMBAT_ALL')
+        if self.active_quest in combat_quests:
+            if quest.target_entity_id and quest.target_entity_id in self.entities:
+                target_entity = self.entities[quest.target_entity_id]
+                target_sk = f"{target_entity.screen_x},{target_entity.screen_y}"
+                if target_sk == screen_key:
+                    proxy.current_target = quest.target_entity_id
+                    proxy.target_type = 'hostile'
+                    proxy.ai_state = 'targeting'
+                    proxy.ai_state_timer = 3
+                else:
+                    self._nudge_toward_zone(proxy, target_entity.screen_x,
+                                            target_entity.screen_y, screen_key)
             return
 
-        # ── Cell target ────────────────────────────────────────────────────
+        # ── Non-combat quests (FARM, LUMBER, MINE, GATHER, EXPLORE, etc.)
+        # 90% of the time: let the proxy wander and execute natural NPC
+        # behavior (farming, chopping, mining).  The behavior_config from
+        # the entity type handles the actual work.
+        # 10% of the time: set a cross-zone travel target to encourage
+        # the proxy to explore new areas.
+        if random.random() < 0.90:
+            # Natural behavior mode — just make sure proxy is wandering
+            # so its behavior_config fires on the next tick % 60 cycle.
+            if proxy.ai_state == 'targeting':
+                # Only clear targeting if it was a quest-assigned target,
+                # not a reactive one (hostile, etc.)
+                if proxy.target_type in ('resource', 'entity', None):
+                    proxy.ai_state = 'wandering'
+                    proxy.current_target = None
+                    proxy.ai_state_timer = 2
+            return
+
+        # ── 10% travel nudge: pick a target from a nearby zone ─────────
         if quest.target_cell:
             tsx, tsy, tx, ty = quest.target_cell
             target_sk = f"{tsx},{tsy}"
-
             if target_sk == screen_key:
-                proxy.current_target = ('cell', tx, ty)
-                proxy.target_type = 'resource'
-                proxy.ai_state = 'targeting'
-                proxy.ai_state_timer = 3
+                # Already in the target zone — let natural behavior handle it
+                proxy.ai_state = 'wandering'
+                proxy.current_target = None
+                proxy.ai_state_timer = 2
             else:
                 self._nudge_toward_zone(proxy, tsx, tsy, screen_key)
-            return
-
-        # No target resolved — let it wander naturally
-        proxy.ai_state = 'wandering'
+        elif quest.target_entity_id and quest.target_entity_id in self.entities:
+            target_entity = self.entities[quest.target_entity_id]
+            target_sk = f"{target_entity.screen_x},{target_entity.screen_y}"
+            if target_sk != screen_key:
+                self._nudge_toward_zone(proxy, target_entity.screen_x,
+                                        target_entity.screen_y, screen_key)
+        else:
+            # No target — let it wander naturally
+            proxy.ai_state = 'wandering'
 
     def _nudge_toward_zone(self, proxy, target_sx, target_sy, screen_key):
         """Set proxy target toward the center-corridor exit that leads to (target_sx, target_sy).

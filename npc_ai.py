@@ -809,7 +809,7 @@ class NpcAiMixin:
         # accurately reflects whether a grid step happened in the current AI update.
         is_proxy = entity.props.get('is_autopilot_proxy', False)
         moved_this_cycle = getattr(entity, 'moved_this_update', False)
-        if self.tick % 60 == 0 and not is_follower and not is_proxy and not moved_this_cycle:
+        if self.tick % 60 == 0 and not is_follower and not moved_this_cycle:
             # Execute behavior based on entity's behavior_config
             behavior_config = entity.props.get('behavior_config')
             if behavior_config:
@@ -2977,9 +2977,14 @@ class NpcAiMixin:
                     
                     if random.random() < LUMBERJACK_CHOP_SUCCESS:
                         drops = CELL_TYPES[cell].get('drops', [])
+                        # Tool gate: autopilot proxy only collects items if
+                        # player has an axe; the cell still transforms either way.
+                        is_proxy = entity.props.get('is_autopilot_proxy', False)
+                        has_tool = (not is_proxy or
+                                    (hasattr(self, 'inventory') and self.inventory.has_item('axe')))
                         for drop in drops:
                             if random.random() < drop['chance']:
-                                if 'item' in drop:
+                                if 'item' in drop and has_tool:
                                     entity.inventory[drop['item']] = entity.inventory.get(drop['item'], 0) + drop['amount']
                                 elif 'cell' in drop:
                                         screen['grid'][check_y][check_x] = drop['cell']
@@ -3024,17 +3029,24 @@ class NpcAiMixin:
                             entity.level_up()
                         
                         if random.random() < MINER_MINE_SUCCESS:
+                            # Tool gate: proxy only collects stone if player has pickaxe
+                            is_proxy = entity.props.get('is_autopilot_proxy', False)
+                            has_tool = (not is_proxy or
+                                        (hasattr(self, 'inventory') and
+                                         (self.inventory.has_item('pickaxe') or self.inventory.has_item('stone_pickaxe'))))
                             # Check if at corner and can create cave
                             at_corner = self.is_at_corner(entity.x, entity.y)
                             if at_corner and random.random() < MINER_CAVE_CREATE_CHANCE:
                                 # Create cave instead of just mining
                                 screen['grid'][check_y][check_x] = 'CAVE'
-                                entity.inventory['stone'] = entity.inventory.get('stone', 0) + 1
+                                if has_tool:
+                                    entity.inventory['stone'] = entity.inventory.get('stone', 0) + 1
                                 print(f"Miner discovered a cave at corner ({check_x}, {check_y})!")
                                 entity.level_up_from_activity('mine', self)
                             else:
-                                # Mine the rock - give stone and convert to dirt
-                                entity.inventory['stone'] = entity.inventory.get('stone', 0) + 2
+                                # Mine the rock - convert to dirt, give stone only with tool
+                                if has_tool:
+                                    entity.inventory['stone'] = entity.inventory.get('stone', 0) + 2
                                 screen['grid'][check_y][check_x] = 'DIRT'
                                 entity.level_up_from_activity('mine', self)
                         return
@@ -4078,12 +4090,12 @@ class NpcAiMixin:
                         entity.trigger_action_animation()
                         self.show_attack_animation(check_x, check_y, entity=entity)
                         if cell == 'CAMP' and random.random() < 0.08:  # 8% chance
-                            screen['grid'][check_y][check_x] = 'WOOD'
+                            screen['grid'][check_y][check_x] = 'GRASS'
                             entity.hunger = min(entity.max_hunger, entity.hunger + 15)
                             if random.random() < 0.2:
                                 print(f"Termite destroyed a camp at [{screen_key}]")
                         elif cell == 'HOUSE' and random.random() < 0.03:  # 3% chance
-                            screen['grid'][check_y][check_x] = 'WOOD'
+                            screen['grid'][check_y][check_x] = 'GRASS'
                             entity.hunger = min(entity.max_hunger, entity.hunger + 20)
                             print(f"Termite destroyed a house at [{screen_key}]!")
                         return  # Only one action per update
@@ -4220,7 +4232,7 @@ class NpcAiMixin:
                         entity.update_facing_toward(check_x, check_y)
                         entity.trigger_action_animation()
                         self.show_attack_animation(check_x, check_y, entity=entity)
-                        screen['grid'][check_y][check_x] = 'WOOD'
+                        screen['grid'][check_y][check_x] = 'GRASS'
                         if random.random() < 0.2:
                             name_str = entity.name if entity.name else entity.type
                             print(f"{name_str} destroyed a camp at [{screen_key}]")
@@ -4231,7 +4243,7 @@ class NpcAiMixin:
                         entity.update_facing_toward(check_x, check_y)
                         entity.trigger_action_animation()
                         self.show_attack_animation(check_x, check_y, entity=entity)
-                        screen['grid'][check_y][check_x] = 'WOOD'
+                        screen['grid'][check_y][check_x] = 'GRASS'
                         name_str = entity.name if entity.name else entity.type
                         print(f"{name_str} destroyed a house at [{screen_key}]!")
                         return

@@ -208,7 +208,7 @@ WARRIOR_HOME_RETURN_INTERVAL = 600 # Ticks (10 seconds) between warrior home zon
 
 # Zone Update System (simplified linear with probabilistic skipping)
 UPDATE_FREQUENCY = 30               # Ticks between update cycles (30 = 0.5 sec)
-MAX_ZONES_PER_UPDATE = 8            # Maximum zones to update per cycle (decreased from 15 for wider spread)
+MAX_ZONES_PER_UPDATE = 20           # Maximum zones to update per cycle
 CURRENT_ZONE_UPDATE_CHANCE = 1.0    # 100% chance to update player's zone
 CURRENT_ZONE_CELL_COVERAGE = 1.0    # Update 100% of cells in current zone
 CURRENT_ZONE_ENTITY_COVERAGE = 1.0  # Update 100% of entities in current zone
@@ -380,10 +380,10 @@ ITEMS = {
     'skeleton_bones': {'color': (240, 240, 230), 'name': 'Skeleton Bones', 'is_follower': True},
     
     # Runestones - Magic damage types
-    'lightning_rune': {'color': (100, 149, 237), 'name': 'Lightning Rune', 'magic_damage': 'lightning', 'damage': 3},
-    'fire_rune': {'color': (255, 69, 0), 'name': 'Fire Rune', 'magic_damage': 'fire', 'damage': 3},
-    'ice_rune': {'color': (173, 216, 230), 'name': 'Ice Rune', 'magic_damage': 'ice', 'damage': 3},
-    'poison_rune': {'color': (50, 205, 50), 'name': 'Poison Rune', 'magic_damage': 'poison', 'damage': 3},
+    'lightning_rune': {'color': (100, 149, 237), 'name': 'Lightning Rune', 'magic_damage': 'lightning', 'damage': 3, 'sprite_name': 'magic_rune'},
+    'fire_rune': {'color': (255, 69, 0), 'name': 'Fire Rune', 'magic_damage': 'fire', 'damage': 3, 'sprite_name': 'magic_rune'},
+    'ice_rune': {'color': (173, 216, 230), 'name': 'Ice Rune', 'magic_damage': 'ice', 'damage': 3, 'sprite_name': 'magic_rune'},
+    'poison_rune': {'color': (50, 205, 50), 'name': 'Poison Rune', 'magic_damage': 'poison', 'damage': 3, 'sprite_name': 'magic_rune'},
     'shadow_rune': {'color': (75, 0, 130), 'name': 'Shadow Rune', 'magic_damage': 'shadow', 'damage': 3, 'sprite_name': 'magic_rune'}
 }
 
@@ -597,8 +597,7 @@ ENTITY_TYPES = {
         'edible': False,
         'attacks_hostile': True,
         'drops': [
-            {'item': 'bones', 'amount': 1, 'chance': 0.2},
-            {'item': 'wood', 'amount': 1, 'chance': 0.3}
+            {'item': 'bones', 'amount': 1, 'chance': 0.2}
         ],
         'behavior_config': {
             'actions': ['patrol', 'build_path'],
@@ -628,8 +627,7 @@ ENTITY_TYPES = {
         'edible': False,
         'attacks_hostile': True,
         'drops': [
-            {'item': 'bones', 'amount': 1, 'chance': 0.2},
-            {'item': 'wood', 'amount': 1, 'chance': 0.3}
+            {'item': 'bones', 'amount': 1, 'chance': 0.2}
         ],
         'behavior_config': {
             'actions': ['patrol', 'build_path'],
@@ -660,7 +658,6 @@ ENTITY_TYPES = {
         'attacks_hostile': True,
         'drops': [
             {'item': 'bones', 'amount': 1, 'chance': 0.2},
-            {'item': 'wood', 'amount': 2, 'chance': 0.5},
             {'item': 'gold', 'amount': 1, 'chance': 0.3}
         ],
         'behavior_config': {
@@ -692,7 +689,6 @@ ENTITY_TYPES = {
         'attacks_hostile': True,
         'drops': [
             {'item': 'bones', 'amount': 1, 'chance': 0.2},
-            {'item': 'wood', 'amount': 3, 'chance': 0.7},
             {'item': 'gold', 'amount': 3, 'chance': 0.8}
         ],
         'behavior_config': {
@@ -880,8 +876,7 @@ ENTITY_TYPES = {
         'edible': False,
         'attacks_structures': True,
         'drops': [
-            {'item': 'meat', 'amount': 2, 'chance': 0.8},  # Always drop meat
-            {'item': 'wood', 'amount': 2, 'chance': 0.6},
+            {'item': 'meat', 'amount': 2, 'chance': 0.8},
             {'item': 'bones', 'amount': 1, 'chance': 0.2}
         ],
         'ai_params': {
@@ -962,7 +957,8 @@ ENTITY_TYPES = {
         'attacks_trees': True,
         'drops': [
             {'item': 'sand', 'amount': 1, 'chance': 0.6},
-            {'item': 'bones', 'amount': 1, 'chance': 0.2}
+            {'item': 'bones', 'amount': 1, 'chance': 0.2},
+            {'cell': 'SAND', 'chance': 0.3}
         ],
         'behavior_config': {
             'actions': ['chop_trees'],
@@ -1044,6 +1040,20 @@ QUEST_TYPES = {
         'color': (100, 200, 100),
         'symbol': '✿',
         'target_types': ['TREE', 'STONE', 'WATER'],
+    },
+    'LUMBER': {
+        'name': 'Lumber',
+        'description': 'Chop trees for wood',
+        'color': (160, 100, 40),
+        'symbol': '🪓',
+        'target_types': ['TREE1', 'TREE2'],
+    },
+    'MINE': {
+        'name': 'Mine',
+        'description': 'Mine stone for resources',
+        'color': (140, 140, 160),
+        'symbol': '⛏',
+        'target_types': ['STONE'],
     },
     'RESCUE': {
         'name': 'Rescue',
