@@ -17,7 +17,7 @@ We believe that open-source contributors should be rewarded. That is why we run 
 
 ## 📚 Quick Links to Get Started
 To keep things running smoothly and fairly, please review these before building or contributing:
-* **[LICENSE.txt](LICENSE.txt):** The exact legal terms of what you can and cannot do.
+* **[LICENSE.txt](license.txt):** The exact legal terms of what you can and cannot do.
 * **[COMMERCIAL_USE.md](commercial_use.md):** Rules for indie monetization vs. the Community Support Program.
 * **[CONTRIBUTING.md](contributing.md):** The Contributor License Agreement (CLA) and Reward Pool details.
 
