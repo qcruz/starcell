@@ -3593,26 +3593,45 @@ class GameCoreMixin:
         if 'drops' in entity.props:
             for drop in entity.props['drops']:
                 if random.random() < drop['chance']:
-                    for _ in range(drop['amount']):
-                        # Add some randomness to drop position
-                        drop_x = entity.x + random.randint(-1, 1)
-                        drop_y = entity.y + random.randint(-1, 1)
-                        
-                        # Clamp to valid positions
-                        drop_x = max(1, min(GRID_WIDTH - 2, drop_x))
-                        drop_y = max(1, min(GRID_HEIGHT - 2, drop_y))
-                        
-                        # Create the drop
-                        if screen_key not in self.dropped_items:
-                            self.dropped_items[screen_key] = {}
-                        
-                        cell_key = (drop_x, drop_y)
-                        if cell_key not in self.dropped_items[screen_key]:
-                            self.dropped_items[screen_key][cell_key] = {}
-                        
-                        item_name = drop['item']
-                        self.dropped_items[screen_key][cell_key][item_name] = \
-                            self.dropped_items[screen_key][cell_key].get(item_name, 0) + 1
+                    if 'cell' in drop:
+                        # Cell placement drop — change the grid cell at entity position
+                        if screen_key in self.screens:
+                            cx = max(1, min(GRID_WIDTH - 2, entity.x))
+                            cy = max(1, min(GRID_HEIGHT - 2, entity.y))
+                            self.screens[screen_key]['grid'][cy][cx] = drop['cell']
+                    elif 'item' in drop:
+                        for _ in range(drop['amount']):
+                            # Add some randomness to drop position
+                            drop_x = entity.x + random.randint(-1, 1)
+                            drop_y = entity.y + random.randint(-1, 1)
+                            
+                            # Clamp to valid positions
+                            drop_x = max(1, min(GRID_WIDTH - 2, drop_x))
+                            drop_y = max(1, min(GRID_HEIGHT - 2, drop_y))
+                            
+                            # Create the drop
+                            if screen_key not in self.dropped_items:
+                                self.dropped_items[screen_key] = {}
+                            
+                            cell_key = (drop_x, drop_y)
+                            if cell_key not in self.dropped_items[screen_key]:
+                                self.dropped_items[screen_key][cell_key] = {}
+                            
+                            item_name = drop['item']
+                            self.dropped_items[screen_key][cell_key][item_name] = \
+                                self.dropped_items[screen_key][cell_key].get(item_name, 0) + 1
+        
+        # All entities have a chance to drop a magic_rune on death
+        if random.random() < 0.15:
+            drop_x = max(1, min(GRID_WIDTH - 2, entity.x))
+            drop_y = max(1, min(GRID_HEIGHT - 2, entity.y))
+            if screen_key not in self.dropped_items:
+                self.dropped_items[screen_key] = {}
+            cell_key = (drop_x, drop_y)
+            if cell_key not in self.dropped_items[screen_key]:
+                self.dropped_items[screen_key][cell_key] = {}
+            self.dropped_items[screen_key][cell_key]['magic_rune'] = \
+                self.dropped_items[screen_key][cell_key].get('magic_rune', 0) + 1
         
         # Drop all items from inventory (excluding magic category)
         for item_name, count in entity.inventory.items():
@@ -6665,21 +6684,24 @@ class GameCoreMixin:
                                     item_name = list(items.keys())[0]
                                     count = items[item_name]
                                     
-                                    # Try to use sprite if available (check both lowercase and uppercase)
-                                    has_sprite = (self.use_sprites and 
-                                                 hasattr(self, 'sprite_manager') and 
-                                                 item_name in self.sprite_manager.sprites)
-                                    
-                                    # Also try uppercase version (sprites loaded as BONES, items stored as bones)
-                                    if not has_sprite and self.use_sprites and hasattr(self, 'sprite_manager'):
-                                        has_sprite = item_name.upper() in self.sprite_manager.sprites
-                                    
-                                    if has_sprite:
-                                        # Get sprite - try lowercase first, then uppercase
+                                    # Try to use sprite if available
+                                    # Check: item_name, item's sprite_name, uppercase variants
+                                    sprite_key = None
+                                    if self.use_sprites and hasattr(self, 'sprite_manager'):
+                                        # 1. Direct item name
                                         if item_name in self.sprite_manager.sprites:
-                                            sprite = self.sprite_manager.get_sprite(item_name)
-                                        else:
-                                            sprite = self.sprite_manager.get_sprite(item_name.upper())
+                                            sprite_key = item_name
+                                        # 2. Item's sprite_name property (e.g. fire_rune -> magic_rune)
+                                        elif item_name in ITEMS and 'sprite_name' in ITEMS[item_name]:
+                                            sn = ITEMS[item_name]['sprite_name']
+                                            if sn in self.sprite_manager.sprites:
+                                                sprite_key = sn
+                                        # 3. Uppercase fallback
+                                        if not sprite_key and item_name.upper() in self.sprite_manager.sprites:
+                                            sprite_key = item_name.upper()
+                                    
+                                    if sprite_key:
+                                        sprite = self.sprite_manager.get_sprite(sprite_key)
                                         self.screen.blit(sprite, (x * CELL_SIZE, y * CELL_SIZE))
                                     elif item_name in ITEMS:
                                         # Fallback: draw colored overlay
@@ -7199,6 +7221,17 @@ class GameCoreMixin:
             controls = f"{hint_text} | B: Block | C: Craft | X: Combine | L: Cast | E: Pickup"
             text = self.tiny_font.render(controls, True, COLORS['WHITE'])
             self.screen.blit(text, (10, ui_y + 42))
+            
+            # ── Key reference on right side of bottom bar ──────────────
+            key_ref_x = SCREEN_WIDTH - 340
+            key_lines = [
+                "WASD/Arrows: Move  SPACE: Interact  ESC: Pause",
+                "I/T/M/F: Items/Tools/Magic/Follow  Q: Quests  N: Trade",
+                "E: Pickup  P: Place  D: Drop  B: Block  V: FF  C/X: Craft",
+            ]
+            for i, line in enumerate(key_lines):
+                ref_text = self.tiny_font.render(line, True, (160, 160, 170))
+                self.screen.blit(ref_text, (key_ref_x, ui_y + 4 + i * 14))
             
             # Draw rain effect if raining (minimal, just visual indicator)
             if self.is_raining:
@@ -7774,96 +7807,86 @@ class GameCoreMixin:
         
         # Process zones in priority order
         zones_updated = 0
+        total_entities_updated = 0
+        total_cells_updated = 0
         
-        # CRITICAL: Always update the player's zone first — structure zones at
-        # distance=0 with connection bonuses can score higher than the player zone
-        # (90+40+15=145 vs 100+staleness) and consume all MAX_ZONES_PER_UPDATE
-        # slots, starving the player zone of updates entirely.  This was the root
-        # cause of the "all NPCs freeze" bug during autopilot and normal play.
+        # CRITICAL: Always update the player's zone first at full coverage.
         player_zone_key = f"{self.player['screen_x']},{self.player['screen_y']}"
         if self.player.get('in_subscreen') and self.player.get('subscreen_key'):
             player_zone_key = self.player['subscreen_key']
         
-        # Force-update the player's zone with full coverage
-        if self.is_overworld_zone(player_zone_key):
-            parts = player_zone_key.split(',')
-            self.update_zone_with_coverage(int(parts[0]), int(parts[1]),
-                                           CURRENT_ZONE_CELL_COVERAGE,
-                                           CURRENT_ZONE_ENTITY_COVERAGE)
-            zones_updated += 1
-        elif player_zone_key in self.structure_zones:
-            self.update_structure_zone(player_zone_key,
-                                       CURRENT_ZONE_CELL_COVERAGE,
-                                       CURRENT_ZONE_ENTITY_COVERAGE)
-            zones_updated += 1
+        # Build set of mandatory zones: player + 4 cardinal neighbors
+        # These always get 100% update (cells + entities).
+        psx, psy = self.player['screen_x'], self.player['screen_y']
+        mandatory_zones = {player_zone_key}
+        for dx, dy in [(0, -1), (0, 1), (-1, 0), (1, 0)]:
+            nk = f"{psx + dx},{psy + dy}"
+            if nk in self.screens:
+                mandatory_zones.add(nk)
+        # Also include structure zones connected to player zone
+        if player_zone_key in self.zone_connections:
+            for connected_key, *_ in self.zone_connections[player_zone_key]:
+                if connected_key in self.screens:
+                    mandatory_zones.add(connected_key)
         
+        # Update all mandatory zones at 100% coverage
+        for mz_key in mandatory_zones:
+            if mz_key in self.structure_zones:
+                self.update_structure_zone(mz_key, 1.0, 1.0)
+            elif self.is_overworld_zone(mz_key):
+                parts = mz_key.split(',')
+                self.update_zone_with_coverage(int(parts[0]), int(parts[1]), 1.0, 1.0)
+            else:
+                continue
+            zones_updated += 1
+            ent_count = len(self.screen_entities.get(mz_key, []))
+            total_entities_updated += ent_count
+            total_cells_updated += GRID_WIDTH * GRID_HEIGHT
+        
+        # Process remaining zones from priority queue with position-based falloff
+        queue_position = 0
         for priority, zone_key in priority_queue:
             if zones_updated >= MAX_ZONES_PER_UPDATE:
                 break
             
-            # Skip the player's zone — already force-updated above
-            if zone_key == player_zone_key:
+            # Skip already-updated mandatory zones
+            if zone_key in mandatory_zones:
                 continue
             
-            # Determine coverage based on priority score
-            if priority >= 90:
-                # Player's zone or directly connected — full update
-                update_chance = 1.0
-                cell_coverage = CURRENT_ZONE_CELL_COVERAGE
-                entity_coverage = CURRENT_ZONE_ENTITY_COVERAGE
-            elif priority >= 40:
-                # Adjacent / connected structure zones
-                update_chance = 0.8
-                cell_coverage = DISTANCE_1_CELL_COVERAGE
-                entity_coverage = DISTANCE_1_ENTITY_COVERAGE
-            elif priority >= 20:
-                # Nearby zones
-                update_chance = 0.5
-                cell_coverage = DISTANCE_2_CELL_COVERAGE
-                entity_coverage = DISTANCE_2_ENTITY_COVERAGE
-            elif priority >= 5:
-                # Distant but relevant zones
-                update_chance = 0.3
-                cell_coverage = DISTANCE_3_CELL_COVERAGE
-                entity_coverage = DISTANCE_3_ENTITY_COVERAGE
-            else:
-                # Background zones — only update if stale enough
-                update_chance = 0.1
-                cell_coverage = DISTANCE_3_CELL_COVERAGE
-                entity_coverage = DISTANCE_3_ENTITY_COVERAGE
+            queue_position += 1
             
-            # Probabilistic skip based on tier
+            # Update chance = (100 - queue_position)%, minimum 5%
+            update_chance = max(0.05, (100 - queue_position) / 100.0)
             if random.random() > update_chance:
                 continue
             
-            # Determine zone coords for update_zone_with_coverage
+            # Cell/entity coverage = same percentage as update chance
+            coverage = update_chance
+            
             if zone_key in self.structure_zones:
-                # Structure zone — update using its screen data
-                self.update_structure_zone(zone_key, cell_coverage, entity_coverage)
+                self.update_structure_zone(zone_key, coverage, coverage)
             elif self.is_overworld_zone(zone_key):
                 parts = zone_key.split(',')
-                zone_x, zone_y = int(parts[0]), int(parts[1])
-                self.update_zone_with_coverage(zone_x, zone_y, cell_coverage, entity_coverage)
+                self.update_zone_with_coverage(int(parts[0]), int(parts[1]), coverage, coverage)
+            else:
+                continue
             
             zones_updated += 1
+            ent_count = len(self.screen_entities.get(zone_key, []))
+            total_entities_updated += int(ent_count * coverage)
+            total_cells_updated += int(GRID_WIDTH * GRID_HEIGHT * coverage)
         
-        # ── Update cycle stats (printed every 5 seconds) ──
-        if self.tick % 300 == 0:
-            updated_entity_count = len(self.screen_entities.get(player_zone_key, []))
-            for _, zk in priority_queue:
-                if zk == player_zone_key:
-                    continue
-                updated_entity_count += len(self.screen_entities.get(zk, []))
-            total_entities = len(self.entities)
-            total_zones = len(self.screens)
-            approx_cells = zones_updated * GRID_WIDTH * GRID_HEIGHT
-            print(f"[UpdateCycle] tick={self.tick} "
-                  f"zones={zones_updated}/{total_zones} "
-                  f"entities≈{updated_entity_count}/{total_entities} "
-                  f"cells≈{approx_cells} "
-                  f"player_zone={player_zone_key}"
-                  f"({len(self.screen_entities.get(player_zone_key, []))}ent) "
-                  f"queue={len(priority_queue)}")
+        # ── Update cycle stats (printed every update cycle) ──
+        total_entities = len(self.entities)
+        total_zones = len(self.screens)
+        print(f"[UpdateCycle] tick={self.tick} "
+              f"zones={zones_updated}/{total_zones} "
+              f"entities={total_entities_updated}/{total_entities} "
+              f"cells={total_cells_updated} "
+              f"mandatory={len(mandatory_zones)} "
+              f"player_zone={player_zone_key}"
+              f"({len(self.screen_entities.get(player_zone_key, []))}ent) "
+              f"queue={len(priority_queue)}")
     
     def update_structure_zone(self, struct_zone_key, cell_coverage, entity_coverage):
         """Update a structure zone (cave/house interior) like a regular zone."""
@@ -8712,78 +8735,158 @@ class GameCoreMixin:
                 quest.target_info = info
                 return False
         
-        # For FARM quests - find farming targets (till soil, plant, harvest, build)
+        # For LUMBER quests — find trees to chop
+        elif quest_type == 'LUMBER':
+            search_types = ['TREE1', 'TREE2']
+            pz_key = f"{player_sx},{player_sy}"
+
+            # Check if current zone has trees (proxy can chop via behavior_config)
+            has_local = False
+            if pz_key in self.screens:
+                for row in self.screens[pz_key]['grid']:
+                    for cell in row:
+                        if cell in search_types:
+                            has_local = True
+                            break
+                    if has_local:
+                        break
+
+            # 90% of the time: stay local and let NPC behavior handle chopping
+            # 10% of the time (or if no local trees): set a cross-zone target
+            if has_local and random.random() < 0.90:
+                # Mark quest active with current zone so proxy just wanders + chops
+                quest.target_info = "Chopping trees nearby"
+                quest.target_zone = pz_key
+                quest.target_cell = (player_sx, player_sy, GRID_WIDTH // 2, GRID_HEIGHT // 2)
+                quest.status = 'active'
+                return True
+
+            # Cross-zone: find trees in a nearby zone to travel to
+            for screen_key, screen_data in self.screens.items():
+                if not self.is_overworld_zone(screen_key):
+                    continue
+                if screen_key == pz_key:
+                    continue
+                sx, sy = map(int, screen_key.split(','))
+                if abs(sx - player_sx) + abs(sy - player_sy) > 3:
+                    continue
+                for y, row in enumerate(screen_data['grid']):
+                    for x, cell in enumerate(row):
+                        if cell in search_types:
+                            info = f"Travel to chop trees at zone ({sx},{sy})"
+                            quest.set_target('cell', (sx, sy, x, y), info)
+                            quest._original_cell = cell
+                            quest.target_zone = screen_key
+                            return True
+            # Fallback: stay local if nothing found
+            if has_local:
+                quest.target_info = "Chopping trees nearby"
+                quest.target_zone = pz_key
+                quest.target_cell = (player_sx, player_sy, GRID_WIDTH // 2, GRID_HEIGHT // 2)
+                quest.status = 'active'
+                return True
+            quest.target_info = "Looking for trees..."
+            return False
+        
+        # For MINE quests — find stone to mine
+        elif quest_type == 'MINE':
+            pz_key = f"{player_sx},{player_sy}"
+
+            # Check if current zone has stone
+            has_local = False
+            if pz_key in self.screens:
+                for row in self.screens[pz_key]['grid']:
+                    for cell in row:
+                        if cell == 'STONE':
+                            has_local = True
+                            break
+                    if has_local:
+                        break
+
+            # 90%: stay local and let NPC behavior handle mining
+            if has_local and random.random() < 0.90:
+                quest.target_info = "Mining stone nearby"
+                quest.target_zone = pz_key
+                quest.target_cell = (player_sx, player_sy, GRID_WIDTH // 2, GRID_HEIGHT // 2)
+                quest.status = 'active'
+                return True
+
+            # 10% or no local stone: find stone in a nearby zone
+            for screen_key, screen_data in self.screens.items():
+                if not self.is_overworld_zone(screen_key):
+                    continue
+                if screen_key == pz_key:
+                    continue
+                sx, sy = map(int, screen_key.split(','))
+                if abs(sx - player_sx) + abs(sy - player_sy) > 3:
+                    continue
+                for y, row in enumerate(screen_data['grid']):
+                    for x, cell in enumerate(row):
+                        if cell == 'STONE':
+                            info = f"Travel to mine stone at zone ({sx},{sy})"
+                            quest.set_target('cell', (sx, sy, x, y), info)
+                            quest._original_cell = 'STONE'
+                            quest.target_zone = screen_key
+                            return True
+            if has_local:
+                quest.target_info = "Mining stone nearby"
+                quest.target_zone = pz_key
+                quest.target_cell = (player_sx, player_sy, GRID_WIDTH // 2, GRID_HEIGHT // 2)
+                quest.status = 'active'
+                return True
+            quest.target_info = "Looking for stone..."
+            return False
+        
+        # For FARM quests - farmer behavior (harvest, till, plant, build)
         elif quest_type == 'FARM':
             player_zone = f"{player_sx},{player_sy}"
             if player_zone not in self.screens:
                 return False
             screen = self.screens[player_zone]
-            
-            # Priority sequence for farming:
-            # 1. Harvest mature crops (CARROT3)
-            # 2. Till dirt near water (convert DIRT→SOIL)
-            # 3. Plant on soil (SOIL→CARROT1)
-            # 4. Chop trees for wood (need for building)
-            # 5. Build camp if have enough wood
-            
-            # Check for mature crops to harvest
-            for y, row in enumerate(screen['grid']):
-                for x, cell in enumerate(row):
-                    if cell in ('CARROT3', 'CARROT2'):
-                        info = f"Harvest {cell} at ({x},{y})"
-                        quest.set_target('cell', (player_sx, player_sy, x, y), info)
-                        quest._original_cell = cell
-                        quest.target_zone = player_zone
-                        return True
-            
-            # Check for soil to plant on — only if player has carrots
-            has_carrots = self.inventory.has_item('carrot') if hasattr(self, 'inventory') else False
-            if has_carrots:
-                for y, row in enumerate(screen['grid']):
+
+            # Check if current zone has any farmable cells
+            farm_cells = {'CARROT1', 'CARROT2', 'CARROT3', 'SOIL', 'DIRT', 'TREE1', 'TREE2'}
+            has_local = False
+            for row in screen['grid']:
+                for cell in row:
+                    if cell in farm_cells:
+                        has_local = True
+                        break
+                if has_local:
+                    break
+
+            # 90%: stay local and let FARMER behavior_config handle the work
+            # (harvest, till, plant are all in the farmer's action list)
+            if has_local and random.random() < 0.90:
+                quest.target_info = "Farming nearby"
+                quest.target_zone = player_zone
+                quest.target_cell = (player_sx, player_sy, GRID_WIDTH // 2, GRID_HEIGHT // 2)
+                quest.status = 'active'
+                return True
+
+            # 10% or no local targets: find farm-able cells in a nearby zone
+            for screen_key, screen_data in self.screens.items():
+                if not self.is_overworld_zone(screen_key):
+                    continue
+                if screen_key == player_zone:
+                    continue
+                sx, sy = map(int, screen_key.split(','))
+                if abs(sx - player_sx) + abs(sy - player_sy) > 3:
+                    continue
+                for y, row in enumerate(screen_data['grid']):
                     for x, cell in enumerate(row):
-                        if cell == 'SOIL':
-                            info = f"Plant carrot at ({x},{y})"
-                            quest.set_target('cell', (player_sx, player_sy, x, y), info)
-                            quest._original_cell = 'SOIL'
-                            quest.target_zone = player_zone
-                            return True
-            
-            # Check for dirt near water to till — only if player has hoe
-            has_hoe = self.inventory.has_item('hoe') if hasattr(self, 'inventory') else False
-            if has_hoe:
-                for y, row in enumerate(screen['grid']):
-                    for x, cell in enumerate(row):
-                        if cell == 'DIRT':
-                            # Check if water is nearby (within 3 cells)
-                            near_water = False
-                            for dy in range(-3, 4):
-                                for dx in range(-3, 4):
-                                    wy, wx = y + dy, x + dx
-                                    if 0 <= wy < GRID_HEIGHT and 0 <= wx < GRID_WIDTH:
-                                        if screen['grid'][wy][wx] == 'WATER':
-                                            near_water = True
-                                            break
-                                if near_water:
-                                    break
-                            if near_water:
-                                info = f"Till dirt at ({x},{y})"
-                                quest.set_target('cell', (player_sx, player_sy, x, y), info)
-                                quest._original_cell = 'DIRT'
-                                quest.target_zone = player_zone
-                                return True
-            
-            # Chop trees for resources — only if player has axe
-            has_axe = self.inventory.has_item('axe') if hasattr(self, 'inventory') else False
-            if has_axe:
-                for y, row in enumerate(screen['grid']):
-                    for x, cell in enumerate(row):
-                        if cell in ('TREE1', 'TREE2'):
-                            info = f"Chop tree at ({x},{y})"
-                            quest.set_target('cell', (player_sx, player_sy, x, y), info)
+                        if cell in farm_cells:
+                            info = f"Travel to farm at zone ({sx},{sy})"
+                            quest.set_target('cell', (sx, sy, x, y), info)
                             quest._original_cell = cell
-                            quest.target_zone = player_zone
+                            quest.target_zone = screen_key
                             return True
-            
+            if has_local:
+                quest.target_info = "Farming nearby"
+                quest.target_zone = player_zone
+                quest.target_cell = (player_sx, player_sy, GRID_WIDTH // 2, GRID_HEIGHT // 2)
+                quest.status = 'active'
+                return True
             quest.target_info = "Looking for farm targets..."
             return False
 
