@@ -265,7 +265,7 @@ class GameCoreMixin:
                           'TREE1', 'TREE2', 'TREE3', 'FLOWER', 
                           'CARROT1', 'CARROT2', 'CARROT3',
                           'CAMP', 'HOUSE', 'WOOD', 'PLANKS',
-                          'WALL', 'CAVE', 'SOIL', 'MEAT', 'FUR', 'BONES',
+                          'WALL', 'CAVE', 'MINESHAFT', 'SOIL', 'MEAT', 'FUR', 'BONES',
                           'FLOOR_WOOD', 'CAVE_FLOOR', 'CAVE_WALL', 'CHEST',
                           'STAIRS_DOWN', 'STAIRS_UP']:
             
@@ -424,6 +424,34 @@ class GameCoreMixin:
                     except Exception as e:
                         print(f"Failed to load {filename}: {e}")
         
+        # Load item sprites (for dropped item overlays)
+        # Collect unique sprite_name values from ITEMS definitions
+        item_sprite_names = set()
+        for item_key, item_data in ITEMS.items():
+            if 'sprite_name' in item_data:
+                item_sprite_names.add(item_data['sprite_name'])
+            # Also try loading by item key name directly
+            item_sprite_names.add(item_key)
+        
+        # Also load utility sprites (itembag, etc.)
+        item_sprite_names.add('itembag')
+        
+        for sprite_name in item_sprite_names:
+            if sprite_name in self.sprite_manager.sprites:
+                continue  # Already loaded (e.g. same as a cell sprite)
+            filename_base = f"{sprite_name}.png"
+            for search_path in search_paths:
+                filename = os.path.join(search_path, filename_base) if search_path else filename_base
+                if os.path.exists(filename):
+                    try:
+                        sprite_img = pygame.image.load(filename).convert_alpha()
+                        sprite_img = pygame.transform.scale(sprite_img, (CELL_SIZE, CELL_SIZE))
+                        self.sprite_manager.sprites[sprite_name] = sprite_img
+                        sprite_files_loaded += 1
+                        break
+                    except Exception as e:
+                        print(f"Failed to load item sprite {filename}: {e}")
+        
         # If individual files were loaded, use them
         if sprite_files_loaded > 0:
             print("\n" + "=" * 60)
@@ -564,9 +592,22 @@ class GameCoreMixin:
             return [(GRID_WIDTH - 1, GRID_HEIGHT // 2 - 1), (GRID_WIDTH - 1, GRID_HEIGHT // 2)]
         return []
     
+    def get_biome_base_cell(self):
+        """Return the primary walkable ground cell for the current zone's biome."""
+        biome = 'FOREST'
+        if self.current_screen:
+            biome = self.current_screen.get('biome', 'FOREST')
+        biome_map = {
+            'FOREST': 'GRASS', 'PLAINS': 'GRASS', 'DESERT': 'SAND',
+            'MOUNTAINS': 'DIRT', 'TUNDRA': 'DIRT', 'SWAMP': 'DIRT',
+            'HOUSE_INTERIOR': 'FLOOR_WOOD', 'CAVE': 'CAVE_FLOOR',
+        }
+        return biome_map.get(biome, 'GRASS')
+    
     
     def consolidate_dropped_items(self, screen_key):
-        """Move all dropped items to nearest structure"""
+        """Merge ALL dropped items within 3-cell range into the largest nearby pile.
+        Runs every zone update. Very aggressive — items should never sit adjacent."""
         
         if screen_key not in self.dropped_items:
             return
@@ -575,33 +616,67 @@ class GameCoreMixin:
             return
         
         screen = self.screens[screen_key]
+        grid = screen['grid']
+        items = self.dropped_items[screen_key]
         
-        # Find structures
-        structures = []
-        for y in range(GRID_HEIGHT):
-            for x in range(GRID_WIDTH):
-                if screen['grid'][y][x] in ['HOUSE', 'CAVE']:
-                    structures.append((x, y))
-        
-        if not structures:
-            # No structures - items disappear
-            self.dropped_items[screen_key] = {}
+        if len(items) <= 1:
             return
         
-        # Move all items to nearest structure
-        consolidated = {}
-        for (item_x, item_y), items in self.dropped_items[screen_key].items():
-            nearest = min(structures, 
-                         key=lambda s: abs(s[0]-item_x) + abs(s[1]-item_y))
+        # Multi-pass: keep merging until stable
+        changed = True
+        passes = 0
+        while changed and passes < 5:
+            changed = False
+            passes += 1
+            positions = list(items.keys())
             
-            if nearest not in consolidated:
-                consolidated[nearest] = {}
-            
-            for item_name, count in items.items():
-                consolidated[nearest][item_name] = \
-                    consolidated[nearest].get(item_name, 0) + count
-        
-        self.dropped_items[screen_key] = consolidated
+            for pos in positions:
+                if pos not in items:
+                    continue
+                
+                ix, iy = pos
+                my_count = sum(items[pos].values())
+                
+                # Find the best neighbor to merge with (within 3 cells)
+                best_target = None
+                best_count = -1
+                best_dist = 999
+                
+                for dx in range(-3, 4):
+                    for dy in range(-3, 4):
+                        if dx == 0 and dy == 0:
+                            continue
+                        nx, ny = ix + dx, iy + dy
+                        if not (0 <= nx < GRID_WIDTH and 0 <= ny < GRID_HEIGHT):
+                            continue
+                        neighbor_key = (nx, ny)
+                        if neighbor_key not in items or neighbor_key == pos:
+                            continue
+                        neighbor_count = sum(items[neighbor_key].values())
+                        dist = abs(dx) + abs(dy)
+                        # Merge smaller into larger; if equal, merge into closer
+                        if (neighbor_count > best_count or 
+                            (neighbor_count == best_count and dist < best_dist)):
+                            cell = grid[ny][nx]
+                            if not CELL_TYPES.get(cell, {}).get('solid', False):
+                                best_target = neighbor_key
+                                best_count = neighbor_count
+                                best_dist = dist
+                
+                # Merge: smaller pile goes into larger, or into closer if equal
+                if best_target:
+                    if my_count <= best_count:
+                        # Merge pos into best_target
+                        for item_name, count in items[pos].items():
+                            items[best_target][item_name] = items[best_target].get(item_name, 0) + count
+                        del items[pos]
+                        changed = True
+                    elif my_count > best_count:
+                        # Merge best_target into pos
+                        for item_name, count in items[best_target].items():
+                            items[pos][item_name] = items[pos].get(item_name, 0) + count
+                        del items[best_target]
+                        changed = True
     
     def catch_up_entities(self, screen_x, screen_y, cycles):
         """Simplified entity simulation for catch-up with eating, drinking, and healing"""
@@ -630,7 +705,7 @@ class GameCoreMixin:
                 has_cave = False
                 for y in range(GRID_HEIGHT):
                     for x in range(GRID_WIDTH):
-                        if screen['grid'][y][x] in ['CAVE', 'HIDDEN_CAVE']:
+                        if screen['grid'][y][x] in ['CAVE', 'HIDDEN_CAVE', 'MINESHAFT']:
                             has_cave = True
                             break
                     if has_cave:
@@ -1296,19 +1371,21 @@ class GameCoreMixin:
             self.update_screen_exits(sx+1, sy)
         
         # Generate grid
+        exit_cell = {'FOREST': 'GRASS', 'PLAINS': 'GRASS', 'DESERT': 'SAND',
+                     'MOUNTAINS': 'DIRT', 'TUNDRA': 'DIRT', 'SWAMP': 'DIRT'}.get(biome_name, 'GRASS')
         grid = []
         for y in range(GRID_HEIGHT):
             row = []
             for x in range(GRID_WIDTH):
                 if y == 0 or y == GRID_HEIGHT - 1 or x == 0 or x == GRID_WIDTH - 1:
                     if (y == 0 and exits['top'] and GRID_WIDTH // 2 - 1 <= x <= GRID_WIDTH // 2):
-                        row.append('GRASS')
+                        row.append(exit_cell)
                     elif (y == GRID_HEIGHT - 1 and exits['bottom'] and GRID_WIDTH // 2 - 1 <= x <= GRID_WIDTH // 2):
-                        row.append('GRASS')
+                        row.append(exit_cell)
                     elif (x == 0 and exits['left'] and GRID_HEIGHT // 2 - 1 <= y <= GRID_HEIGHT // 2):
-                        row.append('GRASS')
+                        row.append(exit_cell)
                     elif (x == GRID_WIDTH - 1 and exits['right'] and GRID_HEIGHT // 2 - 1 <= y <= GRID_HEIGHT // 2):
-                        row.append('GRASS')
+                        row.append(exit_cell)
                     else:
                         row.append('WALL')
                 else:
@@ -1365,6 +1442,22 @@ class GameCoreMixin:
         # Spawn entities in new screen
         if key not in self.screen_entities:
             self.spawn_entities_for_screen(sx, sy, biome_name)
+        
+        # Natural cave formation — uncommon, favors mountains
+        cave_chance = NATURAL_CAVE_ZONE_CHANCE
+        if biome_name == 'MOUNTAINS':
+            cave_chance *= 3  # Mountains have 3x more caves
+        elif biome_name == 'DESERT':
+            cave_chance *= 1.5
+        if random.random() < cave_chance:
+            # Place a natural cave on a non-edge, non-wall cell
+            valid = [(x, y) for y in range(2, GRID_HEIGHT - 2)
+                     for x in range(2, GRID_WIDTH - 2)
+                     if CELL_TYPES.get(grid[y][x], {}).get('solid', False)
+                     and grid[y][x] != 'WALL']
+            if valid:
+                cx, cy = random.choice(valid)
+                grid[cy][cx] = 'CAVE'
         
         # Spawn runestones (rare)
         self.spawn_runestones_for_screen(sx, sy)
@@ -1460,9 +1553,9 @@ class GameCoreMixin:
                 grid[y][GRID_WIDTH-1] = 'WALL'
 
     def generate_subscreen(self, parent_screen_x, parent_screen_y, cell_x, cell_y, structure_type, depth=1):
-        """Generate interior for house/cave (caves share one system per zone)"""
-        # For CAVE, check if zone already has a cave system
-        if structure_type == 'CAVE':
+        """Generate interior for house/cave (caves share one system per zone at depth 1)"""
+        # For CAVE at depth 1, check if zone already has a cave system
+        if structure_type == 'CAVE' and depth == 1:
             parent_key = f"{parent_screen_x},{parent_screen_y}"
             if parent_key in self.zone_cave_systems:
                 # Use existing cave system
@@ -1504,8 +1597,8 @@ class GameCoreMixin:
         # Store subscreen first
         self.subscreens[subscreen_key] = subscreen_data
         
-        # For caves, register as zone's cave system
-        if structure_type == 'CAVE':
+        # For caves at depth 1, register as zone's cave system
+        if structure_type == 'CAVE' and depth == 1:
             parent_key = f"{parent_screen_x},{parent_screen_y}"
             self.zone_cave_systems[parent_key] = subscreen_key
         
@@ -2038,9 +2131,9 @@ class GameCoreMixin:
         
         # Choose raid type
         raid_types = [
-            ('GOBLIN', 3),
-            ('BANDIT', 4),
-            ('WOLF', 5)
+            ('GOBLIN', 2),
+            ('BANDIT', 2),
+            ('WOLF', 3)
         ]
         raid_type, raid_count = random.choice(raid_types)
         
@@ -2566,6 +2659,18 @@ class GameCoreMixin:
         
         return magic_damage, magic_type
     
+    def calculate_weapon_bonus(self, inventory):
+        """Calculate bonus damage from weapons/tools in entity inventory.
+        Returns the damage of the best weapon found."""
+        best_damage = 0
+        for item_name, count in inventory.items():
+            if count > 0 and item_name in ITEMS:
+                item_data = ITEMS[item_name]
+                dmg = item_data.get('damage', 0)
+                if dmg > best_damage and (item_data.get('is_tool') or item_data.get('is_spell')):
+                    best_damage = dmg
+        return best_damage
+    
     def get_faction_exploration_target(self, screen_key, faction):
         """Get target zone for faction to explore/expand into"""
         # Parse current position
@@ -2736,7 +2841,7 @@ class GameCoreMixin:
         caves = []
         for y in range(GRID_HEIGHT):
             for x in range(GRID_WIDTH):
-                if grid[y][x] in ['CAVE', 'HIDDEN_CAVE']:
+                if grid[y][x] in ['CAVE', 'HIDDEN_CAVE', 'MINESHAFT']:
                     caves.append((x, y))
         
         if not caves:
@@ -3633,10 +3738,13 @@ class GameCoreMixin:
             self.dropped_items[screen_key][cell_key]['magic_rune'] = \
                 self.dropped_items[screen_key][cell_key].get('magic_rune', 0) + 1
         
-        # Drop all items from inventory (excluding magic category)
+        # Drop all items from inventory (excluding magic and wood/planks)
         for item_name, count in entity.inventory.items():
             # Skip dropping magic items (spells are permanent)
             if item_name in ITEMS and ITEMS[item_name].get('is_spell', False):
+                continue
+            # Skip wood and planks — they clutter the map as overlays
+            if item_name in ('wood', 'planks'):
                 continue
             
             for _ in range(count):
@@ -3925,7 +4033,7 @@ class GameCoreMixin:
                             for nx, ny in [(x-1, y), (x+1, y), (x, y-1), (x, y+1)]:
                                 if 0 <= nx < GRID_WIDTH and 0 <= ny < GRID_HEIGHT:
                                     neighbor_cell = screen['grid'][ny][nx]
-                                    if neighbor_cell in ['HOUSE', 'CAMP', 'CAVE']:
+                                    if neighbor_cell in ['HOUSE', 'CAMP', 'CAVE', 'MINESHAFT']:
                                         has_structure_neighbor = True
                                         break
                             
@@ -4125,10 +4233,10 @@ class GameCoreMixin:
                     if random.random() < 0.05:  # 5% decay rate
                         new_grid[y][x] = 'DIRT'
                 
-                # Planks decay to wood then dirt (outside structures)
+                # Planks decay to dirt (outside structures)
                 elif cell == 'PLANKS' and not self.is_near_structure(x, y, key):
                     if random.random() < 0.03:  # 3% decay rate
-                        new_grid[y][x] = 'WOOD'
+                        new_grid[y][x] = 'DIRT'
                 
                 # Crop decay without rain (drought) - moderate rates
                 elif cell in ['CARROT1', 'CARROT2', 'CARROT3']:
@@ -4307,8 +4415,10 @@ class GameCoreMixin:
             del self.dropped_items[screen_key][cell_key]
     
     def drop_item(self, item_name, x, y):
-        """Drop item onto cell"""
+        """Drop item onto cell (works in both overworld and subscreens)"""
         screen_key = f"{self.player['screen_x']},{self.player['screen_y']}"
+        if self.player.get('in_subscreen') and self.player.get('subscreen_key'):
+            screen_key = self.player['subscreen_key']
         if screen_key not in self.dropped_items:
             self.dropped_items[screen_key] = {}
         
@@ -4508,21 +4618,27 @@ class GameCoreMixin:
                 return
 
     def pickup_cell_or_items(self):
-        """Pick up cell EXACTLY as it is (creative/admin mode) or dropped items"""
+        """Pick up cell EXACTLY as it is (creative/admin mode) or dropped items.
+        Inside structures: cannot pick up base floor cells (except in mines).
+        Picking up placed items inside structures restores the structure floor."""
         target = self.get_target_cell()
         if not target:
             return
         
         target_x, target_y = target
         screen_key = f"{self.player['screen_x']},{self.player['screen_y']}"
+        in_subscreen = self.player.get('in_subscreen', False)
+        subscreen_key = self.player.get('subscreen_key')
+        
+        # Determine the correct screen key for subscreens
+        if in_subscreen and subscreen_key:
+            screen_key = subscreen_key
         
         # Check if cell is enchanted - cannot pick up enchanted cells
         if self.is_cell_enchanted(target_x, target_y, screen_key):
             cell_type = self.current_screen['grid'][target_y][target_x]
-            # Exception: can drink from enchanted water
             if cell_type == 'WATER':
                 print("Drank from enchanted water!")
-                # Could add health/thirst benefits here later
                 return
             print("Cannot pick up enchanted cell!")
             return
@@ -4539,77 +4655,105 @@ class GameCoreMixin:
         # Pick up the cell EXACTLY as it is
         cell_type = self.current_screen['grid'][target_y][target_x]
         
+        # Determine structure floor type (what to restore when picking up)
+        structure_floor = None
+        is_mine = False
+        if in_subscreen and subscreen_key:
+            subscreen = self.subscreens.get(subscreen_key)
+            if subscreen:
+                stype = subscreen.get('type', '')
+                if stype == 'HOUSE_INTERIOR':
+                    structure_floor = 'FLOOR_WOOD'
+                elif stype == 'CAVE':
+                    structure_floor = 'CAVE_FLOOR'
+                    is_mine = True  # Caves/mines allow base cell pickup
+        
+        # Inside structures (non-mine): block pickup of base floor/wall cells
+        if structure_floor and not is_mine:
+            blocked_cells = {'FLOOR_WOOD', 'CAVE_FLOOR', 'CAVE_WALL', 'WALL',
+                             'STAIRS_UP', 'STAIRS_DOWN'}
+            if cell_type in blocked_cells:
+                print("Cannot pick up structural elements!")
+                return
+        
         # Create direct cell-to-item mapping for exact pickup
         exact_pickup_map = {
-            'GRASS': 'grass',
-            'DIRT': 'dirt',
-            'SOIL': 'soil',
-            'SAND': 'sand',
-            'WATER': 'water_bucket',
-            'DEEP_WATER': 'deep_water_bucket',
-            'STONE': 'stone',
-            'TREE1': 'tree1',
-            'TREE2': 'tree2',
-            'WALL': 'wall',
-            'HOUSE': 'house',
-            'CAVE': 'cave',
-            'CARROT1': 'carrot1',
-            'CARROT2': 'carrot2',
-            'CARROT3': 'carrot3',
-            'FLOWER': 'flower',
-            'WOOD': 'wood',
-            'PLANKS': 'planks',
-            'MEAT': 'meat',
-            'FUR': 'fur',
-            'BONES': 'bones'
+            'GRASS': 'grass', 'DIRT': 'dirt', 'SOIL': 'soil', 'SAND': 'sand',
+            'WATER': 'water_bucket', 'DEEP_WATER': 'deep_water_bucket',
+            'STONE': 'stone', 'TREE1': 'tree1', 'TREE2': 'tree2',
+            'WALL': 'wall', 'HOUSE': 'house', 'CAVE': 'cave',
+            'MINESHAFT': 'mineshaft', 'CAMP': 'camp', 'CHEST': 'chest',
+            'CARROT1': 'carrot1', 'CARROT2': 'carrot2', 'CARROT3': 'carrot3',
+            'FLOWER': 'flower', 'WOOD': 'wood', 'PLANKS': 'planks',
+            'MEAT': 'meat', 'FUR': 'fur', 'BONES': 'bones'
         }
         
         if cell_type in exact_pickup_map:
             item_name = exact_pickup_map[cell_type]
             self.inventory.add_item(item_name, 1)
             
-            # Replace cell with appropriate background
-            if cell_type in ['TREE1', 'TREE2', 'HOUSE', 'CAVE', 'WALL']:
-                self.current_screen['grid'][target_y][target_x] = 'GRASS'
+            # Replace cell: inside structures → restore structure floor, else biome base
+            base = self.get_biome_base_cell()
+            if structure_floor:
+                self.current_screen['grid'][target_y][target_x] = structure_floor
             elif cell_type in ['CARROT1', 'CARROT2', 'CARROT3']:
                 self.current_screen['grid'][target_y][target_x] = 'SOIL'
-            elif cell_type in ['GRASS', 'SOIL', 'FLOWER']:
-                self.current_screen['grid'][target_y][target_x] = 'DIRT'
-            elif cell_type in ['WATER', 'DEEP_WATER', 'STONE']:
-                self.current_screen['grid'][target_y][target_x] = 'DIRT'
-            elif cell_type in ['WOOD', 'PLANKS', 'MEAT', 'FUR', 'BONES']:
-                self.current_screen['grid'][target_y][target_x] = 'GRASS'
             else:
-                # Default: leave as dirt
-                self.current_screen['grid'][target_y][target_x] = 'DIRT'
+                self.current_screen['grid'][target_y][target_x] = base
     
     def place_selected_item(self):
-        """Place selected item as a cell in the world"""
+        """Place selected item as a cell in the world, or as an overlay if no cell mapping.
+        Inside structures, non-structural items are always placed as overlays
+        to preserve the structure floor."""
         target = self.get_target_cell()
         if not target:
             return
         
         target_x, target_y = target
         screen_key = f"{self.player['screen_x']},{self.player['screen_y']}"
+        in_subscreen = self.player.get('in_subscreen', False)
         
         # Cannot place on enchanted cells
         if self.is_cell_enchanted(target_x, target_y, screen_key):
             print("Cannot place on enchanted cell!")
             return
         
+        # Structural items that replace grid cells even inside structures
+        structural_items = {'wall', 'house', 'cave', 'mineshaft', 'chest'}
+        
         # Find which category has an item selected
         for category in ['items', 'tools', 'magic', 'followers']:
             selected = self.inventory.get_selected_item(category)
-            if selected and selected in ITEM_TO_CELL:
-                # Check if we have the item
-                if self.inventory.has_item(selected):
-                    # Place the cell
+            if selected:
+                if not self.inventory.has_item(selected):
+                    continue
+                
+                # Inside structures: non-structural items always go as overlays
+                if in_subscreen and selected not in structural_items and selected in ITEM_TO_CELL:
+                    self.inventory.remove_item(selected, 1)
+                    if in_subscreen and self.player.get('subscreen_key'):
+                        sk = self.player['subscreen_key']
+                    else:
+                        sk = screen_key
+                    if sk not in self.dropped_items:
+                        self.dropped_items[sk] = {}
+                    cell_key = (target_x, target_y)
+                    if cell_key not in self.dropped_items[sk]:
+                        self.dropped_items[sk][cell_key] = {}
+                    self.dropped_items[sk][cell_key][selected] = \
+                        self.dropped_items[sk][cell_key].get(selected, 0) + 1
+                    return
+                elif selected in ITEM_TO_CELL:
+                    # Overworld: place as a grid cell (replaces the cell)
                     cell_type = ITEM_TO_CELL[selected]
                     self.current_screen['grid'][target_y][target_x] = cell_type
-                    
-                    # Remove item from inventory
                     self.inventory.remove_item(selected, 1)
-                    return  # Exit after placing
+                    return
+                else:
+                    # No cell mapping — place as overlay
+                    self.inventory.remove_item(selected, 1)
+                    self.drop_item(selected, target_x, target_y)
+                    return
     
     def drop_selected_item(self):
         """Drop currently selected item"""
@@ -4672,6 +4816,36 @@ class GameCoreMixin:
         
         if not any_movement_key:
             if self.is_autopilot_idle():
+                # If in a subscreen, navigate toward the exit instead of autopiloting
+                if self.player.get('in_subscreen'):
+                    subscreen = self.subscreens.get(self.player.get('subscreen_key'))
+                    if subscreen:
+                        exit_pos = subscreen.get('exit', subscreen.get('entrance'))
+                        if exit_pos:
+                            px, py = self.player['x'], self.player['y']
+                            ex, ey = exit_pos
+                            # If at exit, leave
+                            if px == ex and py == ey:
+                                self.exit_subscreen()
+                                return
+                            # Move toward exit
+                            if self.tick % 18 == 0:
+                                dx = 1 if ex > px else (-1 if ex < px else 0)
+                                dy = 1 if ey > py else (-1 if ey < py else 0)
+                                # Prefer one axis at a time
+                                if dx != 0 and dy != 0:
+                                    if random.random() < 0.5:
+                                        dx = 0
+                                    else:
+                                        dy = 0
+                                new_x, new_y = px + dx, py + dy
+                                cell = self.current_screen['grid'][new_y][new_x]
+                                if not CELL_TYPES.get(cell, {}).get('solid', False):
+                                    self.player['x'] = new_x
+                                    self.player['y'] = new_y
+                                    facing_map = {(0,-1): 'up', (0,1): 'down', (-1,0): 'left', (1,0): 'right'}
+                                    self.player['facing'] = facing_map.get((dx, dy), self.player['facing'])
+                    return
                 if not self.autopilot:
                     self.autopilot = True
                 self.update_autopilot()
@@ -5212,6 +5386,10 @@ class GameCoreMixin:
 
     def interact(self):
         """Handle space bar interactions - attack if weapon equipped, otherwise normal gameplay"""
+        # Snap player facing to match target direction
+        facing_map = {0: 'up', 1: 'down', 2: 'left', 3: 'right'}
+        self.player['facing'] = facing_map.get(self.target_direction, self.player['facing'])
+        
         # Try to attack first if weapon selected
         if self.player_attack():
             return  # Attack was performed
@@ -5284,6 +5462,32 @@ class GameCoreMixin:
         if cell == 'STONE' and self.inventory.has_item('pickaxe'):
             self.inventory.add_item('stone', 1)
             self.current_screen['grid'][check_y][check_x] = 'DIRT'
+            self.show_attack_animation(check_x, check_y)
+            return
+        
+        # Dig mineshaft — pickaxe on soft ground cells (overworld or inside caves)
+        # This creates a mineshaft entrance leading to a cave system
+        minable_ground = {'DIRT', 'SAND', 'GRASS', 'CAVE_FLOOR'}
+        if cell in minable_ground and self.inventory.has_item('pickaxe'):
+            depth = 1
+            in_cave = False
+            if self.player.get('in_subscreen'):
+                subscreen = self.subscreens.get(self.player.get('subscreen_key'))
+                if subscreen and subscreen.get('type') == 'CAVE':
+                    depth = subscreen.get('depth', 1)
+                    in_cave = True
+            
+            mineshaft_chance = PLAYER_MINESHAFT_BASE_CHANCE / (MINESHAFT_DEPTH_DIVISOR ** (depth - 1))
+            self.show_attack_animation(check_x, check_y)
+            
+            if random.random() < mineshaft_chance:
+                self.current_screen['grid'][check_y][check_x] = 'MINESHAFT'
+                
+                # Pre-generate the deeper level so it's ready when entered
+                if in_cave:
+                    print(f"You dug a mineshaft to depth {depth + 1}!")
+                else:
+                    print(f"You discovered an underground passage!")
             return
         
         # Till dirt with hoe
@@ -5325,12 +5529,19 @@ class GameCoreMixin:
             return
     
     def enter_subscreen(self, cell_x, cell_y):
-        """Player enters a house or cave"""
+        """Player enters a house, cave, or mineshaft"""
         cell = self.current_screen['grid'][cell_y][cell_x]
         structure_type = CELL_TYPES[cell].get('subscreen_type')
         
         if not structure_type:
             return
+        
+        # If entering a MINESHAFT from inside a cave — descend deeper
+        if cell == 'MINESHAFT' and self.player.get('in_subscreen'):
+            current_subscreen = self.subscreens.get(self.player.get('subscreen_key'))
+            if current_subscreen and current_subscreen.get('type') == 'CAVE':
+                self.descend_cave()
+                return
         
         # Check if subscreen already exists for this location
         parent_screen_x = self.player['screen_x']
@@ -5343,6 +5554,16 @@ class GameCoreMixin:
                 subscreen['parent_cell'] == (cell_x, cell_y)):
                 existing_key = key
                 break
+        
+        # For CAVE/MINESHAFT, also check zone cave system
+        if not existing_key and structure_type == 'CAVE':
+            parent_key = f"{parent_screen_x},{parent_screen_y}"
+            if parent_key in self.zone_cave_systems:
+                existing_key = self.zone_cave_systems[parent_key]
+                # Add this entrance to the cave system's entrance list
+                subscreen = self.subscreens.get(existing_key)
+                if subscreen and (cell_x, cell_y) not in subscreen.get('entrances', []):
+                    subscreen.setdefault('entrances', []).append((cell_x, cell_y))
         
         # Generate or retrieve subscreen
         if existing_key:
@@ -5904,6 +6125,7 @@ class GameCoreMixin:
         self.inventory.add_item('bone_sword', 1)
         self.inventory.add_item('carrot', 5)
         self.inventory.add_item('tree_sapling', 3)
+        self.inventory.add_item('magic_rune', 1)  # Testing sprite overlay
         self.dropped_items = {}
         self.enchanted_cells = {}
         self.enchanted_entities = {}
@@ -6672,31 +6894,24 @@ class GameCoreMixin:
                             if cell_key in self.dropped_items[screen_key]:
                                 items = self.dropped_items[screen_key][cell_key]
                                 item_count = len(items)
+                                total_count = sum(items.values())
                                 
-                                # Check if cell is "empty" enough for full overlay
-                                # Empty cells: GRASS, DIRT, SAND, STONE, FLOOR_WOOD, CAVE_FLOOR, PLANKS, WOOD
+                                # Empty cells allow full overlay
                                 empty_cells = ['GRASS', 'DIRT', 'SAND', 'STONE', 'FLOOR_WOOD', 'CAVE_FLOOR', 
                                              'PLANKS', 'WOOD', 'SOIL', 'COBBLESTONE']
                                 is_empty_cell = cell in empty_cells
                                 
-                                if item_count == 1 and is_empty_cell:
-                                    # Single item on empty cell - overlay its sprite
+                                if item_count == 1 and total_count == 1 and is_empty_cell:
+                                    # Single item, single count — show item sprite
                                     item_name = list(items.keys())[0]
-                                    count = items[item_name]
-                                    
-                                    # Try to use sprite if available
-                                    # Check: item_name, item's sprite_name, uppercase variants
                                     sprite_key = None
                                     if self.use_sprites and hasattr(self, 'sprite_manager'):
-                                        # 1. Direct item name
                                         if item_name in self.sprite_manager.sprites:
                                             sprite_key = item_name
-                                        # 2. Item's sprite_name property (e.g. fire_rune -> magic_rune)
                                         elif item_name in ITEMS and 'sprite_name' in ITEMS[item_name]:
                                             sn = ITEMS[item_name]['sprite_name']
                                             if sn in self.sprite_manager.sprites:
                                                 sprite_key = sn
-                                        # 3. Uppercase fallback
                                         if not sprite_key and item_name.upper() in self.sprite_manager.sprites:
                                             sprite_key = item_name.upper()
                                     
@@ -6704,59 +6919,30 @@ class GameCoreMixin:
                                         sprite = self.sprite_manager.get_sprite(sprite_key)
                                         self.screen.blit(sprite, (x * CELL_SIZE, y * CELL_SIZE))
                                     elif item_name in ITEMS:
-                                        # Fallback: draw colored overlay
                                         item_color = ITEMS[item_name]['color']
                                         overlay_surface = pygame.Surface((CELL_SIZE, CELL_SIZE), pygame.SRCALPHA)
-                                        overlay_surface.fill((*item_color, 180))  # Semi-transparent
+                                        overlay_surface.fill((*item_color, 180))
                                         self.screen.blit(overlay_surface, (x * CELL_SIZE, y * CELL_SIZE))
-                                        
-                                        # Draw item name abbreviation
                                         item_label = ITEMS[item_name].get('name', item_name)[:3].upper()
                                         text = self.tiny_font.render(item_label, True, COLORS['WHITE'])
                                         text_rect = text.get_rect(center=(
                                             x * CELL_SIZE + CELL_SIZE // 2,
-                                            y * CELL_SIZE + CELL_SIZE // 2
-                                        ))
+                                            y * CELL_SIZE + CELL_SIZE // 2))
                                         self.screen.blit(text, text_rect)
-                                    
-                                    # Draw count if > 1
-                                    if count > 1:
-                                        count_text = self.font.render(str(count), True, COLORS['WHITE'])
-                                        count_bg = pygame.Surface((count_text.get_width() + 4, count_text.get_height() + 2))
-                                        count_bg.fill(COLORS['BLACK'])
-                                        self.screen.blit(count_bg, (x * CELL_SIZE + 2, y * CELL_SIZE + 2))
-                                        self.screen.blit(count_text, (x * CELL_SIZE + 4, y * CELL_SIZE + 2))
-                                
                                 else:
-                                    # Multiple items OR non-empty cell - show small stash bag in corner
-                                    # Draw small stash bag in top-right corner
-                                    bag_size = CELL_SIZE // 3
-                                    bag_x = x * CELL_SIZE + CELL_SIZE - bag_size - 2
-                                    bag_y = y * CELL_SIZE + 2
-                                    
-                                    # Try to use mini stash_bag sprite if available
-                                    has_bag_sprite = (self.use_sprites and 
-                                                     hasattr(self, 'sprite_manager') and 
-                                                     'stash_bag' in self.sprite_manager.sprites)
-                                    
-                                    if has_bag_sprite:
-                                        bag_sprite = self.sprite_manager.get_sprite('stash_bag')
-                                        # Scale down sprite
-                                        scaled_sprite = pygame.transform.scale(bag_sprite, (bag_size, bag_size))
-                                        self.screen.blit(scaled_sprite, (bag_x, bag_y))
+                                    # Multiple items or stacks — show itembag sprite
+                                    has_bag = (self.use_sprites and hasattr(self, 'sprite_manager') and
+                                               'itembag' in self.sprite_manager.sprites)
+                                    if has_bag:
+                                        bag_sprite = self.sprite_manager.get_sprite('itembag')
+                                        self.screen.blit(bag_sprite, (x * CELL_SIZE, y * CELL_SIZE))
                                     else:
-                                        # Fallback: brown bag shape
-                                        bag_color = (139, 90, 43)  # Brown
-                                        pygame.draw.circle(self.screen, bag_color, 
-                                                         (bag_x + bag_size//2, bag_y + bag_size//2), 
-                                                         bag_size//2)
-                                    
-                                    # Draw small item count badge
-                                    count_text = self.tiny_font.render(str(item_count), True, COLORS['WHITE'])
-                                    count_bg = pygame.Surface((count_text.get_width() + 2, count_text.get_height() + 2))
-                                    count_bg.fill(COLORS['BLACK'])
-                                    self.screen.blit(count_bg, (bag_x, bag_y + bag_size - count_text.get_height() - 2))
-                                    self.screen.blit(count_text, (bag_x + 1, bag_y + bag_size - count_text.get_height() - 1))
+                                        # Fallback: brown bag circle
+                                        bag_color = (139, 90, 43)
+                                        pygame.draw.circle(self.screen, bag_color,
+                                                         (x * CELL_SIZE + CELL_SIZE // 2,
+                                                          y * CELL_SIZE + CELL_SIZE // 2),
+                                                         CELL_SIZE // 3)
             
             # ... rest of draw_game continues (target highlight, entities, player, etc)
             
@@ -7273,6 +7459,9 @@ class GameCoreMixin:
             
             # Draw NPC inspection if targeting peaceful NPC
             self.draw_inspected_npc()
+            
+            # Draw item list when targeting a cell with dropped items or a chest
+            self.draw_targeted_items()
 
         
     def draw_trader_ui(self):
@@ -7545,9 +7734,86 @@ class GameCoreMixin:
             text = self.tiny_font.render(line, True, (255, 255, 255))
             self.screen.blit(text, (info_x, info_y + i * line_height))
     
+    def draw_targeted_items(self):
+        """Show item list when player targets a cell with dropped items or a chest."""
+        target = self.get_target_cell()
+        if not target:
+            return
+        
+        tx, ty = target
+        screen_key = f"{self.player['screen_x']},{self.player['screen_y']}"
+        if self.player.get('in_subscreen') and self.player.get('subscreen_key'):
+            screen_key = self.player['subscreen_key']
+        
+        info_lines = []
+        
+        # Check for dropped items
+        if screen_key in self.dropped_items:
+            cell_key = (tx, ty)
+            if cell_key in self.dropped_items[screen_key]:
+                items = self.dropped_items[screen_key][cell_key]
+                for item_name, count in items.items():
+                    name = ITEMS.get(item_name, {}).get('name', item_name)
+                    if count > 1:
+                        info_lines.append(f"{name} x{count}")
+                    else:
+                        info_lines.append(name)
+        
+        # Check for chest contents
+        if self.current_screen and self.current_screen['grid'][ty][tx] == 'CHEST':
+            chest_key = f"{screen_key}:{tx},{ty}"
+            if chest_key in self.chest_contents and self.chest_contents[chest_key]:
+                info_lines.append("-- Chest --")
+                for item_name, count in self.chest_contents[chest_key].items():
+                    name = ITEMS.get(item_name, {}).get('name', item_name)
+                    if count > 1:
+                        info_lines.append(f"{name} x{count}")
+                    else:
+                        info_lines.append(name)
+        
+        if not info_lines:
+            return
+        
+        # Limit display to 8 items
+        if len(info_lines) > 8:
+            info_lines = info_lines[:7] + [f"...+{len(info_lines) - 7} more"]
+        
+        # Draw to the right of target cell
+        info_x = tx * CELL_SIZE + CELL_SIZE + 8
+        info_y = ty * CELL_SIZE
+        line_height = 14
+        
+        # Keep on screen
+        if info_x + 120 > SCREEN_WIDTH:
+            info_x = tx * CELL_SIZE - 128
+        
+        for i, line in enumerate(info_lines):
+            text = self.tiny_font.render(line, True, (255, 255, 255))
+            # Small shadow for readability
+            shadow = self.tiny_font.render(line, True, (0, 0, 0))
+            self.screen.blit(shadow, (info_x + 1, info_y + i * line_height + 1))
+            self.screen.blit(text, (info_x, info_y + i * line_height))
+    
     def draw_quest_arrow(self):
         """Draw directional arrow to quest target"""
         quest = self.quests[self.active_quest]
+        
+        # If player is in a subscreen, always point to the exit
+        if self.player.get('in_subscreen'):
+            subscreen = self.subscreens.get(self.player.get('subscreen_key'))
+            if subscreen:
+                exit_pos = subscreen.get('exit', subscreen.get('entrance'))
+                if exit_pos:
+                    ex, ey = exit_pos
+                    px, py = self.player['x'], self.player['y']
+                    if px != ex or py != ey:
+                        arrow_x = ex * CELL_SIZE + CELL_SIZE // 2
+                        arrow_y = (ey - 1) * CELL_SIZE + CELL_SIZE // 2
+                        quest_color = QUEST_TYPES.get(self.active_quest, {}).get('color', (200, 200, 200))
+                        arrow_text = self.font.render("EXIT ↓", True, quest_color)
+                        arrow_rect = arrow_text.get_rect(center=(arrow_x, arrow_y))
+                        self.screen.blit(arrow_text, arrow_rect)
+                    return
         
         # Determine target position
         target_screen_x, target_screen_y = None, None
@@ -7876,17 +8142,18 @@ class GameCoreMixin:
             total_entities_updated += int(ent_count * coverage)
             total_cells_updated += int(GRID_WIDTH * GRID_HEIGHT * coverage)
         
-        # ── Update cycle stats (printed every update cycle) ──
-        total_entities = len(self.entities)
-        total_zones = len(self.screens)
-        print(f"[UpdateCycle] tick={self.tick} "
-              f"zones={zones_updated}/{total_zones} "
-              f"entities={total_entities_updated}/{total_entities} "
-              f"cells={total_cells_updated} "
-              f"mandatory={len(mandatory_zones)} "
-              f"player_zone={player_zone_key}"
-              f"({len(self.screen_entities.get(player_zone_key, []))}ent) "
-              f"queue={len(priority_queue)}")
+        # ── Update cycle stats (printed every 30 seconds) ──
+        if self.tick % 1800 == 0:
+            total_entities = len(self.entities)
+            total_zones = len(self.screens)
+            print(f"[UpdateCycle] tick={self.tick} "
+                  f"zones={zones_updated}/{total_zones} "
+                  f"entities={total_entities_updated}/{total_entities} "
+                  f"cells={total_cells_updated} "
+                  f"mandatory={len(mandatory_zones)} "
+                  f"player_zone={player_zone_key}"
+                  f"({len(self.screen_entities.get(player_zone_key, []))}ent) "
+                  f"queue={len(priority_queue)}")
     
     def update_structure_zone(self, struct_zone_key, cell_coverage, entity_coverage):
         """Update a structure zone (cave/house interior) like a regular zone."""
@@ -7975,6 +8242,9 @@ class GameCoreMixin:
         # Decay dropped items
         self.decay_dropped_items(zone_x, zone_y)
         
+        # Consolidate nearby dropped items into bags
+        self.consolidate_dropped_items(zone_key)
+        
         # === CELL UPDATES ===
         
         # Apply rain effects if raining
@@ -8019,7 +8289,7 @@ class GameCoreMixin:
                             for nx, ny in [(x-1, y), (x+1, y), (x, y-1), (x, y+1)]:
                                 if 0 <= nx < GRID_WIDTH and 0 <= ny < GRID_HEIGHT:
                                     neighbor_cell = screen['grid'][ny][nx]
-                                    if neighbor_cell in ['HOUSE', 'CAMP', 'CAVE']:
+                                    if neighbor_cell in ['HOUSE', 'CAMP', 'CAVE', 'MINESHAFT']:
                                         has_structure_neighbor = True
                                         break
                             
@@ -8034,6 +8304,63 @@ class GameCoreMixin:
                         # Special handling for house destruction - drop loot
                         if old_cell == 'HOUSE':
                             self.process_house_destruction(x, y, zone_key)
+        
+        # === BIOME REVERSION & SPREADING ===
+        # Foreign cells decay toward the biome's base cell type
+        # Native cells have a small chance to spread to adjacent non-native cells
+        biome = screen.get('biome', 'FOREST')
+        biome_base_map = {
+            'FOREST': 'GRASS', 'PLAINS': 'GRASS', 'DESERT': 'SAND',
+            'MOUNTAINS': 'DIRT', 'TUNDRA': 'DIRT', 'SWAMP': 'DIRT',
+        }
+        base_cell = biome_base_map.get(biome, 'GRASS')
+        
+        # Define which cells are "native" to each biome and can spread
+        biome_native = {
+            'FOREST': {'GRASS', 'DIRT', 'TREE1', 'TREE2', 'FLOWER'},
+            'PLAINS': {'GRASS', 'DIRT', 'FLOWER'},
+            'DESERT': {'SAND', 'DIRT'},
+            'MOUNTAINS': {'DIRT', 'STONE', 'GRASS'},
+            'TUNDRA': {'DIRT', 'STONE'},
+            'SWAMP': {'DIRT', 'WATER', 'GRASS'},
+        }
+        native_cells = biome_native.get(biome, {'GRASS', 'DIRT'})
+        
+        # Cells that should NOT be overwritten by spreading (structures, placed items)
+        protected_cells = {'HOUSE', 'CAVE', 'MINESHAFT', 'CAMP', 'CHEST', 'WALL',
+                          'COBBLESTONE', 'WATER', 'DEEP_WATER', 'WOOD', 'PLANKS',
+                          'FLOOR_WOOD', 'CAVE_FLOOR', 'CAVE_WALL', 'STAIRS_UP', 
+                          'STAIRS_DOWN', 'HIDDEN_CAVE', 'SOIL', 'CARROT1', 'CARROT2', 'CARROT3'}
+        
+        # Foreign cells that should revert to base cell
+        foreign_revert = {
+            'DESERT': {'GRASS', 'TREE1', 'TREE2', 'FLOWER', 'DIRT'},
+            'FOREST': {'SAND'},
+            'PLAINS': {'SAND'},
+            'MOUNTAINS': {'SAND'},
+            'TUNDRA': {'SAND', 'GRASS'},
+            'SWAMP': {'SAND'},
+        }
+        revert_targets = foreign_revert.get(biome, set())
+        
+        for y in range(1, GRID_HEIGHT - 1):
+            for x in range(1, GRID_WIDTH - 1):
+                cell = screen['grid'][y][x]
+                
+                # 1. Foreign cell reversion: 0.3% chance per update
+                if cell in revert_targets and random.random() < 0.003:
+                    screen['grid'][y][x] = base_cell
+                    continue
+                
+                # 2. Native cell spreading: 0.5% chance per update
+                if cell in native_cells and random.random() < 0.005:
+                    # Pick a random adjacent cell
+                    dx, dy = random.choice([(1,0), (-1,0), (0,1), (0,-1)])
+                    nx, ny = x + dx, y + dy
+                    if 0 <= nx < GRID_WIDTH and 0 <= ny < GRID_HEIGHT:
+                        neighbor = screen['grid'][ny][nx]
+                        if neighbor not in protected_cells and neighbor not in native_cells:
+                            screen['grid'][ny][nx] = cell
         
         # === ENTITY UPDATES (always update all entities when zone is selected) ===
         
@@ -8131,6 +8458,101 @@ class GameCoreMixin:
             
             for entity_id in entities_to_remove:
                 self.remove_entity(entity_id)
+            
+            # Entity-item interactions: pickup dropped items, chest interaction, inventory overflow
+            if zone_key in self.screens and self.tick % 60 == 0:
+                grid = self.screens[zone_key]['grid']
+                for entity_id in list(self.screen_entities.get(zone_key, [])):
+                    if entity_id not in self.entities:
+                        continue
+                    entity = self.entities[entity_id]
+                    if not entity.is_alive():
+                        continue
+                    
+                    ex, ey = entity.x, entity.y
+                    
+                    # Pick up dropped items at entity position AND adjacent cells
+                    if zone_key in self.dropped_items:
+                        for dx, dy in [(0,0), (1,0), (-1,0), (0,1), (0,-1)]:
+                            px, py = ex + dx, ey + dy
+                            cell_key = (px, py)
+                            if cell_key in self.dropped_items[zone_key]:
+                                for item_name, count in self.dropped_items[zone_key][cell_key].items():
+                                    entity.inventory[item_name] = entity.inventory.get(item_name, 0) + count
+                                del self.dropped_items[zone_key][cell_key]
+                    
+                    # Pick up from adjacent chest
+                    for dx, dy in [(0,0), (1,0), (-1,0), (0,1), (0,-1)]:
+                        cx, cy = ex + dx, ey + dy
+                        if 0 <= cx < GRID_WIDTH and 0 <= cy < GRID_HEIGHT:
+                            if grid[cy][cx] == 'CHEST':
+                                chest_key = f"{zone_key}:{cx},{cy}"
+                                if chest_key in self.chest_contents:
+                                    contents = self.chest_contents[chest_key]
+                                    for item_name, count in contents.items():
+                                        entity.inventory[item_name] = entity.inventory.get(item_name, 0) + count
+                                    self.chest_contents[chest_key] = {}
+                                    # Empty chest degrades
+                                    grid[cy][cx] = 'WOOD'
+                                break
+                    
+                    # Inventory overflow: if >10 unique item types, place chest
+                    if len(entity.inventory) > 10:
+                        # Find adjacent walkable cell for chest
+                        for dx, dy in [(1,0), (-1,0), (0,1), (0,-1)]:
+                            cx, cy = ex + dx, ey + dy
+                            if 0 <= cx < GRID_WIDTH and 0 <= cy < GRID_HEIGHT:
+                                cell = grid[cy][cx]
+                                if not CELL_TYPES.get(cell, {}).get('solid', False):
+                                    grid[cy][cx] = 'CHEST'
+                                    chest_key = f"{zone_key}:{cx},{cy}"
+                                    # Move half of inventory to chest
+                                    items_list = list(entity.inventory.items())
+                                    half = len(items_list) // 2
+                                    chest_items = {}
+                                    for item_name, count in items_list[:half]:
+                                        chest_items[item_name] = count
+                                    self.chest_contents[chest_key] = chest_items
+                                    for item_name in chest_items:
+                                        del entity.inventory[item_name]
+                                    break
+        
+        # Entity consolidation: when >2 of the same base type, merge pairs into _double
+        if zone_key in self.screen_entities and self.tick % 300 == 0:
+            type_counts = {}
+            for eid in list(self.screen_entities.get(zone_key, [])):
+                if eid not in self.entities:
+                    continue
+                e = self.entities[eid]
+                if not e.is_alive() or e.props.get('is_autopilot_proxy'):
+                    continue
+                base = e.type.replace('_double', '')
+                if base not in type_counts:
+                    type_counts[base] = []
+                type_counts[base].append(eid)
+            
+            for base_type, eids in type_counts.items():
+                # Count singles (non-double) of this type
+                singles = [eid for eid in eids 
+                           if self.entities[eid].type == base_type]
+                if len(singles) > 2:
+                    # Merge pairs: keep the higher-level one, remove the other
+                    singles.sort(key=lambda eid: self.entities[eid].level, reverse=True)
+                    while len(singles) > 2:
+                        if len(singles) < 2:
+                            break
+                        keep_id = singles.pop(0)
+                        remove_id = singles.pop(0)
+                        keeper = self.entities[keep_id]
+                        removed = self.entities[remove_id]
+                        # Merge: upgrade to _double, combine inventory, boost stats
+                        keeper.type = f"{base_type}_double"
+                        keeper.max_health = int(keeper.max_health * 1.5)
+                        keeper.health = min(keeper.health + removed.health, keeper.max_health)
+                        keeper.strength = int(keeper.strength * 1.3)
+                        for item, count in removed.inventory.items():
+                            keeper.inventory[item] = keeper.inventory.get(item, 0) + count
+                        self.remove_entity(remove_id)
         
         # Zone-wide faction change: rare chance all warriors change to new faction (0.05% per update, requires 3+ warriors)
         if zone_key in self.screen_entities and random.random() < 0.0005:
@@ -8665,42 +9087,35 @@ class GameCoreMixin:
                 quest.target_zone = f"{entity.screen_x},{entity.screen_y}"
                 return True
         
-        # For SEARCH quests - find item matching player's selected inventory item
+        # For SEARCH quests - find any dropped items across zones
         elif quest_type == 'SEARCH':
-            # Get player's currently selected item
+            # Build search target list: player's selected item, or random from all items
             selected_item = self.inventory.get_selected_item_name()
-            if not selected_item:
-                quest.target_info = "No item selected"
-                return False
             
-            # Search for this item (or rarer variant) in dropped items across zones
-            # Build list of search targets: the item itself + any rarer versions
-            search_items = [selected_item]
-            
-            # Check if there are level variants (e.g., bone_sword → bone_sword_2, bone_sword_3)
-            # Or cell variants for resources
-            for item_name in ITEMS:
-                if item_name.startswith(selected_item) and item_name != selected_item:
-                    search_items.append(item_name)
-            
-            # Target level: prefer items at player level or up to +2
-            target_level = random.randint(min_level, max_level)
-            
-            # Search dropped items in all zones (not current zone)
+            # Search ALL dropped items across zones — find anything available
             found_items = []
             for screen_key, items_dict in self.dropped_items.items():
                 if screen_key == player_zone:
                     continue
                 if not self.is_overworld_zone(screen_key):
                     continue
-                sx, sy = map(int, screen_key.split(','))
+                try:
+                    sx, sy = map(int, screen_key.split(','))
+                except (ValueError, AttributeError):
+                    continue
                 for (cx, cy), item_bag in items_dict.items():
                     for item_name, count in item_bag.items():
-                        if count > 0 and item_name in search_items:
+                        if count > 0:
                             dist = abs(sx - player_sx) + abs(sy - player_sy)
-                            found_items.append((dist, sx, sy, cx, cy, item_name))
+                            # Prioritize: selected item first, runes second, others third
+                            priority = 2
+                            if selected_item and item_name == selected_item:
+                                priority = 0
+                            elif 'rune' in item_name:
+                                priority = 1
+                            found_items.append((priority, dist, sx, sy, cx, cy, item_name))
             
-            # Also search entity inventories for the item
+            # Also search entity inventories
             for entity_id, entity in self.entities.items():
                 if entity.is_dead:
                     continue
@@ -8708,32 +9123,56 @@ class GameCoreMixin:
                 if zone_key == player_zone:
                     continue
                 for item_name, count in entity.inventory.items():
-                    if count > 0 and item_name in search_items:
+                    if count > 0:
                         dist = abs(entity.screen_x - player_sx) + abs(entity.screen_y - player_sy)
-                        found_items.append((dist, entity.screen_x, entity.screen_y, entity.x, entity.y, item_name))
+                        priority = 2
+                        if selected_item and item_name == selected_item:
+                            priority = 0
+                        elif 'rune' in item_name:
+                            priority = 1
+                        found_items.append((priority, dist, entity.screen_x, entity.screen_y, entity.x, entity.y, item_name))
             
             # Also search chests
             for chest_key, contents in self.chest_contents.items():
                 for item_name, count in contents.items():
-                    if count > 0 and item_name in search_items:
-                        # chest_key format varies — try to extract zone coords
-                        # Just add with high distance if we can't parse
-                        found_items.append((5, 0, 0, 0, 0, item_name))
+                    if count > 0:
+                        # Try to parse zone coords from chest_key
+                        try:
+                            zone_part = chest_key.split(':')[0]
+                            csx, csy = map(int, zone_part.split(','))
+                            dist = abs(csx - player_sx) + abs(csy - player_sy)
+                        except (ValueError, IndexError):
+                            dist = 10
+                            csx, csy = player_sx, player_sy
+                        priority = 2
+                        if selected_item and item_name == selected_item:
+                            priority = 0
+                        elif 'rune' in item_name:
+                            priority = 1
+                        found_items.append((priority, dist, csx, csy, GRID_WIDTH // 2, GRID_HEIGHT // 2, item_name))
             
             if found_items:
-                # Pick closest
-                found_items.sort(key=lambda x: x[0])
-                dist, sx, sy, cx, cy, item_name = found_items[0]
+                # Sort by priority first, then distance
+                found_items.sort(key=lambda x: (x[0], x[1]))
+                priority, dist, sx, sy, cx, cy, item_name = found_items[0]
                 display_name = ITEMS.get(item_name, {}).get('name', item_name)
-                info = f"L{target_level} {display_name} near ({sx},{sy})"
+                info = f"Find {display_name} near ({sx},{sy})"
                 quest.set_target('cell', (sx, sy, cx, cy), info)
                 quest.target_zone = f"{sx},{sy}"
                 return True
             else:
-                # No existing items found — set target to a random zone to explore
-                info = f"Search for {ITEMS.get(selected_item, {}).get('name', selected_item)}"
+                # No existing items found — set target to a random nearby zone to explore
+                info = "Searching for items..."
                 quest.target_info = info
-                return False
+                # Pick a random nearby zone to explore
+                explore_dx = random.randint(-3, 3)
+                explore_dy = random.randint(-3, 3)
+                if explore_dx == 0 and explore_dy == 0:
+                    explore_dx = 1
+                tsx, tsy = player_sx + explore_dx, player_sy + explore_dy
+                quest.set_target('cell', (tsx, tsy, GRID_WIDTH // 2, GRID_HEIGHT // 2), info)
+                quest.target_zone = f"{tsx},{tsy}"
+                return True
         
         # For LUMBER quests — find trees to chop
         elif quest_type == 'LUMBER':

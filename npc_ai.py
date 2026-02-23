@@ -789,13 +789,21 @@ class NpcAiMixin:
         # if entity.props.get('hostile') and not is_follower:
         #     self.update_entity_combat_state(entity)
         
-        # Night behavior: DISABLED - NPCs active at all times
-        # if self.is_night and not is_follower:
-        #     peaceful_types = ['FARMER', 'TRADER', 'GUARD', 'LUMBERJACK']
-        #     if entity.type in peaceful_types:
-        #         # Seek shelter - if found and sheltered, skip other behaviors
-        #         if self.npc_seek_shelter(entity):
-        #             return  # Sheltered, don't wander or do work behaviors
+        is_proxy = entity.props.get('is_autopilot_proxy', False)
+        
+        # Night behavior: peaceful NPCs seek shelter in houses
+        if self.is_night and not is_follower and not is_proxy:
+            peaceful_types = ['FARMER', 'TRADER', 'GUARD', 'LUMBERJACK', 'MINER',
+                              'WARRIOR', 'COMMANDER', 'KING']
+            if entity.type in peaceful_types and not entity.in_subscreen:
+                if self.npc_seek_shelter(entity):
+                    return  # Sheltered, don't wander or do work behaviors
+        
+        # Daytime: NPCs in subscreens have a chance to leave
+        if not self.is_night and entity.in_subscreen and not is_follower and not is_proxy:
+            if random.random() < 0.02:  # 2% per update to leave
+                self.npc_exit_subscreen(entity)
+                return
         
         # PEACEFUL NPC THREAT DETECTION - DISABLED
         # Now handled by the reactive hostile proximity check in update_entity_ai_state
@@ -807,7 +815,6 @@ class NpcAiMixin:
         # changes entity.facing which confuses smooth interpolation, causing visual jumps.
         # moved_this_update is cleared at the top of update_entity_ai each cycle so it
         # accurately reflects whether a grid step happened in the current AI update.
-        is_proxy = entity.props.get('is_autopilot_proxy', False)
         moved_this_cycle = getattr(entity, 'moved_this_update', False)
         if self.tick % 60 == 0 and not is_follower and not moved_this_cycle:
             # Execute behavior based on entity's behavior_config
@@ -978,6 +985,9 @@ class NpcAiMixin:
                                 # Adjacent - hit back!
                                 damage = entity.strength
                                 
+                                # Add weapon bonus from inventory
+                                damage += self.calculate_weapon_bonus(entity.inventory)
+                                
                                 # Add magic damage from runestones
                                 magic_damage, magic_type = self.calculate_magic_damage(entity.inventory)
                                 damage += magic_damage
@@ -1002,6 +1012,9 @@ class NpcAiMixin:
                             if dist <= 1:
                                 # Adjacent - hit back!
                                 damage = entity.strength
+                                
+                                # Add weapon bonus from inventory
+                                damage += self.calculate_weapon_bonus(entity.inventory)
                                 
                                 # Add magic damage from runestones
                                 magic_damage, magic_type = self.calculate_magic_damage(entity.inventory)
@@ -1126,8 +1139,13 @@ class NpcAiMixin:
                     # Cooldown expired - can travel
                     can_travel = True
                     
-                    # Transition rate: 30% - entities don't always cross immediately
-                    travel_rate = 0.3
+                    # Transition rate: 30% for normal NPCs, 100% for autopilot proxy
+                    is_proxy_entity = entity.props.get('is_autopilot_proxy', False)
+                    travel_rate = 1.0 if is_proxy_entity else 0.3
+                    
+                    # Entities in targeting state with cross-zone target also always cross
+                    if entity.ai_state == 'targeting' and entity.current_target:
+                        travel_rate = 1.0
                     
                     if can_travel and random.random() < travel_rate:
                         old_zone = f"{entity.screen_x},{entity.screen_y}"
@@ -1924,6 +1942,9 @@ class NpcAiMixin:
                 if closest_enemy == 'player':
                     damage = entity.strength
                     
+                    # Add weapon bonus from inventory
+                    damage += self.calculate_weapon_bonus(entity.inventory)
+                    
                     # Add magic damage from runestones
                     magic_damage, magic_type = self.calculate_magic_damage(entity.inventory)
                     damage += magic_damage
@@ -1936,6 +1957,9 @@ class NpcAiMixin:
                     self.show_attack_animation(self.player['x'], self.player['y'], entity=entity, magic_type=magic_type)
                 else:
                     damage = entity.strength
+                    
+                    # Add weapon bonus from inventory
+                    damage += self.calculate_weapon_bonus(entity.inventory)
                     
                     # Add magic damage from runestones
                     magic_damage, magic_type = self.calculate_magic_damage(entity.inventory)
@@ -2431,8 +2455,8 @@ class NpcAiMixin:
     def _get_exit_toward_zone(self, from_sx, from_sy, to_sx, to_sy):
         """Return the (x, y) grid position of the zone exit closest to a target zone.
         
-        Used when an entity needs to path toward a target in another zone —
-        this gives them the correct exit cell to walk toward.
+        Exit cells are at the actual edge: y=0 (top), y=GRID_HEIGHT-1 (bottom),
+        x=0 (left), x=GRID_WIDTH-1 (right), centered on the 2-tile corridor.
         """
         zone_dx = to_sx - from_sx
         zone_dy = to_sy - from_sy
@@ -2441,12 +2465,12 @@ class NpcAiMixin:
         center_y = GRID_HEIGHT // 2
         
         if abs(zone_dx) >= abs(zone_dy) and zone_dx != 0:
-            # Horizontal is dominant — aim for left/right exit
-            exit_x = (GRID_WIDTH - 2) if zone_dx > 0 else 1
+            # Horizontal — aim for left/right edge
+            exit_x = (GRID_WIDTH - 1) if zone_dx > 0 else 0
             exit_y = center_y
         else:
-            # Vertical is dominant — aim for top/bottom exit
-            exit_y = (GRID_HEIGHT - 2) if zone_dy > 0 else 1
+            # Vertical — aim for top/bottom edge
+            exit_y = (GRID_HEIGHT - 1) if zone_dy > 0 else 0
             exit_x = center_x
         
         return exit_x, exit_y
@@ -3034,14 +3058,18 @@ class NpcAiMixin:
                             has_tool = (not is_proxy or
                                         (hasattr(self, 'inventory') and
                                          (self.inventory.has_item('pickaxe') or self.inventory.has_item('stone_pickaxe'))))
-                            # Check if at corner and can create cave
-                            at_corner = self.is_at_corner(entity.x, entity.y)
-                            if at_corner and random.random() < MINER_CAVE_CREATE_CHANCE:
-                                # Create cave instead of just mining
-                                screen['grid'][check_y][check_x] = 'CAVE'
+                            
+                            # NPC miners can create mineshafts (limited per zone)
+                            mineshaft_count = sum(1 for row in screen['grid']
+                                                  for c in row if c == 'MINESHAFT')
+                            can_create_shaft = (mineshaft_count < MINESHAFT_MAX_PER_ZONE)
+                            
+                            if can_create_shaft and random.random() < MINER_MINESHAFT_CHANCE:
+                                # Create mineshaft entrance
+                                screen['grid'][check_y][check_x] = 'MINESHAFT'
                                 if has_tool:
                                     entity.inventory['stone'] = entity.inventory.get('stone', 0) + 1
-                                print(f"Miner discovered a cave at corner ({check_x}, {check_y})!")
+                                print(f"Miner dug a mineshaft at ({check_x}, {check_y})!")
                                 entity.level_up_from_activity('mine', self)
                             else:
                                 # Mine the rock - convert to dirt, give stone only with tool
@@ -3855,6 +3883,9 @@ class NpcAiMixin:
             elif action == 'explore_cave':
                 self.try_wizard_explore_cave(entity, screen_key)
                 return
+            elif action == 'seek_rune':
+                self.try_wizard_seek_rune(entity, screen_key)
+                return
         
         # If no actions or action didn't succeed, try secondary behaviors
         # All peaceful NPCs can occasionally trade with nearby NPCs
@@ -4642,27 +4673,26 @@ class NpcAiMixin:
                     nearest_camp = (x, y)
         
         # Move toward nearest shelter (prefer house)
-        if nearest_house and min_house_dist <= 15:  # Only seek if within reasonable distance
-            if min_house_dist <= 2:
-                # Actually at house - enter idle state
+        if nearest_house and min_house_dist <= 15:
+            if min_house_dist <= 1:
+                # Adjacent to house — enter it
+                hx, hy = nearest_house
+                self.npc_enter_subscreen(entity, screen_key, hx, hy, 'HOUSE')
                 entity.is_idle = True
-                return True  # Sheltered, don't do other behaviors
+                return True
             else:
-                # Moving toward house - not idle yet
                 entity.is_idle = False
                 self.move_entity_towards(entity, nearest_house[0], nearest_house[1])
-                return True  # Don't do other behaviors while seeking shelter
+                return True
         
-        elif nearest_camp and min_camp_dist <= 15:  # Fallback to camp
+        elif nearest_camp and min_camp_dist <= 15:
             if min_camp_dist <= 2:
-                # Actually at camp - enter idle state
                 entity.is_idle = True
-                return True  # Sheltered
+                return True
             else:
-                # Moving toward camp - not idle yet
                 entity.is_idle = False
                 self.move_entity_towards(entity, nearest_camp[0], nearest_camp[1])
-                return True  # Don't do other behaviors while seeking shelter
+                return True
         
         # No shelter nearby - not idle
         entity.is_idle = False
@@ -4775,6 +4805,14 @@ class NpcAiMixin:
             
             # If stuck on same target for too long, add to memory and clear target
             if entity.target_stuck_counter >= TARGET_STUCK_THRESHOLD:
+                # Don't blacklist zone exit cells — entity needs to reach them
+                is_exit_cell, _ = self.is_at_exit(current_target[0], current_target[1])
+                if is_exit_cell:
+                    # Clear memory instead to give fresh approach
+                    entity.memory_lane = []
+                    entity.target_stuck_counter = 0
+                    return
+                
                 # Add stuck target to memory lane to avoid it
                 if current_target not in entity.memory_lane:
                     entity.memory_lane.append(current_target)
@@ -5225,6 +5263,61 @@ class NpcAiMixin:
                 nearest = other
         
         return nearest
+    
+    def try_wizard_seek_rune(self, entity, screen_key):
+        """Wizard moves toward nearest magic rune in dropped items (local zone or cross-zone)."""
+        rune_names = {'magic_rune', 'fire_rune', 'lightning_rune', 'ice_rune', 'poison_rune', 'shadow_rune'}
+        
+        # Check local zone for dropped runes
+        if screen_key in self.dropped_items:
+            best_pos = None
+            best_dist = 999
+            for (ix, iy), items in self.dropped_items[screen_key].items():
+                for item_name in items:
+                    if item_name in rune_names:
+                        dist = abs(entity.x - ix) + abs(entity.y - iy)
+                        if dist < best_dist:
+                            best_dist = dist
+                            best_pos = (ix, iy)
+            
+            if best_pos:
+                if best_dist <= 1:
+                    # Adjacent — pick it up
+                    for item_name, count in self.dropped_items[screen_key][best_pos].items():
+                        entity.inventory[item_name] = entity.inventory.get(item_name, 0) + count
+                    del self.dropped_items[screen_key][best_pos]
+                    return
+                else:
+                    # Move toward it
+                    self.move_entity_towards(entity, best_pos[0], best_pos[1])
+                    return
+        
+        # No local runes — try cross-zone: find nearest zone with runes and head to exit
+        best_zone = None
+        best_zone_dist = 999
+        for sk, items_dict in self.dropped_items.items():
+            if sk == screen_key:
+                continue
+            try:
+                sx, sy = map(int, sk.split(','))
+            except (ValueError, AttributeError):
+                continue
+            for pos, items in items_dict.items():
+                if any(n in rune_names for n in items):
+                    dist = abs(entity.screen_x - sx) + abs(entity.screen_y - sy)
+                    if dist < best_zone_dist:
+                        best_zone_dist = dist
+                        best_zone = (sx, sy)
+                    break
+        
+        if best_zone:
+            # Head toward the exit leading to that zone
+            exit_x, exit_y = self._get_exit_toward_zone(
+                entity.screen_x, entity.screen_y, best_zone[0], best_zone[1])
+            entity.current_target = ('cell', exit_x, exit_y)
+            entity.target_type = 'resource'
+            entity.ai_state = 'targeting'
+            entity.ai_state_timer = 3
     
     def try_wizard_cast_spell(self, entity, screen_key):
         """Wizard casts spell on nearby target"""
