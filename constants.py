@@ -190,10 +190,15 @@ MOUNTAINS_BIOME_CHANCE = 0.15   # 15% of zones are mountains (generate_screen)
 DESERT_BIOME_CHANCE = 0.05      # 5% of zones are desert (generate_screen)
 
 # Raid Event System
-RAID_CHECK_INTERVAL = 300       # Ticks between raid checks (5 seconds at 60 FPS)
-RAID_CHANCE_BASE = 0.15         # 15% chance for raid when zone has 5+ entities
-RAID_POPULATION_THRESHOLD = 5   # Minimum entities in zone to trigger raid check
+RAID_CHECK_INTERVAL = 600       # Ticks between raid checks (10 seconds at 60 FPS)
+RAID_CHANCE_BASE = 0.08         # 8% chance for raid when zone has 5+ entities
+RAID_POPULATION_THRESHOLD = 6   # Minimum entities in zone to trigger raid check
 HIDDEN_CAVE_SPAWN_CHANCE = 0.20 # 20% chance to spawn hidden cave during raid
+NATURAL_CAVE_ZONE_CHANCE = 0.08 # 8% chance a zone gets a natural cave on generation
+PLAYER_MINESHAFT_BASE_CHANCE = 0.05 # 5% base chance for player mining to create mineshaft
+MINESHAFT_DEPTH_DIVISOR = 2.0  # Each depth level halves the mineshaft creation chance
+MINER_MINESHAFT_CHANCE = 0.03  # 3% chance per mine action for NPC miners
+MINESHAFT_MAX_PER_ZONE = 2     # Max mineshafts NPCs can create in one zone
 WARRIOR_PROMOTION_CHANCE = 0.60 # 60% chance highest level entity becomes warrior after raid clear
 
 # Miner & Structure Systems
@@ -243,6 +248,7 @@ COLORS = {
     'HOUSE': (139, 69, 19),
     'FORGE': (80, 80, 80),  # Gray for forge
     'CAVE': (17, 24, 39),
+    'MINESHAFT': (90, 70, 50),
     'SOIL': (101, 67, 33),
     'BLACK': (0, 0, 0),
     'WHITE': (255, 255, 255),
@@ -305,7 +311,8 @@ CELL_TYPES = {
     'HOUSE': {'color': COLORS['HOUSE'], 'label': 'Hos', 'solid': True, 'enterable': True, 'subscreen_type': 'HOUSE_INTERIOR', 'degrades_to': 'PLANKS', 'degrade_rate': 0.0001},
     'FORGE': {'color': COLORS['FORGE'], 'label': 'Frg', 'solid': True, 'degrades_to': 'STONE', 'degrade_rate': 0.0001},
     'CAVE': {'color': COLORS['CAVE'], 'label': 'Cav', 'solid': True, 'enterable': True, 'subscreen_type': 'CAVE'},
-    'HIDDEN_CAVE': {'color': (40, 35, 30), 'label': 'HCav', 'solid': False, 'degrades_to': 'DIRT', 'degrade_rate': 0.01},  # High decay rate - fills in quickly
+    'MINESHAFT': {'color': (90, 70, 50), 'label': 'Mine', 'solid': True, 'enterable': True, 'subscreen_type': 'CAVE', 'sprite_name': 'mineshaft'},
+    'HIDDEN_CAVE': {'color': (40, 35, 30), 'label': 'HCav', 'solid': False, 'degrades_to': 'CAVE', 'degrade_rate': 0.005},
     'CAMP': {'color': (200, 100, 50), 'label': 'Camp', 'solid': False, 'grows_to': 'HOUSE', 'growth_rate': 0.001},
     'SOIL': {'color': COLORS['SOIL'], 'label': 'Soil', 'solid': False},
     'FLOWER': {'color': COLORS['FLOWER'], 'label': 'Flwr', 'solid': False, 'degrades_to': 'GRASS', 'degrade_rate': 0.0001},  # Very slow decay
@@ -380,10 +387,10 @@ ITEMS = {
     'skeleton_bones': {'color': (240, 240, 230), 'name': 'Skeleton Bones', 'is_follower': True},
     
     # Runestones - Magic damage types
-    'lightning_rune': {'color': (100, 149, 237), 'name': 'Lightning Rune', 'magic_damage': 'lightning', 'damage': 3, 'sprite_name': 'magic_rune'},
-    'fire_rune': {'color': (255, 69, 0), 'name': 'Fire Rune', 'magic_damage': 'fire', 'damage': 3, 'sprite_name': 'magic_rune'},
-    'ice_rune': {'color': (173, 216, 230), 'name': 'Ice Rune', 'magic_damage': 'ice', 'damage': 3, 'sprite_name': 'magic_rune'},
-    'poison_rune': {'color': (50, 205, 50), 'name': 'Poison Rune', 'magic_damage': 'poison', 'damage': 3, 'sprite_name': 'magic_rune'},
+    'lightning_rune': {'color': (100, 149, 237), 'name': 'Lightning Rune', 'magic_damage': 'lightning', 'damage': 3},
+    'fire_rune': {'color': (255, 69, 0), 'name': 'Fire Rune', 'magic_damage': 'fire', 'damage': 3},
+    'ice_rune': {'color': (173, 216, 230), 'name': 'Ice Rune', 'magic_damage': 'ice', 'damage': 3},
+    'poison_rune': {'color': (50, 205, 50), 'name': 'Poison Rune', 'magic_damage': 'poison', 'damage': 3},
     'shadow_rune': {'color': (75, 0, 130), 'name': 'Shadow Rune', 'magic_damage': 'shadow', 'damage': 3, 'sprite_name': 'magic_rune'}
 }
 
@@ -482,7 +489,7 @@ ENTITY_TYPES = {
         'max_health': 20,
         'max_hunger': 100,
         'max_thirst': 100,
-        'strength': 5,
+        'strength': 6,
         'speed': 1.0,
         'food_sources': ['GRASS'],
         'water_sources': ['WATER'],
@@ -504,7 +511,7 @@ ENTITY_TYPES = {
     'WOLF': {
         'color': (80, 80, 80),
         'symbol': 'W',
-        'max_health': 40,
+        'max_health': 30,
         'max_hunger': 100,
         'max_thirst': 100,
         'strength': 15,
@@ -532,7 +539,7 @@ ENTITY_TYPES = {
         'max_health': 30,
         'max_hunger': 100,
         'max_thirst': 100,
-        'strength': 8,
+        'strength': 9,
         'speed': 2.0,
         'food_sources': ['GRASS', 'CARROT1', 'CARROT2', 'CARROT3'],
         'water_sources': ['WATER'],
@@ -558,7 +565,7 @@ ENTITY_TYPES = {
         'max_health': 80,
         'max_hunger': 100,
         'max_thirst': 100,
-        'strength': 12,
+        'strength': 13,
         'speed': 1.0,
         'food_sources': ['CARROT1', 'CARROT2', 'CARROT3'],
         'water_sources': ['WATER'],
@@ -589,7 +596,7 @@ ENTITY_TYPES = {
         'max_health': 130,
         'max_hunger': 100,
         'max_thirst': 100,
-        'strength': 30,
+        'strength': 31,
         'speed': 1.2,
         'food_sources': ['CARROT1', 'CARROT2', 'CARROT3'],
         'water_sources': ['WATER'],
@@ -619,7 +626,7 @@ ENTITY_TYPES = {
         'max_health': 100,
         'max_hunger': 100,
         'max_thirst': 100,
-        'strength': 25,
+        'strength': 26,
         'speed': 1.2,
         'food_sources': ['CARROT1', 'CARROT2', 'CARROT3'],
         'water_sources': ['WATER'],
@@ -649,7 +656,7 @@ ENTITY_TYPES = {
         'max_health': 120,
         'max_hunger': 100,
         'max_thirst': 100,
-        'strength': 30,
+        'strength': 31,
         'speed': 1.2,
         'food_sources': ['CARROT1', 'CARROT2', 'CARROT3'],
         'water_sources': ['WATER'],
@@ -680,7 +687,7 @@ ENTITY_TYPES = {
         'max_health': 150,
         'max_hunger': 100,
         'max_thirst': 100,
-        'strength': 40,
+        'strength': 41,
         'speed': 1.0,
         'food_sources': ['CARROT1', 'CARROT2', 'CARROT3'],
         'water_sources': ['WATER'],
@@ -711,7 +718,7 @@ ENTITY_TYPES = {
         'max_health': 70,
         'max_hunger': 100,
         'max_thirst': 100,
-        'strength': 10,
+        'strength': 11,
         'speed': 0.8,
         'food_sources': ['CARROT1', 'CARROT2', 'CARROT3'],
         'water_sources': ['WATER'],
@@ -772,29 +779,30 @@ ENTITY_TYPES = {
         'max_health': 60,
         'max_hunger': 100,
         'max_thirst': 100,
-        'strength': 12,
+        'strength': 13,
         'speed': 1.0,
         'food_sources': ['CARROT1', 'CARROT2', 'CARROT3'],
         'water_sources': ['WATER'],
         'hostile': False,
         'edible': False,
+        'attacks_hostile': True,
         'can_trade': True,
         'inventory': {},
         'drops': [
             {'item': 'bones', 'amount': 1, 'chance': 0.2}
         ],
         'behavior_config': {
-            'actions': ['cast_spell', 'travel', 'explore_cave'],
+            'actions': ['seek_rune', 'cast_spell', 'travel', 'explore_cave'],
             'seek_exits': True,
             'wander_when_idle': True
         },
         'ai_params': {
-            'aggressiveness': 0.45,  # 45% - seeks targets for spells
-            'passiveness': 0.30,     # 30% - mystical/distracted
-            'idleness': 0.20,        # 20% - meditates/studies
-            'flee_chance': 0.40,
-            'combat_chance': 0.60,
-            'target_types': ['hostile', 'food', 'water', 'structure']
+            'aggressiveness': 0.20,  # Low — only fights when attacked
+            'passiveness': 0.10,     # Stays on task
+            'idleness': 0.05,        # Almost always active
+            'flee_chance': 0.50,
+            'combat_chance': 0.50,
+            'target_types': ['food', 'water', 'structure']  # No 'hostile' — won't seek fights
         }
     },
     'LUMBERJACK': {
@@ -803,7 +811,7 @@ ENTITY_TYPES = {
         'max_health': 100,
         'max_hunger': 100,
         'max_thirst': 100,
-        'strength': 18,
+        'strength': 19,
         'speed': 0.9,
         'food_sources': ['CARROT1', 'CARROT2', 'CARROT3'],
         'water_sources': ['WATER'],
@@ -835,7 +843,7 @@ ENTITY_TYPES = {
         'max_health': 110,
         'max_hunger': 100,
         'max_thirst': 100,
-        'strength': 20,
+        'strength': 21,
         'speed': 0.8,
         'food_sources': ['CARROT1', 'CARROT2', 'CARROT3'],
         'water_sources': ['WATER'],
@@ -865,7 +873,7 @@ ENTITY_TYPES = {
     'BANDIT': {
         'color': (150, 50, 50),
         'symbol': 'B',
-        'max_health': 70,
+        'max_health': 50,
         'max_hunger': 100,
         'max_thirst': 100,
         'strength': 20,
@@ -891,7 +899,7 @@ ENTITY_TYPES = {
     'GOBLIN': {
         'color': (100, 150, 50),
         'symbol': 'g',
-        'max_health': 50,
+        'max_health': 35,
         'max_hunger': 100,
         'max_thirst': 100,
         'strength': 12,
@@ -918,7 +926,7 @@ ENTITY_TYPES = {
     'SKELETON': {
         'color': (200, 200, 200),
         'symbol': 'K',
-        'max_health': 50,
+        'max_health': 35,
         'max_hunger': 50,
         'max_thirst': 50,
         'strength': 12,
@@ -944,7 +952,7 @@ ENTITY_TYPES = {
         'color': (255, 215, 0),  # Yellow/gold
         'symbol': 'T',
         'sprite_name': 'yellow termite',  # Maps to sprite files named "yellow termite_direction_frame.png"
-        'max_health': 40,
+        'max_health': 25,
         'max_hunger': 100,
         'max_thirst': 100,
         'strength': 3,
@@ -977,7 +985,7 @@ ENTITY_TYPES = {
         'color': (40, 30, 50),
         'symbol': 'b',
         'sprite_name': 'black bat',  # Maps to "black bat_direction_frame.png"
-        'max_health': 15,
+        'max_health': 10,
         'max_hunger': 80,
         'max_thirst': 80,
         'strength': 4,       # Very low damage per hit
@@ -1143,9 +1151,11 @@ ITEMS.update({
     'carrot3': {'color': COLORS['CARROT3'], 'name': 'Carrot 3'},
     'house': {'color': COLORS['HOUSE'], 'name': 'House'},
     'cave': {'color': COLORS['CAVE'], 'name': 'Cave'},
+    'mineshaft': {'color': COLORS['MINESHAFT'], 'name': 'Mineshaft'},
+    'camp': {'color': (200, 100, 50), 'name': 'Camp'},
     'wall': {'color': COLORS['WALL'], 'name': 'Wall'},
     'flower': {'color': COLORS['FLOWER'], 'name': 'Flower'},
-    'magic_rune': {'color': (180, 120, 255), 'name': 'Magic Rune', 'magic_damage': 'arcane', 'damage': 5},
+    'magic_rune': {'color': (180, 120, 255), 'name': 'Magic Rune', 'magic_damage': 'arcane', 'damage': 5, 'sprite_name': 'magic_rune'},
 })
 
 # Cell pickup requirements
@@ -1161,6 +1171,7 @@ CELL_PICKUP = {
     'WALL': {'tool': None, 'item': 'wall'},
     'HOUSE': {'tool': None, 'item': 'house'},
     'CAVE': {'tool': None, 'item': 'cave'},
+    'MINESHAFT': {'tool': None, 'item': 'mineshaft'},
     'CARROT1': {'tool': None, 'item': 'carrot', 'amount': 1},
     'CARROT2': {'tool': None, 'item': 'carrot', 'amount': 2},
     'CARROT3': {'tool': None, 'item': 'carrot', 'amount': 3},
@@ -1238,6 +1249,9 @@ ITEM_TO_CELL = {
     'carrot3': 'CARROT3',
     'house': 'HOUSE',
     'cave': 'CAVE',
+    'mineshaft': 'MINESHAFT',
+    'camp': 'CAMP',
+    'chest': 'CHEST',
     'wall': 'WALL',
     'wood': 'WOOD',
     'planks': 'PLANKS',

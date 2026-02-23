@@ -45,8 +45,8 @@ QUEST_NPC_TYPE = {
     'HUNT':           'WARRIOR',
     'SLAY':           'WARRIOR',
     'EXPLORE':        'TRADER',
-    'SEARCH':         'TRADER',
-    'RESCUE':         'GUARD',
+    'SEARCH':         'WIZARD',
+    'RESCUE':         'WIZARD',
     'COMBAT_HOSTILE': 'WARRIOR',
     'COMBAT_ALL':     'WARRIOR',
 }
@@ -99,6 +99,25 @@ class AutopilotMixin:
 
         # Keep proxy position in sync so the player's logical position tracks it
         self._sync_player_from_proxy(proxy)
+
+        # Diagnostic: print positions every tick to track teleport glitches
+        pz = f"{self.player['screen_x']},{self.player['screen_y']}"
+        pp = f"({self.player['x']},{self.player['y']})"
+        prz = f"{proxy.screen_x},{proxy.screen_y}"
+        prp = f"({proxy.x},{proxy.y})"
+        state = proxy.ai_state
+        tgt = proxy.current_target
+        cs_key = None
+        if self.current_screen:
+            for k, v in self.screens.items():
+                if v is self.current_screen:
+                    cs_key = k
+                    break
+        print(f"[AP] t={self.tick} "
+              f"pZ={pz} pP={pp} "
+              f"xZ={prz} xP={prp} "
+              f"st={state} tgt={tgt} "
+              f"cs={cs_key}")
 
         # Periodically sync proxy inventory → player inventory
         self._autopilot_sync_timer += 1
@@ -392,7 +411,12 @@ class AutopilotMixin:
         # the entity type handles the actual work.
         # 10% of the time: set a cross-zone travel target to encourage
         # the proxy to explore new areas.
-        if random.random() < 0.90:
+        # Exception: SEARCH and RESCUE always travel toward target zone.
+        
+        travel_quests = ('SEARCH', 'RESCUE', 'EXPLORE')
+        force_travel = self.active_quest in travel_quests
+        
+        if not force_travel and random.random() < 0.90:
             # Natural behavior mode — just make sure proxy is wandering
             # so its behavior_config fires on the next tick % 60 cycle.
             if proxy.ai_state == 'targeting':
@@ -439,12 +463,12 @@ class AutopilotMixin:
         center_y = GRID_HEIGHT // 2   # e.g. 9  for GRID_HEIGHT=18
 
         if abs(zone_dx) >= abs(zone_dy) and zone_dx != 0:
-            # Move horizontally — aim at the center of the left/right edge
-            exit_x = (GRID_WIDTH - 2) if zone_dx > 0 else 1
+            # Move horizontally — aim at the actual edge cell
+            exit_x = (GRID_WIDTH - 1) if zone_dx > 0 else 0
             exit_y = center_y
         else:
-            # Move vertically — aim at the center of the top/bottom edge
-            exit_y = (GRID_HEIGHT - 2) if zone_dy > 0 else 1
+            # Move vertically — aim at the actual edge cell
+            exit_y = (GRID_HEIGHT - 1) if zone_dy > 0 else 0
             exit_x = center_x
 
         proxy.current_target = ('cell', exit_x, exit_y)
