@@ -61,6 +61,7 @@ class AutopilotMixin:
     def init_autopilot(self):
         """Initialise autopilot state.  Call from __init__ and after new_game/load_game."""
         self.autopilot = False
+        self.autopilot_locked = False           # True when manually toggled on via Shift+A
         self.autopilot_proxy_id = None          # entity_id of the proxy NPC, or None
         self._autopilot_nudge_timer = 0
         self._autopilot_sync_timer = 0
@@ -73,10 +74,21 @@ class AutopilotMixin:
         return self.tick - self.last_input_tick > AUTOPILOT_IDLE_TICKS
 
     def mark_input(self):
-        """Called on any player input — disables autopilot and restores player control."""
+        """Called on any player input — disables autopilot unless manually locked on."""
         self.last_input_tick = self.tick
-        if self.autopilot:
+        if self.autopilot and not self.autopilot_locked:
             self._autopilot_disengage()
+
+    def toggle_autopilot(self):
+        """Manually toggle autopilot on/off (Shift+A)."""
+        if self.autopilot_locked:
+            self.autopilot_locked = False
+            self._autopilot_disengage()
+            print("[Autopilot] OFF")
+        else:
+            self.autopilot_locked = True
+            self.autopilot = True
+            print("[Autopilot] ON")
 
     # ── Main update (called every tick from move_player) ──────────────────────
 

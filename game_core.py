@@ -920,6 +920,8 @@ class GameCoreMixin:
                     elif event.key == pygame.K_d:
                         # Drop selected item
                         self.drop_selected_item()
+                    elif event.key == pygame.K_a and (pygame.key.get_mods() & pygame.KMOD_SHIFT):
+                        self.toggle_autopilot()
                     elif event.key == pygame.K_g:
                         # Toggle debug memory lanes visualization
                         self.debug_memory_lanes = not self.debug_memory_lanes
@@ -1056,7 +1058,7 @@ class GameCoreMixin:
                            keys[pygame.K_RIGHT] or keys[pygame.K_d])
         
         if not any_movement_key:
-            if self.is_autopilot_idle():
+            if getattr(self, 'autopilot_locked', False):
                 # If in a subscreen, navigate toward the exit instead of autopiloting
                 if self.player.get('in_subscreen'):
                     subscreen = self.subscreens.get(self.player.get('subscreen_key'))
@@ -1087,8 +1089,6 @@ class GameCoreMixin:
                                     facing_map = {(0,-1): 'up', (0,1): 'down', (-1,0): 'left', (1,0): 'right'}
                                     self.player['facing'] = facing_map.get((dx, dy), self.player['facing'])
                     return
-                if not self.autopilot:
-                    self.autopilot = True
                 self.update_autopilot()
             return
         
