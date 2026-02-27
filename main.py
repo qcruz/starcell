@@ -39,6 +39,9 @@ Module layout:
     actions.py     — NpcAiActionsMixin
     movement.py    — NpcAiMovementMixin
 
+  lore/            — Quest targeting and world event generation
+    engine.py      — LoreEngineMixin
+
   Legacy monoliths (gradually being emptied as extraction completes):
     game_core.py   — GameCoreMixin
     npc_ai.py      — NpcAiMixin
@@ -54,6 +57,7 @@ from systems import (SaveLoadMixin, CraftingMixin, CombatMixin,
 from world import WorldGenerationMixin, ZonesMixin, CellsMixin
 from ui import HudMixin, InventoryUIMixin, MenusMixin
 from ai import NpcAiActionsMixin, NpcAiMovementMixin
+from lore import LoreEngineMixin
 
 # ── Legacy monoliths (fallback for methods not yet extracted) ─────────────────
 from game_core import GameCoreMixin
@@ -68,6 +72,7 @@ class Game(
     SaveLoadMixin, CraftingMixin, CombatMixin,        # systems/
     EnchantmentMixin, FactionsMixin, SpawningMixin,   # systems/
     NpcAiActionsMixin, NpcAiMovementMixin,            # ai/
+    LoreEngineMixin,                                  # lore/
     # Legacy monoliths — cover methods not yet extracted
     GameCoreMixin, NpcAiMixin, AutopilotMixin,
 ):
