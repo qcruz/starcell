@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+saves/
+.DS_Store
+
+# Old versioned archive files
+starcellv1-1-*.py
+
+# Archive snapshot directories
+game files 2-17-26/
+game files 2-19-26/
+game files 2-21-26/
+gamefiles 2-18-26/
+gamefiles2-16-26/
+gamefiles2-7-26/
+gamefiles2-8-26/
