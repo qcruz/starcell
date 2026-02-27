@@ -6,7 +6,7 @@ By submitting any contribution to this project (via pull request, issue tracker,
 Contributions include, but are not limited to: Code, technical systems, artwork, animation, audio, narrative design, documentation, bug reports, and community tools.
 
 ## 2. Rights Granted (CLA)
-You grant the project owner ([Your Name/Entity]) a perpetual, irrevocable, worldwide, royalty-free, and non-exclusive license to:
+You grant the project owner a perpetual, irrevocable, worldwide, royalty-free, and non-exclusive license to:
 * Use, modify, and distribute your contribution.
 * Integrate it into the base project or related commercial products.
 * Sublicense it as part of the project.
@@ -16,7 +16,7 @@ You grant the project owner ([Your Name/Entity]) a perpetual, irrevocable, world
 You confirm that your contribution is your original creation, or you have the explicit legal right to submit it under these terms.
 
 ## 4. Community Reward Pool
-We believe in rewarding the talent that builds this ecosystem. The Contributor Reward Pool is funded by **[e.g., 90%] of our Patreon revenue** PLUS **100% of proceeds generated from the Community Support Program (CSP)**.
+We believe in rewarding the talent that builds this ecosystem. The Contributor Reward Pool is funded by **[90%] of our Patreon revenue** PLUS **100% of proceeds generated from the Community Support Program (CSP)**.
 
 * **Distribution Model:** The total fund pool is distributed proportionately based on integrated contributions in the current base version, estimated functional impact, and asset scope.
 * **Maintainer Discretion:** Final reward allocation decisions and contribution valuations are made at the sole discretion of the Project Manager. Unused funds roll over to future distributions.
