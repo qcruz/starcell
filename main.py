@@ -1,25 +1,77 @@
 #!/usr/bin/env python3
 """
-StarCell v2.0 - Modular Architecture
+StarCell — Modular Architecture
 Run this file to start the game.
 
-Structure:
-  constants.py  — Data tables, config, behavior definitions
-  entity.py     — Entity, Inventory, Quest classes
-  game_core.py  — Rendering, player, world gen, quests, save/load, zone updates
-  npc_ai.py     — NPC behavior, AI, movement, combat, action primitives
-  autopilot.py  — Player autopilot system
+Module layout:
+  data/            — Game data tables (split from constants.py)
+    settings.py    — Screen size, FPS, grid constants
+    cells.py       — Cell types, biomes
+    items.py       — Item definitions
+    entities.py    — Entity type definitions
+    factions.py    — Faction data
+    quests.py      — Quest type definitions
+    spells.py      — Spell definitions
+
+  engine/          — Core engine helpers
+    entity.py      — Entity, Inventory, Quest classes
+    sprite_manager.py
+
+  systems/         — Game systems
+    save_load.py   — SaveLoadMixin
+    crafting.py    — CraftingMixin
+    combat.py      — CombatMixin
+    enchantment.py — EnchantmentMixin
+    factions.py    — FactionsMixin
+    spawning.py    — SpawningMixin
+
+  world/           — World simulation
+    generation.py  — WorldGenerationMixin
+    zones.py       — ZonesMixin
+    cells.py       — CellsMixin
+
+  ui/              — Rendering
+    hud.py         — HudMixin
+    inventory.py   — InventoryUIMixin
+    menus.py       — MenusMixin
+
+  ai/              — NPC behaviour
+    actions.py     — NpcAiActionsMixin
+    movement.py    — NpcAiMovementMixin
+
+  Legacy monoliths (gradually being emptied as extraction completes):
+    game_core.py   — GameCoreMixin
+    npc_ai.py      — NpcAiMixin
+    autopilot.py   — AutopilotMixin
 """
 
 from constants import *
 from entity import *
+
+# ── New modular mixins ────────────────────────────────────────────────────────
+from systems import (SaveLoadMixin, CraftingMixin, CombatMixin,
+                     EnchantmentMixin, FactionsMixin, SpawningMixin)
+from world import WorldGenerationMixin, ZonesMixin, CellsMixin
+from ui import HudMixin, InventoryUIMixin, MenusMixin
+from ai import NpcAiActionsMixin, NpcAiMovementMixin
+
+# ── Legacy monoliths (fallback for methods not yet extracted) ─────────────────
 from game_core import GameCoreMixin
 from npc_ai import NpcAiMixin
 from autopilot import AutopilotMixin
 
 
-class Game(GameCoreMixin, NpcAiMixin, AutopilotMixin):
-    """Main game class combining all systems via mixins."""
+class Game(
+    # New modular mixins take precedence over legacy duplicates via MRO
+    HudMixin, InventoryUIMixin, MenusMixin,           # ui/
+    WorldGenerationMixin, ZonesMixin, CellsMixin,     # world/
+    SaveLoadMixin, CraftingMixin, CombatMixin,        # systems/
+    EnchantmentMixin, FactionsMixin, SpawningMixin,   # systems/
+    NpcAiActionsMixin, NpcAiMovementMixin,            # ai/
+    # Legacy monoliths — cover methods not yet extracted
+    GameCoreMixin, NpcAiMixin, AutopilotMixin,
+):
+    """Main game class combining all systems via multiple inheritance."""
     pass
 
 
