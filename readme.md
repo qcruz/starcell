@@ -23,3 +23,9 @@ To keep things running smoothly and fairly, please review these before building 
 
 ## ❤️ Support the Ecosystem
 If you love what we are building, consider supporting the project on [https://patreon.com/starcellgame?utm_medium=unknown&utm_source=join_link&utm_campaign=creatorshare_creator&utm_content=copyLink]. Your support goes directly toward funding the community contributors!
+
+---
+
+## ⬇️ Download
+
+[![Download StarCell](https://img.shields.io/badge/Download-StarCell-blue?style=for-the-badge)](https://github.com/qcruz/starcell/archive/refs/heads/main.zip)
