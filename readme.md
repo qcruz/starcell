@@ -29,3 +29,11 @@ If you love what we are building, consider supporting the project on [https://pa
 ## ⬇️ Download
 
 [![Download StarCell](https://img.shields.io/badge/Download-StarCell-blue?style=for-the-badge)](https://github.com/qcruz/starcell/archive/refs/heads/main.zip)
+
+### How to run (macOS)
+
+1. Download and unzip the file above
+2. Double-click **`Launch StarCell.command`** inside the folder
+3. If macOS says it can't verify the app, go to **System Settings → Privacy & Security** and click **Open Anyway**
+
+> The game requires Python 3. If it's not installed, download it from [python.org](https://www.python.org/downloads/).
