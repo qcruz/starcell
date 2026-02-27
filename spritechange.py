@@ -3,13 +3,13 @@ import random
 from PIL import Image
 import numpy as np
 
-INPUT_FOLDER = "/Users/quanahcruz/Desktop/porn/starcell/sprites/input_sprites"
-OUTPUT_FOLDER = "/Users/quanahcruz/Desktop/porn/starcell/sprites/output_sprites"
+_BASE = os.path.dirname(os.path.abspath(__file__))
+INPUT_FOLDER = os.path.join(_BASE, "sprites", "input_sprites")
+OUTPUT_FOLDER = os.path.join(_BASE, "sprites", "output_sprites")
 VARIANTS_PER_SPRITE = 12
 SPRITE_SIZE = (40, 40)
 
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
-#/Users/quanahcruz/Desktop/porn/starcell/sprites
 
 
 # ---------- Utility Functions ----------

@@ -6,7 +6,7 @@ By submitting any contribution to this project (via pull request, issue tracker,
 Contributions include, but are not limited to: Code, technical systems, artwork, animation, audio, narrative design, documentation, bug reports, and community tools.
 
 ## 2. Rights Granted (CLA)
-You grant the project owner ([Your Name/Entity]) a perpetual, irrevocable, worldwide, royalty-free, and non-exclusive license to:
+You grant the project owner (OpenStar Project) a perpetual, irrevocable, worldwide, royalty-free, and non-exclusive license to:
 * Use, modify, and distribute your contribution.
 * Integrate it into the base project or related commercial products.
 * Sublicense it as part of the project.

@@ -1,6 +1,6 @@
 Legal Disclosures
 Project License — Open Core with Reciprocity
-Copyright © [2026] [Quanah Cruz]
+Copyright © [2026] OpenStar Project
 
 Permission is granted to use, modify, and distribute this software, including for commercial purposes, subject to the following conditions:
 
