@@ -1,26 +1,11 @@
-# Starcell — Current Features & Planned
+# StarCell — Implemented Features
 
-This document is the authoritative reference for all implemented features and planned work.
-Update it regularly as features are added, changed, or planned.
-
----
-
-## PLANNED FEATURES
-> Add planned features here as they are decided. Reference this section when scoping intermediate updates.
-
-- [ ] Modular file structure refactor (in progress)
-- [ ] Audio system
-- [ ] Procedural dungeon themes (caves feel distinct)
-- [ ] NPC relationship system
-- [ ] Complex quest chains
-- [ ] Economy / inflation system
-- [ ] Advanced crafting (failure rates, partial results)
-- [ ] Particle effects (rain, fire, magic)
-- [ ] Full wizard spell suite
+This document is the reference for all features currently in the game.
+For planned and desired future features, see [`roadmap.md`](roadmap.md).
 
 ---
 
-## CURRENT FEATURES
+## IMPLEMENTED FEATURES
 
 ### Core Game Loop & Initialization
 - **Main Class** (`main.py`, `game_core.py`): Composed via mixins — GameCoreMixin, NpcAiMixin, AutopilotMixin
@@ -311,11 +296,11 @@ Update it regularly as features are added, changed, or planned.
 
 ### Autopilot System (`autopilot.py`)
 
-- Triggers after 180 ticks (3s) of no player input (grace period: 900 ticks on start)
+- **Off by default** — toggled on/off with **Shift+A**
 - Spawns a proxy Entity at player position using quest-appropriate NPC role
 - Nudges proxy toward quest target every 120 ticks
 - Mirrors proxy inventory to player every 60 ticks
-- Disengages on any player input; player snaps to proxy's position
+- Disengages immediately on any player input; player snaps to proxy's position
 
 **Quest → Proxy Role**
 
@@ -396,19 +381,25 @@ Update it regularly as features are added, changed, or planned.
 
 ---
 
-## FILE STRUCTURE REFERENCE (current — pre-refactor)
+## FILE STRUCTURE REFERENCE
 
-| File | Size | Role |
-|---|---|---|
-| `main.py` | small | Entry point, mixin class composition |
-| `game_core.py` | ~447 KB | Rendering, game loop, world gen, quests, save/load, zone updates |
-| `npc_ai.py` | ~264 KB | All NPC AI, movement, combat, action primitives |
-| `autopilot.py` | ~55 KB | Player autopilot system |
-| `entity.py` | ~46 KB | SpriteManager, Entity, Inventory, Quest classes |
-| `constants.py` | ~55 KB | All config tables, data definitions, recipes, biomes |
-| `sprites/` | — | All sprite images (terrain, entities, animated) |
-| `spritesheet.png` | 2.1 MB | Original sprite sheet |
+| Path | Role |
+|---|---|
+| `main.py` | Entry point — assembles `Game` class via mixin MRO |
+| `data/` | Game data tables (settings, cells, items, entities, factions, quests, spells, biomes) |
+| `engine/` | Core helpers (Entity, Inventory, Quest, SpriteManager) |
+| `systems/` | SaveLoad, Crafting, Combat, Enchantment, Factions, Spawning mixins |
+| `world/` | WorldGeneration, Zones, Cells mixins |
+| `ui/` | HUD, InventoryUI, Menus mixins |
+| `ai/` | NpcAiActions, NpcAiMovement mixins |
+| `lore/` | LoreEngine mixin (quest targeting, secret entrances, world events) |
+| `game_core.py` | Legacy monolith — game loop, input, player movement, subscreen transitions |
+| `npc_ai.py` | Legacy monolith — NPC AI states, role behaviors, combat |
+| `autopilot.py` | Player autopilot system (Shift+A toggle) |
+| `constants.py` | All config constants, recipes, biome definitions |
+| `sprites/` | Sprite images (terrain, entities, animated walk cycles) |
+| `launcher/` | macOS .app bundle + launch.py for one-click GitHub install |
 
 ---
 
-*Last updated: 2026-02-26*
+*Last updated: 2026-02-27*
