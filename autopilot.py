@@ -74,9 +74,10 @@ class AutopilotMixin:
         return self.tick - self.last_input_tick > AUTOPILOT_IDLE_TICKS
 
     def mark_input(self):
-        """Called on any player input — disables autopilot unless manually locked on."""
+        """Called on any player input — always disables autopilot."""
         self.last_input_tick = self.tick
-        if self.autopilot and not self.autopilot_locked:
+        if self.autopilot:
+            self.autopilot_locked = False
             self._autopilot_disengage()
 
     def toggle_autopilot(self):

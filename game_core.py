@@ -1384,11 +1384,21 @@ class GameCoreMixin:
             if current_subscreen and current_subscreen.get('type') == 'CAVE':
                 self.descend_cave()
                 return
-        
+
         # Check if subscreen already exists for this location
         parent_screen_x = self.player['screen_x']
         parent_screen_y = self.player['screen_y']
-        
+
+        # If entering a CAVE/MINESHAFT from inside a house, record which subscreen
+        # we came from so ascend_cave() can return the player to the right place.
+        came_from_subscreen = None
+        came_from_pos = None
+        if structure_type == 'CAVE' and self.player.get('in_subscreen'):
+            origin_sub = self.subscreens.get(self.player.get('subscreen_key'))
+            if origin_sub and origin_sub.get('type') == 'HOUSE_INTERIOR':
+                came_from_subscreen = self.player['subscreen_key']
+                came_from_pos = (cell_x, cell_y)
+
         # Look for existing subscreen at this location
         existing_key = None
         for key, subscreen in self.subscreens.items():
@@ -1396,7 +1406,7 @@ class GameCoreMixin:
                 subscreen['parent_cell'] == (cell_x, cell_y)):
                 existing_key = key
                 break
-        
+
         # For CAVE/MINESHAFT, also check zone cave system
         if not existing_key and structure_type == 'CAVE':
             parent_key = f"{parent_screen_x},{parent_screen_y}"
@@ -1406,32 +1416,35 @@ class GameCoreMixin:
                 subscreen = self.subscreens.get(existing_key)
                 if subscreen and (cell_x, cell_y) not in subscreen.get('entrances', []):
                     subscreen.setdefault('entrances', []).append((cell_x, cell_y))
-        
+
         # Generate or retrieve subscreen
         if existing_key:
             subscreen_key = existing_key
         else:
             subscreen_key = self.generate_subscreen(
-                parent_screen_x, parent_screen_y, 
-                cell_x, cell_y, 
-                structure_type, 
+                parent_screen_x, parent_screen_y,
+                cell_x, cell_y,
+                structure_type,
                 depth=1
             )
-        
+
         # Save player's parent location
         self.player['in_subscreen'] = True
         self.player['subscreen_key'] = subscreen_key
         self.player['subscreen_parent'] = (parent_screen_x, parent_screen_y, cell_x, cell_y)
-        
+        # Secret-entrance context so ascend_cave knows how to exit
+        self.player['cave_via_subscreen'] = came_from_subscreen
+        self.player['cave_via_pos'] = came_from_pos
+
         # Switch to subscreen
         subscreen = self.subscreens[subscreen_key]
         self.current_screen = subscreen
-        
+
         # Position player at entrance
         entrance = subscreen['entrance']
         self.player['x'] = entrance[0]
         self.player['y'] = entrance[1]
-        
+
         print(f"Entered {structure_type}!")
     
     def exit_subscreen(self):
@@ -1525,8 +1538,11 @@ class GameCoreMixin:
         
         current_depth = current_subscreen['depth']
         if current_depth <= 1:
-            # At level 1, just exit
-            self.exit_subscreen()
+            via_key = self.player.get('cave_via_subscreen')
+            if via_key:
+                self._exit_secret_cave_entrance()
+            else:
+                self.exit_subscreen()
             return
         
         # Get parent info for generating/finding the level above
@@ -1566,6 +1582,65 @@ class GameCoreMixin:
         
         print(f"Ascended to cave level {target_depth}!")
     
+    def _exit_secret_cave_entrance(self):
+        """Exit a cave that was entered via a secret MINESHAFT inside a house.
+
+        Priority:
+          1. Overworld CAVE/MINESHAFT entrance for this zone (teleports player there).
+          2. Back inside the house interior at the MINESHAFT tile.
+        """
+        parent_info = self.player['subscreen_parent']
+        psx, psy = parent_info[0], parent_info[1]
+        zone_key = f"{psx},{psy}"
+        via_key = self.player.get('cave_via_subscreen')
+        via_pos = self.player.get('cave_via_pos')
+
+        # Clear secret-entrance tracking
+        self.player['cave_via_subscreen'] = None
+        self.player['cave_via_pos'] = None
+
+        # ── Option 1: find a real overworld cave entrance ─────────────────────
+        zone_grid = self.screens.get(zone_key, {}).get('grid', [])
+        overworld_entrance = None
+        cave_system_key = self.zone_cave_systems.get(zone_key)
+        if cave_system_key and cave_system_key in self.subscreens:
+            cx, cy = self.subscreens[cave_system_key].get('parent_cell', (None, None))
+            if (cx is not None and
+                    0 <= cy < len(zone_grid) and 0 <= cx < len(zone_grid[cy]) and
+                    zone_grid[cy][cx] in ('CAVE', 'MINESHAFT')):
+                overworld_entrance = (cx, cy)
+
+        if overworld_entrance:
+            ox, oy = overworld_entrance
+            self.current_screen = (self.screens[zone_key] if zone_key in self.screens
+                                   else self.generate_screen(psx, psy))
+            self.player['x'] = ox
+            self.player['y'] = oy
+            self.player['screen_x'] = psx
+            self.player['screen_y'] = psy
+            self.player['in_subscreen'] = False
+            self.player['subscreen_key'] = None
+            self.player['subscreen_parent'] = None
+            print("Exited secret cave — arrived at overworld cave entrance.")
+            return
+
+        # ── Option 2: return to house interior at the MINESHAFT tile ─────────
+        house_sub = self.subscreens.get(via_key)
+        if house_sub:
+            self.current_screen = house_sub
+            self.player['x'] = via_pos[0] if via_pos else house_sub['entrance'][0]
+            self.player['y'] = via_pos[1] if via_pos else house_sub['entrance'][1]
+            self.player['in_subscreen'] = True
+            self.player['subscreen_key'] = via_key
+            hp = house_sub.get('parent_screen', (psx, psy))
+            hc = house_sub.get('parent_cell', (0, 0))
+            self.player['subscreen_parent'] = (hp[0], hp[1], hc[0], hc[1])
+            print("Exited secret cave — returned to house interior.")
+            return
+
+        # Fallback: normal exit to overworld
+        self.exit_subscreen()
+
     def spawn_cave_entities(self, subscreen_key, depth):
         """Spawn enemies in cave based on depth"""
         subscreen = self.subscreens[subscreen_key]
