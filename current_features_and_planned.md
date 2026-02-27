@@ -17,7 +17,6 @@ Update it regularly as features are added, changed, or planned.
 - [ ] Advanced crafting (failure rates, partial results)
 - [ ] Particle effects (rain, fire, magic)
 - [ ] Full wizard spell suite
-- [ ] Skill trees (not just level-based progression)
 
 ---
 

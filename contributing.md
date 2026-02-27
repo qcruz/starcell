@@ -16,7 +16,7 @@ You grant the project owner (OpenStar Project) a perpetual, irrevocable, worldwi
 You confirm that your contribution is your original creation, or you have the explicit legal right to submit it under these terms.
 
 ## 4. Community Reward Pool
-We believe in rewarding the talent that builds this ecosystem. The Contributor Reward Pool is funded by **[e.g., 90%] of our Patreon revenue** PLUS **100% of proceeds generated from the Community Support Program (CSP)**.
+We believe in rewarding the talent that builds this ecosystem. The Contributor Reward Pool is funded by **[90%] of our Patreon revenue** PLUS **100% of proceeds generated from the Community Support Program (CSP)**.
 
 * **Distribution Model:** The total fund pool is distributed proportionately based on integrated contributions in the current base version, estimated functional impact, and asset scope.
 * **Maintainer Discretion:** Final reward allocation decisions and contribution valuations are made at the sole discretion of the Project Manager. Unused funds roll over to future distributions.
