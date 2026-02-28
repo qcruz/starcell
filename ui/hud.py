@@ -136,6 +136,14 @@ class HudMixin:
                             if base_terrain in self.sprite_manager.sprites:
                                 object_sprite = cell
                                 use_layered = True
+                    elif cell == 'IRON_ORE':
+                        # Iron ore always appears inside caves — layer on CAVE_FLOOR
+                        if (self.use_sprites and hasattr(self, 'sprite_manager') and
+                                cell in self.sprite_manager.sprites and
+                                'CAVE_FLOOR' in self.sprite_manager.sprites):
+                            base_terrain = 'CAVE_FLOOR'
+                            object_sprite = cell
+                            use_layered = True
 
                     # Layered rendering (when we have both sprites)
                     if use_layered:
