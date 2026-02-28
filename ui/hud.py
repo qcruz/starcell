@@ -241,7 +241,18 @@ class HudMixin:
                                      sprite_name in self.sprite_manager.sprites)
 
                         if has_sprite:
-                            # Use sprite directly - NO LABEL
+                            # Always draw biome base beneath the sprite so transparency
+                            # never shows as a black square
+                            if self.current_screen and 'parent_screen' in self.current_screen:
+                                subscreen_type = self.current_screen.get('type', 'HOUSE_INTERIOR')
+                                _base = 'CAVE_FLOOR' if 'CAVE' in subscreen_type else 'FLOOR_WOOD'
+                            else:
+                                _biome = self.current_screen.get('biome', 'FOREST') if self.current_screen else 'FOREST'
+                                _base = {'DESERT': 'SAND', 'MOUNTAINS': 'DIRT'}.get(_biome, 'GRASS')
+                            _base_sprite = self.sprite_manager.sprites.get(_base)
+                            if _base_sprite:
+                                self.screen.blit(_base_sprite, (x * CELL_SIZE, y * CELL_SIZE))
+                            # Draw cell sprite on top
                             sprite = self.sprite_manager.get_sprite(sprite_name)
                             self.screen.blit(sprite, (x * CELL_SIZE, y * CELL_SIZE))
                         else:
