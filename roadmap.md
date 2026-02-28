@@ -28,6 +28,8 @@
 - [ ] Fort → Castle progression
 - [ ] Castle has interior guards and a King who retreats inside when health is low
 - [ ] When zone is attacked, guards and a commander spawn from the castle (if not already present)
+- [ ] Tavern / Inn structure — NPCs gather here to rest, trade rumors, and recover health; player can sleep here to skip time and restore stats
+- [ ] Temple / Shrine structure — healing and resurrection point; priests spawn here; holy water and blessings available
 
 ---
 
@@ -36,37 +38,87 @@
 **Hostile / Rare**
 - [ ] Rare enemy type variants (TBD — design pass needed)
 - [ ] Golem (stone) — very slow, high defense and health, attacks only when attacked; used to block entries
+- [ ] Dragon — rare, powerful boss-tier enemy; guards a hoard; fire breath as ranged attack
+- [ ] Troll — regenerates health slowly; weak to fire
+- [ ] Zombie — slow, spreads contagion on hit; spawns in graveyards
+- [ ] Ghost — passes through walls; immune to physical damage; weak to holy/magic
+- [ ] Werewolf — normal human NPC at day; transforms at night; weak to silver weapons
+- [ ] Mimic — disguised as a chest; attacks when opened
+- [ ] Slime — splits into smaller slimes on death
+- [ ] Witch — ranged spell attacks; curses player on hit
+
+**Boss Enemies**
+- [ ] Boss rooms in deep dungeon levels — unique high-health enemy with special attack patterns and a guaranteed rare loot drop
+- [ ] Dungeon boss has a "lair action" that triggers once per zone update (environmental hazard — falling rocks, rising water, etc.)
 
 **Peaceful / Animals**
 - [ ] Birds
-- [ ] Sheep (placeholder exists; behavior pass needed)
-- [ ] Cow
-- [ ] Chicken
+- [ ] Sheep (placeholder exists; behavior pass needed; produces wool)
+- [ ] Cow (produces milk)
+- [ ] Chicken (produces eggs)
+- [ ] Horse / Mount — rideable; increases player movement speed
+- [ ] Cat — tameable via favor system; hunts small creatures; reduces pest spawns in zone
+- [ ] Dog — tameable; barks (alerts) when hostiles enter zone; assists in combat
+
+---
+
+### Seasonal System *(Stardew Valley / D&D)*
+- [ ] Four seasons: Spring, Summer, Autumn, Winter — each ~7 in-game days
+- [ ] Season affects which crops can grow and which wild plants appear
+- [ ] Winter: snow biome overlay, water freezes to ice, reduced crop growth, some NPCs shelter indoors
+- [ ] Seasonal festivals and events (harvest festival, winter solstice, etc.)
+- [ ] Calendar / day tracker visible in HUD
 
 ---
 
 ### New Items & Crops
 
 **Crops**
-- [ ] Fruit trees
+- [ ] Fruit trees (apple, cherry, etc.) — seasonal yield
 - [ ] Melons
-- [ ] Wheat
-- [ ] Ghost Fruit
-- [ ] Cactus — spawns in desert biomes (slightly less often than trees in forest); damages player and NPCs by 1 on contact/attack; NPC pathfinding gradually clears it over time
+- [ ] Wheat — milled into flour; used in bread recipes
+- [ ] Mushroom — grows in caves and dark forest zones; some variants are magical or poisonous
+- [ ] Ghost Fruit — magical crop; grants brief spectral state or other effect when eaten
+- [ ] Cactus — spawns in desert biomes (slightly less often than trees in forest); deals 1 damage on contact/attack; NPC pathfinding gradually clears it over time *(sprite added)*
+- [ ] Herbs / Flowers — forageable; used in potions and cooking
 
 **Resources & Materials**
-- [ ] Iron Ore — spawns commonly in caves; miners seek it aggressively (similar to lumberjacks and trees); mining yields XP; higher-level miners have an increased chance to generate a deeper cave level (level 1 miner = 1% chance per update); leaving a deeper cave requires traveling back up through each level *(sprite added: `ironore.png`)*
-- [ ] Sword item — replaces or supplements existing bone sword slot *(sprite added: `sword.png`)*
-- [ ] Magic Crystal — AoE zone effect (reduce zone damage, bonus fire damage, etc.)
+- [ ] Iron Ore — spawns commonly in caves; miners seek it aggressively; mining yields XP; higher-level miners have increased chance to open deeper cave levels (level 1 = 1% chance per update); leaving deeper cave requires traveling back up through each level *(sprite added: `ironore.png`)*
+- [ ] Sword — iron or steel sword; stronger than bone sword *(sprite added: `sword.png`)*
+- [ ] Iron Ingot — smelted from iron ore at a forge; used in iron tool and armor recipes
+- [ ] Silver — rare ore; effective against werewolves and undead
+- [ ] Coal / Fuel — required to operate forge; found in caves
+- [ ] Rope — already exists; expand uses (bridge building, trap crafting)
+- [ ] Glass — crafted from sand; used in windows, bottles, lenses
+- [ ] Magic Crystal — AoE zone effect (reduce zone damage, fire damage bonus, etc.)
 - [ ] Peace Tree — zone becomes peaceful; starting zone should always have one
-- [ ] Gravestone
+- [ ] Gravestone — marks death locations; may spawn ghosts
 - [ ] Fence
+- [ ] Torch — craftable light source; placed as a cell; reduces hostile spawn rate in zone
 
 **Structures**
-- [ ] Water Well — constructed by Miners; requires 2+ houses in zone and no existing well; placed near zone center; permanent water source for human NPCs only; targeted by bandits/goblins but low destruction chance *(sprite added: `well.png`)*
+- [ ] Water Well — constructed by Miners; requires 2+ houses in zone and no existing well; placed near zone center; permanent water source for human NPCs; targeted by bandits/goblins but low destruction chance *(sprite added: `well.png`)*
+- [ ] Beehive — produces honey; attracts bees that sting hostiles nearby
+- [ ] Chest variants — labeled chests, locked chests (require key), trapped chests (Mimic)
+- [ ] Campfire — craftable; heals nearby entities; cooks food automatically; NPCs gather around at night
+
+**Consumables & Potions** *(Minecraft / Final Fantasy / D&D)*
+- [ ] Potion of Healing — restores HP
+- [ ] Potion of Strength — temporary damage bonus
+- [ ] Potion of Speed — temporary movement bonus
+- [ ] Antidote — cures poison status
+- [ ] Elixir — cures all status effects
+- [ ] Poison Flask — throwable; applies poison to target area
+- [ ] Smoke Bomb — throwable; creates obscuring cloud; breaks NPC line of sight
+
+**Artisan Goods** *(Stardew Valley)*
+- [ ] Flour (from wheat), Bread (from flour), Cheese (from milk), Cloth (from wool), Honey (from beehive)
+- [ ] Artisan goods have higher trade value than raw materials
 
 **Crafting**
-- [ ] Design pass: new recipes creating natural progression and quest goals (iron tools, stone walls, etc.)
+- [ ] Design pass: new recipes creating natural progression — iron tools, iron armor, potions, artisan goods
+- [ ] Crafting stations: forge (metal), alchemy table (potions), loom (cloth), cooking pot (food)
+- [ ] Recipes discoverable through gameplay — NPCs teach recipes, books contain recipes, experimentation
 
 ---
 
@@ -74,23 +126,192 @@
 - [ ] **Rain** — toggle rain on/off in the current zone
 - [ ] **Calcify** — freeze an NPC in place / turn to stone
 - [ ] **Charm** — toggle NPC between friendly and hostile
-- [ ] **Heal** — fill player health, food, and water; chance to increase max life; reverse (K key) absorbs health from target and may drain years of life
+- [ ] **Heal** — fill player health, food, and water; chance to increase max life; reverse (K key) absorbs health from target, may drain years of life
 - [ ] **Spectral State** — player briefly passes through solid cells (not outer walls)
+- [ ] **Fireball** — ranged projectile; sets target cell on fire (new fire cell type); spreads to adjacent flammable cells
+- [ ] **Blizzard** — AoE frost; slows all entities in zone for duration
+- [ ] **Lightning Strike** — instant high damage to single target; chains to nearby metal-wearing entities
+- [ ] **Summon** — calls a powerful temporary ally based on player's quest focus (warrior, beast, spirit)
+- [ ] **Teleport** — instant travel to a previously visited zone or waypoint
+- [ ] **Barrier** — creates a temporary impassable wall cell
+- [ ] **Identify** — reveals the true stats and any curses on an unknown item *(D&D)*
+- [ ] **Detect** — highlights hidden doors, traps, buried treasure, and hostile entities in the zone *(D&D / Zelda)*
+- [ ] **Bard Song** — passive AoE buff to all friendly entities in zone (damage, speed, or morale) *(D&D)*
+
+---
+
+### Combat Depth
+
+**Status Effects** *(Final Fantasy / D&D / Zelda)*
+- [ ] Poisoned — lose HP over time; cured by antidote or milk
+- [ ] Burning — lose HP over time; spreads to adjacent flammable cells
+- [ ] Frozen — cannot move for duration; shatters for bonus damage
+- [ ] Stunned — skip next action
+- [ ] Confused — random movement direction
+- [ ] Cursed — stats halved; requires temple or Identify to cure
+- [ ] Charmed — temporarily fights for opposite side
+- [ ] Sleeping — immobile until hit
+
+**Elemental System** *(Final Fantasy)*
+- [ ] Elements: Fire, Ice, Lightning, Poison, Holy, Shadow
+- [ ] Each entity type has elemental resistances and weaknesses (e.g. skeletons weak to Holy, trolls weak to Fire)
+- [ ] Elemental weapons and spell damage already partially in place via runestones — expand to full system
+
+**Ranged Combat** *(Zelda / D&D)*
+- [ ] Bow and arrow — craftable; ranged attack; uses arrows as ammo
+- [ ] Thrown weapons — rocks, knives, bombs; one-use or retrieved
+- [ ] Bomb / explosive — destroys cells in small radius; used to open hidden passages
+
+**Limit Break / Overdrive** *(Final Fantasy)*
+- [ ] When player health drops below 20%, unlock a one-time powerful attack or spell burst
+- [ ] Recharges when health is restored above 50%
+
+**Equipment Slots** *(Zelda / Final Fantasy / D&D)*
+- [ ] Separate equipment panel: Weapon, Off-hand/Shield, Armor, Ring (×2), Amulet
+- [ ] Equipped items apply passive stat bonuses and are distinct from inventory
+- [ ] Armor types: cloth (mage), leather (rogue), chain (warrior), plate (knight)
+- [ ] Weapon determines attack range and damage type
+
+**Stealth** *(D&D / Zelda)*
+- [ ] Crouch / sneak mode — reduced detection radius; bonus damage on first hit (sneak attack)
+- [ ] Shadows and darkness increase stealth effectiveness
+
+---
+
+### Dungeon Mechanics *(Zelda / D&D / Minecraft)*
+- [ ] Dungeon rooms with environmental puzzles — pressure plates, levers, locked doors, push-block puzzles
+- [ ] Small keys — found in chests or dropped by enemies; open locked doors in the same dungeon
+- [ ] Boss key — opens boss room door
+- [ ] Dungeon map item — reveals layout of current dungeon level
+- [ ] Compass item — reveals chest locations on dungeon map
+- [ ] Traps — floor spikes, arrow traps, falling ceiling; triggered by pressure plates or tripwires
+- [ ] Hidden rooms — pushable wall cells revealing secret passages *(Zelda)*
+- [ ] Dungeon-specific themes: crypt (undead), mine (golem/ore), ice cave (frozen), volcanic cave (fire)
+
+---
+
+### Fishing System *(Stardew Valley / Zelda)*
+- [ ] Cast fishing line from water-adjacent cell
+- [ ] Fish variety based on biome, season, and time of day
+- [ ] Rare fish as collectibles; common fish as food
+- [ ] Fish provide unique crafting materials (scales, fins, etc.)
+- [ ] Fishing pond structure — place fish to farm them
+
+---
+
+### Animal Husbandry *(Stardew Valley)*
+- [ ] Animals produce goods over time: cow → milk, chicken → eggs, sheep → wool
+- [ ] Animal products used in artisan crafting and cooking
+- [ ] Animals need food/water or their production declines
+- [ ] Barn / pen structure — houses animals; keeps them from wandering
+
+---
+
+### Cooking & Recipes *(Stardew Valley / Final Fantasy)*
+- [ ] Cooking pot / campfire crafting station
+- [ ] Recipes discovered through relationships with NPCs, found in books, or through experimentation
+- [ ] Cooked food provides temporary stat buffs beyond basic hunger fill (speed, strength, max HP, luck)
+- [ ] Recipe book — tracks known and undiscovered recipes
+
+---
+
+### Foraging *(Stardew Valley / D&D)*
+- [ ] Wild mushrooms, berries, and herbs spawn in forest and cave zones
+- [ ] Seasonal and biome-specific forage items
+- [ ] Some forage items are ingredients; some are immediately consumable
+- [ ] Foraging skill perk — increases yield and reveals rare forage
+
+---
+
+### Travel & Exploration
+
+**Mounts** *(Zelda / Final Fantasy / D&D)*
+- [ ] Horse — rideable; 2× movement speed; requires taming via favor system
+- [ ] Can be stabled at a zone with a barn/pen structure
+
+**Fast Travel & Waypoints** *(Zelda / Minecraft / Final Fantasy)*
+- [ ] Waypoint stone — placeable structure; player can teleport between owned waypoints
+- [ ] Discovered zone names persist on a world map
+- [ ] World map view — zoomed-out view showing explored zones and zone names
+
+**Alternate Realms** *(Minecraft / Final Fantasy / D&D)*
+- [ ] Shadow Realm — dark mirror of the overworld; accessible via specific portal or spell; hostile entities are stronger; unique items only found here
+- [ ] Sky / Cloud zone — elevated biome accessible via beanstalk or magic; unique creatures and loot
+
+---
+
+### Rest & Time Mechanics *(Stardew Valley / D&D)*
+- [ ] Bed / sleeping — craftable bed or inn room; skips to next morning; fully restores stats and removes minor status effects
+- [ ] Campfire rest — partial restore; shorter time skip; requires food
+- [ ] Long rest vs short rest — long rest at inn/home fully resets spells and health; short rest at camp partially restores
+- [ ] Energy system — actions consume energy; replenished by eating and sleeping
+
+---
+
+### Social & Dialogue *(Stardew Valley / Zelda / D&D)*
+- [ ] NPC dialogue system — NPCs have contextual lines based on relationship, quest state, and zone events
+- [ ] Dialogue choices — player selects responses; affects NPC favor score
+- [ ] Gift giving — offer items to NPCs to increase favor; each NPC has preferred gifts
+- [ ] NPC schedules — NPCs follow daily routines (go to field at dawn, tavern at night, temple on rest day)
+- [ ] NPC birthdays / named calendar events — special interactions on those days
+- [ ] Rumor system — NPCs at taverns share information about zone events, rare loot, and hidden locations
+- [ ] Guild membership — join faction guilds for perks, special quests, and unique items
+
+---
+
+### Character Creation & Progression *(Final Fantasy / D&D)*
+- [ ] Race selection at game start: Human, Elf, Dwarf, Halfling — each with minor stat bonuses and flavor
+- [ ] Ability scores: STR (melee damage), DEX (speed/dodge), CON (max health), INT (spell power), WIS (healing/detection), CHA (favor gain rate)
+- [ ] Ability scores increase on level-up (player chooses which to raise)
+- [ ] Class / archetype choice — influences starting equipment and which perks unlock fastest (Fighter, Wizard, Rogue, Ranger, Cleric, Druid)
+
+---
+
+### Luck System *(Stardew Valley)*
+- [ ] Daily luck value (hidden or hinted via NPC dialogue or environmental signs)
+- [ ] Affects drop rates, rare encounter chance, crafting success, fishing catch quality
+
+---
+
+### Inventory & Equipment Improvements
+- [ ] Tool and weapon durability — items degrade with use; repaired at forge or with materials
+- [ ] Backpack upgrades — expand inventory slot count via crafted or purchased upgrades
+- [ ] Item identification — some items are "unknown" until Identified or appraised by a merchant *(D&D)*
+- [ ] Cursed items — equipped and cannot be removed without a temple visit or Identify spell *(D&D)*
+- [ ] Lore / flavor text on rare and legendary items
+
+---
+
+### Building Mode *(Minecraft)*
+- [ ] Dedicated build mode — place any owned cell or structure item freely without interact-movement conflict
+- [ ] Blueprint system — save and place multi-cell structure templates
+- [ ] Redecorate house interiors — place furniture, chests, lighting
+
+---
+
+### Achievements & Bestiary *(Minecraft / Final Fantasy)*
+- [ ] Achievement system — tracks player milestones (first kill, first craft, first dungeon completed, etc.)
+- [ ] Bestiary — logs discovered entity types with flavor text, stats, and weaknesses; filled by defeating or observing enemies
+- [ ] Collection log — tracks all found items, zones explored, fish caught, recipes learned
 
 ---
 
 ### NPC Behavior Updates
-- [ ] All NPCs (hostile and peaceful) occasionally swipe at obstacles blocking their path — small chance to destroy the cell based on type; extends existing bandit-attacks-structures logic to cover trees, rocks, fences, etc.
+- [ ] All NPCs occasionally swipe at obstacles blocking their path — small chance to destroy the cell based on type; extends existing bandit-attacks-structures logic to trees, rocks, fences, etc.
 - [ ] Miner: seek iron ore in caves aggressively; exit cave when health is low; chance to dig a deeper cave level scaled by miner level
 - [ ] Natural flee system — low-level enemies flee significantly higher-level enemies (~5+ level difference)
+- [ ] NPC memory — remembers player attacks and warns other NPCs in the same faction
+- [ ] Merchant NPC restocks inventory over time; prices shift with supply and demand *(economy system)*
 
 ---
 
 ### Follower System Improvements
 - [ ] Followers are never hostile to each other
 - [ ] Hostile entity list clears correctly when the target dies (bug: skeleton still appears in follower slot after it dies)
-- [ ] When item inventory and follower inventory are both open, selecting an item and pressing Place puts it in the follower's inventory
+- [ ] When item inventory and follower inventory are both open, selecting an item and pressing Place puts it into the follower's inventory
 - [ ] Follower auto-equips the strongest version of each gear type (sword, armor, etc.) for combat and stat calculations
+- [ ] Follower commands — basic orders: stay, follow, attack, retreat
+- [ ] Follower leveling — followers gain XP alongside player and level up
 
 ---
 
@@ -101,6 +322,7 @@
 - [ ] Obstructions — block zone exits until cleared; may be NPCs or hard-to-destroy structures (e.g. Golem)
 - [ ] Zone and NPC name generation — unique, flavored names (e.g. "Redoak Grove"); zone generation influenced by its assigned name
 - [ ] Secret lairs / additional secret entrance types *(foundation already in place)*
+- [ ] Prophecy system — LoreEngine occasionally generates a "prophecy" hint pointing the player toward a rare event or item
 
 ---
 
@@ -110,12 +332,14 @@
   - [ ] Vampirism
   - [ ] Fairy fountain
   - [ ] Blood fountain
+  - [ ] Philosopher's Stone — legendary crafted item; halts aging permanently
 
 ---
 
 ### Perk / Skill System
 - [ ] Perks earned through natural gameplay (e.g. killing goblins repeatedly builds a goblin-damage bonus)
 - [ ] Perks decay slowly over time if not maintained
+- [ ] Skill trees per activity — combat, crafting, farming, exploration, magic — each with tiered unlocks
 
 ---
 
@@ -132,6 +356,11 @@
 - [ ] Loyalty threshold: high favor + matching reputation score may cause NPC to become a follower
 - [ ] Works on animals too (cats, dogs, etc.) as an alternative to enchant/follower spell
 - [ ] Follower conversion chance decreases per existing follower already in party
+
+**Bounty / Wanted System** *(D&D)*
+- [ ] Attacking peaceful NPCs or stealing may trigger a bounty
+- [ ] Guards and bounty hunters pursue player across zones until bounty is paid or served
+- [ ] Bounty can be cleared at a temple or by bribing a guard
 
 ---
 
@@ -171,15 +400,21 @@
 ---
 
 ### Audio
-- [ ] Background music
-- [ ] Ambient sound effects (rain, wind, fire)
-- [ ] Action sound effects (combat, crafting, spells)
+- [ ] Background music — biome-specific and dynamic (intensity scales with nearby combat)
+- [ ] Ambient sound effects (rain, wind, fire, cave drips, birds)
+- [ ] Action sound effects (combat hits, crafting, spells, footsteps)
+- [ ] NPC vocal sounds — short audio cues for combat, greeting, pain
 
 ---
 
 ### Miscellaneous
 - [ ] Minimap or zone map view
+- [ ] World map — zoomed-out view of explored zones with names
 - [ ] In-game help overlay / context-sensitive tips
+- [ ] Multiple save slots
+- [ ] Difficulty settings (combat damage multiplier, permadeath toggle, NPC aggression level)
+- [ ] Fullscreen / resolution toggle
+- [ ] Mod support — structured data tables and hook points for community content *(open-source goal)*
 
 ---
 
