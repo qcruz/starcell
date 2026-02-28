@@ -551,11 +551,17 @@ class GameCoreMixin:
             if not entity.is_alive():
                 entities_to_remove.append(entity_id)
                 continue
-            
+
             # Only update entities within 2 screens of player
             if screen_distance > 2:
                 continue
-            
+
+            # Try to split _double entities in under-populated zones
+            entity_screen_key = f"{entity.screen_x},{entity.screen_y}"
+            if entity.type.endswith('_double'):
+                if self.try_split_double_entity(entity_id, entity, entity_screen_key):
+                    continue  # Entity was split — re-evaluate next tick
+
             # Decay stats
             entity.decay_stats()
             
@@ -1527,7 +1533,50 @@ class GameCoreMixin:
         self.player['y'] = entrance[1]
 
         print(f"Entered {structure_type}!")
-    
+        self._teleport_followers_with_player()
+
+    def _teleport_followers_with_player(self):
+        """Teleport all followers to wherever the player currently is (overworld or subscreen)."""
+        in_sub = self.player.get('in_subscreen', False)
+        sub_key = self.player.get('subscreen_key')
+        player_screen_key = f"{self.player['screen_x']},{self.player['screen_y']}"
+
+        for fid in list(self.followers):
+            if fid not in self.entities:
+                continue
+            f = self.entities[fid]
+
+            # Remove from old location
+            old_sk = f"{f.screen_x},{f.screen_y}"
+            for bucket in [self.screen_entities, self.subscreen_entities]:
+                for sk, lst in bucket.items():
+                    if fid in lst:
+                        lst.remove(fid)
+
+            # Place in new location
+            if in_sub and sub_key:
+                if sub_key not in self.subscreen_entities:
+                    self.subscreen_entities[sub_key] = []
+                if fid not in self.subscreen_entities[sub_key]:
+                    self.subscreen_entities[sub_key].append(fid)
+                f.in_subscreen = True
+                f.subscreen_key = sub_key
+            else:
+                if player_screen_key not in self.screen_entities:
+                    self.screen_entities[player_screen_key] = []
+                if fid not in self.screen_entities[player_screen_key]:
+                    self.screen_entities[player_screen_key].append(fid)
+                f.in_subscreen = False
+                f.subscreen_key = None
+
+            # Snap position to player (offset slightly to avoid overlap)
+            f.screen_x = self.player['screen_x']
+            f.screen_y = self.player['screen_y']
+            f.x = max(1, self.player['x'] - 1)
+            f.y = self.player['y']
+            f.world_x = float(f.x)
+            f.world_y = float(f.y)
+
     def exit_subscreen(self):
         """Player exits back to parent screen"""
         if not self.player['in_subscreen']:
@@ -1559,7 +1608,8 @@ class GameCoreMixin:
         self.player['subscreen_parent'] = None
         
         print("Exited to outside!")
-    
+        self._teleport_followers_with_player()
+
     def descend_cave(self):
         """Go deeper into a cave"""
         if not self.player['in_subscreen']:
@@ -1604,7 +1654,8 @@ class GameCoreMixin:
         self.player['y'] = entrance[1]
         
         print(f"Descended to cave level {new_depth}!")
-        
+        self._teleport_followers_with_player()
+
         # Spawn enemies for this depth
         self.spawn_cave_entities(deeper_key, new_depth)
     
@@ -1662,7 +1713,8 @@ class GameCoreMixin:
         self.player['y'] = entrance[1]
         
         print(f"Ascended to cave level {target_depth}!")
-    
+        self._teleport_followers_with_player()
+
     def _exit_secret_cave_entrance(self):
         """Exit a cave that was entered via a secret MINESHAFT inside a house.
 

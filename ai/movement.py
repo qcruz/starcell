@@ -1172,6 +1172,51 @@ class NpcAiMovementMixin:
 
         return False
 
+    def try_split_double_entity(self, entity_id, entity, screen_key):
+        """Split a _double entity back into two singles when zone population is low.
+
+        Returns True if the entity was split (caller should not update it further
+        this tick, since the original entity has been modified in-place).
+        """
+        if not entity.type.endswith('_double'):
+            return False
+
+        # Only split when zone has very few entities
+        zone_count = len(self.screen_entities.get(screen_key, []))
+        SPLIT_POPULATION_THRESHOLD = 3
+        if zone_count > SPLIT_POPULATION_THRESHOLD:
+            return False
+
+        if random.random() > 0.05:  # 5% chance per update
+            return False
+
+        base_type = entity.type.replace('_double', '')
+
+        # Revert this entity to single type
+        entity.type = base_type
+
+        # Spawn a second single entity nearby
+        from entity import Entity as _Entity
+        offset_x = entity.x + random.choice([-1, 1])
+        offset_y = entity.y + random.choice([-1, 1])
+        offset_x = max(1, min(GRID_WIDTH - 2, offset_x))
+        offset_y = max(1, min(GRID_HEIGHT - 2, offset_y))
+
+        new_entity = _Entity(base_type, offset_x, offset_y,
+                             entity.screen_x, entity.screen_y,
+                             level=max(1, entity.level - 1))
+
+        new_id = self.next_entity_id
+        self.next_entity_id += 1
+        self.entities[new_id] = new_entity
+
+        if screen_key not in self.screen_entities:
+            self.screen_entities[screen_key] = []
+        self.screen_entities[screen_key].append(new_id)
+
+        print(f"[Split] {base_type}_double split into two {base_type}s at zone {screen_key}")
+        return True
+
     def teleport_follower_to_player(self, entity_id, entity):
         """Teleport a follower entity to the player's current screen"""
         player_screen_key = f"{self.player['screen_x']},{self.player['screen_y']}"

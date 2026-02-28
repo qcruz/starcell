@@ -1066,11 +1066,17 @@ class NpcAiMixin:
                 
                 # Determine if enemy
                 is_enemy = False
+                # Follower FF guard in proximity check
+                is_follower_check = other_id in getattr(self, 'followers', [])
+                if is_follower_check:
+                    continue  # Never target fellow followers
+                entity_base_check = entity.type.replace('_double', '')
+                other_base_check = other.type.replace('_double', '')
                 if entity_is_hostile:
                     # Hostile entities attack everyone: non-hostiles AND other hostile types
                     if not other_is_hostile:
                         is_enemy = True  # Attack peaceful NPCs
-                    elif other.type != entity.type:
+                    elif other_base_check != entity_base_check:
                         is_enemy = True  # Attack different hostile species
                 elif other_is_hostile:
                     # Non-hostile entity sees hostile — it's an enemy
@@ -1100,6 +1106,9 @@ class NpcAiMixin:
                 # Only react if entity has hostile in its target_types (combat-capable)
                 target_types = entity.props.get('ai_params', {}).get('target_types', [])
                 has_combat_capability = 'hostile' in target_types
+                # Hostile entities always have combat capability against the player
+                if entity_is_hostile and closest_hostile_id == 'player':
+                    has_combat_capability = True
                 
                 if has_combat_capability:
                     if closest_hostile_dist <= 1:
@@ -1540,10 +1549,22 @@ class NpcAiMixin:
             
             # Determine if this is an enemy
             is_enemy = False
-            
-            # Rule 1: Hostiles ALWAYS attack peaceful entities (highest priority)
+
+            # Base type for double-entity comparison (WOLF_double → WOLF)
+            entity_base = entity.type.replace('_double', '')
+            other_base = other.type.replace('_double', '')
+
+            # Follower FF guard: followers only attack hostile entities unless FF is on
+            is_follower = entity_id in getattr(self, 'followers', [])
+            ff_on = self.player.get('friendly_fire', False)
+            other_is_hostile = other.props.get('hostile', False)
+            if is_follower and not ff_on and not other_is_hostile:
+                continue  # Follower ignores peaceful entities when FF is off
+
+            # Rule 1: Hostiles attack peaceful entities (but not same base-type doubles)
             if entity.props.get('hostile', False) and not other.props.get('hostile', False):
-                is_enemy = True
+                if entity_base != other_base:
+                    is_enemy = True
             # Rule 2: Peaceful entities with attacks_hostile attack hostile entities
             elif entity.props.get('attacks_hostile') and other.props.get('hostile'):
                 is_enemy = True
@@ -1557,14 +1578,14 @@ class NpcAiMixin:
             # Rule 5: Faction warfare - different factions are hostile
             elif entity.faction and other.faction and entity.faction != other.faction:
                 is_enemy = True
-            # Rule 6: Same creature type are friendly (unless different factions)
-            elif entity.type == other.type:
+            # Rule 6: Same base creature type are friendly (covers doubles vs singles)
+            elif entity_base == other_base:
                 is_enemy = False
             # Rule 7: Predator-prey relationships
             elif entity.type in other.props.get('food_sources', []):
                 is_enemy = True
             # Rule 8: Different types with no faction = potentially hostile
-            elif entity.type != other.type and not entity.faction and not other.faction:
+            elif entity_base != other_base and not entity.faction and not other.faction:
                 if entity.props.get('hostile') or other.props.get('hostile'):
                     is_enemy = True
             
