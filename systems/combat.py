@@ -156,7 +156,7 @@ class CombatMixin:
             self.player['max_health'] += 10
             self.player['health'] = self.player['max_health']  # Full heal
             self.player['base_damage'] += 2
-            self.player['max_energy'] = self.player.get('max_energy', 20) + 2
+            self.player['max_energy'] = self.player.get('max_energy', 100) + 2
             self.player['energy'] = self.player['max_energy']  # Full restore
 
             # Increase XP required for next level

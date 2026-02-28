@@ -164,12 +164,8 @@ class SaveLoadMixin:
                 self.player['subscreen_parent'] = None
             # Ensure player has energy fields (added after initial release)
             if 'energy' not in self.player:
-                self.player['energy'] = self.player.get('max_energy', 20)
-                self.player['max_energy'] = self.player.get('max_energy', 20)
-            # Migrate old saves: if max_energy is at old default (100), reset to 20
-            if self.player.get('max_energy', 20) == 100 and 'magic_pool' in self.player:
-                self.player['max_energy'] = 20
-                self.player['energy'] = min(self.player.get('energy', 20), 20)
+                self.player['energy'] = self.player.get('max_energy', 100)
+                self.player['max_energy'] = self.player.get('max_energy', 100)
             # Remove legacy magic_pool fields if present
             self.player.pop('magic_pool', None)
             self.player.pop('max_magic_pool', None)

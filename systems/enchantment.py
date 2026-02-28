@@ -57,12 +57,12 @@ class EnchantmentMixin:
             return
 
         # Check max_energy capacity (each enchant permanently reduces it by 1; keep minimum of 1)
-        if self.player.get('max_energy', 20) <= 1:
+        if self.player.get('max_energy', 100) <= 1:
             print("No energy capacity left to enchant!")
             return
 
         # Check current energy (costs 3 per cast)
-        _cur_energy = self.player.get('energy', self.player.get('max_energy', 20))
+        _cur_energy = self.player.get('energy', self.player.get('max_energy', 100))
         if _cur_energy < 3:
             print("Not enough energy!")
             return
@@ -90,7 +90,7 @@ class EnchantmentMixin:
             entity_id, entity = entity_at_target
             current_enchant = self.enchanted_entities.get(entity_id, 0)
             self.enchanted_entities[entity_id] = current_enchant + 1
-            self.player['max_energy'] = max(1, self.player.get('max_energy', 20) - 1)
+            self.player['max_energy'] = max(1, self.player.get('max_energy', 100) - 1)
 
             # Add to followers list if not already a follower
             if entity_id not in self.followers:
@@ -123,7 +123,7 @@ class EnchantmentMixin:
         self.enchanted_cells[screen_key][(check_x, check_y)] = current_enchant + 1
 
         # Permanently reduce max_energy by 1
-        self.player['max_energy'] = max(1, self.player.get('max_energy', 20) - 1)
+        self.player['max_energy'] = max(1, self.player.get('max_energy', 100) - 1)
 
         print(f"Enchanted {cell} at ({check_x}, {check_y}) to level {self.enchanted_cells[screen_key][(check_x, check_y)]}")
 
@@ -158,7 +158,7 @@ class EnchantmentMixin:
                 print(f"Decreased entity {entity_at_target} enchant to level {self.enchanted_entities[entity_at_target]}")
 
             # Restore 1 max_energy (permanent) and 3 energy (temp)
-            self.player['max_energy'] = self.player.get('max_energy', 20) + 1
+            self.player['max_energy'] = self.player.get('max_energy', 100) + 1
             self.player['energy'] = min(
                 self.player.get('energy', 0) + 3,
                 self.player['max_energy']
@@ -179,7 +179,7 @@ class EnchantmentMixin:
                     print(f"Decreased cell ({check_x}, {check_y}) enchant to level {self.enchanted_cells[screen_key][cell_key]}")
 
                 # Restore 1 max_energy (permanent) and 3 energy (temp)
-                self.player['max_energy'] = self.player.get('max_energy', 20) + 1
+                self.player['max_energy'] = self.player.get('max_energy', 100) + 1
                 self.player['energy'] = min(
                     self.player.get('energy', 0) + 3,
                     self.player['max_energy']
@@ -230,7 +230,7 @@ class EnchantmentMixin:
             del self.enchanted_entities[entity_id]
 
             # Restore max_energy permanently
-            self.player['max_energy'] = self.player.get('max_energy', 20) + energy_restored
+            self.player['max_energy'] = self.player.get('max_energy', 100) + energy_restored
 
             print(f"Released {entity.type} follower! Restored {energy_restored} max energy.")
         else:

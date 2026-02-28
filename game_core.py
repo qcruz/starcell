@@ -26,8 +26,8 @@ class GameCoreMixin:
             'xp_to_level': 100,
             'health': 100,
             'max_health': 100,
-            'energy': 20,
-            'max_energy': 20,
+            'energy': 100,
+            'max_energy': 100,
             'base_damage': 5,
             'blocking': False,
             'friendly_fire': False,      # OFF = cannot damage peaceful entities (press V to toggle)
@@ -1800,8 +1800,8 @@ class GameCoreMixin:
             'xp_to_level': 100,
             'health': 100,
             'max_health': 100,
-            'energy': 20,
-            'max_energy': 20,
+            'energy': 100,
+            'max_energy': 100,
             'base_damage': 10,
             'blocking': False,
             'friendly_fire': False,      # OFF = cannot damage peaceful entities
@@ -1935,7 +1935,7 @@ class GameCoreMixin:
                             self.player['health'] + 0.3,
                             self.player['max_health']
                         )
-                    max_e = self.player.get('max_energy', 20)
+                    max_e = self.player.get('max_energy', 100)
                     cur_e = self.player.get('energy', max_e)
                     if cur_e < max_e:
                         self.player['energy'] = min(cur_e + 1, max_e)
