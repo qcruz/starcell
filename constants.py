@@ -200,7 +200,6 @@ MINESHAFT_DEPTH_DIVISOR = 2.0  # Each depth level halves the mineshaft creation 
 MINER_MINESHAFT_CHANCE = 0.03  # 3% chance per mine action for NPC miners
 MINESHAFT_MAX_PER_ZONE = 2     # Max mineshafts NPCs can create in one zone
 MINER_WELL_BUILD_RATE = 0.02   # 2% chance per action for miner to build a well
-CACTUS_SPREAD_RATE = 0.0004    # Chance per tick for a cactus to spread to an adjacent non-solid cell
 WARRIOR_PROMOTION_CHANCE = 0.60 # 60% chance highest level entity becomes warrior after raid clear
 
 # Miner & Structure Systems

@@ -864,19 +864,6 @@ class GameCoreMixin:
                         # Apply decay
                         screen['grid'][y][x] = cell_info['degrades_to']
         
-        # Cactus spreading — each cactus cell can convert one adjacent non-solid cell
-        for y in range(1, GRID_HEIGHT - 1):
-            for x in range(1, GRID_WIDTH - 1):
-                if screen['grid'][y][x] == 'CACTUS' and random.random() < CACTUS_SPREAD_RATE:
-                    neighbours = [(x+dx, y+dy) for dx, dy in ((0,-1),(0,1),(-1,0),(1,0))]
-                    random.shuffle(neighbours)
-                    for nx, ny in neighbours:
-                        if 0 < nx < GRID_WIDTH - 1 and 0 < ny < GRID_HEIGHT - 1:
-                            target = screen['grid'][ny][nx]
-                            if not CELL_TYPES.get(target, {}).get('solid', False):
-                                screen['grid'][ny][nx] = 'CACTUS'
-                                break
-
         # Track last update
         self.screen_last_update[key] = self.tick
     

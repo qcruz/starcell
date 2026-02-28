@@ -241,17 +241,24 @@ class HudMixin:
                                      sprite_name in self.sprite_manager.sprites)
 
                         if has_sprite:
-                            # Always draw biome base beneath the sprite so transparency
-                            # never shows as a black square
-                            if self.current_screen and 'parent_screen' in self.current_screen:
-                                subscreen_type = self.current_screen.get('type', 'HOUSE_INTERIOR')
-                                _base = 'CAVE_FLOOR' if 'CAVE' in subscreen_type else 'FLOOR_WOOD'
-                            else:
-                                _biome = self.current_screen.get('biome', 'FOREST') if self.current_screen else 'FOREST'
-                                _base = {'DESERT': 'SAND', 'MOUNTAINS': 'DIRT'}.get(_biome, 'GRASS')
-                            _base_sprite = self.sprite_manager.sprites.get(_base)
-                            if _base_sprite:
-                                self.screen.blit(_base_sprite, (x * CELL_SIZE, y * CELL_SIZE))
+                            # For non-base-terrain cells, draw the biome floor first so
+                            # transparent pixels never show as black squares.
+                            # Base terrain cells ARE the floor — no base needed beneath them.
+                            _BASE_TERRAIN = {
+                                'GRASS', 'DIRT', 'SAND', 'WATER', 'DEEP_WATER',
+                                'SOIL', 'COBBLESTONE', 'FLOOR_WOOD', 'CAVE_FLOOR',
+                                'CAVE_WALL', 'WALL',
+                            }
+                            if cell not in _BASE_TERRAIN:
+                                if self.current_screen and 'parent_screen' in self.current_screen:
+                                    subscreen_type = self.current_screen.get('type', 'HOUSE_INTERIOR')
+                                    _base = 'CAVE_FLOOR' if 'CAVE' in subscreen_type else 'FLOOR_WOOD'
+                                else:
+                                    _biome = self.current_screen.get('biome', 'FOREST') if self.current_screen else 'FOREST'
+                                    _base = {'DESERT': 'SAND', 'MOUNTAINS': 'DIRT'}.get(_biome, 'GRASS')
+                                _base_sprite = self.sprite_manager.sprites.get(_base)
+                                if _base_sprite:
+                                    self.screen.blit(_base_sprite, (x * CELL_SIZE, y * CELL_SIZE))
                             # Draw cell sprite on top
                             sprite = self.sprite_manager.get_sprite(sprite_name)
                             self.screen.blit(sprite, (x * CELL_SIZE, y * CELL_SIZE))
