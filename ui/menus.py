@@ -62,19 +62,38 @@ class MenusMixin:
 
         # Pause menu
         title = self.font.render("PAUSED", True, COLORS['YELLOW'])
-        self.screen.blit(title, (SCREEN_WIDTH // 2 - title.get_width() // 2, 250))
+        self.screen.blit(title, (SCREEN_WIDTH // 2 - title.get_width() // 2, 180))
 
-        options = [
-            "P/ESC - Resume",
+        pause_opts = [
+            "P / ESC - Resume",
             "S - Save Game",
-            "M - Main Menu"
+            "M - Main Menu",
         ]
-
-        y = 330
-        for option in options:
+        y = 240
+        for option in pause_opts:
             text = self.small_font.render(option, True, COLORS['WHITE'])
             self.screen.blit(text, (SCREEN_WIDTH // 2 - text.get_width() // 2, y))
-            y += 30
+            y += 26
+
+        # Controls reference
+        y += 10
+        header = self.small_font.render("— Controls —", True, COLORS['YELLOW'])
+        self.screen.blit(header, (SCREEN_WIDTH // 2 - header.get_width() // 2, y))
+        y += 26
+
+        controls = [
+            "WASD / Arrows - Move",
+            "Space - Interact   E - Pick up   D - Drop   P - Place",
+            "L - Cast spell   K - Reverse spell",
+            "Shift+A - Toggle autopilot",
+            "N - Trade   B - Block   V - Friendly fire   J - Release follower",
+            "I - Items   T - Tools   M - Magic   F - Followers   C - Crafting",
+            "X - Craft   Q - Quests   1-9 - Select slot",
+        ]
+        for line in controls:
+            text = self.small_font.render(line, True, COLORS['WHITE'])
+            self.screen.blit(text, (SCREEN_WIDTH // 2 - text.get_width() // 2, y))
+            y += 22
 
     # -------------------------------------------------------------------------
     # Trader UI
