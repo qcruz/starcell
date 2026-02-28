@@ -28,14 +28,16 @@ class MenusMixin:
             "Q - Quit",
             "",
             "Controls:",
-            "WASD/Arrows - Move",
-            "Space - Interact (chop/till/harvest/plant)",
-            "E - Pick up items",
-            "Q - Drop selected item",
-            "I - Items inventory",
-            "T - Tools inventory",
-            "Click items to select/craft",
-            "ESC - Pause"
+            "WASD / Arrows - Move",
+            "Space - Interact",
+            "E - Pick up   D - Drop   P - Place",
+            "N - Trade   B - Block   V - Friendly fire",
+            "L - Cast spell   K - Reverse spell",
+            "Shift+A - Toggle autopilot",
+            "I - Items   T - Tools   M - Magic",
+            "F - Followers   C - Crafting   X - Craft",
+            "Q - Quests   1-9 - Select slot",
+            "ESC - Pause",
         ]
 
         y = 180
