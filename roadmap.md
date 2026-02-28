@@ -7,138 +7,186 @@
 
 ---
 
+## Meta Goals
+> Keep these in mind when making any development decision.
+
+- Make a fun and playable fantasy adventure game.
+- Keep the project open-source and easy for others to learn, contribute to, and build their own games from.
+- Discover deep-value additions: simple mechanics that add the most to gameplay. Simple interfaces for inventory, quests, trading, crafting, followers, spells, tools, etc. Emergent environmental complexity through simple rules (cellular automata, proc gen). Art and design that encourages and rewards exploration, decoration, crafting, combat, building, managing, and collecting.
+- Make the game world as detailed and realistic as possible while balancing the above goals.
+- Regularly review the codebase at a high level. Remove redundancies and overly specific code that can be generalized. Always look for ways to combine features or unify code to get the same result with fewer variables.
+
+---
+
 ## Pending Features
 
-Feature Update Map
+### Structure Progression
+- [ ] Houses upgrade over time based on zone conditions
+- [ ] Zone with lumberjack + miner → stone house variant
+- [ ] Zone with stone house + blacksmith → fort
+- [ ] Guards spawn at fort and protect it
+- [ ] Fort → Castle progression
+- [ ] Castle has interior guards and a King who retreats inside when health is low
+- [ ] When zone is attacked, guards and a commander spawn from the castle (if not already present)
 
-Meta Goals (Always keep in mind when making development decisions)
-Make a fun and playable fantasy adventure game
-Make this project open source and easy for others to learn, understand, contribute to, and able to use to build out their own projects.
-Use this framework to try to discover deep value additions - simple mechanics which add the most value to the gameplay. A simple interface for inventory, quests, trading, crafting, followers, spells, tools, etc. Emergent environmental complexity through simple rules like cellular automata and proc gen. Art and design which encourages and synergizes exploration, decoration, crafting, combat, building, managing, collecting. System design which can be easily adjusted to a large variety of game type and system requirements.
-Make the game world as detailed and realistic as possible, while balancing the other primary goals.
-Frequenety review the game code at a high level and remove redundancies and overly specific code which can be generalized or grouped to be more efficient. Always be looking for a way to combine features or code to ge the same result with fewer variables.
+---
 
-Structure Updates - 
-Houses are upgraded over time
-Zone has lumberjack and miner - chance for house to become stone house
-Zone has stone house and blacksmith - > stone house has chance to become fort
-Guards stand by the fort and protect it
-Fort becomes castle
-Has guards inside, King retreats to fort when health is low
-When zone is attacked, guards and a commander spawn from the castle (if not already in zone)
+### New Entity Types
 
-NPC updates -
-Rare enemy types - TBD
-Golems- stone, very still and slow moving
-High defense and life, slow attack (maybe defense only, used to block entries, attacks only when attacked)
-Birds
-Sheep
-Cow
-Chicken
+**Hostile / Rare**
+- [ ] Rare enemy type variants (TBD — design pass needed)
+- [ ] Golem (stone) — very slow, high defense and health, attacks only when attacked; used to block entries
 
+**Peaceful / Animals**
+- [ ] Birds
+- [ ] Sheep (placeholder exists; behavior pass needed)
+- [ ] Cow
+- [ ] Chicken
 
-Item updates - quick and easy value-add updates. We need to regularly consider new items that can be added to add game play options and depth.
-Items list (items to add over time, functionality can be expanded later)
-Crop types
-Carrot
-Fruit trees
-Melons
-Wheat
-Ghost fruit
-Magic crystal
-AOE effect - reduces damage in the zone, bonus to fire damage in the zone, etc
-Peace Tree - zone is peaceful (starting zone should have peacetree)
-Cactus
-Iron ore
-Water Well
-Gravestone
-Fence
-Crafting (recipes and crafting concepts which make natural progression and quest goals)
-Specific update - Added ironore.png, well.png, cactus.png. We need to add iron ore to spawn pretty commonly in caves, and miners enter caves and seek it out somewhat aggressively, similar to lumberjacks with trees. Mining gives them XP, and the higher level a miner is, the more likely they are to make a deeper cave during their update (level 1 = 1% chance), an entrance leading to a lower level if there is not already a down entrance on the current level. For now, lower levels will just work like an additional cave, but we need to make sure exits are mapped correctly so leaving requires traveling all the way back through the upper levels. When a miner's health gets low they will attempt to exit back up and out of the cave. Later, we will have the reverse, a structure like a wizards tower or a fort/castle which will grow upward the more it is built up, so these mechanics may be used again later.. Wells will have a chance to be constructed by peaceful NPC (Miner) randomly when there are 2 or more houses in the zone, with a low to moderate probability per zone update, and only if there are no wells already in the zone. Wells should be placed randomly but close to the center of the zone. They are a permanent source of water for human NPCs only, but are targeted for attacks by bandits/goblins, but have a low chance of being destroyed. Cactus will be a somewhat common plant that spawns in desert biomes a little less frequently than trees do in forests, but when cut/attacked by the player or NPCs, they do one point of damage. Other plants and structures may have damaging effects in the future as a way to make some paths more difficult to get through. We need to have most NPCs including goblins, wolves, and bandits able to and occasionally swipe at obstacles blocking their way. So when they are standing idle, hostile entities have a chance to swipe at nearby structures, which should have a small chance to destroy it (depending on the cell type. We should be able to add on to the code for bandits attacking structures that is already in place, to add trees, rocks, etc). Peaceful entities  will do the same, but not to usual structures, only environments. The objective is to be able to make a dense environment that can still become walkable over time due to NPC actions gradually making paths. I have also added a sword.png which should be used.
+---
 
-Spells
-Rain - toggle rain off/on
-Calcify - turn NPC to stone/freeze in place
-Charm - turn NPC friendly/hostile
-Heal - fills health, food, and water levels (chance to increase max life)/absorb health (chance to absorb years of life )
-Spectral state - can briefly pass through collision cells (not outer walls)
+### New Items & Crops
 
+**Crops**
+- [ ] Fruit trees
+- [ ] Melons
+- [ ] Wheat
+- [ ] Ghost Fruit
+- [ ] Cactus — spawns in desert biomes (slightly less often than trees in forest); damages player and NPCs by 1 on contact/attack; NPC pathfinding gradually clears it over time
 
-Systems - complex, add in only when code is clean and organized and ready for a potentially significant update
+**Resources & Materials**
+- [ ] Iron Ore — spawns commonly in caves; miners seek it aggressively (similar to lumberjacks and trees); mining yields XP; higher-level miners have an increased chance to generate a deeper cave level (level 1 miner = 1% chance per update); leaving a deeper cave requires traveling back up through each level *(sprite added: `ironore.png`)*
+- [ ] Sword item — replaces or supplements existing bone sword slot *(sprite added: `sword.png`)*
+- [ ] Magic Crystal — AoE zone effect (reduce zone damage, bonus fire damage, etc.)
+- [ ] Peace Tree — zone becomes peaceful; starting zone should always have one
+- [ ] Gravestone
+- [ ] Fence
 
-Follower System
-Ensure followers are not hostile to each other
-Ensure hostile list clears when the hostile dies (skeleton currently still shows in inventory after it died)
-When item inventory and follower inventory are open, selecting an item and using the place button puts the item in the followers inventory. The strongest version of each item (sword, helm, etc) in their inventory is automatically used for combat/other calcs
-LoreEngine
-Generates events, assigns quest targets, places items, spawns NPCs which create interesting and dynamic gameplay
-Migrations events
-Natural disasters
-Secret lairs/entrances
-Invasions/raids
-Obstructions
-Prevent the player from using the zone exit until cleared
-May be NPCs or hard to destroy structures (like a golem)
-Training examples could be a cactus 
-Locations and NPC names
-Generate unique and interesting names for NCPs and zones
-Redoak grove, etc
-Zone generation can be based on the naming - “Red Oak grove” is a grassy plain with oak trees, apple trees, and red themed plants
+**Structures**
+- [ ] Water Well — constructed by Miners; requires 2+ houses in zone and no existing well; placed near zone center; permanent water source for human NPCs only; targeted by bandits/goblins but low destruction chance *(sprite added: `well.png`)*
 
+**Crafting**
+- [ ] Design pass: new recipes creating natural progression and quest goals (iron tools, stone walls, etc.)
 
-LifeTime System
-Player character begin to gradually lose max life as it ages/permadeath
-Multiple ways to extend life/emergent quest
-Vampirism
-Fairy fountain
-Blood fountain
-Perk/Skill System
-Perks earned through natural gameplay
-Killing goblins builds a bonus damage to goblins perk 
-decays slowly over time? 
+---
 
-Contagion system
-Used for fast updates, especially catch-up processing
-Averages NPC stats, inventory, etc, based on proximity (automatic/invisible)
-Spreads player reputation across like-entities by averaging their player reputation scores
-Factions will spread player favorability to each other
+### Spells
+- [ ] **Rain** — toggle rain on/off in the current zone
+- [ ] **Calcify** — freeze an NPC in place / turn to stone
+- [ ] **Charm** — toggle NPC between friendly and hostile
+- [ ] **Heal** — fill player health, food, and water; chance to increase max life; reverse (K key) absorbs health from target and may drain years of life
+- [ ] **Spectral State** — player briefly passes through solid cells (not outer walls)
 
-Hostie/Peaceful - player carried variable
-Updates based on player attacking peaceful entities
--100 to 100 scale, 0 is neutral
-Increases default favor score with hostile/peaceful entities
-Low score causes factions and other NPCs to attack on site
-High level and high hostility causes enemy NPCs to flee
-Natural flee system for low level enemies to flee higher ~(+5, etc) level enemies
-Favor system - NPC carried variable
--100 to 100, tracks NPC favorability to the player
-Loyalty system - high favorability and matching hostility, may cause NPC to become follower
-Also works on animals, cats/dogs, etc
-Alternative to follower/enchant spell
-Lower chance per existing follower 
-BugCatcher
-System for tracking logging game performance and bugs, has set balance targets and allowed movements, etc. A spectrum of cleanup options will resolve issues. 
-Collision cells overlapping, zone is too dense, etc - > zone gets cleared and re-rolled, or spawn termite invasion, etc
-NPC too high level, stuck, teleporting, etc -> procs a full update and an invasion
-Zone is too far out of balance, population too high, etc -> lore engine procs a natural disaster event, or migration, etc
+---
 
-Quest select System
-When item/tool/spell inventory, etc is open in inventory and quest inventory is open, quest target will be a version of the item if possible
+### NPC Behavior Updates
+- [ ] All NPCs (hostile and peaceful) occasionally swipe at obstacles blocking their path — small chance to destroy the cell based on type; extends existing bandit-attacks-structures logic to cover trees, rocks, fences, etc.
+- [ ] Miner: seek iron ore in caves aggressively; exit cave when health is low; chance to dig a deeper cave level scaled by miner level
+- [ ] Natural flee system — low-level enemies flee significantly higher-level enemies (~5+ level difference)
 
-RainbowMaker
-Default sprite colors to be changeable via a built-in randomizer, IE; white cow with black spots can get variant red cow with gold spots
-Rare variants for hunting/collecting gameplay
+---
 
-Entity Genetics
-Entity core behaviors are numerically determined, can mutate slowly over time (via contagion system?)
-Can also reflect in sprite chances
+### Follower System Improvements
+- [ ] Followers are never hostile to each other
+- [ ] Hostile entity list clears correctly when the target dies (bug: skeleton still appears in follower slot after it dies)
+- [ ] When item inventory and follower inventory are both open, selecting an item and pressing Place puts it in the follower's inventory
+- [ ] Follower auto-equips the strongest version of each gear type (sword, armor, etc.) for combat and stat calculations
 
+---
 
+### LoreEngine Expansions
+- [ ] Migration events
+- [ ] Natural disaster events
+- [ ] Invasion / raid events
+- [ ] Obstructions — block zone exits until cleared; may be NPCs or hard-to-destroy structures (e.g. Golem)
+- [ ] Zone and NPC name generation — unique, flavored names (e.g. "Redoak Grove"); zone generation influenced by its assigned name
+- [ ] Secret lairs / additional secret entrance types *(foundation already in place)*
+
+---
+
+### Lifetime System
+- [ ] Player character gradually loses max life as they age → permadeath pressure
+- [ ] Multiple ways to extend life (emergent quest hooks):
+  - [ ] Vampirism
+  - [ ] Fairy fountain
+  - [ ] Blood fountain
+
+---
+
+### Perk / Skill System
+- [ ] Perks earned through natural gameplay (e.g. killing goblins repeatedly builds a goblin-damage bonus)
+- [ ] Perks decay slowly over time if not maintained
+
+---
+
+### Reputation & Favor Systems
+
+**Hostile/Peaceful Score** *(player-carried, -100 to 100)*
+- [ ] Updated by attacking peaceful or hostile entities
+- [ ] Influences default favor score with all entity types
+- [ ] Low score → factions and NPCs become aggressive on sight
+- [ ] High hostility + high player level → enemy NPCs flee on sight
+
+**Favor System** *(NPC-carried, -100 to 100)*
+- [ ] Tracks individual NPC favorability toward the player
+- [ ] Loyalty threshold: high favor + matching reputation score may cause NPC to become a follower
+- [ ] Works on animals too (cats, dogs, etc.) as an alternative to enchant/follower spell
+- [ ] Follower conversion chance decreases per existing follower already in party
+
+---
+
+### Contagion System
+> Primarily for fast updates and catch-up processing.
+
+- [ ] Averages NPC stats and inventory passively based on proximity (invisible to player)
+- [ ] Spreads player reputation scores across nearby same-type entities
+- [ ] Factions spread player favorability scores to allied entities
+
+---
+
+### RainbowMaker (Sprite Variants)
+- [ ] Sprite colors randomizable via a built-in system (e.g. white cow with black spots → red cow with gold spots)
+- [ ] Rare color variants create hunting and collecting gameplay
+
+---
+
+### Entity Genetics
+- [ ] Core NPC behaviors numerically determined and mutating slowly over time (potentially via Contagion System)
+- [ ] Genetic variation reflected in sprite color/variant chances
+
+---
+
+### Quest Select System
+- [ ] When inventory and quest panel are both open, quest target defaults to the currently selected item type if applicable
+
+---
+
+### BugCatcher System
+- [ ] Tracks game performance and detects out-of-balance states (collision overlaps, overpopulated zones, stuck/teleporting NPCs, etc.)
+- [ ] Tiered auto-correction responses:
+  - [ ] Zone too dense → re-roll or spawn termite invasion
+  - [ ] NPC stuck / teleporting / too high level → force full update + trigger invasion event
+  - [ ] Zone population too far out of balance → LoreEngine procs natural disaster or migration
+
+---
+
+### Audio
+- [ ] Background music
+- [ ] Ambient sound effects (rain, wind, fire)
+- [ ] Action sound effects (combat, crafting, spells)
+
+---
+
+### Miscellaneous
+- [ ] Minimap or zone map view
+- [ ] In-game help overlay / context-sensitive tips
 
 ---
 
 ## Completed Features
-> Moved here from Pending when shipped.
 
 - [x] ~~Modular file structure refactor~~ — completed!
-
+- [x] ~~macOS .app launcher with auto-update from GitHub~~ — completed!
+- [x] ~~Autopilot toggle (Shift+A), off by default~~ — completed!
+- [x] ~~Secret cave entrances via MINESHAFT in house interiors~~ — completed!
+- [x] ~~Secret cave exit routing (maps to overworld cave entrance or back to house)~~ — completed!
