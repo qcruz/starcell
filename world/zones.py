@@ -607,6 +607,8 @@ class ZonesMixin:
 
         for y in range(1, GRID_HEIGHT - 1):
             for x in range(1, GRID_WIDTH - 1):
+                if self.is_cell_enchanted(x, y, struct_zone_key):
+                    continue
                 cell = screen['grid'][y][x]
                 if cell in CELL_TYPES:
                     cell_info = CELL_TYPES[cell]

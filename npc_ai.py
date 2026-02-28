@@ -355,13 +355,28 @@ class NpcAiMixin:
             # Daytime: non-nocturnal NPCs should actively try to exit structures
             # Nighttime: nocturnal entities should actively try to exit
             wants_to_exit = False
-            
+
             if not self.is_night and not entity.props.get('nocturnal', False):
                 # Daytime + not nocturnal = want to be outside working
                 wants_to_exit = True
             elif self.is_night and entity.props.get('nocturnal', False):
                 # Nighttime + nocturnal = want to be outside hunting
                 wants_to_exit = True
+
+            # Combat-capable NPCs (guards/warriors) detect nearby hostiles outside and rush to defend
+            if not wants_to_exit and entity.type in ('GUARD', 'WARRIOR') \
+                    and entity.subscreen_key in self.subscreens:
+                sub = self.subscreens[entity.subscreen_key]
+                entrance_x = sub.get('entrance_x', GRID_WIDTH // 2)
+                entrance_y = sub.get('entrance_y', GRID_HEIGHT // 2)
+                overworld_key = f"{entity.screen_x},{entity.screen_y}"
+                for oid in self.screen_entities.get(overworld_key, []):
+                    if oid in self.entities:
+                        other = self.entities[oid]
+                        if other.props.get('hostile', False):
+                            if abs(other.x - entrance_x) + abs(other.y - entrance_y) <= 8:
+                                wants_to_exit = True
+                                break
             
             if wants_to_exit:
                 # Actively move toward exit and leave
@@ -1303,7 +1318,7 @@ class NpcAiMixin:
                         actions.append(('water', (check_x, check_y), 1.0, entity.priority_weights['water'] * 3.0))
                     
                     # Adjacent structure (for goblins)
-                    if entity.type == 'GOBLIN' and cell in ['CAMP', 'HOUSE']:
+                    if entity.type == 'GOBLIN' and cell in ['CAMP', 'HOUSE', 'STONE_HOUSE']:
                         actions.append(('attack', (check_x, check_y, 'structure'), 1.0, entity.priority_weights['attack'] * 2.0))
         
         # SCAN FULL ZONE for targets
@@ -1413,7 +1428,7 @@ class NpcAiMixin:
             closest_structure_dist = float('inf')
             for y in range(GRID_HEIGHT):
                 for x in range(GRID_WIDTH):
-                    if screen['grid'][y][x] in ['CAMP', 'HOUSE']:
+                    if screen['grid'][y][x] in ['CAMP', 'HOUSE', 'STONE_HOUSE']:
                         dist = abs(x - entity.x) + abs(y - entity.y)
                         if dist < closest_structure_dist:
                             closest_structure_dist = dist
@@ -1981,9 +1996,10 @@ class NpcAiMixin:
         if not entity.props.get('hostile', False):
             self.try_npc_trade(entity, screen_key)
         
-        # Wander if configured
+        # Wander if configured (reduced chance — peaceful NPCs stand around more)
         if behavior_config.get('wander_when_idle'):
-            self.wander_entity(entity)
+            if random.random() < NPC_PEACEFUL_WANDER_CHANCE:
+                self.wander_entity(entity)
     
     # Helper methods for specific actions
     def hostile_structure_behavior(self, entity):
@@ -2027,7 +2043,7 @@ class NpcAiMixin:
                         return  # Only one action per update
                     
                     # Attack wooden structures - medium chance
-                    elif cell in ['CAMP', 'HOUSE']:
+                    elif cell in ['CAMP', 'HOUSE', 'STONE_HOUSE']:
                         entity.update_facing_toward(check_x, check_y)
                         entity.trigger_action_animation()
                         self.show_attack_animation(check_x, check_y, entity=entity)
@@ -2040,6 +2056,10 @@ class NpcAiMixin:
                             screen['grid'][check_y][check_x] = 'GRASS'
                             entity.hunger = min(entity.max_hunger, entity.hunger + 20)
                             print(f"Termite destroyed a house at [{screen_key}]!")
+                        elif cell == 'STONE_HOUSE' and random.random() < 0.002:  # 0.2% — stone resists termites
+                            screen['grid'][check_y][check_x] = 'GRASS'
+                            entity.hunger = min(entity.max_hunger, entity.hunger + 10)
+                            print(f"Termite destroyed a stone house at [{screen_key}]!")
                         return  # Only one action per update
             
             # Priority 2: Move toward nearest tree or structure
@@ -2049,12 +2069,12 @@ class NpcAiMixin:
             for y in range(GRID_HEIGHT):
                 for x in range(GRID_WIDTH):
                     cell = screen['grid'][y][x]
-                    if cell in ['TREE1', 'TREE2', 'CAMP', 'HOUSE']:
+                    if cell in ['TREE1', 'TREE2', 'CAMP', 'HOUSE', 'STONE_HOUSE']:
                         dist = abs(x - entity.x) + abs(y - entity.y)
                         if dist < nearest_dist:
                             nearest_dist = dist
                             nearest_target_x, nearest_target_y = x, y
-            
+
             if nearest_target_x is not None and nearest_dist > 1:
                 self.move_entity_towards(entity, nearest_target_x, nearest_target_y)
                 return
@@ -2189,15 +2209,25 @@ class NpcAiMixin:
                         name_str = entity.name if entity.name else entity.type
                         print(f"{name_str} destroyed a house at [{screen_key}]!")
                         return
-        
+
+                    # Attack stone houses - extremely low chance (10x harder than wood house)
+                    elif cell == 'STONE_HOUSE' and random.random() < 0.001:  # 0.1% chance
+                        entity.update_facing_toward(check_x, check_y)
+                        entity.trigger_action_animation()
+                        self.show_attack_animation(check_x, check_y, entity=entity)
+                        screen['grid'][check_y][check_x] = 'GRASS'
+                        name_str = entity.name if entity.name else entity.type
+                        print(f"{name_str} destroyed a stone house at [{screen_key}]!")
+                        return
+
         # PRIORITY 4: Move toward nearest structure if found
         nearest_structure_x, nearest_structure_y = None, None
         nearest_dist = float('inf')
-        
+
         for y in range(GRID_HEIGHT):
             for x in range(GRID_WIDTH):
                 cell = screen['grid'][y][x]
-                if cell in ['CAMP', 'HOUSE']:
+                if cell in ['CAMP', 'HOUSE', 'STONE_HOUSE']:
                     dist = abs(x - entity.x) + abs(y - entity.y)
                     if dist < nearest_dist:
                         nearest_dist = dist

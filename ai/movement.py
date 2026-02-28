@@ -45,8 +45,14 @@ class NpcAiMovementMixin:
             new_x = entity.x + dx
             new_y = entity.y + dy
 
-            # Check bounds - allow edge cells but not out of grid
+            # Out of bounds → attempt seamless zone crossing
             if new_x < 0 or new_x >= GRID_WIDTH or new_y < 0 or new_y >= GRID_HEIGHT:
+                old_sk = f"{entity.screen_x},{entity.screen_y}"
+                self.try_entity_screen_crossing(entity, new_x, new_y)
+                if f"{entity.screen_x},{entity.screen_y}" != old_sk:
+                    entity.is_moving = True
+                    entity.moved_this_update = True
+                    return
                 continue
 
             # Check memory lane — avoid recently visited cells
@@ -198,6 +204,12 @@ class NpcAiMovementMixin:
             new_y = entity.y + move_y
 
             if new_x < 0 or new_x >= GRID_WIDTH or new_y < 0 or new_y >= GRID_HEIGHT:
+                # Try seamless zone crossing
+                old_sk = f"{entity.screen_x},{entity.screen_y}"
+                self.try_entity_screen_crossing(entity, new_x, new_y)
+                if f"{entity.screen_x},{entity.screen_y}" != old_sk:
+                    entity.moved_this_update = True
+                    return True
                 return False
             cell = screen['grid'][new_y][new_x]
             if CELL_TYPES[cell].get('solid', False):
@@ -412,76 +424,98 @@ class NpcAiMovementMixin:
                     self.screen_entities[new_screen_key].append(entity_id)
 
     def try_entity_screen_crossing(self, entity, new_x, new_y):
-        """Try to move entity to adjacent screen"""
+        """Seamlessly transition entity to adjacent zone when they walk through an exit corridor.
+
+        Only triggers at the existing 2-tile-wide exit corridors (center of each edge),
+        matching the same corridor geometry used by try_entity_zone_transition.
+        """
+        # Anti-bounce: prevent an immediate return trip
+        if self.tick - getattr(entity, 'last_zone_change_tick', -9999) < NPC_SEAMLESS_CROSS_COOLDOWN:
+            return
+
         screen_key = entity.screen_key
         if screen_key not in self.screens:
             return
 
         screen = self.screens[screen_key]
+        center_x = GRID_WIDTH // 2
+        center_y = GRID_HEIGHT // 2
         new_screen_x = entity.screen_x
         new_screen_y = entity.screen_y
+        facing_after = entity.facing
 
-        # Determine which screen to move to
-        if new_y < 0 and screen['exits']['top']:
+        # Verify entity is in the exit corridor for the direction they're stepping.
+        # Corridor geometry mirrors is_at_exit(): 2-tile span at each edge center.
+        if new_y < 0:
+            if not screen['exits']['top'] or not (center_x - 1 <= entity.x <= center_x):
+                return
             new_screen_y -= 1
             new_y = GRID_HEIGHT - 2
-        elif new_y >= GRID_HEIGHT and screen['exits']['bottom']:
+            facing_after = 'up'
+        elif new_y >= GRID_HEIGHT:
+            if not screen['exits']['bottom'] or not (center_x - 1 <= entity.x <= center_x):
+                return
             new_screen_y += 1
             new_y = 1
-        elif new_x < 0 and screen['exits']['left']:
+            facing_after = 'down'
+        elif new_x < 0:
+            if not screen['exits']['left'] or not (center_y - 1 <= entity.y <= center_y):
+                return
             new_screen_x -= 1
             new_x = GRID_WIDTH - 2
-        elif new_x >= GRID_WIDTH and screen['exits']['right']:
+            facing_after = 'left'
+        elif new_x >= GRID_WIDTH:
+            if not screen['exits']['right'] or not (center_y - 1 <= entity.y <= center_y):
+                return
             new_screen_x += 1
             new_x = 1
+            facing_after = 'right'
         else:
-            return  # Can't cross
+            return
 
-        # Generate target screen if needed
+        # Generate target zone if not yet visited
         new_screen_key = f"{new_screen_x},{new_screen_y}"
         if new_screen_key not in self.screens:
             self.generate_screen(new_screen_x, new_screen_y)
+        if new_screen_key not in self.screens:
+            return
 
-        # Check population limit
+        # Destination must be walkable
+        if CELL_TYPES.get(self.screens[new_screen_key]['grid'][new_y][new_x], {}).get('solid', False):
+            return
+
+        # Population cap
         if new_screen_key not in self.screen_entities:
             self.screen_entities[new_screen_key] = []
-
-        entity_count = len(self.screen_entities[new_screen_key])
-
-        # Try to merge if too crowded
-        if entity_count > 15:
-            merged = self.try_merge_entity(entity, new_screen_key)
-            if merged:
-                return
-            else:
-                # Too crowded, can't enter
+        if len(self.screen_entities[new_screen_key]) > 15:
+            if not self.try_merge_entity(entity, new_screen_key):
                 return
 
-        # Move entity to new screen
-        old_screen_key = entity.screen_key
-        if old_screen_key in self.screen_entities:
-            entity_id = None
-            for eid, e in self.entities.items():
-                if e == entity:
-                    entity_id = eid
-                    break
+        # Locate entity_id
+        entity_id = next((eid for eid, e in self.entities.items() if e is entity), None)
+        if entity_id is None:
+            return
 
-            if entity_id and entity_id in self.screen_entities[old_screen_key]:
-                # Check if destination cell in new screen is walkable
-                if new_screen_key in self.screens:
-                    dest_cell = self.screens[new_screen_key]['grid'][new_y][new_x]
-                    if CELL_TYPES[dest_cell]['solid']:
-                        # Destination is blocked, don't cross
-                        return
+        # Transfer between screen entity lists
+        old_sk = entity.screen_key
+        if old_sk in self.screen_entities and entity_id in self.screen_entities[old_sk]:
+            self.screen_entities[old_sk].remove(entity_id)
+        self.screen_entities[new_screen_key].append(entity_id)
 
-                # Move is valid
-                self.screen_entities[old_screen_key].remove(entity_id)
-                self.screen_entities[new_screen_key].append(entity_id)
-
-                entity.x = new_x
-                entity.y = new_y
-                entity.screen_x = new_screen_x
-                entity.screen_y = new_screen_y
+        # Update entity state
+        entity.x = new_x
+        entity.y = new_y
+        entity.target_x = new_x
+        entity.target_y = new_y
+        entity.world_x = float(new_x)
+        entity.world_y = float(new_y)
+        entity.screen_x = new_screen_x
+        entity.screen_y = new_screen_y
+        entity.facing = facing_after
+        entity.last_zone_change_tick = self.tick
+        entity.is_moving = True
+        if hasattr(entity, 'memory_lane'):
+            entity.memory_lane = []
 
     def move_entity_towards(self, entity, target_x, target_y):
         """Move entity one step towards target using memory_lane pathfinding"""

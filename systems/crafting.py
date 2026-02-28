@@ -413,7 +413,15 @@ class CraftingMixin:
             'MINESHAFT': 'mineshaft', 'CAMP': 'camp', 'CHEST': 'chest',
             'CARROT1': 'carrot1', 'CARROT2': 'carrot2', 'CARROT3': 'carrot3',
             'FLOWER': 'flower', 'WOOD': 'wood', 'PLANKS': 'planks',
-            'MEAT': 'meat', 'FUR': 'fur', 'BONES': 'bones'
+            'MEAT': 'meat', 'FUR': 'fur', 'BONES': 'bones',
+            # New cells
+            'IRON_ORE': 'iron_ore',
+            'WELL': 'well',
+            'CACTUS': 'cactus',
+            'BARREL': 'barrel',
+            'STONE_HOUSE': 'stone_house',
+            'RUINED_SANDSTONE_COLUMN': 'ruined_sandstone_column',
+            'FORGE': 'forge',
         }
 
         if cell_type in exact_pickup_map:

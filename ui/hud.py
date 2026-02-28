@@ -405,6 +405,15 @@ class HudMixin:
                         level_text = self.tiny_font.render(f"L{entity.level}", True, COLORS['YELLOW'])
                         self.screen.blit(level_text, (int(pixel_x + 2), int(pixel_y + CELL_SIZE - 12)))
 
+                    # Enchantment marker — golden star in top-right corner
+                    if self.is_entity_enchanted(entity_id):
+                        enchant_level = self.enchanted_entities.get(entity_id, 0)
+                        star_text = self.tiny_font.render('★', True, COLORS['YELLOW'])
+                        self.screen.blit(star_text, (int(pixel_x + CELL_SIZE - star_text.get_width() - 1), int(pixel_y + 1)))
+                        if enchant_level > 1:
+                            elv_text = self.tiny_font.render(str(enchant_level), True, COLORS['YELLOW'])
+                            self.screen.blit(elv_text, (int(pixel_x + CELL_SIZE - star_text.get_width() - elv_text.get_width() - 2), int(pixel_y + 1)))
+
                     # Debug: Draw AI state and target info
                     if self.debug_entity_ai:
                         debug_y_offset = CELL_SIZE - 12 if entity.level > 1 else CELL_SIZE - 2

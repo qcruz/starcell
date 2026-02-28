@@ -376,7 +376,7 @@ class MenusMixin:
                         arrow_x = ex * CELL_SIZE + CELL_SIZE // 2
                         arrow_y = (ey - 1) * CELL_SIZE + CELL_SIZE // 2
                         quest_color = QUEST_TYPES.get(self.active_quest, {}).get('color', (200, 200, 200))
-                        arrow_text = self.font.render("EXIT ↓", True, quest_color)
+                        arrow_text = self.font.render("↓", True, quest_color)
                         arrow_rect = arrow_text.get_rect(center=(arrow_x, arrow_y))
                         self.screen.blit(arrow_text, arrow_rect)
                     return

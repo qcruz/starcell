@@ -93,7 +93,7 @@ NPC_MOVE_VARIANCE = 60          # Random variance in movement timing (±1 second
 NPC_COMBAT_MOVE_INTERVAL = 30   # Fast movement during combat (0.5 seconds)
 
 # AI State Timing
-AI_STATE_IDLE_DURATION = 60     # Ticks for idle state (1 second)
+AI_STATE_IDLE_DURATION = 90     # Ticks for idle state (1.5 seconds — slightly longer idle)
 AI_STATE_WANDER_DURATION = 120  # Ticks for wander state (2 seconds)
 AI_STATE_TARGETING_DURATION = 180  # Ticks for targeting state (3 seconds)
 AI_STATE_COMBAT_DURATION = 120  # Ticks for combat state (2 seconds)
@@ -124,7 +124,9 @@ LUMBERJACK_CHOP_SUCCESS = 0.85   # 85% chop success (increased for much faster w
 LUMBERJACK_BUILD_SUCCESS = 0.35 # 35% build success
 MINER_MINE_SUCCESS = 0.2        # 20% mine success
 PEACEFUL_NPC_MIGRATE_RATE = 0.05 # Chance to migrate if duplicate type in zone (update_entity_ai)
-ZONE_CHANGE_COOLDOWN = 1800  # Ticks (30 seconds at 60 FPS) before entity can change zones again
+ZONE_CHANGE_COOLDOWN = 1800  # Ticks (30 seconds at 60 FPS) before entity can change zones again (seek_zone_exit path)
+NPC_SEAMLESS_CROSS_COOLDOWN = 30   # Ticks (0.5 s) anti-bounce cooldown for seamless zone crossing
+NPC_PEACEFUL_WANDER_CHANCE = 0.60  # Probability a peaceful NPC actually wanders when idle
 TARGET_STUCK_THRESHOLD = 180  # Ticks (3 seconds) before target is considered stuck and added to memory_lane
 NPC_TREE_CLEAR_RATE = 0.05  # Non-lumberjack NPCs can clear trees (no wood collected)
 ENHANCED_SETTLEMENT_RATE = 0.25 # Settlement rate when zone needs specific role (farmer/lumberjack/miner)

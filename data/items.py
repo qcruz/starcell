@@ -58,6 +58,14 @@ ITEMS = {
     'iron_ingot': {'color': (180, 140, 100),  'name': 'Iron Ingot'},
     'iron_sword': {'color': (200, 200, 220),  'name': 'Iron Sword', 'is_tool': True, 'damage': 20, 'sprite_name': 'iron_sword'},
 
+    # World structures / placeable cells
+    'well':                    {'color': (100, 80, 60),    'name': 'Well'},
+    'cactus':                  {'color': (50, 120, 50),    'name': 'Cactus'},
+    'barrel':                  {'color': (120, 80, 40),    'name': 'Barrel'},
+    'stone_house':             {'color': (110, 110, 120),  'name': 'Stone House'},
+    'ruined_sandstone_column': {'color': (200, 160, 90),   'name': 'Ruined Column'},
+    'forge':                   {'color': (180, 60, 20),    'name': 'Forge'},
+
     # Special
     'skeleton_bones': {'color': (240, 240, 230), 'name': 'Skeleton Bones', 'is_follower': True},
 

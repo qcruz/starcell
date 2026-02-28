@@ -233,5 +233,12 @@ ITEM_TO_CELL = {
     'meat': 'MEAT',
     'fur': 'FUR',
     'bones': 'BONES',
-    'flower': 'FLOWER'
+    'flower': 'FLOWER',
+    'iron_ore': 'IRON_ORE',
+    'well': 'WELL',
+    'cactus': 'CACTUS',
+    'barrel': 'BARREL',
+    'stone_house': 'STONE_HOUSE',
+    'ruined_sandstone_column': 'RUINED_SANDSTONE_COLUMN',
+    'forge': 'FORGE',
 }
