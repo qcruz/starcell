@@ -144,6 +144,43 @@ class HudMixin:
                             base_terrain = 'CAVE_FLOOR'
                             object_sprite = cell
                             use_layered = True
+                    elif cell == 'CACTUS':
+                        # Cactus layers on SAND
+                        if (self.use_sprites and hasattr(self, 'sprite_manager') and
+                                cell in self.sprite_manager.sprites and
+                                'SAND' in self.sprite_manager.sprites):
+                            base_terrain = 'SAND'
+                            object_sprite = cell
+                            use_layered = True
+                    elif cell == 'RUINED_SANDSTONE_COLUMN':
+                        # Ruined column layers on SAND
+                        if (self.use_sprites and hasattr(self, 'sprite_manager') and
+                                cell in self.sprite_manager.sprites and
+                                'SAND' in self.sprite_manager.sprites):
+                            base_terrain = 'SAND'
+                            object_sprite = cell
+                            use_layered = True
+                    elif cell == 'BARREL':
+                        # Barrel layers on FLOOR_WOOD inside houses
+                        if (self.use_sprites and hasattr(self, 'sprite_manager') and
+                                cell in self.sprite_manager.sprites and
+                                'FLOOR_WOOD' in self.sprite_manager.sprites):
+                            base_terrain = 'FLOOR_WOOD'
+                            object_sprite = cell
+                            use_layered = True
+                    elif cell == 'STONE_HOUSE':
+                        # Stone house layers on biome-appropriate ground, like HOUSE
+                        if self.use_sprites and hasattr(self, 'sprite_manager') and cell in self.sprite_manager.sprites:
+                            biome = self.current_screen.get('biome', 'FOREST') if self.current_screen else 'FOREST'
+                            if biome == 'DESERT':
+                                base_terrain = 'SAND'
+                            elif biome == 'MOUNTAINS':
+                                base_terrain = 'DIRT'
+                            else:
+                                base_terrain = 'GRASS'
+                            if base_terrain in self.sprite_manager.sprites:
+                                object_sprite = cell
+                                use_layered = True
 
                     # Layered rendering (when we have both sprites)
                     if use_layered:

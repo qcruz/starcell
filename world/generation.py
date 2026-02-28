@@ -147,6 +147,17 @@ class WorldGenerationMixin:
             struct_type = random.choice(['HOUSE', 'CAVE'])
             grid[struct_y][struct_x] = struct_type
 
+        # Desert: 60% chance to scatter 1-4 ruined sandstone columns
+        if biome_name == 'DESERT' and random.random() < 0.60:
+            num_columns = random.randint(1, 4)
+            for _ in range(num_columns):
+                for _attempt in range(20):
+                    col_x = random.randint(2, GRID_WIDTH - 3)
+                    col_y = random.randint(2, GRID_HEIGHT - 3)
+                    if grid[col_y][col_x] in ('SAND', 'DIRT'):
+                        grid[col_y][col_x] = 'RUINED_SANDSTONE_COLUMN'
+                        break
+
         # 10% chance to place a WELL near zone centre
         if random.random() < 0.10:
             well_x = GRID_WIDTH  // 2 + random.randint(-3, 3)
@@ -414,6 +425,18 @@ class WorldGenerationMixin:
         grid[GRID_HEIGHT - 2][GRID_WIDTH // 2] = 'FLOOR_WOOD'
         grid[GRID_HEIGHT - 2][GRID_WIDTH // 2 - 1] = 'FLOOR_WOOD'
         grid[GRID_HEIGHT - 2][GRID_WIDTH // 2 + 1] = 'FLOOR_WOOD'
+
+        # Place 0-3 barrels on random FLOOR_WOOD cells
+        num_barrels = random.randint(0, 3)
+        placed = 0
+        attempts = 0
+        while placed < num_barrels and attempts < 40:
+            bx = random.randint(2, GRID_WIDTH - 3)
+            by = random.randint(2, GRID_HEIGHT - 4)
+            if grid[by][bx] == 'FLOOR_WOOD':
+                grid[by][bx] = 'BARREL'
+                placed += 1
+            attempts += 1
 
         return grid
 

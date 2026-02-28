@@ -265,6 +265,10 @@ COLORS = {
     'FLOWER': (255, 100, 200),
     'IRON_ORE': (139, 90, 43),
     'WELL': (100, 80, 60),
+    'CACTUS': (50, 120, 50),
+    'BARREL': (120, 80, 40),
+    'STONE_HOUSE': (110, 110, 120),
+    'RUINED_SANDSTONE_COLUMN': (200, 160, 90),
 }
 
 # Cell type properties with drop probabilities
@@ -308,10 +312,10 @@ CELL_TYPES = {
     'CARROT3': {'color': COLORS['CARROT3'], 'label': 'Crt3', 'solid': False,
                 'degrades_to': 'GRASS', 'degrade_rate': 0.00005,  # Very slow decay
                 'harvest': {'item': 'carrot', 'amount': 3}},
-    'SAND': {'color': COLORS['SAND'], 'label': 'Snd', 'solid': False},
+    'SAND': {'color': COLORS['SAND'], 'label': 'Snd', 'solid': False, 'grows_to': 'CACTUS', 'growth_rate': 0.0001},
     'COBBLESTONE': {'color': COLORS['COBBLESTONE'], 'label': 'Cob', 'solid': False, 'degrades_to': 'DIRT', 'degrade_rate': 0.00001},  # Very persistent
     'WALL': {'color': COLORS['WALL'], 'label': '█', 'solid': True},
-    'HOUSE': {'color': COLORS['HOUSE'], 'label': 'Hos', 'solid': True, 'enterable': True, 'subscreen_type': 'HOUSE_INTERIOR', 'degrades_to': 'PLANKS', 'degrade_rate': 0.0001},
+    'HOUSE': {'color': COLORS['HOUSE'], 'label': 'Hos', 'solid': True, 'enterable': True, 'subscreen_type': 'HOUSE_INTERIOR', 'grows_to': 'STONE_HOUSE', 'growth_rate': 0.00005, 'degrades_to': 'PLANKS', 'degrade_rate': 0.0001},
     'FORGE': {'color': COLORS['FORGE'], 'label': 'Frg', 'solid': True, 'degrades_to': 'STONE', 'degrade_rate': 0.0001},
     'CAVE': {'color': COLORS['CAVE'], 'label': 'Cav', 'solid': True, 'enterable': True, 'subscreen_type': 'CAVE'},
     'MINESHAFT': {'color': (90, 70, 50), 'label': 'Mine', 'solid': True, 'enterable': True, 'subscreen_type': 'CAVE', 'sprite_name': 'mineshaft'},
@@ -343,6 +347,31 @@ CELL_TYPES = {
         'label': 'Wel',
         'solid': False,
         'interactable': True,
+    },
+    'CACTUS': {
+        'color': COLORS['CACTUS'],
+        'label': 'Cct',
+        'solid': True,
+        'degrades_to': 'SAND',
+        'degrade_rate': 0.0002,
+    },
+    'BARREL': {
+        'color': COLORS['BARREL'],
+        'label': 'Brl',
+        'solid': True,
+        'interactable': True,
+    },
+    'STONE_HOUSE': {
+        'color': COLORS['STONE_HOUSE'],
+        'label': 'StH',
+        'solid': True,
+        'enterable': True,
+        'subscreen_type': 'HOUSE_INTERIOR',
+    },
+    'RUINED_SANDSTONE_COLUMN': {
+        'color': COLORS['RUINED_SANDSTONE_COLUMN'],
+        'label': 'RSC',
+        'solid': True,
     },
 }
 
@@ -504,7 +533,7 @@ LOOT_TABLES = {
 BIOMES = {
     'FOREST': {'GRASS': 0.5, 'DIRT': 0.2, 'TREE1': 0.15, 'TREE2': 0.05, 'WATER': 0.1},
     'PLAINS': {'GRASS': 0.6, 'DIRT': 0.2, 'WATER': 0.05, 'CARROT1': 0.1, 'TREE1': 0.05},
-    'DESERT': {'SAND': 0.7, 'DIRT': 0.2, 'WATER': 0.05, 'STONE': 0.05},
+    'DESERT': {'SAND': 0.67, 'DIRT': 0.2, 'WATER': 0.05, 'STONE': 0.05, 'CACTUS': 0.03},
     'MOUNTAINS': {'DIRT': 0.45, 'STONE': 0.20, 'GRASS': 0.20, 'TREE1': 0.10, 'WATER': 0.05}
 }
 

@@ -191,14 +191,15 @@ class GameCoreMixin:
             os.path.join(script_dir, "sprites", "grass_sprites") + os.sep,
         ]
         
-        for cell_type in ['GRASS', 'DIRT', 'SAND', 'STONE', 'WATER', 'DEEP_WATER', 
+        for cell_type in ['GRASS', 'DIRT', 'SAND', 'STONE', 'WATER', 'DEEP_WATER',
                           'COBBLESTONE',
-                          'TREE1', 'TREE2', 'TREE3', 'FLOWER', 
+                          'TREE1', 'TREE2', 'TREE3', 'FLOWER',
                           'CARROT1', 'CARROT2', 'CARROT3',
-                          'CAMP', 'HOUSE', 'WOOD', 'PLANKS',
+                          'CAMP', 'HOUSE', 'STONE_HOUSE', 'WOOD', 'PLANKS',
                           'WALL', 'CAVE', 'MINESHAFT', 'SOIL', 'MEAT', 'FUR', 'BONES',
                           'FLOOR_WOOD', 'CAVE_FLOOR', 'CAVE_WALL', 'CHEST',
-                          'STAIRS_DOWN', 'STAIRS_UP']:
+                          'STAIRS_DOWN', 'STAIRS_UP',
+                          'CACTUS', 'BARREL', 'RUINED_SANDSTONE_COLUMN']:
             
             # Skip if already loaded
             if cell_type in self.sprite_manager.sprites:

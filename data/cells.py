@@ -34,6 +34,10 @@ COLORS = {
     'FLOWER': (255, 100, 200),
     'IRON_ORE': (139, 90, 43),
     'WELL': (100, 80, 60),
+    'CACTUS': (50, 120, 50),
+    'BARREL': (120, 80, 40),
+    'STONE_HOUSE': (110, 110, 120),
+    'RUINED_SANDSTONE_COLUMN': (200, 160, 90),
 }
 
 # Colors for entities
@@ -117,6 +121,31 @@ CELL_TYPES = {
         'label': 'Wel',
         'solid': False,
         'interactable': True,
+    },
+    'CACTUS': {
+        'color': (50, 120, 50),
+        'label': 'Cct',
+        'solid': True,
+        'degrades_to': 'SAND',
+        'degrade_rate': 0.0002,
+    },
+    'BARREL': {
+        'color': (120, 80, 40),
+        'label': 'Brl',
+        'solid': True,
+        'interactable': True,
+    },
+    'STONE_HOUSE': {
+        'color': (110, 110, 120),
+        'label': 'StH',
+        'solid': True,
+        'enterable': True,
+        'subscreen_type': 'HOUSE_INTERIOR',
+    },
+    'RUINED_SANDSTONE_COLUMN': {
+        'color': (200, 160, 90),
+        'label': 'RSC',
+        'solid': True,
     },
 }
 
