@@ -41,6 +41,77 @@ For planned and desired future features, see [`roadmap.md`](roadmap.md).
 
 ---
 
+### Controls Reference
+
+**Movement**
+
+| Key | Action |
+|---|---|
+| W / ↑ | Move up |
+| S / ↓ | Move down |
+| A / ← | Move left |
+| D / → | Move right |
+
+**Actions**
+
+| Key | Action |
+|---|---|
+| Space | Interact (talk, enter, open chest, pick up) |
+| E | Pick up cell or items from target tile |
+| P | Place selected item as a cell |
+| D | Drop selected item |
+| N | Open NPC trade |
+| B | Toggle blocking (90% damage reduction) |
+| V | Toggle friendly fire |
+
+**Magic & Spells**
+
+| Key | Action |
+|---|---|
+| L | Cast star spell — enchants targeted cell or entity |
+| K | Release / reverse spell — removes all active enchantments |
+
+> `K` is the reverse-spell key. Reserved for future spell mechanic expansion (e.g. reversing specific spell effects, countering enemy magic, inverting enchantment properties).
+
+**Inventory & UI**
+
+| Key | Action |
+|---|---|
+| I | Items tab |
+| T | Tools tab |
+| M | Magic tab |
+| F | Followers tab |
+| C | Crafting tab |
+| X | Attempt craft with selected items |
+| Q | Toggle quest panel |
+| 1–9, 0 | Select inventory slot |
+
+**Combat**
+
+| Key | Action |
+|---|---|
+| J | Release selected follower |
+
+**Autopilot**
+
+| Key | Action |
+|---|---|
+| Shift+A | Toggle autopilot on/off (off by default; any other input also disengages) |
+
+**Menu / Pause**
+
+| Key | Action |
+|---|---|
+| Escape | Pause / unpause |
+| P | Unpause |
+| S *(paused)* | Save game |
+| M *(paused)* | Return to main menu |
+| 1 *(menu)* | New game |
+| 2 *(menu)* | Load game |
+| Q *(menu)* | Quit |
+
+---
+
 ### World Generation & Structure
 
 **Biome System** (`constants.py` — `BIOMES` dict)
