@@ -1149,22 +1149,33 @@ class NpcAiMovementMixin:
             entity.patrol_target = None
 
     def try_merge_entity(self, entity, screen_key):
-        """Try to merge entity with similar entity on screen"""
+        """Try to merge entity with similar entity on screen.
+
+        Merge only triggers when there are more than 3 entities of the same
+        base type in the zone (overcrowding condition).
+        """
+        base_type = entity.type.replace('_double', '')
+        # Count same-type entities in zone
+        same_type_count = sum(
+            1 for eid, e in self.entities.items()
+            if e.type.replace('_double', '') == base_type
+            and f"{e.screen_x},{e.screen_y}" == screen_key
+        )
+        if same_type_count <= 3:
+            return False  # Not overcrowded — no merge
+
         for other_id in self.screen_entities.get(screen_key, []):
-            # Safety check for None or invalid entity_id
             if other_id is None or other_id not in self.entities:
                 continue
 
             other = self.entities[other_id]
 
             if entity.can_merge_with(other):
-                # Merge into other
                 other.merge_with(entity)
 
                 # Remove this entity (it was merged)
-                # Find entity_id
                 for eid, e in self.entities.items():
-                    if e == entity:
+                    if e is entity:
                         del self.entities[eid]
                         break
 
@@ -1175,22 +1186,27 @@ class NpcAiMovementMixin:
     def try_split_double_entity(self, entity_id, entity, screen_key):
         """Split a _double entity back into two singles when zone population is low.
 
-        Returns True if the entity was split (caller should not update it further
-        this tick, since the original entity has been modified in-place).
+        Splits when: < 5 of the same base type AND < 12 total entities in zone.
+        Returns True if the entity was split.
         """
         if not entity.type.endswith('_double'):
             return False
 
-        # Only split when zone has very few entities
-        zone_count = len(self.screen_entities.get(screen_key, []))
-        SPLIT_POPULATION_THRESHOLD = 3
-        if zone_count > SPLIT_POPULATION_THRESHOLD:
-            return False
+        base_type = entity.type.replace('_double', '')
+
+        zone_entities = self.screen_entities.get(screen_key, [])
+        total_count = len(zone_entities)
+        same_type_count = sum(
+            1 for eid in zone_entities
+            if eid in self.entities
+            and self.entities[eid].type.replace('_double', '') == base_type
+        )
+
+        if same_type_count >= 5 or total_count >= 12:
+            return False  # Zone has enough — no split needed
 
         if random.random() > 0.05:  # 5% chance per update
             return False
-
-        base_type = entity.type.replace('_double', '')
 
         # Revert this entity to single type
         entity.type = base_type
