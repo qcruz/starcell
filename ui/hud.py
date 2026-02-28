@@ -35,152 +35,69 @@ class HudMixin:
                     vg.append(vrow)
                 self.current_screen['variant_grid'] = vg
 
-            for y, row in enumerate(self.current_screen['grid']):
+            # Cells that ARE the ground — rendered directly, never need a base drawn under them.
+            # Also used as valid base candidates when checking neighbors.
+            _BASE_TERRAIN = {
+                'GRASS', 'DIRT', 'SAND', 'WATER', 'DEEP_WATER',
+                'SOIL', 'COBBLESTONE', 'FLOOR_WOOD', 'CAVE_FLOOR',
+            }
+            # Cells that render directly (no base needed) but are NOT valid base candidates
+            # (solid structural cells that nothing should layer on top of)
+            _SOLID_DIRECT = {'CAVE_WALL', 'WALL'}
+
+            # Precompute the biome/subscreen fallback base — same for every cell this frame
+            if self.current_screen and 'parent_screen' in self.current_screen:
+                _ss_type = self.current_screen.get('type', 'HOUSE_INTERIOR')
+                _fallback_base = 'CAVE_FLOOR' if 'CAVE' in _ss_type else 'FLOOR_WOOD'
+            else:
+                _biome = self.current_screen.get('biome', 'FOREST') if self.current_screen else 'FOREST'
+                _fallback_base = {'DESERT': 'SAND', 'MOUNTAINS': 'DIRT'}.get(_biome, 'GRASS')
+
+            _grid = self.current_screen['grid']
+
+            for y, row in enumerate(_grid):
                 for x, cell in enumerate(row):
-                    # Check if this cell should use layered rendering
-                    # ONLY use layering if we have BOTH base terrain AND object sprites
+                    # ── Neighbor-based base terrain detection ──────────────────
+                    # Look at the 4 orthogonal neighbors; use the first walkable
+                    # base terrain cell found as the base for any layered object.
+                    # This avoids biome-guessing and uses what's actually present.
+                    _neighbor_base = None
+                    for _nx, _ny in ((x, y + 1), (x + 1, y), (x - 1, y), (x, y - 1)):
+                        if 0 <= _nx < GRID_WIDTH and 0 <= _ny < GRID_HEIGHT:
+                            _nc = _grid[_ny][_nx]
+                            if _nc in _BASE_TERRAIN:
+                                _neighbor_base = _nc
+                                break
+                    # Resolved base: neighbor wins, biome/subscreen as fallback
+                    _base = _neighbor_base or _fallback_base
+
+                    # ── Layering decision ──────────────────────────────────────
                     use_layered = False
                     base_terrain = None
                     object_sprite = None
 
-                    if cell in ['TREE1', 'TREE2', 'TREE3', 'FLOWER']:
-                        # Trees/flowers layer on biome-appropriate walkable ground
-                        if (self.use_sprites and hasattr(self, 'sprite_manager') and
-                                cell in self.sprite_manager.sprites):
-                            biome = self.current_screen.get('biome', 'FOREST') if self.current_screen else 'FOREST'
-                            if biome == 'DESERT':
-                                base_terrain = 'SAND'
-                            elif biome == 'MOUNTAINS':
-                                base_terrain = 'DIRT'
-                            else:  # FOREST, PLAINS, or unknown
-                                base_terrain = 'GRASS'
-                            if base_terrain in self.sprite_manager.sprites:
-                                object_sprite = cell
-                                use_layered = True
-                    elif cell in ['CAMP', 'HOUSE', 'CAVE']:
-                        # Camp and house layer on biome-appropriate walkable ground
-                        if self.use_sprites and hasattr(self, 'sprite_manager') and cell in self.sprite_manager.sprites:
-                            biome = self.current_screen.get('biome', 'FOREST') if self.current_screen else 'FOREST'
-                            if biome == 'DESERT':
-                                base_terrain = 'SAND'
-                            elif biome == 'MOUNTAINS':
-                                base_terrain = 'DIRT'
-                            else:  # FOREST, PLAINS, or unknown
-                                base_terrain = 'GRASS'
+                    if cell in _BASE_TERRAIN or cell in _SOLID_DIRECT:
+                        # Base/solid cells render directly — no layering needed
+                        pass
 
-                            # Only use layered if base terrain sprite exists
-                            if base_terrain in self.sprite_manager.sprites:
-                                object_sprite = cell
-                                use_layered = True
                     elif cell == 'CHEST':
-                        # Chest uses stored background cell (what it replaced)
+                        # CHEST: prefer stored background (records what it replaced)
                         if self.use_sprites and hasattr(self, 'sprite_manager') and cell in self.sprite_manager.sprites:
-                            # Check if we have a stored background for this chest
                             chest_key = f"{screen_key}:{x},{y}"
                             if hasattr(self, 'chest_backgrounds') and chest_key in self.chest_backgrounds:
                                 base_terrain = self.chest_backgrounds[chest_key]
                             else:
-                                # No stored background - determine from context
-                                if self.current_screen and 'parent_screen' in self.current_screen:
-                                    # In subscreen - use floor type
-                                    subscreen_type = self.current_screen.get('type', 'HOUSE_INTERIOR')
-                                    if 'CAVE' in subscreen_type:
-                                        base_terrain = 'CAVE_FLOOR'
-                                    else:
-                                        base_terrain = 'FLOOR_WOOD'
-                                else:
-                                    # Fallback to biome-appropriate base terrain
-                                    biome = self.current_screen.get('biome', 'FOREST') if self.current_screen else 'FOREST'
-                                    if biome == 'DESERT':
-                                        base_terrain = 'SAND'
-                                    elif biome == 'MOUNTAINS':
-                                        base_terrain = 'STONE'
-                                    elif biome == 'PLAINS':
-                                        base_terrain = 'GRASS'
-                                    else:  # FOREST
-                                        base_terrain = 'GRASS'
+                                base_terrain = _base
+                            if base_terrain and base_terrain in self.sprite_manager.sprites:
+                                object_sprite = cell
+                                use_layered = True
 
-                            # Only use layered if base terrain sprite exists
-                            if base_terrain in self.sprite_manager.sprites:
-                                object_sprite = cell
-                                use_layered = True
-                    elif cell in ['CARROT1', 'CARROT2', 'CARROT3']:
-                        # Check if both DIRT and crop sprites exist
-                        if (self.use_sprites and hasattr(self, 'sprite_manager') and
-                                'DIRT' in self.sprite_manager.sprites and
-                                cell in self.sprite_manager.sprites):
-                            base_terrain = 'DIRT'
+                    elif self.use_sprites and hasattr(self, 'sprite_manager') and cell in self.sprite_manager.sprites:
+                        # Any other cell with a sprite: layer on the actual base present
+                        base_terrain = _base
+                        if base_terrain in self.sprite_manager.sprites:
                             object_sprite = cell
                             use_layered = True
-                    elif cell == 'STONE':
-                        # Stone should layer on appropriate base terrain
-                        if self.use_sprites and hasattr(self, 'sprite_manager') and cell in self.sprite_manager.sprites:
-                            if self.current_screen and 'parent_screen' in self.current_screen:
-                                # In subscreen - use floor type
-                                subscreen_type = self.current_screen.get('type', 'HOUSE_INTERIOR')
-                                if 'CAVE' in subscreen_type:
-                                    base_terrain = 'CAVE_FLOOR'
-                                else:
-                                    base_terrain = 'FLOOR_WOOD'
-                            else:
-                                # In overworld - determine base terrain by biome
-                                biome = self.current_screen.get('biome', 'FOREST') if self.current_screen else 'FOREST'
-                                if biome == 'DESERT':
-                                    base_terrain = 'SAND'
-                                elif biome == 'MOUNTAINS':
-                                    base_terrain = 'DIRT'
-                                else:
-                                    base_terrain = 'GRASS'
-
-                            # Only use layered if base terrain sprite exists
-                            if base_terrain in self.sprite_manager.sprites:
-                                object_sprite = cell
-                                use_layered = True
-                    elif cell == 'IRON_ORE':
-                        # Iron ore always appears inside caves — layer on CAVE_FLOOR
-                        if (self.use_sprites and hasattr(self, 'sprite_manager') and
-                                cell in self.sprite_manager.sprites and
-                                'CAVE_FLOOR' in self.sprite_manager.sprites):
-                            base_terrain = 'CAVE_FLOOR'
-                            object_sprite = cell
-                            use_layered = True
-                    elif cell == 'CACTUS':
-                        # Cactus layers on SAND
-                        if (self.use_sprites and hasattr(self, 'sprite_manager') and
-                                cell in self.sprite_manager.sprites and
-                                'SAND' in self.sprite_manager.sprites):
-                            base_terrain = 'SAND'
-                            object_sprite = cell
-                            use_layered = True
-                    elif cell == 'RUINED_SANDSTONE_COLUMN':
-                        # Ruined column layers on SAND
-                        if (self.use_sprites and hasattr(self, 'sprite_manager') and
-                                cell in self.sprite_manager.sprites and
-                                'SAND' in self.sprite_manager.sprites):
-                            base_terrain = 'SAND'
-                            object_sprite = cell
-                            use_layered = True
-                    elif cell == 'BARREL':
-                        # Barrel layers on FLOOR_WOOD inside houses
-                        if (self.use_sprites and hasattr(self, 'sprite_manager') and
-                                cell in self.sprite_manager.sprites and
-                                'FLOOR_WOOD' in self.sprite_manager.sprites):
-                            base_terrain = 'FLOOR_WOOD'
-                            object_sprite = cell
-                            use_layered = True
-                    elif cell == 'STONE_HOUSE':
-                        # Stone house layers on biome-appropriate ground, like HOUSE
-                        if self.use_sprites and hasattr(self, 'sprite_manager') and cell in self.sprite_manager.sprites:
-                            biome = self.current_screen.get('biome', 'FOREST') if self.current_screen else 'FOREST'
-                            if biome == 'DESERT':
-                                base_terrain = 'SAND'
-                            elif biome == 'MOUNTAINS':
-                                base_terrain = 'DIRT'
-                            else:
-                                base_terrain = 'GRASS'
-                            if base_terrain in self.sprite_manager.sprites:
-                                object_sprite = cell
-                                use_layered = True
 
                     # Layered rendering (when we have both sprites)
                     if use_layered:
@@ -241,21 +158,9 @@ class HudMixin:
                                      sprite_name in self.sprite_manager.sprites)
 
                         if has_sprite:
-                            # For non-base-terrain cells, draw the biome floor first so
-                            # transparent pixels never show as black squares.
-                            # Base terrain cells ARE the floor — no base needed beneath them.
-                            _BASE_TERRAIN = {
-                                'GRASS', 'DIRT', 'SAND', 'WATER', 'DEEP_WATER',
-                                'SOIL', 'COBBLESTONE', 'FLOOR_WOOD', 'CAVE_FLOOR',
-                                'CAVE_WALL', 'WALL',
-                            }
-                            if cell not in _BASE_TERRAIN:
-                                if self.current_screen and 'parent_screen' in self.current_screen:
-                                    subscreen_type = self.current_screen.get('type', 'HOUSE_INTERIOR')
-                                    _base = 'CAVE_FLOOR' if 'CAVE' in subscreen_type else 'FLOOR_WOOD'
-                                else:
-                                    _biome = self.current_screen.get('biome', 'FOREST') if self.current_screen else 'FOREST'
-                                    _base = {'DESERT': 'SAND', 'MOUNTAINS': 'DIRT'}.get(_biome, 'GRASS')
+                            # For non-base-terrain / non-solid cells, draw the actual
+                            # base terrain underneath so transparent pixels don't show black.
+                            if cell not in _BASE_TERRAIN and cell not in _SOLID_DIRECT:
                                 _base_sprite = self.sprite_manager.sprites.get(_base)
                                 if _base_sprite:
                                     self.screen.blit(_base_sprite, (x * CELL_SIZE, y * CELL_SIZE))
