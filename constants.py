@@ -403,15 +403,15 @@ ITEMS = {
     
     # Weapons
     'hilt': {'color': (139, 90, 43), 'name': 'Weapon Hilt'},
-    'bone_sword': {'color': (220, 220, 200), 'name': 'Bone Sword', 'is_tool': True, 'damage': 15},
-    'club': {'color': (101, 67, 33), 'name': 'Club', 'is_tool': True, 'damage': 8},
+    'bone_sword': {'color': (220, 220, 200), 'name': 'Bone Sword', 'is_tool': True, 'is_weapon': True, 'damage': 15},
+    'club': {'color': (101, 67, 33), 'name': 'Club', 'is_tool': True, 'is_weapon': True, 'damage': 8},
     
     # Magic items
     'star_spell': {'color': (255, 215, 0), 'name': 'Star Spell', 'is_spell': True, 
                    'description': 'Enchants cells and entities'},
     'magic_stone': {'color': (138, 43, 226), 'name': 'Magic Stone', 'is_spell': True, 'damage': 12},
     'magic_wand': {'color': (255, 140, 255), 'name': 'Magic Wand', 'is_spell': True, 'damage': 10},
-    'enchanted_sword': {'color': (147, 112, 219), 'name': 'Enchanted Sword', 'is_tool': True, 'damage': 25},
+    'enchanted_sword': {'color': (147, 112, 219), 'name': 'Enchanted Sword', 'is_tool': True, 'is_weapon': True, 'damage': 25},
     'enchanted_axe': {'color': (148, 0, 211), 'name': 'Enchanted Axe', 'is_tool': True, 'damage': 20},
     
     # Materials
@@ -432,7 +432,7 @@ ITEMS = {
     # Iron pipeline
     'iron_ore':   {'color': (139, 90, 43),   'name': 'Iron Ore'},
     'iron_ingot': {'color': (180, 140, 100),  'name': 'Iron Ingot'},
-    'iron_sword': {'color': (200, 200, 220),  'name': 'Iron Sword', 'is_tool': True, 'damage': 20, 'sprite_name': 'iron_sword'},
+    'iron_sword': {'color': (200, 200, 220),  'name': 'Iron Sword', 'is_tool': True, 'is_weapon': True, 'damage': 20, 'sprite_name': 'iron_sword'},
 
     # World structures / placeable cells
     'well':                    {'color': (100, 80, 60),    'name': 'Well'},

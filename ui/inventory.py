@@ -107,20 +107,33 @@ class InventoryUIMixin:
                     pygame.draw.rect(self.screen, item_color,
                                    (slot_x + 4, slot_y + 4, slot_size - 8, slot_size - 8))
 
-                # Item count
+                # Item count (top-right)
                 if count > 1:
                     count_text = self.tiny_font.render(str(count), True, COLORS['WHITE'])
                     count_bg = pygame.Surface((count_text.get_width() + 2, count_text.get_height()))
                     count_bg.fill(COLORS['BLACK'])
                     count_bg.set_alpha(180)
                     self.screen.blit(count_bg, (slot_x + slot_size - count_text.get_width() - 2,
-                                                 slot_y + slot_size - count_text.get_height()))
+                                                 slot_y + 2))
                     self.screen.blit(count_text, (slot_x + slot_size - count_text.get_width() - 1,
-                                                   slot_y + slot_size - count_text.get_height()))
+                                                   slot_y + 2))
 
-                # Slot number (for number key selection)
+                # Slot number (top-left)
                 num_text = self.tiny_font.render(str((i + 1) % 10), True, COLORS['GRAY'])
                 self.screen.blit(num_text, (slot_x + 2, slot_y + 2))
+
+                # Item name label at bottom of slot
+                display_name = ITEMS.get(item_name, {}).get('name', item_name)
+                name_surf = self.tiny_font.render(display_name, True, COLORS['WHITE'])
+                # Clip to slot width
+                name_w = min(name_surf.get_width(), slot_size - 2)
+                name_h = name_surf.get_height()
+                name_bg = pygame.Surface((slot_size, name_h))
+                name_bg.fill(COLORS['BLACK'])
+                name_bg.set_alpha(180)
+                self.screen.blit(name_bg, (slot_x, slot_y + slot_size - name_h))
+                self.screen.blit(name_surf, (slot_x + 1, slot_y + slot_size - name_h),
+                                 area=pygame.Rect(0, 0, name_w, name_h))
 
             y_offset += slot_size + 15
 

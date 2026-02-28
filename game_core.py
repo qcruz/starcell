@@ -1363,24 +1363,28 @@ class GameCoreMixin:
             self.enter_subscreen(check_x, check_y)
             return
         
-        # Chop tree - drops wood
-        if cell.startswith('TREE') and self.inventory.has_item('axe'):
+        # Weapon check — swords only attack and enter/exit; no world tool interactions
+        selected_tool = self.inventory.selected_tool
+        if selected_tool and ITEMS.get(selected_tool, {}).get('is_weapon', False):
+            return
+
+        # Chop tree — axe must be selected tool
+        if cell.startswith('TREE') and self.inventory.selected_tool == 'axe':
             self.player['energy'] = max(0, self.player.get('energy', 0) - 1)
             self.handle_drops(cell, check_x, check_y)
             return
 
-        # Mine stone - drops stone items
-        if cell == 'STONE' and self.inventory.has_item('pickaxe'):
+        # Mine stone — pickaxe must be selected tool
+        if cell == 'STONE' and self.inventory.selected_tool == 'pickaxe':
             self.player['energy'] = max(0, self.player.get('energy', 0) - 1)
             self.inventory.add_item('stone', 1)
             self.current_screen['grid'][check_y][check_x] = 'DIRT'
             self.show_attack_animation(check_x, check_y)
             return
-        
-        # Dig mineshaft — pickaxe on soft ground cells (overworld or inside caves)
-        # This creates a mineshaft entrance leading to a cave system
+
+        # Dig mineshaft — pickaxe must be selected tool
         minable_ground = {'DIRT', 'SAND', 'GRASS', 'CAVE_FLOOR'}
-        if cell in minable_ground and self.inventory.has_item('pickaxe'):
+        if cell in minable_ground and self.inventory.selected_tool == 'pickaxe':
             self.player['energy'] = max(0, self.player.get('energy', 0) - 1)
             depth = 1
             in_cave = False
@@ -1389,22 +1393,28 @@ class GameCoreMixin:
                 if subscreen and subscreen.get('type') == 'CAVE':
                     depth = subscreen.get('depth', 1)
                     in_cave = True
-            
+
             mineshaft_chance = PLAYER_MINESHAFT_BASE_CHANCE / (MINESHAFT_DEPTH_DIVISOR ** (depth - 1))
+
+            # In overland: divide chance by count of existing caves/mineshafts in this zone
+            if not in_cave:
+                grid = self.current_screen['grid']
+                cave_count = sum(1 for row in grid for c in row if c in ('CAVE', 'MINESHAFT', 'HIDDEN_CAVE'))
+                if cave_count > 0:
+                    mineshaft_chance /= cave_count
+
             self.show_attack_animation(check_x, check_y)
-            
+
             if random.random() < mineshaft_chance:
                 self.current_screen['grid'][check_y][check_x] = 'MINESHAFT'
-                
-                # Pre-generate the deeper level so it's ready when entered
                 if in_cave:
                     print(f"You dug a mineshaft to depth {depth + 1}!")
                 else:
                     print(f"You discovered an underground passage!")
             return
-        
-        # Till dirt with hoe
-        if cell == 'DIRT' and self.inventory.has_item('hoe'):
+
+        # Till dirt — hoe must be selected tool
+        if cell == 'DIRT' and self.inventory.selected_tool == 'hoe':
             self.current_screen['grid'][check_y][check_x] = 'SOIL'
             return
         
