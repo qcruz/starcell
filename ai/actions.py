@@ -368,7 +368,7 @@ class NpcAiActionsMixin:
                 check_x = entity.x + dx
                 check_y = entity.y + dy
                 if 0 <= check_x < GRID_WIDTH and 0 <= check_y < GRID_HEIGHT:
-                    if screen['grid'][check_y][check_x] == 'STONE':
+                    if screen['grid'][check_y][check_x] in ('STONE', 'IRON_ORE'):
                         nearby_rocks += 1
 
         # Calculate mine rate with density bonus (similar to lumberjack)
@@ -383,42 +383,50 @@ class NpcAiActionsMixin:
                 check_y = entity.y + dy
                 if 0 <= check_x < GRID_WIDTH and 0 <= check_y < GRID_HEIGHT:
                     cell = screen['grid'][check_y][check_x]
-                    if cell == 'STONE':
+                    if cell in ('STONE', 'IRON_ORE'):
                         found_rock = True
                         entity.update_facing_toward(check_x, check_y)
                         entity.trigger_action_animation()
                         self.show_attack_animation(check_x, check_y, entity=entity)
 
-                        # Grant 1 XP for action
-                        entity.xp += 1
+                        # Grant XP: iron ore gives more than regular stone
+                        xp_gain = 2 if cell == 'IRON_ORE' else 1
+                        entity.xp += xp_gain
                         if entity.xp >= entity.xp_to_level:
                             entity.level_up()
 
                         if random.random() < MINER_MINE_SUCCESS:
-                            # Tool gate: proxy only collects stone if player has pickaxe
+                            # Tool gate: proxy only collects if player has pickaxe
                             is_proxy = entity.props.get('is_autopilot_proxy', False)
                             has_tool = (not is_proxy or
                                         (hasattr(self, 'inventory') and
                                          (self.inventory.has_item('pickaxe') or self.inventory.has_item('stone_pickaxe'))))
 
-                            # NPC miners can create mineshafts (limited per zone)
-                            mineshaft_count = sum(1 for row in screen['grid']
-                                                  for c in row if c == 'MINESHAFT')
-                            can_create_shaft = (mineshaft_count < MINESHAFT_MAX_PER_ZONE)
-
-                            if can_create_shaft and random.random() < MINER_MINESHAFT_CHANCE:
-                                # Create mineshaft entrance
-                                screen['grid'][check_y][check_x] = 'MINESHAFT'
+                            if cell == 'IRON_ORE':
+                                # Mine iron ore → CAVE_FLOOR, drop iron_ore item
                                 if has_tool:
-                                    entity.inventory['stone'] = entity.inventory.get('stone', 0) + 1
-                                print(f"Miner dug a mineshaft at ({check_x}, {check_y})!")
+                                    entity.inventory['iron_ore'] = entity.inventory.get('iron_ore', 0) + 1
+                                screen['grid'][check_y][check_x] = 'CAVE_FLOOR'
                                 entity.level_up_from_activity('mine', self)
                             else:
-                                # Mine the rock - convert to dirt, give stone only with tool
-                                if has_tool:
-                                    entity.inventory['stone'] = entity.inventory.get('stone', 0) + 2
-                                screen['grid'][check_y][check_x] = 'DIRT'
-                                entity.level_up_from_activity('mine', self)
+                                # NPC miners can create mineshafts (limited per zone)
+                                mineshaft_count = sum(1 for row in screen['grid']
+                                                      for c in row if c == 'MINESHAFT')
+                                can_create_shaft = (mineshaft_count < MINESHAFT_MAX_PER_ZONE)
+
+                                if can_create_shaft and random.random() < MINER_MINESHAFT_CHANCE:
+                                    # Create mineshaft entrance
+                                    screen['grid'][check_y][check_x] = 'MINESHAFT'
+                                    if has_tool:
+                                        entity.inventory['stone'] = entity.inventory.get('stone', 0) + 1
+                                    print(f"Miner dug a mineshaft at ({check_x}, {check_y})!")
+                                    entity.level_up_from_activity('mine', self)
+                                else:
+                                    # Mine the rock - convert to dirt, give stone only with tool
+                                    if has_tool:
+                                        entity.inventory['stone'] = entity.inventory.get('stone', 0) + 2
+                                    screen['grid'][check_y][check_x] = 'DIRT'
+                                    entity.level_up_from_activity('mine', self)
                         return
 
         # No rocks nearby - move toward nearest corner to mine
@@ -426,6 +434,26 @@ class NpcAiActionsMixin:
             target_corner = self.get_nearest_corner_target(entity.x, entity.y)
             if target_corner:
                 self.move_entity_towards(entity, target_corner[0], target_corner[1])
+
+    def try_build_well(self, entity, screen_key):
+        """Miner builds a well if zone has 2+ houses and no existing well."""
+        screen = self.screens.get(screen_key, {})
+        grid = screen.get('grid', [])
+        house_count = sum(1 for row in grid for cell in row if cell == 'HOUSE')
+        if house_count < 2:
+            return
+        if any(cell == 'WELL' for row in grid for cell in row):
+            return  # Well already exists
+        if random.random() > MINER_WELL_BUILD_RATE:
+            return
+        for _ in range(20):
+            wx = GRID_WIDTH  // 2 + random.randint(-4, 4)
+            wy = GRID_HEIGHT // 2 + random.randint(-4, 4)
+            if (2 <= wx < GRID_WIDTH - 2 and 2 <= wy < GRID_HEIGHT - 2
+                    and not CELL_TYPES.get(grid[wy][wx], {}).get('solid', False)):
+                grid[wy][wx] = 'WELL'
+                print(f"[Miner] Built a well at ({wx},{wy}) in zone {screen_key}")
+                return
 
     def try_plant_seed(self, entity, screen_key):
         """Face and plant on exactly one adjacent SOIL cell. Returns True if acted."""

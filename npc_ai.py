@@ -1512,11 +1512,15 @@ class NpcAiMixin:
         for other_id in self.screen_entities.get(screen_key, []):
             if other_id == entity_id:
                 continue
-            
+
+            # Skip entities that are player followers
+            if other_id in getattr(self, 'followers', []):
+                continue
+
             # Safety check for None or invalid entity_id
             if other_id is None or other_id not in self.entities:
                 continue
-            
+
             other = self.entities[other_id]
             
             # Determine if this is an enemy
@@ -1943,6 +1947,9 @@ class NpcAiMixin:
                 return
             elif action == 'mine_rocks':
                 self.try_mine_rock(entity, screen_key)
+                return
+            elif action == 'build_well':
+                self.try_build_well(entity, screen_key)
                 return
             elif action == 'build_house':
                 self.try_build_house(entity, screen_key)

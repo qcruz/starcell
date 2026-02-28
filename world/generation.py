@@ -147,6 +147,15 @@ class WorldGenerationMixin:
             struct_type = random.choice(['HOUSE', 'CAVE'])
             grid[struct_y][struct_x] = struct_type
 
+        # 10% chance to place a WELL near zone centre
+        if random.random() < 0.10:
+            well_x = GRID_WIDTH  // 2 + random.randint(-3, 3)
+            well_y = GRID_HEIGHT // 2 + random.randint(-3, 3)
+            well_x = max(2, min(GRID_WIDTH - 3,  well_x))
+            well_y = max(2, min(GRID_HEIGHT - 3, well_y))
+            if not CELL_TYPES.get(grid[well_y][well_x], {}).get('solid', False):
+                grid[well_y][well_x] = 'WELL'
+
         screen_data = {
             'grid': grid,
             'variant_grid': variant_grid,
@@ -422,7 +431,12 @@ class WorldGenerationMixin:
                 elif y == 0:
                     row.append('CAVE_WALL')
                 else:
-                    if random.random() < 0.15:
+                    rand = random.random()
+                    ore_chance = 0.03 if depth == 1 else 0.07
+                    stone_chance = 0.15 - ore_chance
+                    if rand < ore_chance:
+                        row.append('IRON_ORE')
+                    elif rand < ore_chance + stone_chance:
                         row.append('STONE')
                     else:
                         row.append('CAVE_FLOOR')

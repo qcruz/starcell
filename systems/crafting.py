@@ -102,6 +102,9 @@ class CraftingMixin:
                         'entity_id': skeleton_id
                     }
                 self.inventory.add_follower(follower_name, 1)
+                # Record item name so death handler can clean it up correctly
+                if hasattr(self, 'follower_items'):
+                    self.follower_items[skeleton_id] = follower_name
                 print(f"Skeleton summoned and bound to your will!")
         else:
             # Normal crafting - add result to appropriate inventory

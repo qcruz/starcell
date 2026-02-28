@@ -199,6 +199,7 @@ PLAYER_MINESHAFT_BASE_CHANCE = 0.05 # 5% base chance for player mining to create
 MINESHAFT_DEPTH_DIVISOR = 2.0  # Each depth level halves the mineshaft creation chance
 MINER_MINESHAFT_CHANCE = 0.03  # 3% chance per mine action for NPC miners
 MINESHAFT_MAX_PER_ZONE = 2     # Max mineshafts NPCs can create in one zone
+MINER_WELL_BUILD_RATE = 0.02   # 2% chance per action for miner to build a well
 WARRIOR_PROMOTION_CHANCE = 0.60 # 60% chance highest level entity becomes warrior after raid clear
 
 # Miner & Structure Systems
@@ -261,7 +262,9 @@ COLORS = {
     'INV_BG': (20, 20, 20),
     'INV_BORDER': (100, 100, 100),
     'INV_SELECT': (255, 215, 0),
-    'FLOWER': (255, 100, 200)
+    'FLOWER': (255, 100, 200),
+    'IRON_ORE': (139, 90, 43),
+    'WELL': (100, 80, 60),
 }
 
 # Cell type properties with drop probabilities
@@ -328,7 +331,19 @@ CELL_TYPES = {
     'CAVE_WALL': {'color': (30, 30, 30), 'label': 'Cw', 'solid': True},
     'CHEST': {'color': (139, 69, 19), 'label': 'Chst', 'solid': True, 'interactable': True},
     'STAIRS_DOWN': {'color': (100, 80, 60), 'label': '↓', 'solid': False, 'goes_deeper': True},
-    'STAIRS_UP': {'color': (120, 100, 80), 'label': '↑', 'solid': False, 'exits_subscreen': True}
+    'STAIRS_UP': {'color': (120, 100, 80), 'label': '↑', 'solid': False, 'exits_subscreen': True},
+    'IRON_ORE': {
+        'color': COLORS['IRON_ORE'],
+        'label': 'Fe',
+        'solid': True,
+        'drops': [{'item': 'iron_ore', 'amount': 1, 'chance': 1.0}],
+    },
+    'WELL': {
+        'color': COLORS['WELL'],
+        'label': 'Wel',
+        'solid': False,
+        'interactable': True,
+    },
 }
 
 # Item definitions
@@ -383,9 +398,14 @@ ITEMS = {
     'floor': {'color': (160, 120, 80), 'name': 'Floor'},
     'sandstone': {'color': (210, 180, 140), 'name': 'Sandstone'},
     
+    # Iron pipeline
+    'iron_ore':   {'color': (139, 90, 43),   'name': 'Iron Ore'},
+    'iron_ingot': {'color': (180, 140, 100),  'name': 'Iron Ingot'},
+    'iron_sword': {'color': (200, 200, 220),  'name': 'Iron Sword', 'is_tool': True, 'damage': 20, 'sprite_name': 'iron_sword'},
+
     # Special
     'skeleton_bones': {'color': (240, 240, 230), 'name': 'Skeleton Bones', 'is_follower': True},
-    
+
     # Runestones - Magic damage types
     'lightning_rune': {'color': (100, 149, 237), 'name': 'Lightning Rune', 'magic_damage': 'lightning', 'damage': 3},
     'fire_rune': {'color': (255, 69, 0), 'name': 'Fire Rune', 'magic_damage': 'fire', 'damage': 3},
@@ -448,6 +468,11 @@ RECIPES = {
     ('stone', 'planks'): 'wall',
     ('planks', 'dirt'): 'floor',
     ('wood', 'sand'): 'sandstone',
+
+    # Iron pipeline
+    ('iron_ore', 'iron_ore'):     'iron_ingot',
+    ('iron_ingot', 'hilt'):       'iron_sword',
+    ('iron_ingot', 'iron_ingot'): 'iron_sword',
 }
 
 # Loot tables for chests
@@ -462,13 +487,16 @@ LOOT_TABLES = {
         {'item': 'gold', 'min': 10, 'max': 50, 'chance': 0.9},
         {'item': 'stone', 'min': 5, 'max': 15, 'chance': 0.7},
         {'item': 'bones', 'min': 1, 'max': 3, 'chance': 0.5},
-        {'item': 'stone_pickaxe', 'min': 1, 'max': 1, 'chance': 0.3}
+        {'item': 'stone_pickaxe', 'min': 1, 'max': 1, 'chance': 0.3},
+        {'item': 'iron_ore', 'min': 1, 'max': 3, 'chance': 0.40},
     ],
     'CAVE_DEEP_CHEST': [
         {'item': 'gold', 'min': 50, 'max': 200, 'chance': 1.0},
         {'item': 'enchanted_sword', 'min': 1, 'max': 1, 'chance': 0.4},
         {'item': 'leather_armor', 'min': 1, 'max': 1, 'chance': 0.3},
-        {'item': 'magic_stone', 'min': 1, 'max': 1, 'chance': 0.2}
+        {'item': 'magic_stone', 'min': 1, 'max': 1, 'chance': 0.2},
+        {'item': 'iron_ingot', 'min': 1, 'max': 2, 'chance': 0.30},
+        {'item': 'iron_sword', 'min': 1, 'max': 1, 'chance': 0.20},
     ]
 }
 

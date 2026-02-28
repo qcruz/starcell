@@ -53,6 +53,11 @@ ITEMS = {
     'floor': {'color': (160, 120, 80), 'name': 'Floor'},
     'sandstone': {'color': (210, 180, 140), 'name': 'Sandstone'},
 
+    # Iron pipeline
+    'iron_ore':   {'color': (139, 90, 43),   'name': 'Iron Ore'},
+    'iron_ingot': {'color': (180, 140, 100),  'name': 'Iron Ingot'},
+    'iron_sword': {'color': (200, 200, 220),  'name': 'Iron Sword', 'is_tool': True, 'damage': 20, 'sprite_name': 'iron_sword'},
+
     # Special
     'skeleton_bones': {'color': (240, 240, 230), 'name': 'Skeleton Bones', 'is_follower': True},
 
@@ -140,6 +145,11 @@ RECIPES = {
     ('stone', 'planks'): 'wall',
     ('planks', 'dirt'): 'floor',
     ('wood', 'sand'): 'sandstone',
+
+    # Iron pipeline
+    ('iron_ore', 'iron_ore'):     'iron_ingot',
+    ('iron_ingot', 'hilt'):       'iron_sword',
+    ('iron_ingot', 'iron_ingot'): 'iron_sword',
 }
 
 # Loot tables for chests
@@ -154,12 +164,15 @@ LOOT_TABLES = {
         {'item': 'gold', 'min': 10, 'max': 50, 'chance': 0.9},
         {'item': 'stone', 'min': 5, 'max': 15, 'chance': 0.7},
         {'item': 'bones', 'min': 1, 'max': 3, 'chance': 0.5},
-        {'item': 'stone_pickaxe', 'min': 1, 'max': 1, 'chance': 0.3}
+        {'item': 'stone_pickaxe', 'min': 1, 'max': 1, 'chance': 0.3},
+        {'item': 'iron_ore', 'min': 1, 'max': 3, 'chance': 0.40},
     ],
     'CAVE_DEEP_CHEST': [
         {'item': 'gold', 'min': 50, 'max': 200, 'chance': 1.0},
         {'item': 'enchanted_sword', 'min': 1, 'max': 1, 'chance': 0.4},
         {'item': 'leather_armor', 'min': 1, 'max': 1, 'chance': 0.3},
-        {'item': 'magic_stone', 'min': 1, 'max': 1, 'chance': 0.2}
+        {'item': 'magic_stone', 'min': 1, 'max': 1, 'chance': 0.2},
+        {'item': 'iron_ingot', 'min': 1, 'max': 2, 'chance': 0.30},
+        {'item': 'iron_sword', 'min': 1, 'max': 1, 'chance': 0.20},
     ]
 }

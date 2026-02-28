@@ -31,7 +31,9 @@ COLORS = {
     'INV_BG': (20, 20, 20),
     'INV_BORDER': (100, 100, 100),
     'INV_SELECT': (255, 215, 0),
-    'FLOWER': (255, 100, 200)
+    'FLOWER': (255, 100, 200),
+    'IRON_ORE': (139, 90, 43),
+    'WELL': (100, 80, 60),
 }
 
 # Colors for entities
@@ -103,7 +105,19 @@ CELL_TYPES = {
     'CAVE_WALL': {'color': (30, 30, 30), 'label': 'Cw', 'solid': True},
     'CHEST': {'color': (139, 69, 19), 'label': 'Chst', 'solid': True, 'interactable': True},
     'STAIRS_DOWN': {'color': (100, 80, 60), 'label': '↓', 'solid': False, 'goes_deeper': True},
-    'STAIRS_UP': {'color': (120, 100, 80), 'label': '↑', 'solid': False, 'exits_subscreen': True}
+    'STAIRS_UP': {'color': (120, 100, 80), 'label': '↑', 'solid': False, 'exits_subscreen': True},
+    'IRON_ORE': {
+        'color': (139, 90, 43),
+        'label': 'Fe',
+        'solid': True,
+        'drops': [{'item': 'iron_ore', 'amount': 1, 'chance': 1.0}],
+    },
+    'WELL': {
+        'color': (100, 80, 60),
+        'label': 'Wel',
+        'solid': False,
+        'interactable': True,
+    },
 }
 
 # Cell pickup requirements

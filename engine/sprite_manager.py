@@ -244,6 +244,23 @@ class SpriteManager:
 
         print("  ✓ Generated all structure and special cell sprites")
 
+        # Load individual PNG sprites for new cell/item types
+        _individual_sprites = {
+            'IRON_ORE':   'ironore.png',
+            'WELL':       'well.png',
+            'iron_sword': 'sword.png',
+        }
+        sprite_dir = os.path.join(os.path.dirname(__file__), '..', 'sprites')
+        for sprite_key, filename in _individual_sprites.items():
+            path = os.path.join(sprite_dir, filename)
+            if os.path.exists(path):
+                try:
+                    img = pygame.image.load(path).convert_alpha()
+                    self.sprites[sprite_key] = pygame.transform.scale(img, (self.cell_size, self.cell_size))
+                    print(f"  ✓ Loaded {sprite_key} sprite from {filename}")
+                except Exception as e:
+                    print(f"  ✗ Failed to load {filename}: {e}")
+
     def get_all_sprite_names(self):
         """Return list of all loaded sprite names"""
         return list(self.sprites.keys())

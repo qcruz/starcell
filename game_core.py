@@ -134,6 +134,8 @@ class GameCoreMixin:
         
         # Follower tracking: [entity_ids] - list of entity IDs that are followers
         self.followers = []
+        # Maps entity_id → inventory item name used to summon that follower
+        self.follower_items = {}  # {entity_id: item_name}
         
         # Entities per screen: {screen_key: [entity_ids]}
         self.screen_entities = {}
@@ -583,10 +585,9 @@ class GameCoreMixin:
         # Remove from followers if it was a follower
         if entity_id in self.followers:
             self.followers.remove(entity_id)
-            # Remove from follower inventory
-            follower_name = f"{entity.type.lower()}_{entity_id}"
-            if self.inventory.has_item(follower_name):
-                self.inventory.remove_item(follower_name, 1)
+            item_name = self.follower_items.pop(entity_id, None)
+            if item_name and self.inventory.has_item(item_name):
+                self.inventory.remove_item(item_name, 1)
             print(f"{entity.type} follower has died!")
         
         # Drop items if entity has drops (with probability)
@@ -1762,6 +1763,7 @@ class GameCoreMixin:
         self.enchanted_cells = {}
         self.enchanted_entities = {}
         self.followers = []
+        self.follower_items = {}
         self.subscreens = {}
         self.opened_chests = set()
         self.next_subscreen_id = 0
@@ -1785,10 +1787,11 @@ class GameCoreMixin:
         
         # Add to followers
         self.followers.append(skeleton_id)
-        
+        self.follower_items[skeleton_id] = 'skeleton_bones'
+
         # Add to inventory as follower item (use existing skeleton_bones item)
         self.inventory.add_follower('skeleton_bones', 1)
-        
+
         print(f"Skeleton follower spawned for testing (ID: {skeleton_id})")
         
         # Trigger initial time passage for world generation
