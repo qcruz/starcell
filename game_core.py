@@ -383,6 +383,27 @@ class GameCoreMixin:
                     except Exception as e:
                         print(f"Failed to load item sprite {filename}: {e}")
         
+        # Load sprites whose filenames don't match the standard key.lower()+".png" pattern
+        _explicit_sprites = {
+            'IRON_ORE':   'ironore.png',
+            'WELL':       'well.png',
+            'iron_sword': 'sword.png',
+        }
+        for sprite_key, filename_base in _explicit_sprites.items():
+            if sprite_key in self.sprite_manager.sprites:
+                continue
+            for search_path in search_paths:
+                filename = os.path.join(search_path, filename_base) if search_path else filename_base
+                if os.path.exists(filename):
+                    try:
+                        sprite_img = pygame.image.load(filename).convert_alpha()
+                        sprite_img = pygame.transform.scale(sprite_img, (CELL_SIZE, CELL_SIZE))
+                        self.sprite_manager.sprites[sprite_key] = sprite_img
+                        sprite_files_loaded += 1
+                        break
+                    except Exception as e:
+                        print(f"Failed to load {filename}: {e}")
+
         # If individual files were loaded, use them
         if sprite_files_loaded > 0:
             print("\n" + "=" * 60)
