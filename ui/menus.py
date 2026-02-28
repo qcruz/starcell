@@ -95,6 +95,11 @@ class MenusMixin:
             self.screen.blit(text, (SCREEN_WIDTH // 2 - text.get_width() // 2, y))
             y += 22
 
+        # Last git push timestamp
+        push_time = getattr(self, 'last_push_time', 'Unknown')
+        push_text = self.tiny_font.render(f"Last push: {push_time}", True, COLORS['GRAY'])
+        self.screen.blit(push_text, (SCREEN_WIDTH // 2 - push_text.get_width() // 2, y + 10))
+
     # -------------------------------------------------------------------------
     # Trader UI
     # -------------------------------------------------------------------------

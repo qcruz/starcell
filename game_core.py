@@ -162,6 +162,23 @@ class GameCoreMixin:
         self.inspected_npc = None  # Entity being inspected
         self.inspected_npc_tick = 0  # When inspection started  # When to hide display
 
+        # Last git push timestamp (shown on pause screen)
+        try:
+            import subprocess as _sp
+            _script_dir = os.path.dirname(os.path.abspath(__file__))
+            _res = _sp.run(
+                ['git', 'log', '-1', '--format=%ci', 'origin/main'],
+                capture_output=True, text=True, cwd=_script_dir, timeout=3
+            )
+            _raw = _res.stdout.strip()
+            if _res.returncode == 0 and _raw:
+                # Format: "2026-02-28 10:37:22 -0600" → "2026-02-28 10:37"
+                self.last_push_time = ' '.join(_raw.split()[:2])[:16]
+            else:
+                self.last_push_time = 'Unknown'
+        except Exception:
+            self.last_push_time = 'Unknown'
+
     def load_sprites(self):
         """Load sprite images from individual PNG files"""
         # Initialize the sprite manager
@@ -384,11 +401,16 @@ class GameCoreMixin:
                     except Exception as e:
                         print(f"Failed to load item sprite {filename}: {e}")
         
-        # Load sprites whose filenames don't match the standard key.lower()+".png" pattern
+        # Load sprites whose filenames don't match the standard key.lower()+".png" pattern,
+        # or that need guaranteed convert_alpha() regardless of alpha-detection result.
         _explicit_sprites = {
-            'IRON_ORE':   'ironore.png',
-            'WELL':       'well.png',
-            'iron_sword': 'sword.png',
+            'IRON_ORE':              'ironore.png',
+            'WELL':                  'well.png',
+            'iron_sword':            'sword.png',
+            'RUINED_SANDSTONE_COLUMN': 'ruined_sandstone_column.png',
+            'STONE_HOUSE':           'stone_house.png',
+            'CACTUS':                'cactus.png',
+            'BARREL':                'barrel.png',
         }
         for sprite_key, filename_base in _explicit_sprites.items():
             if sprite_key in self.sprite_manager.sprites:
