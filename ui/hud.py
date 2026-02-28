@@ -35,17 +35,21 @@ class HudMixin:
                     vg.append(vrow)
                 self.current_screen['variant_grid'] = vg
 
-            # Cells that ARE the ground — rendered directly, never need a base drawn under them.
-            # Also used as valid base candidates when checking neighbors.
+            # Cells rendered directly — they ARE the floor, no base needed beneath them.
             _BASE_TERRAIN = {
                 'GRASS', 'DIRT', 'SAND', 'WATER', 'DEEP_WATER',
                 'SOIL', 'COBBLESTONE', 'FLOOR_WOOD', 'CAVE_FLOOR',
             }
-            # Cells that render directly (no base needed) but are NOT valid base candidates
-            # (solid structural cells that nothing should layer on top of)
+            # Solid structural cells — render directly, never a valid base for others.
             _SOLID_DIRECT = {'CAVE_WALL', 'WALL'}
+            # Land-only cells valid as the base beneath object sprites.
+            # WATER and DEEP_WATER are excluded — objects don't sit on open water.
+            _VALID_NEIGHBOR_BASE = {
+                'GRASS', 'DIRT', 'SAND', 'SOIL', 'COBBLESTONE',
+                'FLOOR_WOOD', 'CAVE_FLOOR',
+            }
 
-            # Precompute the biome/subscreen fallback base — same for every cell this frame
+            # Precompute biome/subscreen fallback base — same for every cell this frame
             if self.current_screen and 'parent_screen' in self.current_screen:
                 _ss_type = self.current_screen.get('type', 'HOUSE_INTERIOR')
                 _fallback_base = 'CAVE_FLOOR' if 'CAVE' in _ss_type else 'FLOOR_WOOD'
@@ -58,14 +62,13 @@ class HudMixin:
             for y, row in enumerate(_grid):
                 for x, cell in enumerate(row):
                     # ── Neighbor-based base terrain detection ──────────────────
-                    # Look at the 4 orthogonal neighbors; use the first walkable
-                    # base terrain cell found as the base for any layered object.
-                    # This avoids biome-guessing and uses what's actually present.
+                    # Check the 4 orthogonal neighbors for a land base cell.
+                    # Water cells are excluded — objects shouldn't rest on open water.
                     _neighbor_base = None
                     for _nx, _ny in ((x, y + 1), (x + 1, y), (x - 1, y), (x, y - 1)):
                         if 0 <= _nx < GRID_WIDTH and 0 <= _ny < GRID_HEIGHT:
                             _nc = _grid[_ny][_nx]
-                            if _nc in _BASE_TERRAIN:
+                            if _nc in _VALID_NEIGHBOR_BASE:
                                 _neighbor_base = _nc
                                 break
                     # Resolved base: neighbor wins, biome/subscreen as fallback
@@ -157,7 +160,18 @@ class HudMixin:
                                      hasattr(self, 'sprite_manager') and
                                      sprite_name in self.sprite_manager.sprites)
 
-                        if has_sprite:
+                        if cell == 'DEEP_WATER':
+                            # Render as WATER sprite + dark blue shade overlay
+                            water_spr = self.sprite_manager.sprites.get('WATER')
+                            if water_spr:
+                                self.screen.blit(water_spr, (x * CELL_SIZE, y * CELL_SIZE))
+                                _shade = pygame.Surface((CELL_SIZE, CELL_SIZE), pygame.SRCALPHA)
+                                _shade.fill((0, 20, 80, 110))
+                                self.screen.blit(_shade, (x * CELL_SIZE, y * CELL_SIZE))
+                            else:
+                                pygame.draw.rect(self.screen, COLORS['DEEP_WATER'],
+                                                 (x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE))
+                        elif has_sprite:
                             # For non-base-terrain / non-solid cells, draw the actual
                             # base terrain underneath so transparent pixels don't show black.
                             if cell not in _BASE_TERRAIN and cell not in _SOLID_DIRECT:

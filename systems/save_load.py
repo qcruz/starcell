@@ -162,6 +162,10 @@ class SaveLoadMixin:
                 self.player['in_subscreen'] = False
                 self.player['subscreen_key'] = None
                 self.player['subscreen_parent'] = None
+            # Ensure player has energy fields (added after initial release)
+            if 'energy' not in self.player:
+                self.player['energy'] = self.player.get('max_energy', 100)
+                self.player['max_energy'] = self.player.get('max_energy', 100)
             # Ensure player has animation fields
             if 'facing' not in self.player:
                 self.player['facing'] = 'down'

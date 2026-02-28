@@ -61,11 +61,12 @@ class EnchantmentMixin:
             print("No magic available!")
             return
 
-        # Check energy (costs 3 per cast)
-        if self.player.get('energy', 0) < 3:
+        # Check energy (costs 3 per cast); default to max_energy if key missing (old save)
+        _cur_energy = self.player.get('energy', self.player.get('max_energy', 100))
+        if _cur_energy < 3:
             print("Not enough energy!")
             return
-        self.player['energy'] = max(0, self.player.get('energy', 0) - 3)
+        self.player['energy'] = max(0, _cur_energy - 3)
 
         target = self.get_target_cell()
         if not target:
