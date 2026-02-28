@@ -16,6 +16,7 @@ Make a fun and playable fantasy adventure game
 Make this project open source and easy for others to learn, understand, contribute to, and able to use to build out their own projects.
 Use this framework to try to discover deep value additions - simple mechanics which add the most value to the gameplay. A simple interface for inventory, quests, trading, crafting, followers, spells, tools, etc. Emergent environmental complexity through simple rules like cellular automata and proc gen. Art and design which encourages and synergizes exploration, decoration, crafting, combat, building, managing, collecting. System design which can be easily adjusted to a large variety of game type and system requirements.
 Make the game world as detailed and realistic as possible, while balancing the other primary goals.
+Frequenety review the game code at a high level and remove redundancies and overly specific code which can be generalized or grouped to be more efficient. Always be looking for a way to combine features or code to ge the same result with fewer variables.
 
 Structure Updates - 
 Houses are upgraded over time
