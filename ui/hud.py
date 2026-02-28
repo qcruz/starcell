@@ -202,13 +202,13 @@ class HudMixin:
                     # Draw enchantment indicator if cell is enchanted
                     if self.is_cell_enchanted(x, y, screen_key):
                         enchant_level = self.enchanted_cells[screen_key].get((x, y), 0)
-                        # Draw golden star in corner
-                        star_text = self.tiny_font.render('★', True, COLORS['YELLOW'])
-                        self.screen.blit(star_text, (x * CELL_SIZE + 2, y * CELL_SIZE + 2))
+                        # Draw golden small rect marker in top-left corner
+                        pygame.draw.rect(self.screen, COLORS['YELLOW'],
+                                         (x * CELL_SIZE + 2, y * CELL_SIZE + 2, 5, 5))
                         # Draw enchant level number
                         if enchant_level > 1:
                             level_text = self.tiny_font.render(str(enchant_level), True, COLORS['YELLOW'])
-                            self.screen.blit(level_text, (x * CELL_SIZE + 12, y * CELL_SIZE + 2))
+                            self.screen.blit(level_text, (x * CELL_SIZE + 8, y * CELL_SIZE + 2))
 
                     # Draw dropped items (layered over base cell)
                     if screen_key in self.dropped_items:
@@ -405,14 +405,14 @@ class HudMixin:
                         level_text = self.tiny_font.render(f"L{entity.level}", True, COLORS['YELLOW'])
                         self.screen.blit(level_text, (int(pixel_x + 2), int(pixel_y + CELL_SIZE - 12)))
 
-                    # Enchantment marker — golden star in top-right corner
+                    # Enchantment marker — golden rect in top-right corner
                     if self.is_entity_enchanted(entity_id):
                         enchant_level = self.enchanted_entities.get(entity_id, 0)
-                        star_text = self.tiny_font.render('★', True, COLORS['YELLOW'])
-                        self.screen.blit(star_text, (int(pixel_x + CELL_SIZE - star_text.get_width() - 1), int(pixel_y + 1)))
+                        pygame.draw.rect(self.screen, COLORS['YELLOW'],
+                                         (int(pixel_x + CELL_SIZE - 7), int(pixel_y + 2), 5, 5))
                         if enchant_level > 1:
                             elv_text = self.tiny_font.render(str(enchant_level), True, COLORS['YELLOW'])
-                            self.screen.blit(elv_text, (int(pixel_x + CELL_SIZE - star_text.get_width() - elv_text.get_width() - 2), int(pixel_y + 1)))
+                            self.screen.blit(elv_text, (int(pixel_x + CELL_SIZE - 7 - elv_text.get_width() - 1), int(pixel_y + 1)))
 
                     # Debug: Draw AI state and target info
                     if self.debug_entity_ai:
@@ -638,12 +638,15 @@ class HudMixin:
                 f"{int(energy)}/{max_energy}", True, (200, 200, 200))
             self.screen.blit(nrg_val, (nrg_x + 28 + BAR_W + 4, ui_y + 6))
 
-            # Magic pool (text only, after energy)
-            magic_x = nrg_x + 28 + BAR_W + 4 + 50 + 14
-            magic_lbl = self.tiny_font.render(
-                f"Magic: {self.player['magic_pool']}/{self.player['max_magic_pool']}",
-                True, (200, 130, 255))
-            self.screen.blit(magic_lbl, (magic_x, ui_y + 6))
+            # Enchantment count (shows how many things are enchanted, consuming max_energy)
+            enchant_count = len(self.enchanted_cells.get(
+                f"{self.player['screen_x']},{self.player['screen_y']}", {})) + len(self.enchanted_entities)
+            if enchant_count > 0:
+                enc_x = nrg_x + 28 + BAR_W + 4 + 50 + 14
+                enc_lbl = self.tiny_font.render(
+                    f"Enc:{enchant_count}",
+                    True, (200, 130, 255))
+                self.screen.blit(enc_lbl, (enc_x, ui_y + 6))
 
             # ── Row 2: Location / status info ──────────────────────────────
             info_text = ""

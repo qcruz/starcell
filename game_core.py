@@ -24,12 +24,10 @@ class GameCoreMixin:
             'level': 1,
             'xp': 0,
             'xp_to_level': 100,
-            'magic_pool': 10,
-            'max_magic_pool': 10,
             'health': 100,
             'max_health': 100,
-            'energy': 100,
-            'max_energy': 100,
+            'energy': 20,
+            'max_energy': 20,
             'base_damage': 5,
             'blocking': False,
             'friendly_fire': False,      # OFF = cannot damage peaceful entities (press V to toggle)
@@ -1367,11 +1365,13 @@ class GameCoreMixin:
         
         # Chop tree - drops wood
         if cell.startswith('TREE') and self.inventory.has_item('axe'):
+            self.player['energy'] = max(0, self.player.get('energy', 0) - 1)
             self.handle_drops(cell, check_x, check_y)
             return
-        
+
         # Mine stone - drops stone items
         if cell == 'STONE' and self.inventory.has_item('pickaxe'):
+            self.player['energy'] = max(0, self.player.get('energy', 0) - 1)
             self.inventory.add_item('stone', 1)
             self.current_screen['grid'][check_y][check_x] = 'DIRT'
             self.show_attack_animation(check_x, check_y)
@@ -1381,6 +1381,7 @@ class GameCoreMixin:
         # This creates a mineshaft entrance leading to a cave system
         minable_ground = {'DIRT', 'SAND', 'GRASS', 'CAVE_FLOOR'}
         if cell in minable_ground and self.inventory.has_item('pickaxe'):
+            self.player['energy'] = max(0, self.player.get('energy', 0) - 1)
             depth = 1
             in_cave = False
             if self.player.get('in_subscreen'):
@@ -1797,12 +1798,10 @@ class GameCoreMixin:
             'level': 1,
             'xp': 0,
             'xp_to_level': 100,
-            'magic_pool': 10,
-            'max_magic_pool': 10,
             'health': 100,
             'max_health': 100,
-            'energy': 100,
-            'max_energy': 100,
+            'energy': 20,
+            'max_energy': 20,
             'base_damage': 10,
             'blocking': False,
             'friendly_fire': False,      # OFF = cannot damage peaceful entities
@@ -1936,10 +1935,10 @@ class GameCoreMixin:
                             self.player['health'] + 0.3,
                             self.player['max_health']
                         )
-                    max_e = self.player.get('max_energy', 100)
-                    cur_e = self.player.get('energy', 100)
+                    max_e = self.player.get('max_energy', 20)
+                    cur_e = self.player.get('energy', max_e)
                     if cur_e < max_e:
-                        self.player['energy'] = min(cur_e + 0.2, max_e)
+                        self.player['energy'] = min(cur_e + 1, max_e)
 
                 # Update quest system
                 self.update_quests()

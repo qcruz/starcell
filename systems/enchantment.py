@@ -56,13 +56,13 @@ class EnchantmentMixin:
             print("Star spell not selected!")
             return
 
-        # Check if player has magic available
-        if self.player['magic_pool'] <= 0:
-            print("No magic available!")
+        # Check max_energy capacity (each enchant permanently reduces it by 1; keep minimum of 1)
+        if self.player.get('max_energy', 20) <= 1:
+            print("No energy capacity left to enchant!")
             return
 
-        # Check energy (costs 3 per cast); default to max_energy if key missing (old save)
-        _cur_energy = self.player.get('energy', self.player.get('max_energy', 100))
+        # Check current energy (costs 3 per cast)
+        _cur_energy = self.player.get('energy', self.player.get('max_energy', 20))
         if _cur_energy < 3:
             print("Not enough energy!")
             return
@@ -90,7 +90,7 @@ class EnchantmentMixin:
             entity_id, entity = entity_at_target
             current_enchant = self.enchanted_entities.get(entity_id, 0)
             self.enchanted_entities[entity_id] = current_enchant + 1
-            self.player['magic_pool'] -= 1
+            self.player['max_energy'] = max(1, self.player.get('max_energy', 20) - 1)
 
             # Add to followers list if not already a follower
             if entity_id not in self.followers:
@@ -122,8 +122,8 @@ class EnchantmentMixin:
         current_enchant = self.enchanted_cells[screen_key].get((check_x, check_y), 0)
         self.enchanted_cells[screen_key][(check_x, check_y)] = current_enchant + 1
 
-        # Decrease magic pool permanently
-        self.player['magic_pool'] -= 1
+        # Permanently reduce max_energy by 1
+        self.player['max_energy'] = max(1, self.player.get('max_energy', 20) - 1)
 
         print(f"Enchanted {cell} at ({check_x}, {check_y}) to level {self.enchanted_cells[screen_key][(check_x, check_y)]}")
 
@@ -157,14 +157,11 @@ class EnchantmentMixin:
             else:
                 print(f"Decreased entity {entity_at_target} enchant to level {self.enchanted_entities[entity_at_target]}")
 
-            # Restore 1 magic and 3 energy
-            self.player['magic_pool'] = min(
-                self.player['magic_pool'] + 1,
-                self.player['max_magic_pool']
-            )
+            # Restore 1 max_energy (permanent) and 3 energy (temp)
+            self.player['max_energy'] = self.player.get('max_energy', 20) + 1
             self.player['energy'] = min(
                 self.player.get('energy', 0) + 3,
-                self.player.get('max_energy', 100)
+                self.player['max_energy']
             )
             return
 
@@ -181,14 +178,11 @@ class EnchantmentMixin:
                 else:
                     print(f"Decreased cell ({check_x}, {check_y}) enchant to level {self.enchanted_cells[screen_key][cell_key]}")
 
-                # Restore 1 magic and 3 energy
-                self.player['magic_pool'] = min(
-                    self.player['magic_pool'] + 1,
-                    self.player['max_magic_pool']
-                )
+                # Restore 1 max_energy (permanent) and 3 energy (temp)
+                self.player['max_energy'] = self.player.get('max_energy', 20) + 1
                 self.player['energy'] = min(
                     self.player.get('energy', 0) + 3,
-                    self.player.get('max_energy', 100)
+                    self.player['max_energy']
                 )
                 return
 
@@ -232,15 +226,12 @@ class EnchantmentMixin:
 
         # Remove enchantment
         if entity_id in self.enchanted_entities:
-            magic_restored = self.enchanted_entities[entity_id]
+            energy_restored = self.enchanted_entities[entity_id]
             del self.enchanted_entities[entity_id]
 
-            # Restore magic
-            self.player['magic_pool'] = min(
-                self.player['magic_pool'] + magic_restored,
-                self.player['max_magic_pool']
-            )
+            # Restore max_energy permanently
+            self.player['max_energy'] = self.player.get('max_energy', 20) + energy_restored
 
-            print(f"Released {entity.type} follower! Restored {magic_restored} magic.")
+            print(f"Released {entity.type} follower! Restored {energy_restored} max energy.")
         else:
             print(f"Released {entity.type} follower!")

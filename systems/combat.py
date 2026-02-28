@@ -109,6 +109,9 @@ class CombatMixin:
 
                     entity.take_damage(total_damage, 'player')
 
+                    # Temp energy cost for attacking
+                    self.player['energy'] = max(0, self.player.get('energy', 0) - 2)
+
                     # Show attack animation (with magic color if applicable)
                     self.show_attack_animation(check_x, check_y, target_entity=entity, magic_type=magic_type)
 
@@ -132,6 +135,7 @@ class CombatMixin:
 
         if self.player['blocking']:
             damage *= 0.1  # 90% reduction when blocking
+            self.player['energy'] = max(0, self.player.get('energy', 0) - 5)
 
         self.player['health'] -= damage
         print(f"Player took {int(damage)} damage! Health: {int(self.player['health'])}/{self.player['max_health']}")
@@ -152,8 +156,8 @@ class CombatMixin:
             self.player['max_health'] += 10
             self.player['health'] = self.player['max_health']  # Full heal
             self.player['base_damage'] += 2
-            self.player['max_magic_pool'] += 2
-            self.player['magic_pool'] = self.player['max_magic_pool']  # Full restore
+            self.player['max_energy'] = self.player.get('max_energy', 20) + 2
+            self.player['energy'] = self.player['max_energy']  # Full restore
 
             # Increase XP required for next level
             self.player['xp_to_level'] = int(self.player['xp_to_level'] * 1.5)
@@ -345,6 +349,7 @@ class CombatMixin:
 
         # Add to followers
         self.followers.append(skeleton_id)
+        self.follower_items[skeleton_id] = 'skeleton_bones'
 
         # Add to inventory as follower item (use existing skeleton_bones item)
         self.inventory.add_follower('skeleton_bones', 1)
