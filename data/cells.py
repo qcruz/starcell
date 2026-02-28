@@ -89,8 +89,8 @@ CELL_TYPES = {
     'SAND': {'color': COLORS['SAND'], 'label': 'Snd', 'solid': False},
     'COBBLESTONE': {'color': COLORS['COBBLESTONE'], 'label': 'Cob', 'solid': False, 'degrades_to': 'DIRT', 'degrade_rate': 0.00001},  # Very persistent
     'WALL': {'color': COLORS['WALL'], 'label': '█', 'solid': True},
-    'HOUSE': {'color': COLORS['HOUSE'], 'label': 'Hos', 'solid': True, 'enterable': True, 'subscreen_type': 'HOUSE_INTERIOR', 'degrades_to': 'PLANKS', 'degrade_rate': 0.0001},
-    'FORGE': {'color': COLORS['FORGE'], 'label': 'Frg', 'solid': True, 'degrades_to': 'STONE', 'degrade_rate': 0.0001},
+    'HOUSE': {'color': COLORS['HOUSE'], 'label': 'Hos', 'solid': True, 'enterable': True, 'subscreen_type': 'HOUSE_INTERIOR', 'grows_to': 'STONE_HOUSE', 'growth_rate': 0.01},
+    'FORGE': {'color': COLORS['FORGE'], 'label': 'Frg', 'solid': True},
     'CAVE': {'color': COLORS['CAVE'], 'label': 'Cav', 'solid': True, 'enterable': True, 'subscreen_type': 'CAVE'},
     'MINESHAFT': {'color': (90, 70, 50), 'label': 'Mine', 'solid': True, 'enterable': True, 'subscreen_type': 'CAVE', 'sprite_name': 'mineshaft'},
     'HIDDEN_CAVE': {'color': (40, 35, 30), 'label': 'HCav', 'solid': False, 'degrades_to': 'CAVE', 'degrade_rate': 0.005},

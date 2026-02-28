@@ -61,6 +61,12 @@ class EnchantmentMixin:
             print("No magic available!")
             return
 
+        # Check energy (costs 3 per cast)
+        if self.player.get('energy', 0) < 3:
+            print("Not enough energy!")
+            return
+        self.player['energy'] = max(0, self.player.get('energy', 0) - 3)
+
         target = self.get_target_cell()
         if not target:
             return
@@ -150,10 +156,14 @@ class EnchantmentMixin:
             else:
                 print(f"Decreased entity {entity_at_target} enchant to level {self.enchanted_entities[entity_at_target]}")
 
-            # Restore 1 magic
+            # Restore 1 magic and 3 energy
             self.player['magic_pool'] = min(
                 self.player['magic_pool'] + 1,
                 self.player['max_magic_pool']
+            )
+            self.player['energy'] = min(
+                self.player.get('energy', 0) + 3,
+                self.player.get('max_energy', 100)
             )
             return
 
@@ -170,10 +180,14 @@ class EnchantmentMixin:
                 else:
                     print(f"Decreased cell ({check_x}, {check_y}) enchant to level {self.enchanted_cells[screen_key][cell_key]}")
 
-                # Restore 1 magic
+                # Restore 1 magic and 3 energy
                 self.player['magic_pool'] = min(
                     self.player['magic_pool'] + 1,
                     self.player['max_magic_pool']
+                )
+                self.player['energy'] = min(
+                    self.player.get('energy', 0) + 3,
+                    self.player.get('max_energy', 100)
                 )
                 return
 

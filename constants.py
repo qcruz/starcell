@@ -39,7 +39,7 @@ CELL_SIZE = 40
 GRID_WIDTH = 24
 GRID_HEIGHT = 18
 SCREEN_WIDTH = GRID_WIDTH * CELL_SIZE
-SCREEN_HEIGHT = GRID_HEIGHT * CELL_SIZE + 60
+SCREEN_HEIGHT = GRID_HEIGHT * CELL_SIZE + 80
 FPS = 60
 # Catch-up system constants
 MAX_CATCHUP_PER_FRAME = 2  # Max zones to catch up at once
@@ -315,8 +315,8 @@ CELL_TYPES = {
     'SAND': {'color': COLORS['SAND'], 'label': 'Snd', 'solid': False, 'grows_to': 'CACTUS', 'growth_rate': 0.0001},
     'COBBLESTONE': {'color': COLORS['COBBLESTONE'], 'label': 'Cob', 'solid': False, 'degrades_to': 'DIRT', 'degrade_rate': 0.00001},  # Very persistent
     'WALL': {'color': COLORS['WALL'], 'label': '█', 'solid': True},
-    'HOUSE': {'color': COLORS['HOUSE'], 'label': 'Hos', 'solid': True, 'enterable': True, 'subscreen_type': 'HOUSE_INTERIOR', 'grows_to': 'STONE_HOUSE', 'growth_rate': 0.01, 'degrades_to': 'PLANKS', 'degrade_rate': 0.0001},
-    'FORGE': {'color': COLORS['FORGE'], 'label': 'Frg', 'solid': True, 'degrades_to': 'STONE', 'degrade_rate': 0.0001},
+    'HOUSE': {'color': COLORS['HOUSE'], 'label': 'Hos', 'solid': True, 'enterable': True, 'subscreen_type': 'HOUSE_INTERIOR', 'grows_to': 'STONE_HOUSE', 'growth_rate': 0.01},
+    'FORGE': {'color': COLORS['FORGE'], 'label': 'Frg', 'solid': True},
     'CAVE': {'color': COLORS['CAVE'], 'label': 'Cav', 'solid': True, 'enterable': True, 'subscreen_type': 'CAVE'},
     'MINESHAFT': {'color': (90, 70, 50), 'label': 'Mine', 'solid': True, 'enterable': True, 'subscreen_type': 'CAVE', 'sprite_name': 'mineshaft'},
     'HIDDEN_CAVE': {'color': (40, 35, 30), 'label': 'HCav', 'solid': False, 'degrades_to': 'CAVE', 'degrade_rate': 0.005},

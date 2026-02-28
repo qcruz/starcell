@@ -28,6 +28,8 @@ class GameCoreMixin:
             'max_magic_pool': 10,
             'health': 100,
             'max_health': 100,
+            'energy': 100,
+            'max_energy': 100,
             'base_damage': 5,
             'blocking': False,
             'friendly_fire': False,      # OFF = cannot damage peaceful entities (press V to toggle)
@@ -1015,7 +1017,7 @@ class GameCoreMixin:
         # Calculate inventory position (bottom left)
         slot_size = CELL_SIZE
         start_x = 10
-        start_y = SCREEN_HEIGHT - 70  # Above UI bar
+        start_y = SCREEN_HEIGHT - 90  # Above UI bar
         
         # Stack categories vertically from bottom
         categories = ['tools', 'items', 'magic', 'followers', 'crafting']
@@ -1040,9 +1042,32 @@ class GameCoreMixin:
                 slot_y = start_y - y_offset
                 
                 # Check if click is in this slot
-                if (slot_x <= pos[0] <= slot_x + slot_size and 
-                    slot_y <= pos[1] <= slot_y + slot_size):
-                    self.inventory.selected[category] = item_name
+                if (slot_x <= pos[0] <= slot_x + slot_size and
+                        slot_y <= pos[1] <= slot_y + slot_size):
+                    # Cross-inventory transfer: clicking an item in 'items' while
+                    # a second panel is open moves the item to that panel instead.
+                    other = None
+                    if category == 'items':
+                        for candidate in ('tools', 'magic'):
+                            if candidate in self.inventory.open_menus:
+                                other = candidate
+                                break
+                    if other:
+                        # Move one unit from items → other category
+                        inv_src = self.inventory.items
+                        if inv_src.get(item_name, 0) > 0:
+                            inv_src[item_name] -= 1
+                            if inv_src[item_name] <= 0:
+                                del inv_src[item_name]
+                                if self.inventory.selected['items'] == item_name:
+                                    remaining = list(inv_src.keys())
+                                    self.inventory.selected['items'] = remaining[0] if remaining else None
+                            inv_dst = getattr(self.inventory, other)
+                            inv_dst[item_name] = inv_dst.get(item_name, 0) + 1
+                            self.inventory.selected[other] = item_name
+                            print(f"Moved {item_name} → {other} inventory")
+                    else:
+                        self.inventory.selected[category] = item_name
                     return
             
             y_offset += slot_size + 15  # Stack next category above
@@ -1056,7 +1081,7 @@ class GameCoreMixin:
         start_x = 10
         
         # Calculate starting y position (above inventory panels)
-        base_y = SCREEN_HEIGHT - 70
+        base_y = SCREEN_HEIGHT - 90
         y_offset = 0
         if self.inventory.open_menus:
             categories = ['tools', 'items', 'magic', 'followers', 'crafting']
@@ -1776,6 +1801,8 @@ class GameCoreMixin:
             'max_magic_pool': 10,
             'health': 100,
             'max_health': 100,
+            'energy': 100,
+            'max_energy': 100,
             'base_damage': 10,
             'blocking': False,
             'friendly_fire': False,      # OFF = cannot damage peaceful entities
@@ -1902,6 +1929,18 @@ class GameCoreMixin:
                         print(f"[FREEZE-DETECT] tick={self.tick} autopilot={getattr(self, 'autopilot', False)} "
                               f"inspected_npc={self.inspected_npc} frozen={_frozen}")
                 
+                # Very slow player health and energy regen (once per second)
+                if self.tick % 60 == 0:
+                    if self.player['health'] < self.player['max_health']:
+                        self.player['health'] = min(
+                            self.player['health'] + 0.3,
+                            self.player['max_health']
+                        )
+                    max_e = self.player.get('max_energy', 100)
+                    cur_e = self.player.get('energy', 100)
+                    if cur_e < max_e:
+                        self.player['energy'] = min(cur_e + 0.2, max_e)
+
                 # Update quest system
                 self.update_quests()
                 

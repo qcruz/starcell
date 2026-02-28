@@ -20,7 +20,7 @@ class InventoryUIMixin:
 
         slot_size = CELL_SIZE
         start_x = 10
-        start_y = SCREEN_HEIGHT - 70  # Above UI bar
+        start_y = SCREEN_HEIGHT - 90  # Above UI bar
 
         # Stack categories vertically from bottom
         categories = ['tools', 'items', 'magic', 'followers', 'crafting']
@@ -136,7 +136,7 @@ class InventoryUIMixin:
         slot_size = CELL_SIZE
         start_x = 10
         # Position above inventory panels - calculate based on how many are open
-        base_y = SCREEN_HEIGHT - 70  # Base inventory position
+        base_y = SCREEN_HEIGHT - 90  # Base inventory position
 
         # Calculate y_offset from open inventory panels
         y_offset = 0

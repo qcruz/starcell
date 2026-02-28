@@ -672,14 +672,53 @@ class HudMixin:
             # Draw attack animations
             self.draw_attack_animations()
 
-            # Draw UI bar at bottom
+            # Draw UI bar at bottom (80px tall)
             ui_y = GRID_HEIGHT * CELL_SIZE
-            pygame.draw.rect(self.screen, COLORS['UI_BG'], (0, ui_y, SCREEN_WIDTH, 60))
+            pygame.draw.rect(self.screen, COLORS['UI_BG'], (0, ui_y, SCREEN_WIDTH, 80))
 
-            info_text = f"HP: {int(self.player['health'])}/{self.player['max_health']} | "
-            info_text += f"Magic: {self.player['magic_pool']}/{self.player['max_magic_pool']} | "
+            # ── Row 1: HP and Energy bars ───────────────────────────────────
+            BAR_W = 110
+            BAR_H = 8
 
-            # Show location info
+            # HP bar
+            hp_ratio = self.player['health'] / max(self.player['max_health'], 1)
+            hp_lbl = self.tiny_font.render("HP", True, (255, 120, 120))
+            self.screen.blit(hp_lbl, (10, ui_y + 6))
+            pygame.draw.rect(self.screen, (60, 20, 20), (30, ui_y + 6, BAR_W, BAR_H))
+            if hp_ratio > 0:
+                pygame.draw.rect(self.screen, (210, 55, 55),
+                                 (30, ui_y + 6, int(BAR_W * hp_ratio), BAR_H))
+            pygame.draw.rect(self.screen, (120, 60, 60), (30, ui_y + 6, BAR_W, BAR_H), 1)
+            hp_val = self.tiny_font.render(
+                f"{int(self.player['health'])}/{self.player['max_health']}",
+                True, (200, 200, 200))
+            self.screen.blit(hp_val, (30 + BAR_W + 4, ui_y + 6))
+
+            # Energy bar
+            energy = self.player.get('energy', 100)
+            max_energy = self.player.get('max_energy', 100)
+            nrg_ratio = energy / max(max_energy, 1)
+            nrg_x = 30 + BAR_W + 4 + 46 + 14
+            nrg_lbl = self.tiny_font.render("NRG", True, (100, 180, 255))
+            self.screen.blit(nrg_lbl, (nrg_x, ui_y + 6))
+            pygame.draw.rect(self.screen, (20, 40, 80), (nrg_x + 28, ui_y + 6, BAR_W, BAR_H))
+            if nrg_ratio > 0:
+                pygame.draw.rect(self.screen, (55, 140, 255),
+                                 (nrg_x + 28, ui_y + 6, int(BAR_W * nrg_ratio), BAR_H))
+            pygame.draw.rect(self.screen, (40, 80, 140), (nrg_x + 28, ui_y + 6, BAR_W, BAR_H), 1)
+            nrg_val = self.tiny_font.render(
+                f"{int(energy)}/{max_energy}", True, (200, 200, 200))
+            self.screen.blit(nrg_val, (nrg_x + 28 + BAR_W + 4, ui_y + 6))
+
+            # Magic pool (text only, after energy)
+            magic_x = nrg_x + 28 + BAR_W + 4 + 50 + 14
+            magic_lbl = self.tiny_font.render(
+                f"Magic: {self.player['magic_pool']}/{self.player['max_magic_pool']}",
+                True, (200, 130, 255))
+            self.screen.blit(magic_lbl, (magic_x, ui_y + 6))
+
+            # ── Row 2: Location / status info ──────────────────────────────
+            info_text = ""
             if self.player.get('in_subscreen'):
                 subscreen = self.subscreens.get(self.player['subscreen_key'])
                 if subscreen:
@@ -688,21 +727,19 @@ class HudMixin:
             else:
                 info_text += f"Screen: ({self.player['screen_x']}, {self.player['screen_y']}) | "
                 info_text += f"Biome: {self.current_screen['biome'] if self.current_screen else 'Unknown'}"
-
-                # Show zone control by faction (majority only)
                 screen_key = f"{self.player['screen_x']},{self.player['screen_y']}"
                 controlling_faction = self.get_zone_controlling_faction(screen_key)
                 if controlling_faction:
-                    info_text += f" | Controlled by: {controlling_faction}"
+                    info_text += f" | {controlling_faction}"
 
             if self.player['blocking']:
                 info_text += " | [BLOCKING]"
             if self.player.get('friendly_fire', False):
                 info_text += " | [FF ON]"
             text = self.small_font.render(info_text, True, COLORS['WHITE'])
-            self.screen.blit(text, (10, ui_y + 5))
+            self.screen.blit(text, (10, ui_y + 20))
 
-            # Draw quest target info on second line
+            # ── Row 3: Quest info ───────────────────────────────────────────
             quest_display = ""
             if self.active_quest and self.active_quest in self.quests:
                 quest = self.quests[self.active_quest]
@@ -718,15 +755,14 @@ class HudMixin:
             if quest_display:
                 quest_color = QUEST_TYPES.get(self.active_quest, {}).get('color', (200, 200, 200))
                 quest_text = self.tiny_font.render(quest_display, True, quest_color)
-                self.screen.blit(quest_text, (10, ui_y + 22))
+                self.screen.blit(quest_text, (10, ui_y + 36))
 
-            # Show interaction hint based on target cell
+            # ── Row 4: Interaction hint + controls ─────────────────────────
             target = self.get_target_cell()
             hint_text = "SPACE: Attack"
             if target and self.current_screen:
                 check_x, check_y = target
                 cell = self.current_screen['grid'][check_y][check_x]
-
                 if cell == 'STAIRS_UP':
                     hint_text = "SPACE: Exit"
                 elif cell == 'STAIRS_DOWN':
@@ -738,7 +774,7 @@ class HudMixin:
 
             controls = f"{hint_text} | B: Block | C: Craft | X: Combine | L: Cast | E: Pickup"
             text = self.tiny_font.render(controls, True, COLORS['WHITE'])
-            self.screen.blit(text, (10, ui_y + 42))
+            self.screen.blit(text, (10, ui_y + 52))
 
             # ── Key reference on right side of bottom bar ──────────────────
             key_ref_x = SCREEN_WIDTH - 340
@@ -749,12 +785,12 @@ class HudMixin:
             ]
             for i, line in enumerate(key_lines):
                 ref_text = self.tiny_font.render(line, True, (160, 160, 170))
-                self.screen.blit(ref_text, (key_ref_x, ui_y + 4 + i * 14))
+                self.screen.blit(ref_text, (key_ref_x, ui_y + 6 + i * 18))
 
             # Draw rain effect if raining (minimal, just visual indicator)
             if self.is_raining:
                 # Draw subtle blue tint overlay
-                rain_overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT - 60))
+                rain_overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT - 80))
                 rain_overlay.set_alpha(60)
                 rain_overlay.fill((100, 150, 200))  # Light blue
                 self.screen.blit(rain_overlay, (0, 0))
