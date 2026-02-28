@@ -9,14 +9,130 @@
 
 ## Pending Features
 
-- [ ] Audio system
-- [ ] Procedural dungeon themes (caves feel distinct from each other)
-- [ ] NPC relationship system
-- [ ] Complex quest chains
-- [ ] Economy / inflation system
-- [ ] Advanced crafting (failure rates, partial results)
-- [ ] Particle effects (rain, fire, magic)
-- [ ] Full wizard spell suite
+Feature Update Map
+
+Meta Goals (Always keep in mind when making development decisions)
+Make a fun and playable fantasy adventure game
+Make this project open source and easy for others to learn, understand, contribute to, and able to use to build out their own projects.
+Use this framework to try to discover deep value additions - simple mechanics which add the most value to the gameplay. A simple interface for inventory, quests, trading, crafting, followers, spells, tools, etc. Emergent environmental complexity through simple rules like cellular automata and proc gen. Art and design which encourages and synergizes exploration, decoration, crafting, combat, building, managing, collecting. System design which can be easily adjusted to a large variety of game type and system requirements.
+Make the game world as detailed and realistic as possible, while balancing the other primary goals.
+
+Structure Updates - 
+Houses are upgraded over time
+Zone has lumberjack and miner - chance for house to become stone house
+Zone has stone house and blacksmith - > stone house has chance to become fort
+Guards stand by the fort and protect it
+Fort becomes castle
+Has guards inside, King retreats to fort when health is low
+When zone is attacked, guards and a commander spawn from the castle (if not already in zone)
+
+NPC updates -
+Rare enemy types - TBD
+Golems- stone, very still and slow moving
+High defense and life, slow attack (maybe defense only, used to block entries, attacks only when attacked)
+Birds
+Sheep
+Cow
+Chicken
+
+
+Item updates - quick and easy value-add updates. We need to regularly consider new items that can be added to add game play options and depth.
+Items list (items to add over time, functionality can be expanded later)
+Crop types
+Carrot
+Fruit trees
+Melons
+Wheat
+Ghost fruit
+Magic crystal
+AOE effect - reduces damage in the zone, bonus to fire damage in the zone, etc
+Peace Tree - zone is peaceful (starting zone should have peacetree)
+Cactus
+Iron ore
+Water Well
+Gravestone
+Fence
+Crafting (recipes and crafting concepts which make natural progression and quest goals)
+Specific update - Added ironore.png, well.png, cactus.png. We need to add iron ore to spawn pretty commonly in caves, and miners enter caves and seek it out somewhat aggressively, similar to lumberjacks with trees. Mining gives them XP, and the higher level a miner is, the more likely they are to make a deeper cave during their update (level 1 = 1% chance), an entrance leading to a lower level if there is not already a down entrance on the current level. For now, lower levels will just work like an additional cave, but we need to make sure exits are mapped correctly so leaving requires traveling all the way back through the upper levels. When a miner's health gets low they will attempt to exit back up and out of the cave. Later, we will have the reverse, a structure like a wizards tower or a fort/castle which will grow upward the more it is built up, so these mechanics may be used again later.. Wells will have a chance to be constructed by peaceful NPC (Miner) randomly when there are 2 or more houses in the zone, with a low to moderate probability per zone update, and only if there are no wells already in the zone. Wells should be placed randomly but close to the center of the zone. They are a permanent source of water for human NPCs only, but are targeted for attacks by bandits/goblins, but have a low chance of being destroyed. Cactus will be a somewhat common plant that spawns in desert biomes a little less frequently than trees do in forests, but when cut/attacked by the player or NPCs, they do one point of damage. Other plants and structures may have damaging effects in the future as a way to make some paths more difficult to get through. We need to have most NPCs including goblins, wolves, and bandits able to and occasionally swipe at obstacles blocking their way. So when they are standing idle, hostile entities have a chance to swipe at nearby structures, which should have a small chance to destroy it (depending on the cell type. We should be able to add on to the code for bandits attacking structures that is already in place, to add trees, rocks, etc). Peaceful entities  will do the same, but not to usual structures, only environments. The objective is to be able to make a dense environment that can still become walkable over time due to NPC actions gradually making paths. I have also added a sword.png which should be used.
+
+Spells
+Rain - toggle rain off/on
+Calcify - turn NPC to stone/freeze in place
+Charm - turn NPC friendly/hostile
+Heal - fills health, food, and water levels (chance to increase max life)/absorb health (chance to absorb years of life )
+Spectral state - can briefly pass through collision cells (not outer walls)
+
+
+Systems - complex, add in only when code is clean and organized and ready for a potentially significant update
+
+Follower System
+Ensure followers are not hostile to each other
+Ensure hostile list clears when the hostile dies (skeleton currently still shows in inventory after it died)
+When item inventory and follower inventory are open, selecting an item and using the place button puts the item in the followers inventory. The strongest version of each item (sword, helm, etc) in their inventory is automatically used for combat/other calcs
+LoreEngine
+Generates events, assigns quest targets, places items, spawns NPCs which create interesting and dynamic gameplay
+Migrations events
+Natural disasters
+Secret lairs/entrances
+Invasions/raids
+Obstructions
+Prevent the player from using the zone exit until cleared
+May be NPCs or hard to destroy structures (like a golem)
+Training examples could be a cactus 
+Locations and NPC names
+Generate unique and interesting names for NCPs and zones
+Redoak grove, etc
+Zone generation can be based on the naming - “Red Oak grove” is a grassy plain with oak trees, apple trees, and red themed plants
+
+
+LifeTime System
+Player character begin to gradually lose max life as it ages/permadeath
+Multiple ways to extend life/emergent quest
+Vampirism
+Fairy fountain
+Blood fountain
+Perk/Skill System
+Perks earned through natural gameplay
+Killing goblins builds a bonus damage to goblins perk 
+decays slowly over time? 
+
+Contagion system
+Used for fast updates, especially catch-up processing
+Averages NPC stats, inventory, etc, based on proximity (automatic/invisible)
+Spreads player reputation across like-entities by averaging their player reputation scores
+Factions will spread player favorability to each other
+
+Hostie/Peaceful - player carried variable
+Updates based on player attacking peaceful entities
+-100 to 100 scale, 0 is neutral
+Increases default favor score with hostile/peaceful entities
+Low score causes factions and other NPCs to attack on site
+High level and high hostility causes enemy NPCs to flee
+Natural flee system for low level enemies to flee higher ~(+5, etc) level enemies
+Favor system - NPC carried variable
+-100 to 100, tracks NPC favorability to the player
+Loyalty system - high favorability and matching hostility, may cause NPC to become follower
+Also works on animals, cats/dogs, etc
+Alternative to follower/enchant spell
+Lower chance per existing follower 
+BugCatcher
+System for tracking logging game performance and bugs, has set balance targets and allowed movements, etc. A spectrum of cleanup options will resolve issues. 
+Collision cells overlapping, zone is too dense, etc - > zone gets cleared and re-rolled, or spawn termite invasion, etc
+NPC too high level, stuck, teleporting, etc -> procs a full update and an invasion
+Zone is too far out of balance, population too high, etc -> lore engine procs a natural disaster event, or migration, etc
+
+Quest select System
+When item/tool/spell inventory, etc is open in inventory and quest inventory is open, quest target will be a version of the item if possible
+
+RainbowMaker
+Default sprite colors to be changeable via a built-in randomizer, IE; white cow with black spots can get variant red cow with gold spots
+Rare variants for hunting/collecting gameplay
+
+Entity Genetics
+Entity core behaviors are numerically determined, can mutate slowly over time (via contagion system?)
+Can also reflect in sprite chances
+
+
 
 ---
 
