@@ -4,6 +4,7 @@ Rendering, player systems, world gen, quests, save/load, zone updates.
 """
 from constants import *
 from entity import *
+from debug.bug_catcher import BugCatcher
 
 class GameCoreMixin:
     """Core game systems. Mixed into Game via multiple inheritance."""
@@ -161,6 +162,9 @@ class GameCoreMixin:
         self.trader_display_tick = 0
         self.inspected_npc = None  # Entity being inspected
         self.inspected_npc_tick = 0  # When inspection started  # When to hide display
+
+        # Debug / bug-tracking
+        self.bug_catcher = BugCatcher()
 
         # Last git push timestamp (shown on pause screen)
         try:
@@ -594,6 +598,11 @@ class GameCoreMixin:
             # Apply healing regeneration
             entity.regenerate_health(heal_boost)
             
+            # BugCatcher: log bat state every AI update for current-zone bats
+            if screen_distance == 0 and entity.type in ('BAT', 'BAT_double'):
+                player_zone = f"{self.player['screen_x']},{self.player['screen_y']}"
+                self.bug_catcher.log_bat_state(self.tick, entity_id, entity, player_zone)
+
             # Update AI and movement - more frequently for closer screens
             if screen_distance == 0:
                 # Current screen - update every tick
@@ -843,9 +852,14 @@ class GameCoreMixin:
             if distance <= 2:  # Rain affects nearby screens
                 self.apply_rain(screen_x, screen_y)
         
+        # BugCatcher: snapshot HOUSE/STONE_HOUSE before cell updates (player zone only)
+        player_zone = f"{self.player['screen_x']},{self.player['screen_y']}"
+        if key == player_zone:
+            self.bug_catcher.log_zone_cells(self.tick, key, screen['grid'])
+
         # Apply cellular automata rules first
         self.apply_cellular_automata(screen_x, screen_y)
-        
+
         # Then apply normal growth/decay
         for y in range(1, GRID_HEIGHT - 1):
             for x in range(1, GRID_WIDTH - 1):
@@ -1854,6 +1868,7 @@ class GameCoreMixin:
     
     def new_game(self):
         """Start a new game"""
+        self.bug_catcher.clear()
         self.player = {
             'x': 12, 'y': 9, 
             'screen_x': 0, 'screen_y': 0,

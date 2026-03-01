@@ -156,15 +156,57 @@ class NpcAiMixin:
                             entity.ai_state = 'targeting'
                             entity.ai_state_timer = 1
                     else:
-                        # Target doesn't exist - exit combat
+                        # Target doesn't exist - check for nearby threats before giving up
+                        entity_base = entity.type.replace('_double', '')
+                        threat_nearby = False
+                        player_zone = f"{self.player['screen_x']},{self.player['screen_y']}"
+                        if (screen_key == player_zone and not self.player.get('in_subscreen') and
+                                abs(self.player['x'] - entity.x) + abs(self.player['y'] - entity.y) <= 2):
+                            threat_nearby = True
+                        if not threat_nearby:
+                            for oid, other in self.entities.items():
+                                if oid == entity_id or not other.is_alive():
+                                    continue
+                                other_base = other.type.replace('_double', '')
+                                if (other_base != entity_base and
+                                        f"{other.screen_x},{other.screen_y}" == screen_key and
+                                        abs(other.x - entity.x) + abs(other.y - entity.y) <= 2):
+                                    threat_nearby = True
+                                    break
+                        if threat_nearby:
+                            entity.ai_state = 'targeting'
+                            entity.current_target = None
+                            entity.ai_state_timer = 1
+                        else:
+                            entity.ai_state = 'wandering'
+                            entity.current_target = None
+                            entity.ai_state_timer = 2
+                else:
+                    # No valid target - check for nearby threats before giving up
+                    entity_base = entity.type.replace('_double', '')
+                    threat_nearby = False
+                    player_zone = f"{self.player['screen_x']},{self.player['screen_y']}"
+                    if (screen_key == player_zone and not self.player.get('in_subscreen') and
+                            abs(self.player['x'] - entity.x) + abs(self.player['y'] - entity.y) <= 2):
+                        threat_nearby = True
+                    if not threat_nearby:
+                        for oid, other in self.entities.items():
+                            if oid == entity_id or not other.is_alive():
+                                continue
+                            other_base = other.type.replace('_double', '')
+                            if (other_base != entity_base and
+                                    f"{other.screen_x},{other.screen_y}" == screen_key and
+                                    abs(other.x - entity.x) + abs(other.y - entity.y) <= 2):
+                                threat_nearby = True
+                                break
+                    if threat_nearby:
+                        entity.ai_state = 'targeting'
+                        entity.current_target = None
+                        entity.ai_state_timer = 1
+                    else:
                         entity.ai_state = 'wandering'
                         entity.current_target = None
                         entity.ai_state_timer = 2
-                else:
-                    # No valid target - exit combat
-                    entity.ai_state = 'wandering'
-                    entity.current_target = None
-                    entity.ai_state_timer = 2
             
             elif entity.ai_state == 'flee':
                 # Fleeing - move away from threat every AI update
@@ -2077,12 +2119,12 @@ class NpcAiMixin:
                             screen['grid'][check_y][check_x] = 'GRASS'
                             entity.hunger = min(entity.max_hunger, entity.hunger + 20)
                             print(f"Termite destroyed a house at [{screen_key}]!")
-                        elif cell == 'STONE_HOUSE' and random.random() < 0.002:  # 0.2% — stone resists termites
+                        elif cell == 'STONE_HOUSE' and random.random() < 0.0002:  # 0.02% — stone heavily resists termites
                             screen['grid'][check_y][check_x] = 'GRASS'
                             entity.hunger = min(entity.max_hunger, entity.hunger + 10)
                             print(f"Termite destroyed a stone house at [{screen_key}]!")
                         return  # Only one action per update
-            
+
             # Priority 2: Move toward nearest tree or structure
             nearest_target_x, nearest_target_y = None, None
             nearest_dist = float('inf')
@@ -2231,8 +2273,8 @@ class NpcAiMixin:
                         print(f"{name_str} destroyed a house at [{screen_key}]!")
                         return
 
-                    # Attack stone houses - extremely low chance (10x harder than wood house)
-                    elif cell == 'STONE_HOUSE' and random.random() < 0.001:  # 0.1% chance
+                    # Attack stone houses - very rare (goblins chip at stone slowly)
+                    elif cell == 'STONE_HOUSE' and random.random() < 0.0001:  # 0.01% chance
                         entity.update_facing_toward(check_x, check_y)
                         entity.trigger_action_animation()
                         self.show_attack_animation(check_x, check_y, entity=entity)
@@ -2253,7 +2295,7 @@ class NpcAiMixin:
                     if dist < nearest_dist:
                         nearest_dist = dist
                         nearest_structure_x, nearest_structure_y = x, y
-        
+
         # Move toward structure if found
         if nearest_structure_x is not None and nearest_dist > 1:
             self.move_entity_towards(entity, nearest_structure_x, nearest_structure_y)

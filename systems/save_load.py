@@ -351,6 +351,7 @@ class SaveLoadMixin:
             self.active_quest = save_data.get('active_quest', 'FARM')
             # Autopilot grace period: don't engage for 15 seconds after loading
             self.last_input_tick = self.tick + 900
+            self.bug_catcher.clear()
             print("Game loaded!")
         else:
             print("No save file found!")
