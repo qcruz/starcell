@@ -499,9 +499,10 @@ class GameCoreMixin:
             screen_key = f"{screen_x},{screen_y}"
             
             if screen_key in self.screens:
+                self.bug_catcher.log_zone_cells(self.tick, screen_key, self.screens[screen_key]['grid'])
                 self.apply_cellular_automata(screen_x, screen_y)
                 self.decay_dropped_items(screen_x, screen_y)
-        
+
         # Update nearby screens less frequently
         if self.tick % 180 == 0:  # Every 3 seconds
             # Update adjacent screens (distance 1)
@@ -598,12 +599,6 @@ class GameCoreMixin:
             # Apply healing regeneration
             entity.regenerate_health(heal_boost)
             
-            # BugCatcher: log animation state for entities showing stutter (current zone only)
-            _STUTTER_TRACKED = ('BAT', 'BAT_double', 'WOLF', 'WOLF_double')
-            if screen_distance == 0 and entity.type in _STUTTER_TRACKED:
-                player_zone = f"{self.player['screen_x']},{self.player['screen_y']}"
-                self.bug_catcher.log_bat_state(self.tick, entity_id, entity, player_zone)
-
             # Update AI and movement - more frequently for closer screens
             if screen_distance == 0:
                 # Current screen - update every tick

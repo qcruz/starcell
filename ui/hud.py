@@ -308,6 +308,12 @@ class HudMixin:
                         entity.update_animation()
                         continue
 
+                    # BugCatcher: log every frame for tracked entity types
+                    _STUTTER_TRACKED = ('BAT', 'BAT_double', 'WOLF', 'WOLF_double')
+                    if entity.type in _STUTTER_TRACKED:
+                        player_zone = f"{self.player['screen_x']},{self.player['screen_y']}"
+                        self.bug_catcher.log_bat_state(self.tick, entity_id, entity, player_zone)
+
                     # Snap stale world position if entity wasn't rendered last frame.
                     # Entities in adjacent zones get AI updates (x/y changes) but
                     # update_smooth_movement only runs during rendering, so world_x/y
