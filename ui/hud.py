@@ -308,6 +308,17 @@ class HudMixin:
                         entity.update_animation()
                         continue
 
+                    # Snap stale world position if entity wasn't rendered last frame.
+                    # Entities in adjacent zones get AI updates (x/y changes) but
+                    # update_smooth_movement only runs during rendering, so world_x/y
+                    # can lag behind by 1-2 cells. Anything under the 2.5-cell hard
+                    # snap would otherwise slide visibly on first appearance.
+                    last_rt = getattr(entity, '_last_render_tick', -9999)
+                    if self.tick - last_rt > 1:
+                        entity.world_x = float(entity.x)
+                        entity.world_y = float(entity.y)
+                    entity._last_render_tick = self.tick
+
                     # Update smooth movement
                     entity.update_smooth_movement()
 

@@ -598,8 +598,9 @@ class GameCoreMixin:
             # Apply healing regeneration
             entity.regenerate_health(heal_boost)
             
-            # BugCatcher: log bat state every AI update for current-zone bats
-            if screen_distance == 0 and entity.type in ('BAT', 'BAT_double'):
+            # BugCatcher: log animation state for entities showing stutter (current zone only)
+            _STUTTER_TRACKED = ('BAT', 'BAT_double', 'WOLF', 'WOLF_double')
+            if screen_distance == 0 and entity.type in _STUTTER_TRACKED:
                 player_zone = f"{self.player['screen_x']},{self.player['screen_y']}"
                 self.bug_catcher.log_bat_state(self.tick, entity_id, entity, player_zone)
 

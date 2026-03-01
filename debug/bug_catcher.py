@@ -45,6 +45,8 @@ class BugCatcher:
         self._prev_bat_state: dict = {}   # entity_id -> {'ai_state', 'facing', 'anim_frame'}
         # Previous cell snapshot for detecting mutations
         self._prev_zone_cells: dict = {}  # screen_key -> {(x,y): cell_type}
+        # Create the log file immediately so it exists from game start
+        self.clear()
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -88,14 +90,16 @@ class BugCatcher:
             f.write(line + '\n')
 
     # ------------------------------------------------------------------
-    # Bat animation / AI state logger
+    # Entity animation / AI state logger (bats, wolves, any suspect type)
     # ------------------------------------------------------------------
 
     def log_bat_state(self, tick: int, entity_id, entity, player_zone: str):
-        """Log bat state every AI update for bats in the player's zone.
+        """Log entity AI state every update for tracked entities in the player's zone.
 
         Logs a full state line every update and highlights transitions
         with a *** TRANSITION marker.
+
+        Currently tracks: BAT, BAT_double, WOLF, WOLF_double.
         """
         entity_zone = f"{entity.screen_x},{entity.screen_y}"
         if entity_zone != player_zone:
@@ -128,7 +132,7 @@ class BugCatcher:
         }
 
         header = (
-            f"[tick={tick:07d}] BAT id={entity_id} "
+            f"[tick={tick:07d}] {entity.type} id={entity_id} "
             f"grid=({entity.x},{entity.y}) "
             f"world=({entity.world_x:.2f},{entity.world_y:.2f}) "
             f"zone={entity.screen_x},{entity.screen_y}"
