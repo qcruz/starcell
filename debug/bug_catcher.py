@@ -40,7 +40,6 @@ class BugCatcher:
 
     def __init__(self, log_path: str = _DEFAULT_LOG_PATH):
         self.log_path = log_path
-        self._suppressed = False  # True once file exceeds _MAX_LOG_BYTES
         # Per-entity state for detecting transitions
         self._prev_bat_state: dict = {}   # entity_id -> {'ai_state', 'facing', 'anim_frame'}
         # Previous cell snapshot for detecting mutations
@@ -58,7 +57,6 @@ class BugCatcher:
         with open(self.log_path, 'w') as f:
             ts = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             f.write(f"=== BugCatcher log cleared at {ts} ===\n\n")
-        self._suppressed = False
         self._prev_bat_state.clear()
         self._prev_zone_cells.clear()
 
@@ -67,18 +65,21 @@ class BugCatcher:
     # ------------------------------------------------------------------
 
     def _check_size(self) -> bool:
-        """Return True (ok to write) unless log has grown too large."""
-        if self._suppressed:
-            return False
+        """Trim the oldest quarter of the log when it exceeds _MAX_LOG_BYTES.
+
+        Returns True (ok to write) always — trimming makes room so logging
+        continues with the most recent data intact.
+        """
         try:
-            if os.path.getsize(self.log_path) >= _MAX_LOG_BYTES:
-                self._suppressed = True
-                with open(self.log_path, 'a') as f:
-                    f.write(
-                        f"\n=== LOG SUPPRESSED: file reached {_MAX_LOG_BYTES // 1024} KB "
-                        f"— quit and review ===\n"
-                    )
-                return False
+            if os.path.getsize(self.log_path) < _MAX_LOG_BYTES:
+                return True
+            # Read all lines, drop the oldest 25%, rewrite
+            with open(self.log_path, 'r') as f:
+                lines = f.readlines()
+            keep_from = len(lines) // 4  # discard oldest 25%
+            with open(self.log_path, 'w') as f:
+                f.write(f"=== LOG TRIMMED — oldest 25% dropped ===\n")
+                f.writelines(lines[keep_from:])
         except OSError:
             pass
         return True
