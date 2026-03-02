@@ -537,23 +537,27 @@ class GameCoreMixin:
                         self.decay_dropped_items(screen_x, screen_y)
 
     def update_entities(self):
-        """Update all entities - AI, movement, stats"""
-        if self.tick % 30 != 0:  # Update entities every 0.5 seconds
-            return
-        
-        # Check for spawning new entities in nearby zones (every 0.5 seconds)
-        self.check_zone_spawning()
-        
+        """Update all entities - AI, movement, stats.
+
+        On-screen entities (screen_distance == 0) get AI updated every game
+        tick so combat move_cooldown counts down at the correct 60-fps rate.
+        Stat decay/healing and off-screen AI are still throttled every 30 ticks
+        to keep performance reasonable.
+        """
+        do_slow_update = (self.tick % 30 == 0)
+
+        # Spawning check every 0.5 s
+        if do_slow_update:
+            self.check_zone_spawning()
+
         entities_to_remove = []
-        
-        # Get current player screen
+
         player_screen_x = self.player['screen_x']
         player_screen_y = self.player['screen_y']
-        
+
         for entity_id, entity in list(self.entities.items()):
-            # Calculate distance from player's screen
             screen_distance = abs(entity.screen_x - player_screen_x) + abs(entity.screen_y - player_screen_y)
-            
+
             # Remove dead entities FIRST (regardless of distance)
             if not entity.is_alive():
                 entities_to_remove.append(entity_id)
@@ -563,61 +567,49 @@ class GameCoreMixin:
             if screen_distance > 2:
                 continue
 
-            # Try to split _double entities in under-populated zones
-            entity_screen_key = f"{entity.screen_x},{entity.screen_y}"
-            if entity.type.endswith('_double'):
-                if self.try_split_double_entity(entity_id, entity, entity_screen_key):
-                    continue  # Entity was split — re-evaluate next tick
+            # ── Slow path (every 30 ticks): stat decay, healing, split ────
+            if do_slow_update:
+                entity_screen_key = f"{entity.screen_x},{entity.screen_y}"
+                if entity.type.endswith('_double'):
+                    if self.try_split_double_entity(entity_id, entity, entity_screen_key):
+                        continue  # Entity was split — re-evaluate next tick
 
-            # Decay stats
-            entity.decay_stats()
-            
-            # Regenerate health if well-fed and hydrated
-            heal_boost = 1.0
-            
-            # Peaceful NPCs get healing boost near camps and houses
-            if not entity.props.get('hostile', False):
-                screen_key = f"{entity.screen_x},{entity.screen_y}"
-                if screen_key in self.screens:
-                    screen = self.screens[screen_key]
-                    
-                    # Check for camp or house within 3 cells
-                    for dx in range(-3, 4):
-                        for dy in range(-3, 4):
-                            check_x = entity.x + dx
-                            check_y = entity.y + dy
-                            
-                            if 0 <= check_x < GRID_WIDTH and 0 <= check_y < GRID_HEIGHT:
-                                cell = screen['grid'][check_y][check_x]
-                                if cell == 'CAMP':
-                                    heal_boost = 2.0  # 2x healing near camp
-                                    break
-                                elif cell == 'HOUSE':
-                                    heal_boost = 3.0  # 3x healing near house
-                                    break
-                        if heal_boost > 1.0:
-                            break
-            
-            # Apply healing regeneration
-            entity.regenerate_health(heal_boost)
-            
-            # Update AI and movement - more frequently for closer screens
+                entity.decay_stats()
+
+                heal_boost = 1.0
+                if not entity.props.get('hostile', False):
+                    screen_key = f"{entity.screen_x},{entity.screen_y}"
+                    if screen_key in self.screens:
+                        screen = self.screens[screen_key]
+                        for dx in range(-3, 4):
+                            for dy in range(-3, 4):
+                                check_x = entity.x + dx
+                                check_y = entity.y + dy
+                                if 0 <= check_x < GRID_WIDTH and 0 <= check_y < GRID_HEIGHT:
+                                    cell = screen['grid'][check_y][check_x]
+                                    if cell == 'CAMP':
+                                        heal_boost = 2.0
+                                        break
+                                    elif cell == 'HOUSE':
+                                        heal_boost = 3.0
+                                        break
+                            if heal_boost > 1.0:
+                                break
+                entity.regenerate_health(heal_boost)
+
+            # ── AI update: on-screen every tick, off-screen throttled ──────
             if screen_distance == 0:
-                # Current screen - update every tick
                 self.update_entity_ai(entity_id, entity)
                 self.update_subscreen_npc_behavior(entity_id, entity)
             elif screen_distance == 1:
-                # Adjacent screens - update every other tick
                 if self.tick % 60 == 0:
                     self.update_entity_ai(entity_id, entity)
                     self.update_subscreen_npc_behavior(entity_id, entity)
             else:
-                # Distance 2 - update every 3 ticks
                 if self.tick % 90 == 0:
                     self.update_entity_ai(entity_id, entity)
                     self.update_subscreen_npc_behavior(entity_id, entity)
-        
-        # Remove dead entities
+
         for entity_id in entities_to_remove:
             self.remove_entity(entity_id)
     
