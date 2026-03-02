@@ -209,29 +209,32 @@ class NpcAiMixin:
                         entity.ai_state_timer = 2
             
             elif entity.ai_state == 'flee':
-                # Fleeing - move away from threat every AI update
-                threat_x, threat_y = None, None
-                if entity.flee_target == 'player':
-                    player_zone = f"{self.player['screen_x']},{self.player['screen_y']}"
-                    if screen_key == player_zone and not self.player.get('in_subscreen'):
-                        threat_x, threat_y = self.player['x'], self.player['y']
-                elif entity.flee_target and isinstance(entity.flee_target, int):
-                    if entity.flee_target in self.entities:
-                        threat = self.entities[entity.flee_target]
-                        threat_x, threat_y = threat.x, threat.y
-                
-                if threat_x is not None:
-                    dx = entity.x - threat_x
-                    dy = entity.y - threat_y
-                    if abs(dx) > abs(dy):
-                        move_x = 1 if dx > 0 else -1
-                        move_y = 0
-                    else:
-                        move_x = 0
-                        move_y = 1 if dy > 0 else -1
-                    new_x = entity.x + move_x
-                    new_y = entity.y + move_y
-                    self.move_toward_position(entity, new_x, new_y, screen_key)
+                # Fleeing - move away from threat, gated by move_cooldown so smooth
+                # interpolation (world_x/y) can keep up with grid position changes.
+                if entity.move_cooldown <= 0:
+                    threat_x, threat_y = None, None
+                    if entity.flee_target == 'player':
+                        player_zone = f"{self.player['screen_x']},{self.player['screen_y']}"
+                        if screen_key == player_zone and not self.player.get('in_subscreen'):
+                            threat_x, threat_y = self.player['x'], self.player['y']
+                    elif entity.flee_target and isinstance(entity.flee_target, int):
+                        if entity.flee_target in self.entities:
+                            threat = self.entities[entity.flee_target]
+                            threat_x, threat_y = threat.x, threat.y
+
+                    if threat_x is not None:
+                        dx = entity.x - threat_x
+                        dy = entity.y - threat_y
+                        if abs(dx) > abs(dy):
+                            move_x = 1 if dx > 0 else -1
+                            move_y = 0
+                        else:
+                            move_x = 0
+                            move_y = 1 if dy > 0 else -1
+                        new_x = entity.x + move_x
+                        new_y = entity.y + move_y
+                        self.move_toward_position(entity, new_x, new_y, screen_key)
+                        entity.move_cooldown = max(1, int(NPC_COMBAT_MOVE_INTERVAL / entity.props.get('speed', 1.0)))
             
             elif entity.ai_state == 'targeting':
                 # Moving toward target

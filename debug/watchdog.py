@@ -27,6 +27,7 @@ Integrity checks (log-and-detect, no active healing):
 """
 
 import random
+from debug.fixes import fix_entity_subscreen_flag
 
 
 class Watchdog:
@@ -292,17 +293,16 @@ class Watchdog:
             zone_key = f"{entity.screen_x},{entity.screen_y}"
 
             # Check 1: in_subscreen=True but still in screen_entities
+            # apply=True: root cause is patched (try_entity_screen_crossing guard);
+            # the safety net clears the flag for any entities already in bad state.
             if entity_in_sub_flag:
                 if zone_key in screen_entities and eid in screen_entities[zone_key]:
-                    self.bug_catcher.log({
-                        'tick': tick,
-                        'category': 'integrity_anomaly',
-                        'check': 'entity_in_subscreen_but_in_screen_entities',
-                        'entity_id': eid,
-                        'entity_type': entity.type,
-                        'zone': zone_key,
-                        'subscreen_key': getattr(entity, 'subscreen_key', None),
-                    })
+                    fix_entity_subscreen_flag(
+                        eid, entity, game,
+                        bug_catcher=self.bug_catcher,
+                        tick=tick,
+                        apply=True,
+                    )
 
             # Check 2: in_subscreen=False but present in subscreen_entities
             if not entity_in_sub_flag and eid in entity_in_subs:

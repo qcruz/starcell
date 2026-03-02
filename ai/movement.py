@@ -429,6 +429,11 @@ class NpcAiMovementMixin:
         Only triggers at the existing 2-tile-wide exit corridors (center of each edge),
         matching the same corridor geometry used by try_entity_zone_transition.
         """
+        # Never cross zones while entity is inside a subscreen — the grid is shared
+        # but the entity is logically in the subscreen space, not the overworld.
+        if entity.in_subscreen:
+            return
+
         # Anti-bounce: prevent an immediate return trip
         if self.tick - getattr(entity, 'last_zone_change_tick', -9999) < NPC_SEAMLESS_CROSS_COOLDOWN:
             return
