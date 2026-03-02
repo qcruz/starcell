@@ -320,10 +320,11 @@ class HudMixin:
                         entity.update_animation()
                         continue
 
-                    # BugCatcher: log every frame for tracked entity types
+                    # BugCatcher: log every frame for tracked entity types + autopilot proxy
                     _STUTTER_TRACKED = ('BAT', 'BAT_double', 'WOLF', 'WOLF_double')
-                    if entity.type in _STUTTER_TRACKED:
-                        player_zone = f"{self.player['screen_x']},{self.player['screen_y']}"
+                    player_zone = f"{self.player['screen_x']},{self.player['screen_y']}"
+                    is_proxy = (entity_id == getattr(self, 'autopilot_proxy_id', None))
+                    if entity.type in _STUTTER_TRACKED or is_proxy:
                         self.bug_catcher.log_bat_state(self.tick, entity_id, entity, player_zone)
 
                     # Snap stale world position if entity wasn't rendered last frame.
@@ -677,6 +678,22 @@ class HudMixin:
                     True, (200, 130, 255))
                 self.screen.blit(enc_lbl, (enc_x, ui_y + 6))
 
+            # ── Row 1b: XP / level bar ─────────────────────────────────────
+            xp = self.player.get('xp', 0)
+            xp_to_level = max(self.player.get('xp_to_level', 100), 1)
+            player_lv = self.player.get('level', 1)
+            xp_ratio = xp / xp_to_level
+            xp_lbl = self.tiny_font.render("XP", True, (160, 210, 70))
+            self.screen.blit(xp_lbl, (10, ui_y + 18))
+            pygame.draw.rect(self.screen, (28, 42, 14), (30, ui_y + 19, BAR_W, 6))
+            if xp_ratio > 0:
+                pygame.draw.rect(self.screen, (120, 190, 45),
+                                 (30, ui_y + 19, int(BAR_W * xp_ratio), 6))
+            pygame.draw.rect(self.screen, (65, 95, 22), (30, ui_y + 19, BAR_W, 6), 1)
+            xp_val = self.tiny_font.render(
+                f"L{player_lv}  {xp}/{xp_to_level}", True, (190, 210, 150))
+            self.screen.blit(xp_val, (30 + BAR_W + 4, ui_y + 18))
+
             # ── Row 2: Location / status info ──────────────────────────────
             info_text = ""
             if self.player.get('in_subscreen'):
@@ -697,7 +714,7 @@ class HudMixin:
             if self.player.get('friendly_fire', False):
                 info_text += " | [FF ON]"
             text = self.small_font.render(info_text, True, COLORS['WHITE'])
-            self.screen.blit(text, (10, ui_y + 20))
+            self.screen.blit(text, (10, ui_y + 30))
 
             # ── Row 3: Quest info ───────────────────────────────────────────
             quest_display = ""
@@ -715,7 +732,7 @@ class HudMixin:
             if quest_display:
                 quest_color = QUEST_TYPES.get(self.active_quest, {}).get('color', (200, 200, 200))
                 quest_text = self.tiny_font.render(quest_display, True, quest_color)
-                self.screen.blit(quest_text, (10, ui_y + 36))
+                self.screen.blit(quest_text, (10, ui_y + 45))
 
             # ── Row 4: Interaction hint + controls ─────────────────────────
             target = self.get_target_cell()
@@ -734,7 +751,7 @@ class HudMixin:
 
             controls = f"{hint_text} | B: Block | C: Craft | X: Combine | L: Cast | E: Pickup"
             text = self.tiny_font.render(controls, True, COLORS['WHITE'])
-            self.screen.blit(text, (10, ui_y + 52))
+            self.screen.blit(text, (10, ui_y + 58))
 
             # ── Key reference on right side of bottom bar ──────────────────
             key_ref_x = SCREEN_WIDTH - 340
