@@ -308,6 +308,18 @@ class HudMixin:
                         entity.update_animation()
                         continue
 
+                    # Skip entities that are inside a subscreen while the player
+                    # is in the overworld (and vice-versa). npc_enter_subscreen()
+                    # can leave an entity in screen_entities while setting
+                    # in_subscreen=True, causing a ghost render with frozen
+                    # animation (is_flying_idle evaluates False when in_subscreen).
+                    # Still run movement/animation so internal state stays coherent.
+                    if (not self.player.get('in_subscreen', False)
+                            and getattr(entity, 'in_subscreen', False)):
+                        entity.update_smooth_movement()
+                        entity.update_animation()
+                        continue
+
                     # BugCatcher: log every frame for tracked entity types
                     _STUTTER_TRACKED = ('BAT', 'BAT_double', 'WOLF', 'WOLF_double')
                     if entity.type in _STUTTER_TRACKED:

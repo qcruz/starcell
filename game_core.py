@@ -5,6 +5,7 @@ Rendering, player systems, world gen, quests, save/load, zone updates.
 from constants import *
 from entity import *
 from debug.bug_catcher import BugCatcher
+from debug.watchdog import Watchdog
 
 class GameCoreMixin:
     """Core game systems. Mixed into Game via multiple inheritance."""
@@ -165,6 +166,7 @@ class GameCoreMixin:
 
         # Debug / bug-tracking
         self.bug_catcher = BugCatcher()
+        self.watchdog = Watchdog(self.bug_catcher)
 
         # Last git push timestamp (shown on pause screen)
         try:
@@ -2025,7 +2027,10 @@ class GameCoreMixin:
                 # Process catch-up during idle
                 if self.is_idle() and self.catchup_queue:
                     self.process_catchup_queue()
-                
+
+                # Watchdog: periodic sample + integrity checks + flush
+                self.watchdog.update(self.tick, self)
+
                 self.tick += 1
                 self.draw_game()
             elif self.state == 'death':
