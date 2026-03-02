@@ -1070,9 +1070,20 @@ class NpcAiMixin:
                         flee_chance = getattr(entity, 'flee_chance', 0.05)
                         combat_chance = getattr(entity, 'combat_chance', 0.95)
             
-            # Roll flee vs combat
+            # Roll flee vs combat — scale flee chance by threat level relative
+            # to this entity.  Higher-level enemies increase flee chance; lower-
+            # level enemies reduce it.  This keeps warriors/commanders near-zero
+            # against weak foes and lets farmers/civilians flee reliably.
             entity.wants_counterattack = False
-            if random.random() < flee_chance:
+            threat_level = entity.level
+            _ct = entity.counterattack_target
+            if _ct == 'player':
+                threat_level = self.player.get('level', 1)
+            elif isinstance(_ct, int) and _ct in self.entities:
+                threat_level = self.entities[_ct].level
+            level_ratio = threat_level / max(entity.level, 1)
+            effective_flee = min(flee_chance * level_ratio, 0.95)
+            if random.random() < effective_flee:
                 entity.ai_state = 'flee'
                 entity.flee_target = entity.counterattack_target
                 entity.current_target = None
@@ -2119,7 +2130,7 @@ class NpcAiMixin:
                             screen['grid'][check_y][check_x] = 'GRASS'
                             entity.hunger = min(entity.max_hunger, entity.hunger + 20)
                             print(f"Termite destroyed a house at [{screen_key}]!")
-                        elif cell == 'STONE_HOUSE' and random.random() < 0.0002:  # 0.02% — stone heavily resists termites
+                        elif cell == 'STONE_HOUSE' and random.random() < 0.00002:  # 0.002% — stone heavily resists termites (10x lower than HOUSE rate)
                             screen['grid'][check_y][check_x] = 'GRASS'
                             entity.hunger = min(entity.max_hunger, entity.hunger + 10)
                             print(f"Termite destroyed a stone house at [{screen_key}]!")
@@ -2274,7 +2285,7 @@ class NpcAiMixin:
                         return
 
                     # Attack stone houses - very rare (goblins chip at stone slowly)
-                    elif cell == 'STONE_HOUSE' and random.random() < 0.0001:  # 0.01% chance
+                    elif cell == 'STONE_HOUSE' and random.random() < 0.00001:  # 0.001% chance (10x lower than HOUSE rate)
                         entity.update_facing_toward(check_x, check_y)
                         entity.trigger_action_animation()
                         self.show_attack_animation(check_x, check_y, entity=entity)

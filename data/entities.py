@@ -166,7 +166,7 @@ ENTITY_TYPES = {
             'aggressiveness': 0.95,  # 95% chance to acquire/pursue hostile targets (matched to guards)
             'passiveness': 0.02,     # 2% chance to drop target and wander (matched to guards)
             'idleness': 0.01,        # 1% chance to enter idle state (matched to guards)
-            'flee_chance': 0.05,     # 5% flee when threatened
+            'flee_chance': 0.005,    # 0.5% base flee — near-zero, scales up only vs much higher-level enemies
             'combat_chance': 0.95,   # 95% fight when threatened
             'target_types': ['hostile', 'water', 'food', 'structure']  # What to target
         }
@@ -197,7 +197,7 @@ ENTITY_TYPES = {
             'aggressiveness': 0.75,  # 75% - strong leadership/combat
             'passiveness': 0.08,     # 8% - very focused
             'idleness': 0.07,        # 7% - rarely idle
-            'flee_chance': 0.03,
+            'flee_chance': 0.002,    # 0.2% base flee — commanders almost never flee
             'combat_chance': 0.97,
             'target_types': ['hostile', 'water', 'food', 'structure']
         }
