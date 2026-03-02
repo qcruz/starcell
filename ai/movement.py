@@ -324,13 +324,6 @@ class NpcAiMovementMixin:
         if screen_key not in self.screens:
             return
 
-        # Autopilot proxy must not cross zone boundaries while fleeing — this
-        # causes the player to teleport to the new zone's entry row instantly.
-        # The proxy should flee within its current zone only.
-        if (entity.props.get('is_autopilot_proxy', False)
-                and getattr(entity, 'ai_state', '') == 'flee'):
-            return
-
         # Check travel cooldown - prevent rapid zone switching
         if not hasattr(entity, 'last_zone_change_tick'):
             entity.last_zone_change_tick = -999  # Initialize if missing
