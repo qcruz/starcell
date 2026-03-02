@@ -1253,5 +1253,40 @@ class ZonesMixin:
             if random.random() < TREE_DECAY_RATE:
                 new_cell = 'GRASS'
 
+        # Biome spreading: base terrain bleeds into adjacent different-terrain cells.
+        # Targets receive a VARIANT of the spreading type so they start "young" and
+        # develop via normal automata rules (tree growth, grass→dirt, etc.).
+        # Zone-exit bleeding is handled separately in apply_cellular_automata.
+        if new_cell == cell:
+            base_terrain_cells = {'GRASS', 'SAND', 'SNOW', 'DIRT'}
+            if cell in base_terrain_cells and random.random() < 0.001:
+                adjacent_coords = [
+                    (x + dx, y + dy)
+                    for dy in range(-1, 2) for dx in range(-1, 2)
+                    if not (dx == 0 and dy == 0)
+                    and 0 <= x + dx < GRID_WIDTH and 0 <= y + dy < GRID_HEIGHT
+                ]
+                if adjacent_coords:
+                    target_x, target_y = random.choice(adjacent_coords)
+                    target_cell = screen['grid'][target_y][target_x]
+                    if target_cell in base_terrain_cells and target_cell != cell:
+                        screen['grid'][target_y][target_x] = cell
+                        # Assign a random variant so the new cell looks young/varied
+                        vgrid = screen.get('variant_grid')
+                        if vgrid and 0 <= target_y < len(vgrid) and 0 <= target_x < len(vgrid[target_y]):
+                            variants = CELL_TYPES.get(cell, {}).get('variants')
+                            if variants:
+                                vroll = random.random()
+                                vcumul = 0.0
+                                chosen = None
+                                for vname, vprob in variants.items():
+                                    vcumul += vprob
+                                    if vroll < vcumul:
+                                        chosen = vname if vname != cell else None
+                                        break
+                                vgrid[target_y][target_x] = chosen
+                            else:
+                                vgrid[target_y][target_x] = None
+
         if new_cell != cell:
             screen['grid'][y][x] = new_cell
