@@ -1265,6 +1265,24 @@ class GameCoreMixin:
         if 0 <= new_x < GRID_WIDTH and 0 <= new_y < GRID_HEIGHT:
             target_cell = self.current_screen['grid'][new_y][new_x]
             if not CELL_TYPES[target_cell]['solid']:
+                # Entity collision — block movement if an NPC occupies the target cell
+                screen_key = f"{self.player['screen_x']},{self.player['screen_y']}"
+                proxy_id = getattr(self, 'autopilot_proxy_id', None)
+                entity_blocked = False
+                if self.player.get('in_subscreen'):
+                    check_list = self.subscreen_entities.get(self.player.get('subscreen_key'), [])
+                else:
+                    check_list = self.screen_entities.get(screen_key, [])
+                for eid in check_list:
+                    if eid == proxy_id:
+                        continue  # autopilot proxy is not a physical obstacle
+                    if eid in self.entities:
+                        e = self.entities[eid]
+                        if e.x == new_x and e.y == new_y:
+                            entity_blocked = True
+                            break
+                if entity_blocked:
+                    return
                 self.player['x'] = new_x
                 self.player['y'] = new_y
                 self.player['screen_x'] = new_screen_x
@@ -1390,6 +1408,8 @@ class GameCoreMixin:
         if cell.startswith('TREE') and self.inventory.selected_tool == 'axe':
             self.player['energy'] = max(0, self.player.get('energy', 0) - 1)
             self.handle_drops(cell, check_x, check_y)
+            self.show_attack_animation(check_x, check_y)
+            self.gain_xp(1)
             return
 
         # Mine stone — pickaxe must be selected tool
@@ -1447,6 +1467,7 @@ class GameCoreMixin:
         if cell == 'SOIL' and self.inventory.has_item('carrot'):
             self.inventory.remove_item('carrot', 1)
             self.current_screen['grid'][check_y][check_x] = 'CARROT1'
+            self.gain_xp(1)
             return
         
         # Place bones as decoration on ground cells

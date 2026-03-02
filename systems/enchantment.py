@@ -109,6 +109,7 @@ class EnchantmentMixin:
                 print(f"Enchanted {entity.type} - now following you! (enchant level {self.enchanted_entities[entity_id]})")
             else:
                 print(f"Increased {entity.type} enchant to level {self.enchanted_entities[entity_id]}")
+            self.gain_xp(1)
             return
 
         # Otherwise, enchant cell
@@ -126,6 +127,7 @@ class EnchantmentMixin:
         self.player['max_energy'] = max(1, self.player.get('max_energy', 100) - 1)
 
         print(f"Enchanted {cell} at ({check_x}, {check_y}) to level {self.enchanted_cells[screen_key][(check_x, check_y)]}")
+        self.gain_xp(1)
 
     def release_enchantments(self):
         """Release enchantment from target cell/entity (K key) - decreases by 1 level"""

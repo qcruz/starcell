@@ -1281,6 +1281,23 @@ class NpcAiMixin:
                     entity.current_target = None
                     entity.ai_state_timer = 2
                     return
+            elif entity.current_target == 'player':
+                # Player target — validate player is alive and in same zone
+                player_zone = f"{self.player['screen_x']},{self.player['screen_y']}"
+                entity_zone = f"{entity.screen_x},{entity.screen_y}"
+                if player_zone == entity_zone and not self.player.get('in_subscreen'):
+                    dist = abs(entity.x - self.player['x']) + abs(entity.y - self.player['y'])
+                    if dist > 1:
+                        # Player moved away — chase
+                        entity.ai_state = 'targeting'
+                        entity.ai_state_timer = 1
+                    # else: stay in combat (attack handled in update_entity_ai)
+                else:
+                    # Player left zone
+                    entity.ai_state = 'wandering'
+                    entity.current_target = None
+                    entity.ai_state_timer = 2
+                return
             else:
                 entity.ai_state = 'wandering'
                 entity.current_target = None
