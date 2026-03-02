@@ -2946,7 +2946,8 @@ class NpcAiMixin:
         if spell_data['type'] == 'heal':
             target.heal(spell_data['amount'])
         elif spell_data['type'] == 'damage':
-            target.take_damage(spell_data['amount'], caster)
+            caster_id = next((eid for eid, e in self.entities.items() if e is caster), None)
+            target.take_damage(spell_data['amount'], caster_id)
             if target.health <= 0 and hasattr(caster, 'xp'):
                 caster.xp += target.level * 10
         elif spell_data['type'] == 'enchant':
