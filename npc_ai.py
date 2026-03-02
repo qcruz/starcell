@@ -1230,7 +1230,11 @@ class NpcAiMixin:
                 
                 # Adjacent to hostile → enter combat
                 if target_is_hostile and dist <= 1:
-                    if isinstance(entity.current_target, int) and entity.current_target in self.entities:
+                    if entity.current_target == 'player':
+                        entity.ai_state = 'combat'
+                        entity.ai_state_timer = 3
+                        return
+                    elif isinstance(entity.current_target, int) and entity.current_target in self.entities:
                         target_entity = self.entities[entity.current_target]
                         if target_entity.is_alive():
                             entity.ai_state = 'combat'
