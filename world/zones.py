@@ -1253,21 +1253,5 @@ class ZonesMixin:
             if random.random() < TREE_DECAY_RATE:
                 new_cell = 'GRASS'
 
-        # Biome spreading: base terrain has small chance to spread
-        if new_cell == cell:
-            base_terrain_cells = ['GRASS', 'SAND', 'SNOW', 'DIRT']
-            if cell in base_terrain_cells and random.random() < 0.001:
-                adjacent_coords = [
-                    (x + dx, y + dy)
-                    for dy in range(-1, 2) for dx in range(-1, 2)
-                    if not (dx == 0 and dy == 0)
-                    and 0 <= x + dx < GRID_WIDTH and 0 <= y + dy < GRID_HEIGHT
-                ]
-                if adjacent_coords:
-                    target_x, target_y = random.choice(adjacent_coords)
-                    target_cell = screen['grid'][target_y][target_x]
-                    if target_cell in base_terrain_cells and target_cell != cell:
-                        screen['grid'][target_y][target_x] = cell
-
         if new_cell != cell:
             screen['grid'][y][x] = new_cell

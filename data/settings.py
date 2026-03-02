@@ -90,7 +90,7 @@ NPC_CAMP_PLACE_RATE = 0.01      # Probability to place camp per second (npc_plac
 # NPC Movement Timing
 NPC_BASE_MOVE_INTERVAL = 180    # Base ticks between NPC movements (3 seconds)
 NPC_MOVE_VARIANCE = 60          # Random variance in movement timing (±1 second)
-NPC_COMBAT_MOVE_INTERVAL = 30   # Fast movement during combat (0.5 seconds)
+NPC_COMBAT_MOVE_INTERVAL = 18   # Fast movement during combat (~0.3 seconds)
 
 # AI State Timing
 AI_STATE_IDLE_DURATION = 90     # Ticks for idle state (1.5 seconds — slightly longer idle)

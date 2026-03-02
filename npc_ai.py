@@ -73,7 +73,7 @@ class NpcAiMixin:
                         if dist == 1:
                             # Adjacent — attack player
                             if entity.move_cooldown <= 0:
-                                damage = max(1, entity.props.get('strength', 5) + entity.level)
+                                damage = max(1, (entity.props.get('strength', 5) + entity.level) // 5)
                                 self.player_take_damage(damage)
                                 entity.move_cooldown = max(1, int(NPC_COMBAT_MOVE_INTERVAL / entity.props.get('speed', 1.0)))
                                 entity.in_combat = True
@@ -746,22 +746,22 @@ class NpcAiMixin:
                             dist = abs(self.player['x'] - entity.x) + abs(self.player['y'] - entity.y)
                             if dist <= 1:
                                 # Adjacent - hit back!
-                                damage = entity.strength
-                                
+                                damage = max(1, entity.strength // 5)
+
                                 # Add weapon bonus from inventory
                                 damage += self.calculate_weapon_bonus(entity.inventory)
-                                
+
                                 # Add magic damage from runestones
                                 magic_damage, magic_type = self.calculate_magic_damage(entity.inventory)
                                 damage += magic_damage
-                                
+
                                 # Peaceful NPCs do minimal damage (25%)
                                 if not entity.props.get('hostile', False):
                                     damage *= 0.25
                                 # Hostile entities do slightly more damage (1.2x)
                                 elif entity.props.get('hostile', True):
                                     damage *= 1.2
-                                
+
                                 self.player_take_damage(damage)
                                 self.show_attack_animation(self.player['x'], self.player['y'], entity=entity, magic_type=magic_type)
                             else:
@@ -1760,19 +1760,19 @@ class NpcAiMixin:
                 # Combat entities lock in position when adjacent to enemy
                 
                 if closest_enemy == 'player':
-                    damage = entity.strength
-                    
+                    damage = max(1, entity.strength // 5)
+
                     # Add weapon bonus from inventory
                     damage += self.calculate_weapon_bonus(entity.inventory)
-                    
+
                     # Add magic damage from runestones
                     magic_damage, magic_type = self.calculate_magic_damage(entity.inventory)
                     damage += magic_damage
-                    
+
                     # Hostile entities do more damage (1.2x)
                     if entity.props.get('hostile', True):
                         damage *= 1.2
-                    
+
                     self.player_take_damage(damage)
                     self.show_attack_animation(self.player['x'], self.player['y'], entity=entity, magic_type=magic_type)
                 else:
