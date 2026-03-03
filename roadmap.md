@@ -29,7 +29,7 @@
 - [ ] Castle has interior guards and a King who retreats inside when health is low
 - [ ] When zone is attacked, guards and a commander spawn from the castle (if not already present)
 - [ ] Tavern / Inn structure — NPCs gather here to rest, trade rumors, and recover health; player can sleep here to skip time and restore stats
-- [ ] Temple / Shrine structure — healing and resurrection point; priests spawn here; holy water and blessings available
+- [ ] Temple / Shrine structure 
 
 ---
 
@@ -66,7 +66,7 @@
 - [ ] Four seasons: Spring, Summer, Autumn, Winter — each ~7 in-game days
 - [ ] Season affects which crops can grow and which wild plants appear
 - [ ] Winter: snow biome overlay, water freezes to ice, reduced crop growth, some NPCs shelter indoors
-- [ ] Seasonal festivals and events (harvest festival, winter solstice, etc.)
+- [ ] Seasonal events and quests
 - [ ] Calendar / day tracker visible in HUD
 
 ---
@@ -162,9 +162,6 @@
 - [ ] Thrown weapons — rocks, knives, bombs; one-use or retrieved
 - [ ] Bomb / explosive — destroys cells in small radius; used to open hidden passages
 
-**Limit Break / Overdrive** *(Final Fantasy)*
-- [ ] When player health drops below 20%, unlock a one-time powerful attack or spell burst
-- [ ] Recharges when health is restored above 50%
 
 **Equipment Slots** *(Zelda / Final Fantasy / D&D)*
 - [ ] Separate equipment panel: Weapon, Off-hand/Shield, Armor, Ring (×2), Amulet
@@ -249,8 +246,6 @@
 ---
 
 ### Social & Dialogue *(Stardew Valley / Zelda / D&D)*
-- [ ] NPC dialogue system — NPCs have contextual lines based on relationship, quest state, and zone events
-- [ ] Dialogue choices — player selects responses; affects NPC favor score
 - [ ] Gift giving — offer items to NPCs to increase favor; each NPC has preferred gifts
 - [ ] NPC schedules — NPCs follow daily routines (go to field at dawn, tavern at night, temple on rest day)
 - [ ] NPC birthdays / named calendar events — special interactions on those days
@@ -260,9 +255,8 @@
 ---
 
 ### Character Creation & Progression *(Final Fantasy / D&D)*
-- [ ] Race selection at game start: Human, Elf, Dwarf, Halfling — each with minor stat bonuses and flavor
 - [ ] Ability scores: STR (melee damage), DEX (speed/dodge), CON (max health), INT (spell power), WIS (healing/detection), CHA (favor gain rate)
-- [ ] Ability scores increase on level-up (player chooses which to raise)
+- [ ] Ability scores increase with use, decay over time - (actions fail on empty energy, prevent spamming)
 - [ ] Class / archetype choice — influences starting equipment and which perks unlock fastest (Fighter, Wizard, Rogue, Ranger, Cleric, Druid)
 
 ---
