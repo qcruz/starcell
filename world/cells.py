@@ -106,8 +106,9 @@ class CellsMixin:
                 if self.is_cell_enchanted(x, y, key):
                     continue
 
-                # Zone entrance cells are always pinned to the adjacent zone's biome type.
-                # This seeds spreading inward via the general neighbor-copy rule below.
+                # Zone entrance cells are seeded with the adjacent zone's primary biome cell.
+                # Only update if the cell is not already that type; otherwise leave it
+                # untouched so normal probabilistic rules govern it from there.
                 at_exit, direction = self.is_at_exit(x, y)
                 if at_exit:
                     offsets = {'top': (0, -1), 'bottom': (0, 1), 'left': (-1, 0), 'right': (1, 0)}
@@ -115,7 +116,11 @@ class CellsMixin:
                     adj_key = f"{screen_x + dx},{screen_y + dy}"
                     if adj_key in self.screens:
                         adj_biome = self.screens[adj_key].get('biome', screen['biome'])
-                        new_grid[y][x] = self.get_common_cell_for_biome(adj_biome)
+                        _primary = {'FOREST': 'GRASS', 'PLAINS': 'GRASS', 'DESERT': 'SAND',
+                                    'MOUNTAINS': 'DIRT', 'LAKE': 'WATER'}
+                        target = _primary.get(adj_biome)
+                        if target and cell != target:
+                            new_grid[y][x] = target
                     continue
 
                 if x == 0 or x == GRID_WIDTH - 1 or y == 0 or y == GRID_HEIGHT - 1:
