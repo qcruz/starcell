@@ -99,7 +99,7 @@ class CellsMixin:
             for x in range(GRID_WIDTH):
                 cell = screen['grid'][y][x]
 
-                if cell in ['WALL', 'HOUSE', 'CAVE']:
+                if cell in ['WALL', 'HOUSE', 'CAVE', 'CLIFF']:
                     continue
 
                 if self.is_cell_enchanted(x, y, key):
@@ -155,9 +155,14 @@ class CellsMixin:
                     if random.random() < SAND_RECLAIM_RATE:
                         new_grid[y][x] = 'DIRT'
 
-                # Deep water formation (lakes)
-                elif cell == 'WATER' and water_count >= 4:
-                    if random.random() < DEEP_WATER_FORM_RATE:
+                # Deep water formation: all 4 cardinal neighbors must be water/deepwater
+                elif cell == 'WATER':
+                    cardinal_water = sum(
+                        1 for dx, dy in ((0, -1), (0, 1), (-1, 0), (1, 0))
+                        if 0 <= x + dx < GRID_WIDTH and 0 <= y + dy < GRID_HEIGHT
+                        and screen['grid'][y + dy][x + dx] in ('WATER', 'DEEP_WATER')
+                    )
+                    if cardinal_water == 4 and random.random() < DEEP_WATER_FORM_RATE:
                         new_grid[y][x] = 'DEEP_WATER'
 
                 # Deep water evaporation

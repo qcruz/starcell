@@ -271,6 +271,7 @@ COLORS = {
     'BARREL': (120, 80, 40),
     'STONE_HOUSE': (110, 110, 120),
     'RUINED_SANDSTONE_COLUMN': (200, 160, 90),
+    'CLIFF': (90, 80, 75),
 }
 
 # Cell type properties with drop probabilities
@@ -373,6 +374,11 @@ CELL_TYPES = {
     'RUINED_SANDSTONE_COLUMN': {
         'color': COLORS['RUINED_SANDSTONE_COLUMN'],
         'label': 'RSC',
+        'solid': True,
+    },
+    'CLIFF': {
+        'color': COLORS['CLIFF'],
+        'label': 'Clf',
         'solid': True,
     },
 }
@@ -544,7 +550,8 @@ BIOMES = {
     'FOREST': {'GRASS': 0.5, 'DIRT': 0.2, 'TREE1': 0.15, 'TREE2': 0.05, 'WATER': 0.1},
     'PLAINS': {'GRASS': 0.6, 'DIRT': 0.2, 'WATER': 0.05, 'CARROT1': 0.1, 'TREE1': 0.05},
     'DESERT': {'SAND': 0.67, 'DIRT': 0.2, 'WATER': 0.05, 'STONE': 0.05, 'CACTUS': 0.03},
-    'MOUNTAINS': {'DIRT': 0.45, 'STONE': 0.20, 'GRASS': 0.20, 'TREE1': 0.10, 'WATER': 0.05}
+    'MOUNTAINS': {'DIRT': 0.45, 'STONE': 0.20, 'GRASS': 0.20, 'TREE1': 0.10, 'WATER': 0.05},
+    'LAKE': {'WATER': 0.90, 'DEEP_WATER': 0.10},
 }
 
 # Entity types and properties

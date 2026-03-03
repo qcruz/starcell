@@ -83,7 +83,8 @@ class SpawningMixin:
                 ('TRADER', 1.0, 1, 2),    # Always spawn
                 ('BLACKSMITH', 0.6, 0, 1),
                 ('GUARD', 1.0, 1, 2)      # Always spawn
-            ]
+            ],
+            'LAKE': []                    # No spawns in lake zones
         }
 
         spawn_list = spawn_tables.get(biome_name, [])

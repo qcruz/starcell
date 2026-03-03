@@ -34,6 +34,7 @@ COLORS = {
     'FLOWER': (255, 100, 200),
     'IRON_ORE': (139, 90, 43),
     'WELL': (100, 80, 60),
+    'CLIFF': (90, 80, 75),
     'CACTUS': (50, 120, 50),
     'BARREL': (120, 80, 40),
     'STONE_HOUSE': (110, 110, 120),
@@ -145,6 +146,11 @@ CELL_TYPES = {
     'RUINED_SANDSTONE_COLUMN': {
         'color': (200, 160, 90),
         'label': 'RSC',
+        'solid': True,
+    },
+    'CLIFF': {
+        'color': (90, 80, 75),
+        'label': 'Clf',
         'solid': True,
     },
 }

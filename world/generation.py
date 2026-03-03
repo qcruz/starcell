@@ -22,16 +22,18 @@ class WorldGenerationMixin:
         if key in self.screens:
             return self.screens[key]
 
-        # Determine biome
+        # Determine biome (LAKE at ~3%, others proportionally reduced)
         biome_roll = random.random()
-        if biome_roll < 0.6:
+        if biome_roll < 0.58:
             biome_name = 'FOREST'
-        elif biome_roll < 0.8:
+        elif biome_roll < 0.77:
             biome_name = 'PLAINS'
-        elif biome_roll < 0.95:
+        elif biome_roll < 0.92:
             biome_name = 'MOUNTAINS'
-        else:
+        elif biome_roll < 0.97:
             biome_name = 'DESERT'
+        else:
+            biome_name = 'LAKE'
         biome = BIOMES[biome_name]
 
         # Create exits - check neighboring screens for matching exits
@@ -93,12 +95,35 @@ class WorldGenerationMixin:
 
         # Generate grid
         exit_cell = {'FOREST': 'GRASS', 'PLAINS': 'GRASS', 'DESERT': 'SAND',
-                     'MOUNTAINS': 'DIRT', 'TUNDRA': 'DIRT', 'SWAMP': 'DIRT'}.get(biome_name, 'GRASS')
+                     'MOUNTAINS': 'DIRT', 'TUNDRA': 'DIRT', 'SWAMP': 'DIRT',
+                     'LAKE': 'WATER'}.get(biome_name, 'GRASS')
         grid = []
         for y in range(GRID_HEIGHT):
             row = []
             for x in range(GRID_WIDTH):
-                if y == 0 or y == GRID_HEIGHT - 1 or x == 0 or x == GRID_WIDTH - 1:
+                if biome_name == 'LAKE':
+                    is_border = (y == 0 or y == GRID_HEIGHT - 1 or x == 0 or x == GRID_WIDTH - 1)
+                    is_perimeter = (not is_border and
+                                    (y == 1 or y == GRID_HEIGHT - 2 or x == 1 or x == GRID_WIDTH - 2))
+                    is_exit = (
+                        (y == 0 and exits['top'] and GRID_WIDTH // 2 - 1 <= x <= GRID_WIDTH // 2) or
+                        (y == GRID_HEIGHT - 1 and exits['bottom'] and GRID_WIDTH // 2 - 1 <= x <= GRID_WIDTH // 2) or
+                        (x == 0 and exits['left'] and GRID_HEIGHT // 2 - 1 <= y <= GRID_HEIGHT // 2) or
+                        (x == GRID_WIDTH - 1 and exits['right'] and GRID_HEIGHT // 2 - 1 <= y <= GRID_HEIGHT // 2)
+                    )
+                    is_exit_corridor = (
+                        (y == 1 and exits['top'] and GRID_WIDTH // 2 - 1 <= x <= GRID_WIDTH // 2) or
+                        (y == GRID_HEIGHT - 2 and exits['bottom'] and GRID_WIDTH // 2 - 1 <= x <= GRID_WIDTH // 2) or
+                        (x == 1 and exits['left'] and GRID_HEIGHT // 2 - 1 <= y <= GRID_HEIGHT // 2) or
+                        (x == GRID_WIDTH - 2 and exits['right'] and GRID_HEIGHT // 2 - 1 <= y <= GRID_HEIGHT // 2)
+                    )
+                    if is_border:
+                        row.append('WATER' if is_exit else 'CLIFF')
+                    elif is_perimeter:
+                        row.append('WATER' if is_exit_corridor else 'SAND')
+                    else:
+                        row.append('WATER')
+                elif y == 0 or y == GRID_HEIGHT - 1 or x == 0 or x == GRID_WIDTH - 1:
                     if (y == 0 and exits['top'] and GRID_WIDTH // 2 - 1 <= x <= GRID_WIDTH // 2):
                         row.append(exit_cell)
                     elif (y == GRID_HEIGHT - 1 and exits['bottom'] and GRID_WIDTH // 2 - 1 <= x <= GRID_WIDTH // 2):
@@ -140,8 +165,8 @@ class WorldGenerationMixin:
                 variant_row.append(variant)
             variant_grid.append(variant_row)
 
-        # 30% chance to place a structure (HOUSE or CAVE)
-        if random.random() > 0.7:
+        # 30% chance to place a structure (HOUSE or CAVE) — not in lakes
+        if biome_name != 'LAKE' and random.random() > 0.7:
             struct_x = random.randint(2, GRID_WIDTH - 3)
             struct_y = random.randint(2, GRID_HEIGHT - 3)
             struct_type = random.choice(['HOUSE', 'CAVE'])
@@ -158,8 +183,8 @@ class WorldGenerationMixin:
                         grid[col_y][col_x] = 'RUINED_SANDSTONE_COLUMN'
                         break
 
-        # 10% chance to place a WELL near zone centre
-        if random.random() < 0.10:
+        # 10% chance to place a WELL near zone centre — not in lakes
+        if biome_name != 'LAKE' and random.random() < 0.10:
             well_x = GRID_WIDTH  // 2 + random.randint(-3, 3)
             well_y = GRID_HEIGHT // 2 + random.randint(-3, 3)
             well_x = max(2, min(GRID_WIDTH - 3,  well_x))
@@ -183,7 +208,10 @@ class WorldGenerationMixin:
         if key not in self.screen_entities:
             self.spawn_entities_for_screen(sx, sy, biome_name)
 
-        # Natural cave formation — uncommon, favors mountains
+        # Natural cave formation — uncommon, favors mountains; not in lakes
+        if biome_name == 'LAKE':
+            self.spawn_runestones_for_screen(sx, sy)
+            return screen_data
         cave_chance = NATURAL_CAVE_ZONE_CHANCE
         if biome_name == 'MOUNTAINS':
             cave_chance *= 3
@@ -237,6 +265,7 @@ class WorldGenerationMixin:
         grid = screen['grid']
         biome = screen.get('biome', 'FOREST')
         current_biome_cell = self.get_common_cell_for_biome(biome)
+        border_wall = 'CLIFF' if biome == 'LAKE' else 'WALL'
 
         # Update top edge
         for x in range(GRID_WIDTH):
@@ -249,7 +278,7 @@ class WorldGenerationMixin:
                 else:
                     grid[0][x] = current_biome_cell
             elif not exits['top'] or not (GRID_WIDTH // 2 - 1 <= x <= GRID_WIDTH // 2):
-                grid[0][x] = 'WALL'
+                grid[0][x] = border_wall
 
         # Update bottom edge
         for x in range(GRID_WIDTH):
@@ -262,7 +291,7 @@ class WorldGenerationMixin:
                 else:
                     grid[GRID_HEIGHT - 1][x] = current_biome_cell
             elif not exits['bottom'] or not (GRID_WIDTH // 2 - 1 <= x <= GRID_WIDTH // 2):
-                grid[GRID_HEIGHT - 1][x] = 'WALL'
+                grid[GRID_HEIGHT - 1][x] = border_wall
 
         # Update left edge
         for y in range(GRID_HEIGHT):
@@ -275,7 +304,7 @@ class WorldGenerationMixin:
                 else:
                     grid[y][0] = current_biome_cell
             elif not exits['left'] or not (GRID_HEIGHT // 2 - 1 <= y <= GRID_HEIGHT // 2):
-                grid[y][0] = 'WALL'
+                grid[y][0] = border_wall
 
         # Update right edge
         for y in range(GRID_HEIGHT):
@@ -288,7 +317,7 @@ class WorldGenerationMixin:
                 else:
                     grid[y][GRID_WIDTH - 1] = current_biome_cell
             elif not exits['right'] or not (GRID_HEIGHT // 2 - 1 <= y <= GRID_HEIGHT // 2):
-                grid[y][GRID_WIDTH - 1] = 'WALL'
+                grid[y][GRID_WIDTH - 1] = border_wall
 
     def get_common_cell_for_biome(self, biome_name):
         """Get a common cell type for a biome"""
@@ -297,6 +326,7 @@ class WorldGenerationMixin:
             'PLAINS': ['GRASS', 'GRASS', 'DIRT'],
             'DESERT': ['SAND', 'SAND', 'DIRT'],
             'MOUNTAINS': ['DIRT', 'DIRT', 'GRASS'],
+            'LAKE': ['WATER', 'WATER', 'WATER'],
         }
         cells = biome_cells.get(biome_name, ['GRASS', 'DIRT'])
         return random.choice(cells)

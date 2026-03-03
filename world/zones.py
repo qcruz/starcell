@@ -1195,7 +1195,7 @@ class ZonesMixin:
         screen = self.screens[key]
         cell = screen['grid'][y][x]
 
-        if cell in ['WALL', 'HOUSE', 'CAVE']:
+        if cell in ['WALL', 'HOUSE', 'CAVE', 'CLIFF']:
             return
 
         if self.is_cell_enchanted(x, y, key):
@@ -1231,8 +1231,13 @@ class ZonesMixin:
         elif cell == 'SAND' and total_water >= 2:
             if random.random() < SAND_RECLAIM_RATE:
                 new_cell = 'DIRT'
-        elif cell == 'WATER' and water_count >= 4:
-            if random.random() < DEEP_WATER_FORM_RATE:
+        elif cell == 'WATER':
+            cardinal_water = sum(
+                1 for dx, dy in ((0, -1), (0, 1), (-1, 0), (1, 0))
+                if 0 <= x + dx < GRID_WIDTH and 0 <= y + dy < GRID_HEIGHT
+                and screen['grid'][y + dy][x + dx] in ('WATER', 'DEEP_WATER')
+            )
+            if cardinal_water == 4 and random.random() < DEEP_WATER_FORM_RATE:
                 new_cell = 'DEEP_WATER'
         elif cell == 'DEEP_WATER' and (water_count + deep_water_count) < 2:
             if random.random() < DEEP_WATER_EVAPORATE_RATE:
@@ -1258,7 +1263,7 @@ class ZonesMixin:
         # develop via normal automata rules (tree growth, grass→dirt, etc.).
         # Zone-exit bleeding is handled separately in apply_cellular_automata.
         if new_cell == cell:
-            base_terrain_cells = {'GRASS', 'SAND', 'SNOW', 'DIRT'}
+            base_terrain_cells = {'GRASS', 'SAND', 'SNOW', 'DIRT', 'WATER'}
             if cell in base_terrain_cells and random.random() < 0.001:
                 adjacent_coords = [
                     (x + dx, y + dy)
