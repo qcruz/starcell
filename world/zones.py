@@ -1320,7 +1320,7 @@ class ZonesMixin:
             if not ktype:
                 continue  # TRADER, KING, etc. — never become keepers
 
-            if entity.keeper:
+            if getattr(entity, 'keeper', False):
                 continue  # Already a keeper somewhere
 
             if ktype in keepers:
