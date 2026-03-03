@@ -8,6 +8,25 @@ order.  Entries are grouped into Features, Fixes, and Systems.
 ## [Unreleased]
 
 ### Features
+- **LAKE biome** — new zone type (~3% generation chance).  Zone filled with
+  WATER, SAND perimeter ring, CLIFF solid border (impassable; no sprite
+  file required — falls back to colour).  Exit cells are WATER.  Deep water
+  forms in the centre via a stricter all-4-cardinal-neighbors rule.  No
+  entity spawns.  `check_zone_biome_shift()` now promotes a zone to LAKE
+  when water coverage exceeds 50%.
+- **CLIFF cell type** — solid border cell used by LAKE biome; colour `(90,80,75)`;
+  added to `data/cells.py` and `constants.py`.
+- **Biome spreading — general neighbor-copy rule** — every base terrain cell
+  (GRASS / DIRT / SAND / WATER) has a `BIOME_SPREAD_RATE = 0.001` chance
+  per update to copy a random NSEW neighbor of a different base type.
+  Cells surrounded by the same type never roll.  Replaces the old 8-neighbor
+  random-pick spreading block.
+- **Pinned zone entrance cells** — exit border cells are seeded with the
+  adjacent zone's primary biome type (deterministic) but only when they are
+  currently the wrong type — no constant overwrite churn.
+- **XP on player actions** — player gains 1 XP when chopping a tree, planting
+  a crop, hitting an enemy (via combat system), or casting a star-spell
+  enchantment (cell or entity).
 - **Debug Watchdog system** (`debug/watchdog.py`) — rotating periodic sampler
   that logs random snapshots of entities, cells, zones, player state, and
   subscreen data every 300 ticks (~5 s).  Runs integrity checks on every cycle
@@ -19,6 +38,29 @@ order.  Entries are grouped into Features, Fixes, and Systems.
   mismatch class of bugs.
 
 ### Fixes
+- **Combat — entities now attack the player** — two root causes fixed:
+  (1) `update_entity_ai_state()` TARGETING state only checked `isinstance(target, int)`
+  for the combat transition; `'player'` (string) was never promoted to combat.
+  (2) outer `tick % 30` guard in `update_entities()` throttled all AI including
+  combat cooldowns — on-screen entities now run every tick; stat decay stays at
+  30-tick intervals.
+- **Entity damage tuned** — damage formula changed from `strength + level` to
+  `strength // 5`; attack interval reduced from 30 → 18 ticks (~0.3 s).
+- **JSON serialization crash on new game** — `cast_wizard_spell()` passed the
+  caster's `Entity` object to `take_damage()`, which stored it in `flee_target`
+  and failed JSON serialisation.  Fixed by resolving to `entity_id` first.
+- **Starting zone dirt accumulation** — biome spreading (0.001 rate) compounded
+  into near-uniform DIRT after 150–250 year catch-up simulation.  Fixed by
+  assigning variants to spread targets so they develop naturally via automata.
+- **Zone entrance overwrite churn** — exit border cells were deterministically
+  rewritten every automata pass even when already the correct type; added
+  `cell != target` guard so they are only corrected when wrong.
+- **WATER elif dead-code bug** — water evaporation rule (`WATER → DIRT when
+  total_water <= 1`) was unreachable because the deep-water `elif cell == 'WATER'`
+  branch caught it first.  Both rules merged into one WATER block in
+  `apply_cellular_automata` and `update_single_cell`.
+- **Flee state jumpiness** — flee movement ran every tick with no cooldown,
+  outrunning smooth interpolation.  Wrapped in `move_cooldown <= 0` gate.
 - **Bat/wolf animation frozen at 'still'** — flying entities that entered a
   subscreen (cave/house) via `npc_enter_subscreen()` could remain in
   `screen_entities` with `in_subscreen=True` if the zone key mismatched at

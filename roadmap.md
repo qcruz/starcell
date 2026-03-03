@@ -15,6 +15,7 @@
 - Discover deep-value additions: simple mechanics that add the most to gameplay. Simple interfaces for inventory, quests, trading, crafting, followers, spells, tools, etc. Emergent environmental complexity through simple rules (cellular automata, proc gen). Art and design that encourages and rewards exploration, decoration, crafting, combat, building, managing, and collecting.
 - Make the game world as detailed and realistic as possible while balancing the above goals.
 - Regularly review the codebase at a high level. Remove redundancies and overly specific code that can be generalized. Always look for ways to combine features or unify code to get the same result with fewer variables.
+- System design that can be easily adjusted to support a wide variety of game types — keep data tables, spawn configs, and behavior parameters clean and configurable so the framework stays reusable.
 
 ---
 
@@ -29,7 +30,8 @@
 - [ ] Castle has interior guards and a King who retreats inside when health is low
 - [ ] When zone is attacked, guards and a commander spawn from the castle (if not already present)
 - [ ] Tavern / Inn structure — NPCs gather here to rest, trade rumors, and recover health; player can sleep here to skip time and restore stats
-- [ ] Temple / Shrine structure — healing and resurrection point; priests spawn here; holy water and blessings available
+- [ ] Temple / Shrine structure — healing and resurrection point; priests spawn here; holy water and blessings available; brief buff granted on interaction (zone stat bonus, heal, etc.)
+- [ ] Staircase entry/exit sprites for house and cave structure entrances (replace placeholder cell)
 
 ---
 
@@ -50,6 +52,8 @@
 **Boss Enemies**
 - [ ] Boss rooms in deep dungeon levels — unique high-health enemy with special attack patterns and a guaranteed rare loot drop
 - [ ] Dungeon boss has a "lair action" that triggers once per zone update (environmental hazard — falling rocks, rising water, etc.)
+- [ ] Dragonknight — elite armored warrior NPC with elemental damage bonus (fire / ice / lightning variant); high defense; rare loot drop
+- [ ] Ancient Mechanica — ancient Golem-type lore entity with strong magic attacks; appears in deep ruins and ancient zones; ties into LoreEngine history
 
 **Peaceful / Animals**
 - [ ] Birds
@@ -315,6 +319,28 @@
 
 ---
 
+### Keeper System
+> Assign ownership of a location or entity to an NPC, making them its permanent guardian.
+
+- [ ] Keeper role — any NPC can be designated Keeper of a zone, structure, or another NPC; they will not leave their assigned location (it becomes their home / base / den)
+- [ ] Keeper types: **Zonekeeper** (patrols and defends zone), **Tavernkeeper** (runs a tavern, assigns supply / transport quests), **Towerkeeper** (defends a tower or fort), **Dungeonkeeper** (guards a cave or dungeon)
+- [ ] Keeper quest types — each Keeper role unlocks unique quest categories: collect (supplies), transport, build, recruit, defend
+- [ ] Boss Keeper — a powerful boss NPC assigned as Keeper of a zone or structure; defeating it is required to claim ownership
+- [ ] **Evergael** variant — a Keeper that is trapped or contained (e.g. sealed in a vault, imprisoned in a ruin); their zone exit is blocked until the player defeats or frees them; drops a unique item upon defeat
+
+---
+
+### Domain System
+> Four adjacent zones form a Domain — a macro territory layer above individual zones.
+
+- [ ] Any 2×2 block of adjacent zones forms a Domain
+- [ ] When all zones in a Domain are controlled by the same faction, that faction gains domain bonuses: reinforcement spawns, passive resource collection, Commander NPC appears
+- [ ] Contested Domain: if zones are split between factions, conflict events trigger (raids, skirmishes)
+- [ ] Player can claim and hold a Domain for passive benefits (item drops, zone control quests, reputation with local factions)
+- [ ] Domain boundaries visible on world map
+
+---
+
 ### LoreEngine Expansions
 - [ ] Migration events
 - [ ] Natural disaster events
@@ -425,3 +451,10 @@
 - [x] ~~Autopilot toggle (Shift+A), off by default~~ — completed!
 - [x] ~~Secret cave entrances via MINESHAFT in house interiors~~ — completed!
 - [x] ~~Secret cave exit routing (maps to overworld cave entrance or back to house)~~ — completed!
+- [x] ~~Iron ore pipeline~~ — IRON_ORE cave cell, iron_ore / iron_ingot / iron_sword items + recipes, sprites — completed!
+- [x] ~~Water Well~~ — WELL cell, Miner AI builds wells, all humanoid NPCs use wells as water source — completed!
+- [x] ~~Follower death fix~~ — follower item removed from inventory on death via follower_items dict — completed!
+- [x] ~~Followers attacking each other fix~~ — find_and_attack_enemy skips entity IDs in self.followers — completed!
+- [x] ~~LAKE biome~~ — zone generation with CLIFF border, SAND perimeter, WATER interior, deep water cardinal rule, no entity spawns — completed!
+- [x] ~~Combat functioning~~ — entities correctly enter combat state vs player, on-screen AI runs every tick, attack interval 18 ticks — completed!
+- [x] ~~Biome spreading via general neighbor-copy rule~~ — zone entrance cells pinned to adjacent biome type; base terrain copies random NSEW neighbor at BIOME_SPREAD_RATE — completed!

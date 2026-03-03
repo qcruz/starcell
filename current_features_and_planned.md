@@ -115,22 +115,28 @@ For planned and desired future features, see [`roadmap.md`](roadmap.md).
 ### World Generation & Structure
 
 **Biome System** (`constants.py` — `BIOMES` dict)
-- Forest: 60% grass, 20% dirt, trees, water
-- Plains: 60% grass, 20% dirt, carrots, trees
-- Desert: 70% sand, 20% dirt, stone
-- Mountains: 45% dirt, 20% stone, 20% grass, 10% trees
+- Forest: 58% chance — grass, dirt, trees, water
+- Plains: 19% chance — grass, dirt, carrots, trees
+- Mountains: 15% chance — dirt, stone, grass, trees
+- Desert: 5% chance — sand, dirt, stone, cactus
+- Lake: 3% chance — water interior, SAND perimeter, CLIFF border; no entity spawns; deep water forms in centre
 - Procedurally generated, seeded by zone (screen_x, screen_y)
+- Zone entrance cells pinned to adjacent zone's primary biome type; base terrain spreads via NSEW neighbor-copy rule (rate 0.001/update)
+- Zone biome label auto-updates when dominant cell type shifts (e.g. 50%+ water → LAKE)
 
 **Cell Types**
 
 | Category | Cells |
 |---|---|
 | Terrain | GRASS, DIRT, WATER, DEEP_WATER, SAND |
-| Structures | HOUSE, CAVE, MINESHAFT, CAMP, FORGE, WALL |
-| Farming | SOIL, CARROT1/2/3, FLOWER |
+| Biome borders | CLIFF (LAKE biome border, solid) |
+| Structures | HOUSE, STONE_HOUSE, CAVE, MINESHAFT, CAMP, FORGE, WALL, WELL |
+| Farming | SOIL, CARROT1/2/3, FLOWER, CACTUS |
 | Building materials | WOOD, PLANKS, COBBLESTONE |
-| Trees | TREE1, TREE2, TREE3 |
+| Trees | TREE1, TREE2 |
+| Ore | IRON_ORE (cave cell, drops iron_ore item) |
 | Interior | FLOOR_WOOD, CAVE_FLOOR, CAVE_WALL, CHEST, STAIRS_UP, STAIRS_DOWN |
+| Decorative | BARREL, RUINED_SANDSTONE_COLUMN |
 
 **Cell Growth/Decay Rates**
 - Tree growth: 0.00005 / Flower spread: 0.0001 / Carrot 1→2: 0.02 / 2→3: 0.015
@@ -473,4 +479,4 @@ For planned and desired future features, see [`roadmap.md`](roadmap.md).
 
 ---
 
-*Last updated: 2026-02-27*
+*Last updated: 2026-03-02*
