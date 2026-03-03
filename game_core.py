@@ -756,29 +756,34 @@ class GameCoreMixin:
             return
         
         check_x, check_y = target
-        screen_key = f"{self.player['screen_x']},{self.player['screen_y']}"
-        
-        # Find entity at target
-        if screen_key in self.screen_entities:
-            for entity_id in self.screen_entities[screen_key]:
-                if entity_id in self.entities:
-                    entity = self.entities[entity_id]
-                    if entity.x == check_x and entity.y == check_y:
-                        # Never inspect the autopilot proxy — it renders as the player
-                        if entity.props.get('is_autopilot_proxy', False):
-                            self.inspected_npc = None
-                            return
-                        # Inspect ANY entity (peaceful or hostile)
-                        self.inspected_npc = entity_id
-                        self.inspected_npc_tick = self.tick
-                        
-                        # Make peaceful entities idle briefly during inspection
-                        if not entity.props.get('hostile'):
-                            entity.is_idle = True
-                            entity.idle_timer = 30  # 0.5 seconds
-                            entity.idle_duration = 30
+
+        # Use subscreen entity list when player is inside a structure
+        if self.player.get('in_subscreen'):
+            sub_key = self.player.get('subscreen_key')
+            candidates = self.subscreen_entities.get(sub_key, [])
+        else:
+            screen_key = f"{self.player['screen_x']},{self.player['screen_y']}"
+            candidates = self.screen_entities.get(screen_key, [])
+
+        # Find entity at target cell
+        for entity_id in candidates:
+            if entity_id in self.entities:
+                entity = self.entities[entity_id]
+                if entity.x == check_x and entity.y == check_y:
+                    # Never inspect the autopilot proxy — it renders as the player
+                    if entity.props.get('is_autopilot_proxy', False):
+                        self.inspected_npc = None
                         return
-        
+                    self.inspected_npc = entity_id
+                    self.inspected_npc_tick = self.tick
+
+                    # Make peaceful entities idle briefly during inspection
+                    if not entity.props.get('hostile'):
+                        entity.is_idle = True
+                        entity.idle_timer = 30  # 0.5 seconds
+                        entity.idle_duration = 30
+                    return
+
         # No entity at target
         self.inspected_npc = None
     

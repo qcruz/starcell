@@ -12,15 +12,25 @@ class NpcAiMovementMixin:
 
     def wander_entity(self, entity):
         """Move entity randomly"""
-        screen_key = f"{entity.screen_x},{entity.screen_y}"
-        if screen_key not in self.screens:
-            return
-
-        screen = self.screens[screen_key]
+        # Resolve the correct grid and peer entity list.
+        # Entities in subscreens must use the subscreen grid, not the overworld grid,
+        # otherwise they check the wrong cells and get stuck at the entrance.
+        if entity.in_subscreen:
+            sub_key = entity.subscreen_key
+            screen = self.subscreens.get(sub_key) or self.screens.get(sub_key)
+            if not screen:
+                return
+            peer_ids = self.subscreen_entities.get(sub_key, [])
+        else:
+            screen_key = f"{entity.screen_x},{entity.screen_y}"
+            if screen_key not in self.screens:
+                return
+            screen = self.screens[screen_key]
+            peer_ids = self.screen_entities.get(screen_key, [])
 
         # Check if overlapping with another entity — if so, prioritize unstacking
         is_overlapping = False
-        for other_id in self.screen_entities.get(screen_key, []):
+        for other_id in peer_ids:
             if other_id in self.entities:
                 other = self.entities[other_id]
                 if other is not entity and other.x == entity.x and other.y == entity.y:
@@ -45,14 +55,17 @@ class NpcAiMovementMixin:
             new_x = entity.x + dx
             new_y = entity.y + dy
 
-            # Out of bounds → attempt seamless zone crossing
+            # Out of bounds
             if new_x < 0 or new_x >= GRID_WIDTH or new_y < 0 or new_y >= GRID_HEIGHT:
-                old_sk = f"{entity.screen_x},{entity.screen_y}"
-                self.try_entity_screen_crossing(entity, new_x, new_y)
-                if f"{entity.screen_x},{entity.screen_y}" != old_sk:
-                    entity.is_moving = True
-                    entity.moved_this_update = True
-                    return
+                if not entity.in_subscreen:
+                    # Overworld entity: attempt seamless zone crossing
+                    old_sk = f"{entity.screen_x},{entity.screen_y}"
+                    self.try_entity_screen_crossing(entity, new_x, new_y)
+                    if f"{entity.screen_x},{entity.screen_y}" != old_sk:
+                        entity.is_moving = True
+                        entity.moved_this_update = True
+                        return
+                # In subscreen: edges are walls — just skip this direction
                 continue
 
             # Check memory lane — avoid recently visited cells
@@ -68,7 +81,7 @@ class NpcAiMovementMixin:
             # Check not occupied (skip this check if overlapping — need to unstack)
             if not is_overlapping:
                 occupied = False
-                for other_id in self.screen_entities.get(screen_key, []):
+                for other_id in peer_ids:
                     if other_id in self.entities:
                         other = self.entities[other_id]
                         if other is not entity and other.x == new_x and other.y == new_y:
@@ -129,10 +142,10 @@ class NpcAiMovementMixin:
         memory is halved; at 4+ cycles it is cleared entirely so the entity
         can backtrack freely.
         """
-        if screen_key not in self.screens:
+        # Support subscreen keys (may be in self.subscreens but not self.screens)
+        screen = self.screens.get(screen_key) or self.subscreens.get(screen_key)
+        if not screen:
             return
-
-        screen = self.screens[screen_key]
 
         # Initialize cell reservation system if not exists
         if not hasattr(self, 'reserved_cells'):
@@ -204,12 +217,14 @@ class NpcAiMovementMixin:
             new_y = entity.y + move_y
 
             if new_x < 0 or new_x >= GRID_WIDTH or new_y < 0 or new_y >= GRID_HEIGHT:
-                # Try seamless zone crossing
-                old_sk = f"{entity.screen_x},{entity.screen_y}"
-                self.try_entity_screen_crossing(entity, new_x, new_y)
-                if f"{entity.screen_x},{entity.screen_y}" != old_sk:
-                    entity.moved_this_update = True
-                    return True
+                if not entity.in_subscreen:
+                    # Overworld: try seamless zone crossing
+                    old_sk = f"{entity.screen_x},{entity.screen_y}"
+                    self.try_entity_screen_crossing(entity, new_x, new_y)
+                    if f"{entity.screen_x},{entity.screen_y}" != old_sk:
+                        entity.moved_this_update = True
+                        return True
+                # In subscreen: edges are walls — treat as blocked
                 return False
             cell = screen['grid'][new_y][new_x]
             if CELL_TYPES[cell].get('solid', False):

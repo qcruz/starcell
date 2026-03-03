@@ -45,8 +45,13 @@ class NpcAiMixin:
         # UNIFIED AI STATE SYSTEM - Update entity AI state based on parameters
         self.update_entity_ai_state(entity_id, entity)
         
-        # Get screen_key for execution
-        screen_key = f"{entity.screen_x},{entity.screen_y}"
+        # Get screen_key for execution.
+        # Entities in subscreens must use the subscreen key so grid lookups
+        # (move_toward_position, action checks, etc.) use the right map.
+        if entity.in_subscreen and entity.subscreen_key:
+            screen_key = entity.subscreen_key
+        else:
+            screen_key = f"{entity.screen_x},{entity.screen_y}"
         
         # Movement cooldown - only move every N ticks based on speed
         if not hasattr(entity, 'move_cooldown'):
