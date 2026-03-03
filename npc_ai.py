@@ -10,6 +10,21 @@ from constants import *
 class NpcAiMixin:
     """Mixin class for NPC AI. Mixed into Game via multiple inheritance."""
 
+    def _same_context_as_player(self, entity):
+        """Return True when entity and player share the same zone/subscreen context.
+
+        Replaces the old 'screen_key == player_zone and not player.in_subscreen'
+        pattern which broke when entities (and screen_key) moved to subscreen keys.
+        """
+        player_in_sub = self.player.get('in_subscreen', False)
+        if player_in_sub:
+            return (entity.in_subscreen and
+                    entity.subscreen_key == self.player.get('subscreen_key'))
+        else:
+            return (not entity.in_subscreen and
+                    entity.screen_x == self.player['screen_x'] and
+                    entity.screen_y == self.player['screen_y'])
+
     # ══════════════════════════════════════════════════════════════════════
     # ACTION PRIMITIVES — Reusable building blocks for NPC and player actions
     # ══════════════════════════════════════════════════════════════════════
@@ -68,8 +83,7 @@ class NpcAiMixin:
                 # Combat - face and attack adjacent target
                 if entity.current_target == 'player':
                     # Attacking the player
-                    player_zone = f"{self.player['screen_x']},{self.player['screen_y']}"
-                    if screen_key != player_zone or self.player.get('in_subscreen'):
+                    if not self._same_context_as_player(entity):
                         entity.ai_state = 'wandering'
                         entity.current_target = None
                         entity.ai_state_timer = 2
@@ -162,22 +176,10 @@ class NpcAiMixin:
                             entity.ai_state_timer = 1
                     else:
                         # Target doesn't exist - check for nearby threats before giving up
-                        entity_base = entity.type.replace('_double', '')
                         threat_nearby = False
-                        player_zone = f"{self.player['screen_x']},{self.player['screen_y']}"
-                        if (screen_key == player_zone and not self.player.get('in_subscreen') and
+                        if (self._same_context_as_player(entity) and
                                 abs(self.player['x'] - entity.x) + abs(self.player['y'] - entity.y) <= 2):
                             threat_nearby = True
-                        if not threat_nearby:
-                            for oid, other in self.entities.items():
-                                if oid == entity_id or not other.is_alive():
-                                    continue
-                                other_base = other.type.replace('_double', '')
-                                if (other_base != entity_base and
-                                        f"{other.screen_x},{other.screen_y}" == screen_key and
-                                        abs(other.x - entity.x) + abs(other.y - entity.y) <= 2):
-                                    threat_nearby = True
-                                    break
                         if threat_nearby:
                             entity.ai_state = 'targeting'
                             entity.current_target = None
@@ -188,22 +190,10 @@ class NpcAiMixin:
                             entity.ai_state_timer = 2
                 else:
                     # No valid target - check for nearby threats before giving up
-                    entity_base = entity.type.replace('_double', '')
                     threat_nearby = False
-                    player_zone = f"{self.player['screen_x']},{self.player['screen_y']}"
-                    if (screen_key == player_zone and not self.player.get('in_subscreen') and
+                    if (self._same_context_as_player(entity) and
                             abs(self.player['x'] - entity.x) + abs(self.player['y'] - entity.y) <= 2):
                         threat_nearby = True
-                    if not threat_nearby:
-                        for oid, other in self.entities.items():
-                            if oid == entity_id or not other.is_alive():
-                                continue
-                            other_base = other.type.replace('_double', '')
-                            if (other_base != entity_base and
-                                    f"{other.screen_x},{other.screen_y}" == screen_key and
-                                    abs(other.x - entity.x) + abs(other.y - entity.y) <= 2):
-                                threat_nearby = True
-                                break
                     if threat_nearby:
                         entity.ai_state = 'targeting'
                         entity.current_target = None
@@ -219,8 +209,7 @@ class NpcAiMixin:
                 if entity.move_cooldown <= 0:
                     threat_x, threat_y = None, None
                     if entity.flee_target == 'player':
-                        player_zone = f"{self.player['screen_x']},{self.player['screen_y']}"
-                        if screen_key == player_zone and not self.player.get('in_subscreen'):
+                        if self._same_context_as_player(entity):
                             threat_x, threat_y = self.player['x'], self.player['y']
                     elif entity.flee_target and isinstance(entity.flee_target, int):
                         if entity.flee_target in self.entities:
@@ -246,8 +235,7 @@ class NpcAiMixin:
                 if entity.current_target:
                     if entity.current_target == 'player':
                         # Move toward player
-                        player_zone = f"{self.player['screen_x']},{self.player['screen_y']}"
-                        if screen_key == player_zone and not self.player.get('in_subscreen'):
+                        if self._same_context_as_player(entity):
                             self.move_toward_position(entity, self.player['x'], self.player['y'], screen_key)
                         else:
                             entity.current_target = None
@@ -1155,8 +1143,7 @@ class NpcAiMixin:
             
             # Check player as potential target (hostile entities target the player)
             if entity_is_hostile:
-                player_zone = f"{self.player['screen_x']},{self.player['screen_y']}"
-                if screen_key == player_zone and not self.player.get('in_subscreen'):
+                if self._same_context_as_player(entity):
                     player_dist = abs(entity.x - self.player['x']) + abs(entity.y - self.player['y'])
                     if player_dist < closest_hostile_dist:
                         closest_hostile_dist = player_dist
@@ -1291,10 +1278,8 @@ class NpcAiMixin:
                     entity.ai_state_timer = 2
                     return
             elif entity.current_target == 'player':
-                # Player target — validate player is alive and in same zone
-                player_zone = f"{self.player['screen_x']},{self.player['screen_y']}"
-                entity_zone = f"{entity.screen_x},{entity.screen_y}"
-                if player_zone == entity_zone and not self.player.get('in_subscreen'):
+                # Player target — validate player is alive and in same zone/subscreen
+                if self._same_context_as_player(entity):
                     dist = abs(entity.x - self.player['x']) + abs(entity.y - self.player['y'])
                     if dist > 1:
                         # Player moved away — chase
