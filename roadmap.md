@@ -15,7 +15,6 @@
 - Discover deep-value additions: simple mechanics that add the most to gameplay. Simple interfaces for inventory, quests, trading, crafting, followers, spells, tools, etc. Emergent environmental complexity through simple rules (cellular automata, proc gen). Art and design that encourages and rewards exploration, decoration, crafting, combat, building, managing, and collecting.
 - Make the game world as detailed and realistic as possible while balancing the above goals.
 - Regularly review the codebase at a high level. Remove redundancies and overly specific code that can be generalized. Always look for ways to combine features or unify code to get the same result with fewer variables.
-- System design that can be easily adjusted to support a wide variety of game types — keep data tables, spawn configs, and behavior parameters clean and configurable so the framework stays reusable.
 
 ---
 
@@ -30,8 +29,8 @@
 - [ ] Castle has interior guards and a King who retreats inside when health is low
 - [ ] When zone is attacked, guards and a commander spawn from the castle (if not already present)
 - [ ] Tavern / Inn structure — NPCs gather here to rest, trade rumors, and recover health; player can sleep here to skip time and restore stats
-- [ ] Temple / Shrine structure — healing and resurrection point; priests spawn here; holy water and blessings available; brief buff granted on interaction (zone stat bonus, heal, etc.)
-- [ ] Staircase entry/exit sprites for house and cave structure entrances (replace placeholder cell)
+- [ ] Temple / Shrine structure — visiting grants a brief buff (cure curse, restore stats, or temporary protection); unique quest giver
+- [ ] Staircase sprites for dungeon entry/exit transitions — distinct descend and ascend graphics per depth level
 
 ---
 
@@ -52,8 +51,8 @@
 **Boss Enemies**
 - [ ] Boss rooms in deep dungeon levels — unique high-health enemy with special attack patterns and a guaranteed rare loot drop
 - [ ] Dungeon boss has a "lair action" that triggers once per zone update (environmental hazard — falling rocks, rising water, etc.)
-- [ ] Dragonknight — elite armored warrior NPC with elemental damage bonus (fire / ice / lightning variant); high defense; rare loot drop
-- [ ] Ancient Mechanica — ancient Golem-type lore entity with strong magic attacks; appears in deep ruins and ancient zones; ties into LoreEngine history
+- [ ] Dragonknight — armored dragon-humanoid hybrid; fire breath (ranged AoE) + heavy melee; guards a keep or fort; drops rare armor on defeat
+- [ ] Ancient Mechanica — mechanical golem boss from a lost civilization; shock attacks that chain to nearby metal-armored entities; found in hidden ruins zones; drops unique schematics
 
 **Peaceful / Animals**
 - [ ] Birds
@@ -70,7 +69,7 @@
 - [ ] Four seasons: Spring, Summer, Autumn, Winter — each ~7 in-game days
 - [ ] Season affects which crops can grow and which wild plants appear
 - [ ] Winter: snow biome overlay, water freezes to ice, reduced crop growth, some NPCs shelter indoors
-- [ ] Seasonal festivals and events (harvest festival, winter solstice, etc.)
+- [ ] Seasonal events and quests
 - [ ] Calendar / day tracker visible in HUD
 
 ---
@@ -166,9 +165,6 @@
 - [ ] Thrown weapons — rocks, knives, bombs; one-use or retrieved
 - [ ] Bomb / explosive — destroys cells in small radius; used to open hidden passages
 
-**Limit Break / Overdrive** *(Final Fantasy)*
-- [ ] When player health drops below 20%, unlock a one-time powerful attack or spell burst
-- [ ] Recharges when health is restored above 50%
 
 **Equipment Slots** *(Zelda / Final Fantasy / D&D)*
 - [ ] Separate equipment panel: Weapon, Off-hand/Shield, Armor, Ring (×2), Amulet
@@ -253,8 +249,6 @@
 ---
 
 ### Social & Dialogue *(Stardew Valley / Zelda / D&D)*
-- [ ] NPC dialogue system — NPCs have contextual lines based on relationship, quest state, and zone events
-- [ ] Dialogue choices — player selects responses; affects NPC favor score
 - [ ] Gift giving — offer items to NPCs to increase favor; each NPC has preferred gifts
 - [ ] NPC schedules — NPCs follow daily routines (go to field at dawn, tavern at night, temple on rest day)
 - [ ] NPC birthdays / named calendar events — special interactions on those days
@@ -264,9 +258,8 @@
 ---
 
 ### Character Creation & Progression *(Final Fantasy / D&D)*
-- [ ] Race selection at game start: Human, Elf, Dwarf, Halfling — each with minor stat bonuses and flavor
 - [ ] Ability scores: STR (melee damage), DEX (speed/dodge), CON (max health), INT (spell power), WIS (healing/detection), CHA (favor gain rate)
-- [ ] Ability scores increase on level-up (player chooses which to raise)
+- [ ] Ability scores increase with use, decay over time - (actions fail on empty energy, prevent spamming)
 - [ ] Class / archetype choice — influences starting equipment and which perks unlock fastest (Fighter, Wizard, Rogue, Ranger, Cleric, Druid)
 
 ---
@@ -309,35 +302,46 @@
 
 ---
 
-### Follower System Improvements
-- [ ] Followers are never hostile to each other
-- [ ] Hostile entity list clears correctly when the target dies (bug: skeleton still appears in follower slot after it dies)
-- [ ] When item inventory and follower inventory are both open, selecting an item and pressing Place puts it into the follower's inventory
-- [ ] Follower auto-equips the strongest version of each gear type (sword, armor, etc.) for combat and stat calculations
-- [ ] Follower commands — basic orders: stay, follow, attack, retreat
-- [ ] Follower leveling — followers gain XP alongside player and level up
-
----
-
 ### Keeper System
-> Assign ownership of a location or entity to an NPC, making them its permanent guardian.
+> A **Keeper** is an NPC permanently assigned to a zone, structure, or entity. Unlike normal NPCs, Keepers never leave their assigned domain. They enable unique quest types, shop interactions, and zone-level behaviors tied to their role.
 
-- [ ] Keeper role — any NPC can be designated Keeper of a zone, structure, or another NPC; they will not leave their assigned location (it becomes their home / base / den)
-- [ ] Keeper types: **Zonekeeper** (patrols and defends zone), **Tavernkeeper** (runs a tavern, assigns supply / transport quests), **Towerkeeper** (defends a tower or fort), **Dungeonkeeper** (guards a cave or dungeon)
-- [ ] Keeper quest types — each Keeper role unlocks unique quest categories: collect (supplies), transport, build, recruit, defend
-- [ ] Boss Keeper — a powerful boss NPC assigned as Keeper of a zone or structure; defeating it is required to claim ownership
-- [ ] **Evergael** variant — a Keeper that is trapped or contained (e.g. sealed in a vault, imprisoned in a ruin); their zone exit is blocked until the player defeats or frees them; drops a unique item upon defeat
+**Keeper Roles**
+- [ ] **Zonekeeper** — assigned to a whole zone; manages zone defense and resource collection; gives zone-wide quests (clear bandits, plant crops, build structures)
+- [ ] **Tavernkeeper** — assigned to a Tavern structure; sells food and drink; hosts rumors; lets player rent a room to rest
+- [ ] **Dungeonkeeper** — assigned to a dungeon entrance or cave zone; manages dungeon difficulty; gives depth-based quests (clear level, retrieve artifact)
+- [ ] **Towerkeeper** — assigned to a fort or castle tower; trains warriors; sells weapons and armor; gives combat-oriented quests
+
+**Keeper Mechanics**
+- [ ] Keeper assignment — LoreEngine assigns a suitable NPC as Keeper when a qualifying structure or zone condition is met; assignment persists in save
+- [ ] Keepers have expanded dialogue unique to their role — greetings, quest offers, lore hints, and zone status reports
+- [ ] Keeper health and status tracked; if Keeper dies the role is vacant until a new NPC is promoted
+
+**Evergael (Keeper Variant)**
+- [ ] Special Keeper variant: an ancient or cursed entity trapped in a zone, blocking the exit until defeated
+- [ ] Evergael acts as a zone-exit boss — player cannot leave the zone until the Evergael is cleared
+- [ ] Unique visual and dialogue indicating the block ("You shall not pass…")
+- [ ] Drops a rare key or artifact that permanently unlocks the zone exit and may open a new route
 
 ---
 
 ### Domain System
-> Four adjacent zones form a Domain — a macro territory layer above individual zones.
+> A **domain** is a contiguous 2×2 block of adjacent zones controlled by the same faction. Holding a domain grants that faction persistent bonuses until the domain is broken.
 
-- [ ] Any 2×2 block of adjacent zones forms a Domain
-- [ ] When all zones in a Domain are controlled by the same faction, that faction gains domain bonuses: reinforcement spawns, passive resource collection, Commander NPC appears
-- [ ] Contested Domain: if zones are split between factions, conflict events trigger (raids, skirmishes)
-- [ ] Player can claim and hold a Domain for passive benefits (item drops, zone control quests, reputation with local factions)
-- [ ] Domain boundaries visible on world map
+- [ ] Domain detection — engine checks each 2×2 quad of adjacent zones; if all four share a faction label, that quad is flagged as a domain
+- [ ] Domain bonuses — owning faction gains: increased resource spawn rate, faster NPC healing, bonus XP for player while inside, and reduced hostile spawn rate
+- [ ] Domain contested state — if a single zone in a domain quad is captured by another faction, the domain breaks and bonuses are lost until recaptured
+- [ ] Domain markers visible on world map (coloring or icon overlay on the four zones)
+- [ ] Player can influence domains by aiding or attacking faction NPCs and structures in adjacent zones
+
+---
+
+### Follower System Improvements
+- [x] ~~Followers are never hostile to each other~~ — completed!
+- [x] ~~Hostile entity list clears correctly when the target dies (bug: skeleton still appears in follower slot after it dies)~~ — completed!
+- [ ] When item inventory and follower inventory are both open, selecting an item and pressing Place puts it into the follower's inventory
+- [ ] Follower auto-equips the strongest version of each gear type (sword, armor, etc.) for combat and stat calculations
+- [ ] Follower commands — basic orders: stay, follow, attack, retreat
+- [ ] Follower leveling — followers gain XP alongside player and level up
 
 ---
 
@@ -451,10 +455,13 @@
 - [x] ~~Autopilot toggle (Shift+A), off by default~~ — completed!
 - [x] ~~Secret cave entrances via MINESHAFT in house interiors~~ — completed!
 - [x] ~~Secret cave exit routing (maps to overworld cave entrance or back to house)~~ — completed!
-- [x] ~~Iron ore pipeline~~ — IRON_ORE cave cell, iron_ore / iron_ingot / iron_sword items + recipes, sprites — completed!
-- [x] ~~Water Well~~ — WELL cell, Miner AI builds wells, all humanoid NPCs use wells as water source — completed!
-- [x] ~~Follower death fix~~ — follower item removed from inventory on death via follower_items dict — completed!
-- [x] ~~Followers attacking each other fix~~ — find_and_attack_enemy skips entity IDs in self.followers — completed!
-- [x] ~~LAKE biome~~ — zone generation with CLIFF border, SAND perimeter, WATER interior, deep water cardinal rule, no entity spawns — completed!
-- [x] ~~Combat functioning~~ — entities correctly enter combat state vs player, on-screen AI runs every tick, attack interval 18 ticks — completed!
-- [x] ~~Biome spreading via general neighbor-copy rule~~ — zone entrance cells pinned to adjacent biome type; base terrain copies random NSEW neighbor at BIOME_SPREAD_RATE — completed!
+- [x] ~~Energy system — replaces magic_pool; HP and energy bars in HUD~~ — completed!
+- [x] ~~Iron ore pipeline — IRON_ORE cave cell, iron_ore item, iron_ingot, iron_sword; recipes; loot tables~~ — completed!
+- [x] ~~Water Well — WELL cell; 10% per zone; humanoid NPCs use as water source; Miner builds when 2+ houses present~~ — completed!
+- [x] ~~Follower combat fix — followers no longer attack each other; follower_items dict fixes skeleton death cleanup~~ — completed!
+- [x] ~~LAKE biome — CLIFF border, SAND perimeter, WATER interior, deep water center, no entity spawns, ~3% generation chance~~ — completed!
+- [x] ~~Combat fix — entities now correctly attack the player; tick throttle removed for on-screen entity combat~~ — completed!
+- [x] ~~Biome spreading — general NSEW neighbor-copy rule (BIOME_SPREAD_RATE = 0.001); zone entrance cells pinned to adjacent biome's primary type~~ — completed!
+- [x] ~~BugCatcher debug logging system — JSON-lines format, in-memory buffer, rolling 2 MB cap~~ — completed!
+- [x] ~~Debug Watchdog system — 300-tick rotating sampler, integrity checks, anomaly logging~~ — completed!
+- [x] ~~XP on player actions — chop tree, plant crop, hit enemy, cast spell each grant 1 XP~~ — completed!
