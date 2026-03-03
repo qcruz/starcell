@@ -84,6 +84,9 @@ class Entity:
         self.in_subscreen = False  # True when entity is in a house/cave subscreen
         self.subscreen_key = None  # Key of subscreen entity is in
 
+        # Keeper state — keepers are permanently anchored to their current zone/subscreen
+        self.keeper = False
+
         # Unified AI Behavior State System
         # Set initial state based on entity type
         if entity_type in ['WARRIOR', 'COMMANDER', 'KING', 'GUARD']:

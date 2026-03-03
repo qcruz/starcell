@@ -34,7 +34,8 @@ class SaveLoadMixin:
                 'home_zone': getattr(entity, 'home_zone', None),  # Warrior home zone
                 'movement_pattern': getattr(entity, 'movement_pattern', None),
                 'item_levels': getattr(entity, 'item_levels', {}),
-                'item_names': getattr(entity, 'item_names', {})
+                'item_names': getattr(entity, 'item_names', {}),
+                'keeper': getattr(entity, 'keeper', False)
             }
 
         # Convert dropped_items tuple keys to strings for JSON serialization
@@ -139,6 +140,7 @@ class SaveLoadMixin:
             'zone_structures': self.zone_structures,
             'next_structure_zone_id': self.next_structure_zone_id,
             'active_quest': self.active_quest,
+            'zone_keepers': self.zone_keepers,
         }
         with open('savegame.json', 'w') as f:
             json.dump(save_data, f)
@@ -245,6 +247,7 @@ class SaveLoadMixin:
                 entity.movement_pattern = entity_data.get('movement_pattern', None)
                 entity.item_levels = entity_data.get('item_levels', {})
                 entity.item_names = entity_data.get('item_names', {})
+                entity.keeper = entity_data.get('keeper', False)
 
                 # Ensure wizards from old saves have spell and alignment
                 if entity.type == 'WIZARD':
@@ -302,6 +305,7 @@ class SaveLoadMixin:
 
             self.zone_structures = save_data.get('zone_structures', {})
             self.next_structure_zone_id = save_data.get('next_structure_zone_id', 0)
+            self.zone_keepers = save_data.get('zone_keepers', {})
 
             # Restore tuple keys in screen data (chests, parent_screen, etc.)
             for screen_key, screen_data in self.screens.items():

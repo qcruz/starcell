@@ -324,6 +324,10 @@ class NpcAiMovementMixin:
         if screen_key not in self.screens:
             return
 
+        # Keepers are anchored to their current zone — never transition
+        if getattr(entity, 'keeper', False):
+            return
+
         # Check travel cooldown - prevent rapid zone switching
         if not hasattr(entity, 'last_zone_change_tick'):
             entity.last_zone_change_tick = -999  # Initialize if missing
@@ -432,6 +436,10 @@ class NpcAiMovementMixin:
         # Never cross zones while entity is inside a subscreen — the grid is shared
         # but the entity is logically in the subscreen space, not the overworld.
         if entity.in_subscreen:
+            return
+
+        # Keepers are anchored to their current zone — never cross
+        if getattr(entity, 'keeper', False):
             return
 
         # Anti-bounce: prevent an immediate return trip
@@ -776,6 +784,10 @@ class NpcAiMovementMixin:
         if not entity_id:
             return
 
+        # Keepers cannot leave their current zone level — block subscreen entry
+        if getattr(entity, 'keeper', False):
+            return
+
         # Check subscreen travel cooldown
         if not hasattr(entity, 'last_subscreen_change_tick'):
             entity.last_subscreen_change_tick = -999
@@ -860,6 +872,10 @@ class NpcAiMovementMixin:
                 break
 
         if not entity_id:
+            return
+
+        # Keepers are anchored to their subscreen — cannot exit
+        if getattr(entity, 'keeper', False):
             return
 
         # Check subscreen travel cooldown

@@ -204,6 +204,30 @@ MINER_MINESHAFT_CHANCE = 0.03  # 3% chance per mine action for NPC miners
 MINESHAFT_MAX_PER_ZONE = 2     # Max mineshafts NPCs can create in one zone
 MINER_WELL_BUILD_RATE = 0.02   # 2% chance per action for miner to build a well
 WARRIOR_PROMOTION_CHANCE = 0.60 # 60% chance highest level entity becomes warrior after raid clear
+KEEPER_ASSIGNMENT_RATE = 0.02  # 2% chance per zone update to assign a vacant keeper slot
+
+# Maps entity type → keeper slot name for keeper assignment.
+# Entities not listed here (TRADER, KING) are intentionally excluded — they travel freely.
+# All peaceful worker humanoids share one slot so a zone doesn't accumulate one of every type.
+KEEPER_ENTITY_TYPE = {
+    'WOLF':       'wolf',
+    'BAT':        'bat',
+    'GOBLIN':     'goblin',
+    'BANDIT':     'bandit',
+    'SKELETON':   'skeleton',
+    'TERMITE':    'termite',
+    'SHEEP':      'sheep',
+    'DEER':       'deer',
+    # Peaceful worker types share one 'humanoid' slot per zone
+    'FARMER':     'humanoid',
+    'GUARD':      'humanoid',
+    'WARRIOR':    'humanoid',
+    'COMMANDER':  'humanoid',
+    'BLACKSMITH': 'humanoid',
+    'WIZARD':     'humanoid',
+    'LUMBERJACK': 'humanoid',
+    'MINER':      'humanoid',
+}
 
 # Miner & Structure Systems
 MINER_CAVE_CREATE_CHANCE = 0.10 # 10% chance to create cave when mining at zone corners

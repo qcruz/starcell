@@ -91,6 +91,7 @@ class GameCoreMixin:
         self.rain_duration = 0  # Initialize rain duration
         self.rain_timer = 0  # Separate timer for tracking rain duration
         self.zone_last_rain = {}  # {screen_key: tick} - track last rain per zone for crop decay
+        self.zone_keepers = {}   # {zone_key: {keeper_type: entity_id}} — one keeper per slot per zone
         
         # Day/Night cycle
         self.day_night_timer = 0  # Cycles from 0 to DAY_NIGHT_CYCLE_LENGTH
@@ -631,6 +632,14 @@ class GameCoreMixin:
             elif entity.thirst <= 0:
                 print(f"{entity.type} died from dehydration at ({entity.x}, {entity.y})")
         
+        # Free keeper slot if this entity was a keeper
+        if getattr(entity, 'keeper', False):
+            for zone_key, slots in self.zone_keepers.items():
+                for ktype, eid in list(slots.items()):
+                    if eid == entity_id:
+                        del slots[ktype]
+                        break
+
         # Remove from followers if it was a follower
         if entity_id in self.followers:
             self.followers.remove(entity_id)
@@ -1922,6 +1931,7 @@ class GameCoreMixin:
         self.enchanted_entities = {}
         self.followers = []
         self.follower_items = {}
+        self.zone_keepers = {}
         self.subscreens = {}
         self.opened_chests = set()
         self.next_subscreen_id = 0

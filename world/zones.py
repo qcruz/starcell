@@ -9,6 +9,7 @@ from constants import (
     SKELETON_DAYLIGHT_DAMAGE,
     CAMP_HEALING_MULTIPLIER, HOUSE_HEALING_MULTIPLIER,
     NPC_CAMP_PLACE_RATE, ENHANCED_SETTLEMENT_RATE,
+    KEEPER_ENTITY_TYPE, KEEPER_ASSIGNMENT_RATE,
 )
 from entity import Entity
 
@@ -147,6 +148,7 @@ class ZonesMixin:
         self.check_termite_spawn(zone_key)
         self.decay_dropped_items(zone_x, zone_y)
         self.consolidate_dropped_items(zone_key)
+        self.assign_zone_keepers(zone_key)
 
         # === CELL UPDATES ===
         if self.is_raining:
@@ -646,6 +648,8 @@ class ZonesMixin:
 
         for entity_id in entities_to_remove:
             self.remove_entity(entity_id)
+
+        self.assign_zone_keepers(struct_zone_key)
 
     # -------------------------------------------------------------------------
     # Catch-up system
@@ -1272,3 +1276,57 @@ class ZonesMixin:
 
         if new_cell != cell:
             screen['grid'][y][x] = new_cell
+
+    # -------------------------------------------------------------------------
+    # Keeper assignment
+    # -------------------------------------------------------------------------
+
+    def assign_zone_keepers(self, zone_key):
+        """Check entities in zone_key and assign keeper status to fill vacant slots.
+
+        Called once per zone update cycle.  Each zone/subscreen maintains a dict
+        of keeper slots keyed by keeper_type.  If a slot is vacant and an eligible
+        entity is present, there is a KEEPER_ASSIGNMENT_RATE chance per call to
+        assign one as keeper.  Keepers are permanent anchors — they cannot exit
+        the zone or subscreen they were assigned in.
+        """
+        if zone_key not in self.zone_keepers:
+            self.zone_keepers[zone_key] = {}
+
+        keepers = self.zone_keepers[zone_key]
+
+        # --- Prune dead or missing keepers ---
+        for ktype, eid in list(keepers.items()):
+            if eid not in self.entities:
+                del keepers[ktype]
+            # If somehow the entity lost its keeper flag, clear the slot too
+            elif not getattr(self.entities[eid], 'keeper', False):
+                del keepers[ktype]
+
+        # --- Collect candidates from this zone ---
+        entity_ids = (self.screen_entities.get(zone_key, [])
+                      + self.subscreen_entities.get(zone_key, []))
+
+        for eid in entity_ids:
+            if eid not in self.entities:
+                continue
+            entity = self.entities[eid]
+
+            # Skip followers — they travel with the player
+            if eid in self.followers:
+                continue
+
+            ktype = KEEPER_ENTITY_TYPE.get(entity.type)
+            if not ktype:
+                continue  # TRADER, KING, etc. — never become keepers
+
+            if entity.keeper:
+                continue  # Already a keeper somewhere
+
+            if ktype in keepers:
+                continue  # Slot already occupied
+
+            if random.random() < KEEPER_ASSIGNMENT_RATE:
+                entity.keeper = True
+                keepers[ktype] = eid
+                print(f"[Keeper] {entity.type} (id={eid}) assigned as {ktype} keeper in {zone_key}")
