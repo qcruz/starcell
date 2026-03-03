@@ -10,6 +10,7 @@ from constants import (
     FLOWER_SPREAD_RATE, FLOWER_DECAY_RATE,
     DEEP_WATER_FORM_RATE, DEEP_WATER_EVAPORATE_RATE,
     WATER_TO_DIRT_RATE, FLOODING_RATE,
+    BIOME_SPREAD_RATE,
     # Rain
     RAIN_WATER_SPAWNS, RAIN_GRASS_SPAWNS,
     RAIN_FREQUENCY_MIN, RAIN_FREQUENCY_MAX,
@@ -105,13 +106,17 @@ class CellsMixin:
                 if self.is_cell_enchanted(x, y, key):
                     continue
 
-                # Cross-zone biome spreading at exits
+                # Zone entrance cells are always pinned to the adjacent zone's biome type.
+                # This seeds spreading inward via the general neighbor-copy rule below.
                 at_exit, direction = self.is_at_exit(x, y)
                 if at_exit:
-                    adj_biome = self.get_adjacent_screen_biome(screen_x, screen_y, direction)
-                    if adj_biome != screen['biome'] and random.random() < 0.01:
+                    offsets = {'top': (0, -1), 'bottom': (0, 1), 'left': (-1, 0), 'right': (1, 0)}
+                    dx, dy = offsets.get(direction, (0, 0))
+                    adj_key = f"{screen_x + dx},{screen_y + dy}"
+                    if adj_key in self.screens:
+                        adj_biome = self.screens[adj_key].get('biome', screen['biome'])
                         new_grid[y][x] = self.get_common_cell_for_biome(adj_biome)
-                        continue
+                    continue
 
                 if x == 0 or x == GRID_WIDTH - 1 or y == 0 or y == GRID_HEIGHT - 1:
                     continue
@@ -158,22 +163,19 @@ class CellsMixin:
                 # Deep water formation: all 4 cardinal neighbors must be water/deepwater
                 elif cell == 'WATER':
                     cardinal_water = sum(
-                        1 for dx, dy in ((0, -1), (0, 1), (-1, 0), (1, 0))
-                        if 0 <= x + dx < GRID_WIDTH and 0 <= y + dy < GRID_HEIGHT
-                        and screen['grid'][y + dy][x + dx] in ('WATER', 'DEEP_WATER')
+                        1 for cdx, cdy in ((0, -1), (0, 1), (-1, 0), (1, 0))
+                        if 0 <= x + cdx < GRID_WIDTH and 0 <= y + cdy < GRID_HEIGHT
+                        and screen['grid'][y + cdy][x + cdx] in ('WATER', 'DEEP_WATER')
                     )
                     if cardinal_water == 4 and random.random() < DEEP_WATER_FORM_RATE:
                         new_grid[y][x] = 'DEEP_WATER'
+                    elif total_water <= 1 and random.random() < WATER_TO_DIRT_RATE:
+                        new_grid[y][x] = 'DIRT'
 
                 # Deep water evaporation
                 elif cell == 'DEEP_WATER' and (water_count + deep_water_count) < 2:
                     if random.random() < DEEP_WATER_EVAPORATE_RATE:
                         new_grid[y][x] = 'WATER'
-
-                # Water evaporation (slow decay to dirt without water neighbours)
-                elif cell == 'WATER' and total_water <= 1:
-                    if random.random() < WATER_TO_DIRT_RATE:
-                        new_grid[y][x] = 'DIRT'
 
                 # Flooding (water spreads to dirt when abundant)
                 elif cell == 'DIRT' and total_water >= 3:
@@ -195,12 +197,14 @@ class CellsMixin:
                     if random.random() < TREE_DECAY_RATE:
                         new_grid[y][x] = 'GRASS'
 
-                # Dirt invaded by grass or desert
-                elif cell == 'DIRT':
-                    if grass_count >= 3 and random.random() < 0.001:
-                        new_grid[y][x] = 'GRASS'
-                    elif sand_count >= 3 and random.random() < 0.001:
-                        new_grid[y][x] = 'SAND'
+                # General neighbor-copy: base terrain may adopt a random NSEW neighbor's type
+                if new_grid[y][x] == cell and cell in ('GRASS', 'DIRT', 'SAND', 'WATER'):
+                    nx, ny = random.choice(((x, y - 1), (x, y + 1), (x - 1, y), (x + 1, y)))
+                    if 0 <= nx < GRID_WIDTH and 0 <= ny < GRID_HEIGHT:
+                        neighbor = screen['grid'][ny][nx]
+                        if neighbor in ('GRASS', 'DIRT', 'SAND', 'WATER') and neighbor != cell:
+                            if random.random() < BIOME_SPREAD_RATE:
+                                new_grid[y][x] = neighbor
 
                 # Wood decay to dirt (outside structures)
                 elif cell == 'WOOD' and not self.is_near_structure(x, y, key):

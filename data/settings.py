@@ -65,6 +65,7 @@ FLOWER_DECAY_RATE = 0.0005      # Flowers die from overcrowding/drought (was 0.0
 DEEP_WATER_FORM_RATE = 0.05     # Water becomes deep water (apply_cellular_automata)
 DEEP_WATER_EVAPORATE_RATE = 0.03 # Deep water becomes water (apply_cellular_automata)
 WATER_TO_DIRT_RATE = 0.005      # Water slowly evaporates to dirt without neighbors (apply_cellular_automata)
+BIOME_SPREAD_RATE = 0.001       # Chance per update a base cell copies a different NSEW neighbor type
 FLOODING_RATE = 0.015           # Water spreads to dirt (apply_cellular_automata)
 
 # Entity Survival

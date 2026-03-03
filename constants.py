@@ -105,6 +105,7 @@ DEEP_WATER_FORM_RATE = 0.05     # Water becomes deep water (apply_cellular_autom
 DEEP_WATER_EVAPORATE_RATE = 0.03 # Deep water becomes water (apply_cellular_automata)
 WATER_TO_DIRT_RATE = 0.005      # Water slowly evaporates to dirt without neighbors (apply_cellular_automata)
 FLOODING_RATE = 0.015           # Water spreads to dirt (apply_cellular_automata)
+BIOME_SPREAD_RATE = 0.001       # Chance per update a base cell copies a different NSEW neighbor type
 
 # Entity Survival
 HUNGER_DECAY_RATE = 0.02        # Hunger loss per tick (slowed down further)

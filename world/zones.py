@@ -1149,9 +1149,12 @@ class ZonesMixin:
         sand_pct = cell_counts['SAND'] / total_cells
         stone_pct = cell_counts['STONE'] / total_cells
         tree_pct = cell_counts['TREE'] / total_cells
+        water_pct = cell_counts['WATER'] / total_cells
 
         new_biome = current_biome
-        if sand_pct > 0.4:
+        if water_pct > 0.5:
+            new_biome = 'LAKE'
+        elif sand_pct > 0.4:
             new_biome = 'DESERT'
         elif stone_pct > 0.3:
             new_biome = 'MOUNTAINS'
@@ -1186,6 +1189,7 @@ class ZonesMixin:
             TREE_GROWTH_RATE, SAND_RECLAIM_RATE, DEEP_WATER_FORM_RATE,
             DEEP_WATER_EVAPORATE_RATE, WATER_TO_DIRT_RATE, FLOODING_RATE,
             FLOWER_SPREAD_RATE, FLOWER_DECAY_RATE, TREE_DECAY_RATE,
+            BIOME_SPREAD_RATE,
         )
 
         key = f"{screen_x},{screen_y}"
@@ -1233,18 +1237,17 @@ class ZonesMixin:
                 new_cell = 'DIRT'
         elif cell == 'WATER':
             cardinal_water = sum(
-                1 for dx, dy in ((0, -1), (0, 1), (-1, 0), (1, 0))
-                if 0 <= x + dx < GRID_WIDTH and 0 <= y + dy < GRID_HEIGHT
-                and screen['grid'][y + dy][x + dx] in ('WATER', 'DEEP_WATER')
+                1 for cdx, cdy in ((0, -1), (0, 1), (-1, 0), (1, 0))
+                if 0 <= x + cdx < GRID_WIDTH and 0 <= y + cdy < GRID_HEIGHT
+                and screen['grid'][y + cdy][x + cdx] in ('WATER', 'DEEP_WATER')
             )
             if cardinal_water == 4 and random.random() < DEEP_WATER_FORM_RATE:
                 new_cell = 'DEEP_WATER'
+            elif total_water <= 1 and random.random() < WATER_TO_DIRT_RATE:
+                new_cell = 'DIRT'
         elif cell == 'DEEP_WATER' and (water_count + deep_water_count) < 2:
             if random.random() < DEEP_WATER_EVAPORATE_RATE:
                 new_cell = 'WATER'
-        elif cell == 'WATER' and total_water <= 1:
-            if random.random() < WATER_TO_DIRT_RATE:
-                new_cell = 'DIRT'
         elif cell == 'DIRT' and total_water >= 3:
             if random.random() < FLOODING_RATE:
                 new_cell = 'WATER'
@@ -1258,40 +1261,14 @@ class ZonesMixin:
             if random.random() < TREE_DECAY_RATE:
                 new_cell = 'GRASS'
 
-        # Biome spreading: base terrain bleeds into adjacent different-terrain cells.
-        # Targets receive a VARIANT of the spreading type so they start "young" and
-        # develop via normal automata rules (tree growth, grass→dirt, etc.).
-        # Zone-exit bleeding is handled separately in apply_cellular_automata.
-        if new_cell == cell:
-            base_terrain_cells = {'GRASS', 'SAND', 'SNOW', 'DIRT', 'WATER'}
-            if cell in base_terrain_cells and random.random() < 0.001:
-                adjacent_coords = [
-                    (x + dx, y + dy)
-                    for dy in range(-1, 2) for dx in range(-1, 2)
-                    if not (dx == 0 and dy == 0)
-                    and 0 <= x + dx < GRID_WIDTH and 0 <= y + dy < GRID_HEIGHT
-                ]
-                if adjacent_coords:
-                    target_x, target_y = random.choice(adjacent_coords)
-                    target_cell = screen['grid'][target_y][target_x]
-                    if target_cell in base_terrain_cells and target_cell != cell:
-                        screen['grid'][target_y][target_x] = cell
-                        # Assign a random variant so the new cell looks young/varied
-                        vgrid = screen.get('variant_grid')
-                        if vgrid and 0 <= target_y < len(vgrid) and 0 <= target_x < len(vgrid[target_y]):
-                            variants = CELL_TYPES.get(cell, {}).get('variants')
-                            if variants:
-                                vroll = random.random()
-                                vcumul = 0.0
-                                chosen = None
-                                for vname, vprob in variants.items():
-                                    vcumul += vprob
-                                    if vroll < vcumul:
-                                        chosen = vname if vname != cell else None
-                                        break
-                                vgrid[target_y][target_x] = chosen
-                            else:
-                                vgrid[target_y][target_x] = None
+        # General neighbor-copy: base terrain may adopt a random NSEW neighbor's type
+        if new_cell == cell and cell in ('GRASS', 'DIRT', 'SAND', 'WATER'):
+            nx, ny = random.choice(((x, y - 1), (x, y + 1), (x - 1, y), (x + 1, y)))
+            if 0 <= nx < GRID_WIDTH and 0 <= ny < GRID_HEIGHT:
+                neighbor = screen['grid'][ny][nx]
+                if neighbor in ('GRASS', 'DIRT', 'SAND', 'WATER') and neighbor != cell:
+                    if random.random() < BIOME_SPREAD_RATE:
+                        new_cell = neighbor
 
         if new_cell != cell:
             screen['grid'][y][x] = new_cell
