@@ -734,13 +734,19 @@ class GameCoreMixin:
         del self.entities[entity_id]
     
     def check_npc_inspection(self):
-        """Check if player is targeting any entity and set inspection"""
+        """Check if player is targeting any entity and Shift is held — set inspection"""
         # During autopilot, the proxy's facing direction constantly sweeps over
         # nearby NPCs.  The inspection system sets idle_timer=30 on each one and
         # the inspected_npc guard skips their entire AI update, which freezes
         # every NPC the proxy walks past.  Disable inspection while autopilot
         # is active so the proxy doesn't paralyse the zone.
         if getattr(self, 'autopilot', False):
+            self.inspected_npc = None
+            return
+
+        # Inspection only triggers while Shift is held
+        keys = pygame.key.get_pressed()
+        if not (keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]):
             self.inspected_npc = None
             return
 

@@ -276,6 +276,10 @@ class MenusMixin:
         if hasattr(entity, 'age'):
             info_lines.append(f"Age:{int(entity.age)}y")
 
+        # Keeper status
+        if getattr(entity, 'keeper', False):
+            info_lines.append("Keeper")
+
         # Faction (if entity has faction)
         if hasattr(entity, 'faction') and entity.faction:
             info_lines.append(f"{entity.faction}")

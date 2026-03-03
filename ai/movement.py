@@ -1059,19 +1059,11 @@ class NpcAiMovementMixin:
 
                 # Must be standing on it or immediately adjacent (like zone transitions)
                 if dist <= 1:
-                    # Peaceful NPCs can enter houses, miners/hostiles can enter caves
-                    peaceful_types = ['FARMER', 'TRADER', 'LUMBERJACK', 'MINER', 'GUARD', 'WARRIOR', 'BLACKSMITH']
-
-                    if cell == 'HOUSE' and entity.type in peaceful_types and not entity.props.get('hostile', False):
-                        # Small chance to actually enter when adjacent (10%)
-                        if random.random() < 0.1:
-                            self.npc_enter_subscreen(entity, screen_key, check_x, check_y, cell)
-                            return
-                    elif cell == 'CAVE' and (entity.type == 'MINER' or entity.props.get('hostile', False)):
-                        # Small chance to actually enter when adjacent (10%)
-                        if random.random() < 0.1:
-                            self.npc_enter_subscreen(entity, screen_key, check_x, check_y, cell)
-                            return
+                    # Any entity may wander into any enterable structure.
+                    # This lets keepers anchor naturally to houses, caves, etc.
+                    if random.random() < 0.1:
+                        self.npc_enter_subscreen(entity, screen_key, check_x, check_y, cell)
+                        return
 
     def try_npc_exit_subscreen(self, entity):
         """NPC tries to exit subscreen back to overworld"""

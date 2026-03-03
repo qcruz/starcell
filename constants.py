@@ -207,7 +207,7 @@ WARRIOR_PROMOTION_CHANCE = 0.60 # 60% chance highest level entity becomes warrio
 KEEPER_ASSIGNMENT_RATE = 0.02  # 2% chance per zone update to assign a vacant keeper slot
 
 # Maps entity type → keeper slot name for keeper assignment.
-# Entities not listed here (TRADER, KING) are intentionally excluded — they travel freely.
+# KING intentionally omitted — singular, always traveling.
 # All peaceful worker humanoids share one slot so a zone doesn't accumulate one of every type.
 KEEPER_ENTITY_TYPE = {
     'WOLF':       'wolf',
@@ -227,6 +227,7 @@ KEEPER_ENTITY_TYPE = {
     'WIZARD':     'humanoid',
     'LUMBERJACK': 'humanoid',
     'MINER':      'humanoid',
+    'TRADER':     'humanoid',
 }
 
 # Miner & Structure Systems
