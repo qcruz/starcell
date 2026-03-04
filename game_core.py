@@ -152,6 +152,7 @@ class GameCoreMixin:
         self.quest_ui_open = False
         self.quest_ui_selected = 0
         self.npc_quests = []  # list of NpcQuestSlot, max 3
+        self.active_npc_quest_npc_id = None  # npc_id of the currently tracked NPC quest
         
         # Initialize all quest types
         for quest_type in QUEST_TYPES.keys():
@@ -780,6 +781,11 @@ class GameCoreMixin:
                     if entity.props.get('is_autopilot_proxy', False):
                         self.inspected_npc = None
                         return
+                    if self.inspected_npc != entity_id:
+                        # New NPC targeted — open all inventory panels + quest UI
+                        for cat in ['items', 'tools', 'magic', 'followers']:
+                            self.inventory.open_menus.add(cat)
+                        self.quest_ui_open = True
                     self.inspected_npc = entity_id
                     self.inspected_npc_tick = self.tick
 
@@ -1005,6 +1011,10 @@ class GameCoreMixin:
                     elif event.key == pygame.K_d:
                         # Drop selected item
                         self.drop_selected_item()
+                    elif event.key == pygame.K_LEFT and (pygame.key.get_mods() & pygame.KMOD_SHIFT):
+                        self.cycle_inventory_slot(-1)
+                    elif event.key == pygame.K_RIGHT and (pygame.key.get_mods() & pygame.KMOD_SHIFT):
+                        self.cycle_inventory_slot(1)
                     elif event.key == pygame.K_a and (pygame.key.get_mods() & pygame.KMOD_SHIFT):
                         self.toggle_autopilot()
                     elif event.key == pygame.K_g:
@@ -1043,9 +1053,10 @@ class GameCoreMixin:
                 self.target_direction = 3
                 moved = True
             
-            # Close inventory when moving
-            if moved and len(self.inventory.open_menus) > 0:
+            # Close inventory and quest UI when moving
+            if moved and (len(self.inventory.open_menus) > 0 or self.quest_ui_open):
                 self.inventory.close_all_menus()
+                self.quest_ui_open = False
     
     def handle_inventory_click(self, pos):
         """Handle clicking on inventory items"""
@@ -1134,12 +1145,27 @@ class GameCoreMixin:
         for i, quest_type in enumerate(quest_types):
             slot_x = start_x + i * (slot_size + 2)
             slot_y = start_y
-            
+
             # Check if click is in this quest slot
             if (slot_x <= pos[0] <= slot_x + slot_size and
                 slot_y <= pos[1] <= slot_y + slot_size):
                 self.active_quest = quest_type
+                self.active_npc_quest_npc_id = None  # deselect NPC quest when picking standard
                 print(f"Active quest: {QUEST_TYPES[quest_type]['name']}")
+                return
+
+        # Check NPC quest slots (offset by 1 gap after standard slots)
+        npc_slots = getattr(self, 'npc_quests', [])
+        for j, nq in enumerate(npc_slots):
+            slot_x = start_x + (len(quest_types) + 1 + j) * (slot_size + 2)
+            slot_y = start_y
+            if (slot_x <= pos[0] <= slot_x + slot_size and
+                    slot_y <= pos[1] <= slot_y + slot_size):
+                self.active_npc_quest_npc_id = nq.npc_id
+                giver = self.entities.get(nq.npc_id)
+                npc_name = (giver.name or giver.type) if giver else "NPC"
+                q_name = QUEST_TYPES.get(nq.quest.quest_type, {}).get('name', nq.quest.quest_type)
+                print(f"Tracking NPC quest [{q_name}] from {npc_name}")
                 return
 
     def handle_npc_quest_interaction(self):
@@ -1159,6 +1185,8 @@ class GameCoreMixin:
             xp_reward = 100 * self.player['level']
             self.gain_xp(xp_reward)
             self.npc_quests.remove(existing)
+            if self.active_npc_quest_npc_id == npc_id:
+                self.active_npc_quest_npc_id = None
             print(f"Quest turned in! +{xp_reward} XP from {npc_name}.")
             return
 
@@ -1176,6 +1204,7 @@ class GameCoreMixin:
         success = self.loreEngine(quest)
         if success:
             self.npc_quests.append(NpcQuestSlot(npc_id, quest))
+            self.active_npc_quest_npc_id = npc_id  # auto-select as active NPC quest
             q_name = QUEST_TYPES[quest_type]['name']
             print(f"Received quest [{q_name}] from {npc_name}!")
         else:
@@ -1189,6 +1218,22 @@ class GameCoreMixin:
                 items = self.inventory.get_item_list(category)
                 if slot_index < len(items):
                     self.inventory.selected[category] = items[slot_index][0]
+                break
+
+    def cycle_inventory_slot(self, direction):
+        """Cycle selected slot in the first open inventory menu by direction (+1 or -1)."""
+        for category in ['tools', 'items', 'magic', 'followers']:
+            if category in self.inventory.open_menus:
+                items = self.inventory.get_item_list(category)
+                if not items:
+                    break
+                names = [item[0] for item in items]
+                current = self.inventory.selected.get(category)
+                if current in names:
+                    idx = (names.index(current) + direction) % len(names)
+                else:
+                    idx = 0 if direction > 0 else len(names) - 1
+                self.inventory.selected[category] = names[idx]
                 break
     
     def move_player(self):
@@ -1992,6 +2037,7 @@ class GameCoreMixin:
         self.followers = []
         self.follower_items = {}
         self.npc_quests = []
+        self.active_npc_quest_npc_id = None
         self.zone_keepers = {}
         self.subscreens = {}
         self.opened_chests = set()

@@ -377,9 +377,13 @@ class MenusMixin:
     # Quest arrow
     # -------------------------------------------------------------------------
 
-    def draw_quest_arrow(self):
-        """Draw directional arrow to quest target"""
-        quest = self.quests[self.active_quest]
+    def draw_quest_arrow(self, quest=None, color=None):
+        """Draw directional arrow to quest target.
+        If quest/color not provided, falls back to active_quest."""
+        if quest is None:
+            quest = self.quests[self.active_quest]
+        if color is None:
+            color = QUEST_TYPES.get(self.active_quest, {}).get('color', (200, 200, 200))
 
         # If player is in a subscreen, always point to the exit
         if self.player.get('in_subscreen'):
@@ -392,8 +396,7 @@ class MenusMixin:
                     if px != ex or py != ey:
                         arrow_x = ex * CELL_SIZE + CELL_SIZE // 2
                         arrow_y = (ey - 1) * CELL_SIZE + CELL_SIZE // 2
-                        quest_color = QUEST_TYPES.get(self.active_quest, {}).get('color', (200, 200, 200))
-                        arrow_text = self.font.render("↓", True, quest_color)
+                        arrow_text = self.font.render("↓", True, color)
                         arrow_rect = arrow_text.get_rect(center=(arrow_x, arrow_y))
                         self.screen.blit(arrow_text, arrow_rect)
                     return

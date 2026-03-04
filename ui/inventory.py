@@ -230,23 +230,28 @@ class InventoryUIMixin:
 
         # Draw NPC quest slots (offset by 1 gap for visual separation)
         npc_slots = getattr(self, 'npc_quests', [])
+        active_npc_id = getattr(self, 'active_npc_quest_npc_id', None)
         for j, nq in enumerate(npc_slots):
             slot_x = start_x + (len(quest_types) + 1 + j) * (slot_size + 2)
             slot_y = start_y
             quest_info = QUEST_TYPES.get(nq.quest.quest_type, {})
             q_color = quest_info.get('color', (180, 180, 180))
+            is_active = (nq.npc_id == active_npc_id)
 
             if nq.quest.status == 'completed':
                 # Solid filled block — turn-in indicator
                 pygame.draw.rect(self.screen, q_color,
                                  (slot_x, slot_y, slot_size, slot_size))
-                pygame.draw.rect(self.screen, COLORS['WHITE'],
-                                 (slot_x, slot_y, slot_size, slot_size), 1)
+                border_col = COLORS['INV_SELECT'] if is_active else COLORS['WHITE']
+                pygame.draw.rect(self.screen, border_col,
+                                 (slot_x, slot_y, slot_size, slot_size), 2 if is_active else 1)
             else:
                 pygame.draw.rect(self.screen, COLORS['BLACK'],
                                  (slot_x, slot_y, slot_size, slot_size))
-                pygame.draw.rect(self.screen, q_color,
-                                 (slot_x, slot_y, slot_size, slot_size), 2)
+                border_col = COLORS['INV_SELECT'] if is_active else q_color
+                border_w = 3 if is_active else 2
+                pygame.draw.rect(self.screen, border_col,
+                                 (slot_x, slot_y, slot_size, slot_size), border_w)
                 symbol_text = self.font.render(quest_info.get('symbol', '?'), True, q_color)
                 symbol_rect = symbol_text.get_rect(
                     center=(slot_x + slot_size // 2, slot_y + slot_size // 2))

@@ -140,6 +140,7 @@ class SaveLoadMixin:
             'zone_structures': self.zone_structures,
             'next_structure_zone_id': self.next_structure_zone_id,
             'active_quest': self.active_quest,
+            'active_npc_quest_npc_id': getattr(self, 'active_npc_quest_npc_id', None),
             'zone_keepers': self.zone_keepers,
             'npc_quests': [
                 {
@@ -379,6 +380,7 @@ class SaveLoadMixin:
                 q.target_zone      = d.get('target_zone')
                 q.completed_count  = d.get('completed_count', 0)
                 self.npc_quests.append(NpcQuestSlot(d['npc_id'], q))
+            self.active_npc_quest_npc_id = save_data.get('active_npc_quest_npc_id')
             # Autopilot grace period: don't engage for 15 seconds after loading
             self.last_input_tick = self.tick + 900
             self.bug_catcher.clear()

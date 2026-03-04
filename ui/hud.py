@@ -718,10 +718,31 @@ class HudMixin:
 
             # ── Row 3: Quest info ───────────────────────────────────────────
             quest_display = ""
-            if self.active_quest and self.active_quest in self.quests:
+            quest_color = (200, 200, 200)
+
+            # Active NPC quest takes priority over standard quest display
+            active_npc_id = getattr(self, 'active_npc_quest_npc_id', None)
+            active_nq = next((nq for nq in getattr(self, 'npc_quests', [])
+                              if nq.npc_id == active_npc_id), None) if active_npc_id else None
+
+            if active_nq:
+                q_info = QUEST_TYPES.get(active_nq.quest.quest_type, {})
+                q_name = q_info.get('name', active_nq.quest.quest_type)
+                quest_color = q_info.get('color', (200, 200, 200))
+                giver = self.entities.get(active_nq.npc_id)
+                npc_name = (giver.name or giver.type) if giver else "NPC"
+                if active_nq.quest.status == 'completed':
+                    quest_display = f"NPC Quest [{q_name}]: Return to {npc_name} (Shift+Q)"
+                    quest_color = (255, 220, 100)
+                elif active_nq.quest.status == 'active' and active_nq.quest.target_info:
+                    quest_display = f"[{npc_name}] {q_name}: {active_nq.quest.target_info}"
+                else:
+                    quest_display = f"[{npc_name}] {q_name}: Tracking..."
+            elif self.active_quest and self.active_quest in self.quests:
                 quest = self.quests[self.active_quest]
                 quest_info = QUEST_TYPES.get(self.active_quest, {})
                 quest_name = quest_info.get('name', self.active_quest)
+                quest_color = quest_info.get('color', (200, 200, 200))
                 if quest.status == 'active' and quest.target_info:
                     quest_display = f"Quest [{quest_name}]: {quest.target_info}"
                 elif quest.status == 'active':
@@ -730,21 +751,8 @@ class HudMixin:
                     quest_display = f"Quest [{quest_name}]: Press Q to activate"
 
             if quest_display:
-                quest_color = QUEST_TYPES.get(self.active_quest, {}).get('color', (200, 200, 200))
                 quest_text = self.tiny_font.render(quest_display, True, quest_color)
                 self.screen.blit(quest_text, (10, ui_y + 45))
-
-            # NPC quest return hint (first completed slot)
-            for nq in getattr(self, 'npc_quests', []):
-                if nq.quest.status == 'completed':
-                    giver = self.entities.get(nq.npc_id)
-                    npc_name = (giver.name or giver.type) if giver else "NPC"
-                    q_name = QUEST_TYPES.get(nq.quest.quest_type, {}).get('name', '')
-                    ret_text = self.tiny_font.render(
-                        f"Return to {npc_name} [{q_name}] (Shift+Q)",
-                        True, (255, 220, 100))
-                    self.screen.blit(ret_text, (10, ui_y + 56))
-                    break  # show only first completed
 
             # ── Row 4: Interaction hint + controls ─────────────────────────
             target = self.get_target_cell()
@@ -806,8 +814,16 @@ class HudMixin:
             if self.quest_ui_open:
                 self.draw_quest_ui()
 
-            # Draw quest arrow if quest is active
-            if self.active_quest and self.quests[self.active_quest].status == 'active':
+            # Draw quest arrow: NPC quest takes priority when active
+            _active_npc_id = getattr(self, 'active_npc_quest_npc_id', None)
+            _active_nq = next((nq for nq in getattr(self, 'npc_quests', [])
+                               if nq.npc_id == _active_npc_id), None) if _active_npc_id else None
+            if _active_nq and _active_nq.quest.status in ('active', 'completed'):
+                _nq_color = QUEST_TYPES.get(_active_nq.quest.quest_type, {}).get('color', (200, 200, 200))
+                if _active_nq.quest.status == 'completed':
+                    _nq_color = (255, 220, 100)
+                self.draw_quest_arrow(quest=_active_nq.quest, color=_nq_color)
+            elif self.active_quest and self.quests[self.active_quest].status == 'active':
                 self.draw_quest_arrow()
 
             # Draw trader UI if active
