@@ -1026,6 +1026,7 @@ class Quest:
         self.cooldown_remaining = 0
         self.completed_count = 0
         self._original_cell = None     # Cell type at target before player action
+        self.progress = 0.0            # 0.0–1.0 for zone-based NPC quest progress
     
     def set_target(self, target_type, target_data, info=''):
         """Set quest target"""

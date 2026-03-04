@@ -237,25 +237,37 @@ class InventoryUIMixin:
             quest_info = QUEST_TYPES.get(nq.quest.quest_type, {})
             q_color = quest_info.get('color', (180, 180, 180))
             is_active = (nq.npc_id == active_npc_id)
+            progress = getattr(nq.quest, 'progress', 0.0)
+
+            # Black background
+            pygame.draw.rect(self.screen, COLORS['BLACK'],
+                             (slot_x, slot_y, slot_size, slot_size))
 
             if nq.quest.status == 'completed':
-                # Solid filled block — turn-in indicator
+                # Full solid fill — turn-in indicator
                 pygame.draw.rect(self.screen, q_color,
                                  (slot_x, slot_y, slot_size, slot_size))
-                border_col = COLORS['INV_SELECT'] if is_active else COLORS['WHITE']
-                pygame.draw.rect(self.screen, border_col,
-                                 (slot_x, slot_y, slot_size, slot_size), 2 if is_active else 1)
             else:
-                pygame.draw.rect(self.screen, COLORS['BLACK'],
-                                 (slot_x, slot_y, slot_size, slot_size))
-                border_col = COLORS['INV_SELECT'] if is_active else q_color
-                border_w = 3 if is_active else 2
-                pygame.draw.rect(self.screen, border_col,
-                                 (slot_x, slot_y, slot_size, slot_size), border_w)
+                # Progress fill from bottom up
+                if progress > 0:
+                    fill_h = int(slot_size * progress)
+                    fill_y = slot_y + slot_size - fill_h
+                    # Dim version of color for partial fill
+                    dim = tuple(max(0, int(c * 0.55)) for c in q_color)
+                    pygame.draw.rect(self.screen, dim,
+                                     (slot_x, fill_y, slot_size, fill_h))
+
+                # Quest symbol (drawn over fill)
                 symbol_text = self.font.render(quest_info.get('symbol', '?'), True, q_color)
                 symbol_rect = symbol_text.get_rect(
                     center=(slot_x + slot_size // 2, slot_y + slot_size // 2))
                 self.screen.blit(symbol_text, symbol_rect)
+
+            # Selection border
+            border_col = COLORS['INV_SELECT'] if is_active else (COLORS['WHITE'] if nq.quest.status == 'completed' else q_color)
+            border_w = 3 if is_active else (1 if nq.quest.status == 'completed' else 2)
+            pygame.draw.rect(self.screen, border_col,
+                             (slot_x, slot_y, slot_size, slot_size), border_w)
 
             # NPC name label top-left
             giver = self.entities.get(nq.npc_id)

@@ -570,70 +570,55 @@ class LoreEngineMixin:
         # Run background lore events (throttled to once every ~10 s)
         self.update_lore()
 
+    # -------------------------------------------------------------------------
+    # NPC quest — zone-based progress system
+    # -------------------------------------------------------------------------
+
     def check_npc_quest_completions(self):
-        """Check completion of all active NPC quests."""
+        """Zone-based progress system for NPC quests.
+
+        Progress has two sources:
+          • Proximity  — up to 30 % as the player approaches the target zone
+          • Action     — 40–65 % per relevant action taken inside the target zone
+
+        Quest completes when progress reaches 100 %.
+        """
         for nq in getattr(self, 'npc_quests', []):
             quest = nq.quest
             if quest.status != 'active':
                 continue
 
-            # Guard against same-tick re-completion
-            if hasattr(quest, '_last_completed_tick') and quest._last_completed_tick == self.tick:
+            # Resolve target zone key
+            zone_key = self._npc_quest_zone(quest)
+            if not zone_key:
                 continue
 
-            completed = False
-            xp_reward = 0
+            try:
+                tzx, tzy = map(int, zone_key.split(','))
+            except (ValueError, AttributeError):
+                continue
 
-            if quest.target_entity_id:
-                if quest.target_entity_id not in self.entities:
-                    quest.clear_target()
-                    continue
-                entity = self.entities[quest.target_entity_id]
-                if entity.is_dead:
-                    if entity.killed_by == 'player':
-                        completed = True
-                        xp_reward = entity.level * QUEST_XP_MULTIPLIER
-                    else:
-                        quest.clear_target()
-                        continue
+            player_sx = self.player['screen_x']
+            player_sy = self.player['screen_y']
+            zone_dist = abs(player_sx - tzx) + abs(player_sy - tzy)
 
-            elif quest.target_cell:
-                sx, sy, x, y = quest.target_cell
-                player_sx = self.player['screen_x']
-                player_sy = self.player['screen_y']
-                player_x  = self.player['x']
-                player_y  = self.player['y']
+            # ── Proximity progress (passive, trickles up to 30 %) ────────────
+            prox_cap = max(0.0, 0.30 - zone_dist * 0.10)
+            if quest.progress < prox_cap:
+                quest.progress = min(prox_cap, quest.progress + 0.005)
 
-                if sx == player_sx and sy == player_sy:
-                    distance = abs(x - player_x) + abs(y - player_y)
-                    if quest.quest_type in ('FARM', 'GATHER', 'MINE', 'LUMBER'):
-                        original = getattr(quest, '_original_cell', None)
-                        if distance <= 2 and original is not None:
-                            screen_key = f"{sx},{sy}"
-                            if screen_key in self.screens:
-                                grid = self.screens[screen_key]['grid']
-                                if 0 <= y < len(grid) and 0 <= x < len(grid[0]):
-                                    if grid[y][x] != original:
-                                        completed = True
-                                        xp_reward = {'FARM': 10, 'GATHER': 15, 'MINE': 20, 'LUMBER': 15}.get(quest.quest_type, 15)
-                    elif quest.quest_type in ('EXPLORE', 'RESCUE', 'SEARCH'):
-                        if distance <= 2:
-                            completed = True
-                            xp_reward = 20
+            # ── Action progress (only when standing in the target zone) ──────
+            if zone_dist == 0:
+                gain = self._npc_quest_action_gain(quest, zone_key)
+                if gain > 0:
+                    quest.progress = min(1.0, quest.progress + gain)
+                    pct = int(quest.progress * 100)
+                    qt_name = QUEST_TYPES.get(quest.quest_type, {}).get('name', quest.quest_type)
+                    print(f"NPC quest [{qt_name}]: {pct}%")
 
-            elif quest.target_location:
-                target_sx, target_sy = quest.target_location
-                if (target_sx == self.player['screen_x'] and
-                        target_sy == self.player['screen_y']):
-                    completed = True
-                    xp_reward = 30
-
-            if completed:
-                quest._last_completed_tick = self.tick
-                if xp_reward > 0:
-                    self.gain_xp(xp_reward)
-                    print(f"NPC quest [{quest.quest_type}] objective done! +{xp_reward} XP")
-                # Mark completed and point arrow back at NPC giver for HUD
+            # ── Completion ────────────────────────────────────────────────────
+            if quest.progress >= 1.0:
+                quest.progress = 1.0
                 quest.status = 'completed'
                 quest.completed_count += 1
                 quest.cooldown_remaining = 0
@@ -641,6 +626,84 @@ class LoreEngineMixin:
                 giver = self.entities.get(nq.npc_id)
                 giver_name = (giver.name or giver.type) if giver else "NPC"
                 quest.target_info = f"Return to {giver_name}"
+                qt_name = QUEST_TYPES.get(quest.quest_type, {}).get('name', quest.quest_type)
+                print(f"NPC quest [{qt_name}] complete! Return to {giver_name} for XP.")
+
+    def _npc_quest_zone(self, quest):
+        """Return the target zone key for a quest, trying all possible sources."""
+        if quest.target_zone:
+            return quest.target_zone
+        if quest.target_cell:
+            sx, sy = quest.target_cell[0], quest.target_cell[1]
+            return f"{sx},{sy}"
+        if quest.target_entity_id and quest.target_entity_id in self.entities:
+            e = self.entities[quest.target_entity_id]
+            return f"{e.screen_x},{e.screen_y}"
+        if quest.target_location:
+            return f"{quest.target_location[0]},{quest.target_location[1]}"
+        return None
+
+    def _npc_quest_action_gain(self, quest, zone_key):
+        """Return progress gain (0.0–1.0) if the quest's base action was detected
+        anywhere in zone_key this tick.  Returns 0 if nothing detected."""
+        qt = quest.quest_type
+
+        if qt in ('EXPLORE', 'RESCUE', 'SEARCH'):
+            # Reaching the zone IS the action — fill quickly
+            return random.uniform(0.45, 0.60)
+
+        elif qt == 'MINE':
+            return self._detect_cell_decrease(quest, zone_key,
+                                              {'STONE', 'IRON_ORE'})
+
+        elif qt == 'LUMBER':
+            return self._detect_cell_decrease(quest, zone_key,
+                                              {'TREE1', 'TREE2', 'TREE3'})
+
+        elif qt == 'FARM':
+            return self._detect_cell_decrease(quest, zone_key,
+                                              {'CARROT1', 'CARROT2', 'CARROT3',
+                                               'SOIL', 'DIRT', 'TREE1', 'TREE2'})
+
+        elif qt == 'GATHER':
+            targets = {'STONE', 'IRON_ORE', 'TREE1', 'TREE2', 'TREE3',
+                       'CARROT1', 'CARROT2', 'CARROT3'}
+            return self._detect_cell_decrease(quest, zone_key, targets)
+
+        elif qt in ('HUNT', 'SLAY', 'COMBAT_HOSTILE', 'COMBAT_ALL'):
+            return self._detect_kill_in_zone(quest, zone_key)
+
+        return 0.0
+
+    def _detect_cell_decrease(self, quest, zone_key, target_types):
+        """Count cells of target_types in zone.  If the count dropped since the
+        last check, a relevant action happened — return a random progress gain."""
+        if zone_key not in self.screens:
+            return 0.0
+        grid = self.screens[zone_key]['grid']
+        count = sum(1 for row in grid for cell in row if cell in target_types)
+
+        prev = getattr(quest, '_zone_cell_count', None)
+        quest._zone_cell_count = count
+
+        if prev is not None and count < prev:
+            return random.uniform(0.40, 0.65)
+        return 0.0
+
+    def _detect_kill_in_zone(self, quest, zone_key):
+        """Return a progress gain if a new player-kill is detected in zone_key."""
+        if not hasattr(quest, '_counted_kill_ids'):
+            quest._counted_kill_ids = set()
+
+        screen_key_norm = zone_key  # already "sx,sy" format
+        for eid in list(self.screen_entities.get(screen_key_norm, [])):
+            entity = self.entities.get(eid)
+            if (entity and entity.is_dead
+                    and entity.killed_by == 'player'
+                    and eid not in quest._counted_kill_ids):
+                quest._counted_kill_ids.add(eid)
+                return random.uniform(0.40, 0.65)
+        return 0.0
 
     # -------------------------------------------------------------------------
     # Lore world events
