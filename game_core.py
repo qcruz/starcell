@@ -1181,13 +1181,16 @@ class GameCoreMixin:
         existing = next((nq for nq in self.npc_quests if nq.npc_id == npc_id), None)
 
         if existing and existing.quest.status == 'completed':
-            # TURN IN
+            # TURN IN — player and NPC both gain XP
             xp_reward = 100 * self.player['level']
             self.gain_xp(xp_reward)
+            entity.gain_xp(100)
+            leveled = entity.xp == 0  # gain_xp resets xp to 0 on level-up
             self.npc_quests.remove(existing)
             if self.active_npc_quest_npc_id == npc_id:
                 self.active_npc_quest_npc_id = None
-            print(f"Quest turned in! +{xp_reward} XP from {npc_name}.")
+            level_msg = f" ({npc_name} leveled up to {entity.level}!)" if leveled else ""
+            print(f"Quest turned in! +{xp_reward} XP. {npc_name} +100 XP.{level_msg}")
             return
 
         if existing and existing.quest.status == 'active':
