@@ -212,37 +212,53 @@ class CombatMixin:
         conversion (10%/call) would massively counteract the grows_to DIRT→GRASS
         (0.3%/call), leaving zones full of dirt instead of developing properly.
         """
-        ticks_to_simulate = self.death_years * 60  # 60 ticks per simulated year
-        cycles_per_frame = 20  # simulation ticks processed per render frame
+        ticks_to_simulate = self.death_years * 20  # 20 ticks per simulated year
+        cycles_per_frame = 10  # simulation ticks processed per render frame
 
         if self.death_ticks_simulated < ticks_to_simulate:
             for _ in range(cycles_per_frame):
-                current_year = self.death_ticks_simulated // 60
+                current_year = self.death_ticks_simulated // 20
 
                 # === Weather — enables rain which drives DIRT→GRASS conversion ===
                 self.update_weather()
                 self.update_day_night_cycle()
 
                 # === Entity lifecycle — once per simulated year ===
-                if self.death_ticks_simulated % 60 == 0:
+                if self.death_ticks_simulated % 20 == 0:
                     for entity in list(self.entities.values()):
                         if entity.type != 'SKELETON':
                             entity.age += 1
 
-                    # Cull entities that died of natural causes
-                    dead = [eid for eid, e in self.entities.items() if not e.is_alive()]
-                    for eid in dead:
-                        self.remove_entity(eid)
+                    # Cull dead entities AND orphaned entities (those no longer tracked
+                    # in any screen_entities after a spawn_entities_for_screen call).
+                    # Without this, entity count explodes to tens of thousands.
+                    tracked = set()
+                    for eids in self.screen_entities.values():
+                        tracked.update(eids)
+                    for eids in self.subscreen_entities.values():
+                        tracked.update(eids)
 
-                    # Spawn NPCs across ALL instantiated zones every 5 simulated years.
-                    # Random 5-zone sampling was causing player zone to often be skipped.
-                    if current_year > 0 and current_year % 5 == 0:
-                        for zone_key in list(self.instantiated_zones):
-                            if zone_key in self.screens:
-                                zx, zy = map(int, zone_key.split(','))
-                                biome = self.screens[zone_key].get('biome', 'FOREST')
-                                self.spawn_entities_for_screen(zx, zy, biome)
-                        print(f"Year {current_year}: NPC spawn wave ({len(self.instantiated_zones)} zones)")
+                    for eid in list(self.entities.keys()):
+                        e = self.entities[eid]
+                        if not e.is_alive() or (eid not in tracked and eid not in self.followers):
+                            self.remove_entity(eid)
+
+                    # Spawn NPCs in the player zone + immediate neighbors every 10 years.
+                    # Spawning all 49 zones every 5 years caused entity explosion:
+                    # 40 waves × 49 zones × ~10 NPCs = 20k+ orphaned entities.
+                    if current_year > 0 and current_year % 10 == 0:
+                        player_sx = self.player['screen_x']
+                        player_sy = self.player['screen_y']
+                        spawn_zones = []
+                        for dx in range(-2, 3):
+                            for dy in range(-2, 3):
+                                zk = f"{player_sx + dx},{player_sy + dy}"
+                                if zk in self.screens:
+                                    spawn_zones.append((player_sx + dx, player_sy + dy, zk))
+                        for zx, zy, zk in spawn_zones:
+                            biome = self.screens[zk].get('biome', 'FOREST')
+                            self.spawn_entities_for_screen(zx, zy, biome)
+                        print(f"Year {current_year}: NPC spawn wave ({len(spawn_zones)} nearby zones)")
 
                 # === Zone updates — same priority queue used in normal gameplay ===
                 player_sx = self.player['screen_x']
