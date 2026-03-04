@@ -2055,7 +2055,8 @@ class GameCoreMixin:
         # Spawning immediately puts the entity in screen_entities where hostile NPCs
         # can kill it during the 150-250 year simulation before the player even loads.
         self._pending_follower_type = random.choice(['SHEEP', 'DEER', 'WOLF', 'BAT', 'GOBLIN', 'SKELETON', 'TERMITE'])
-        
+        self._time_pass_spawned = False
+
         # Trigger initial time passage for world generation
         if self.needs_initial_time_passage:
             self.needs_initial_time_passage = False

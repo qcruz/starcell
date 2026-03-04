@@ -205,85 +205,76 @@ class CombatMixin:
     def update_death_screen(self):
         """Update during death - accelerated time passage.
 
-        Runs ALL normal game systems at full fidelity, just without the real-time
-        pacing. Every system that runs during normal gameplay runs here:
-        weather/rain, cellular automata, grows_to, entity AI, spawning, decay.
-        catch_up_screen is intentionally NOT called — its Tier-2 bulk GRASS→DIRT
-        conversion (10%/call) would massively counteract the grows_to DIRT→GRASS
-        (0.3%/call), leaving zones full of dirt instead of developing properly.
+        Focuses on cell-level simulation only (cellular automata + grows_to) for
+        the player zone and immediate neighbors. This is sufficient to convert
+        DIRT→GRASS reliably without the overhead of full entity AI or zone-level
+        systems, which caused frame stalls when run for all 49 instantiated zones.
+
+        NPCs are spawned once right before respawn so they are fresh and alive.
+        catch_up_screen is intentionally NOT called — its Tier-2 bulk path converts
+        GRASS→DIRT at 10%/call, massively counteracting grows_to DIRT→GRASS (0.3%).
         """
-        ticks_to_simulate = self.death_years * 20  # 20 ticks per simulated year
-        cycles_per_frame = 10  # simulation ticks processed per render frame
+        ticks_to_simulate = self.death_years * 5   # 5 ticks per simulated year
+        cycles_per_frame = 10                       # years processed per render frame
 
         if self.death_ticks_simulated < ticks_to_simulate:
             for _ in range(cycles_per_frame):
-                current_year = self.death_ticks_simulated // 20
-
-                # === Weather — enables rain which drives DIRT→GRASS conversion ===
+                # Weather drives rain → water → DIRT→GRASS via cellular automata
                 self.update_weather()
-                self.update_day_night_cycle()
 
-                # === Entity lifecycle — once per simulated year ===
-                if self.death_ticks_simulated % 20 == 0:
-                    for entity in list(self.entities.values()):
-                        if entity.type != 'SKELETON':
-                            entity.age += 1
-
-                    # Cull dead entities AND orphaned entities (those no longer tracked
-                    # in any screen_entities after a spawn_entities_for_screen call).
-                    # Without this, entity count explodes to tens of thousands.
-                    tracked = set()
-                    for eids in self.screen_entities.values():
-                        tracked.update(eids)
-                    for eids in self.subscreen_entities.values():
-                        tracked.update(eids)
-
-                    for eid in list(self.entities.keys()):
-                        e = self.entities[eid]
-                        if not e.is_alive() or (eid not in tracked and eid not in self.followers):
-                            self.remove_entity(eid)
-
-                    # Spawn NPCs in the player zone + immediate neighbors every 10 years.
-                    # Spawning all 49 zones every 5 years caused entity explosion:
-                    # 40 waves × 49 zones × ~10 NPCs = 20k+ orphaned entities.
-                    if current_year > 0 and current_year % 10 == 0:
-                        player_sx = self.player['screen_x']
-                        player_sy = self.player['screen_y']
-                        spawn_zones = []
-                        for dx in range(-2, 3):
-                            for dy in range(-2, 3):
-                                zk = f"{player_sx + dx},{player_sy + dy}"
-                                if zk in self.screens:
-                                    spawn_zones.append((player_sx + dx, player_sy + dy, zk))
-                        for zx, zy, zk in spawn_zones:
-                            biome = self.screens[zk].get('biome', 'FOREST')
-                            self.spawn_entities_for_screen(zx, zy, biome)
-                        print(f"Year {current_year}: NPC spawn wave ({len(spawn_zones)} nearby zones)")
-
-                # === Zone updates — same priority queue used in normal gameplay ===
                 player_sx = self.player['screen_x']
                 player_sy = self.player['screen_y']
 
-                for zone_key in list(self.instantiated_zones):
-                    try:
-                        zone_x, zone_y = map(int, zone_key.split(','))
-                    except (ValueError, AttributeError):
-                        continue
+                # Cell updates for player zone + 3×3 neighbors only.
+                # update_zone_with_coverage is too heavy (entity AI + raid checks
+                # + threat checks for all 49 zones) — stalls every frame.
+                for dx in range(-1, 2):
+                    for dy in range(-1, 2):
+                        zx, zy = player_sx + dx, player_sy + dy
+                        zone_key = f"{zx},{zy}"
+                        if zone_key not in self.screens:
+                            continue
+                        screen = self.screens[zone_key]
 
-                    dist = abs(zone_x - player_sx) + abs(zone_y - player_sy)
-                    update_chance = max(0.1, 1.0 / (1 + dist))
+                        # Rain effect if currently raining
+                        if self.is_raining:
+                            self.apply_rain(zx, zy)
 
-                    if random.random() < update_chance:
-                        # Full zone update: cellular automata, grows_to, entity AI,
-                        # farming/building, decay, rain (if self.is_raining is True).
-                        self.update_zone_with_coverage(zone_x, zone_y, 1.0, 1.0)
+                        # Cellular automata (handles DIRT→GRASS with water neighbors)
+                        self.apply_cellular_automata(zx, zy)
+
+                        # grows_to: unconditional DIRT→GRASS at 0.3%/cell/tick
+                        for y in range(1, GRID_HEIGHT - 1):
+                            for x in range(1, GRID_WIDTH - 1):
+                                cell = screen['grid'][y][x]
+                                if cell in CELL_TYPES:
+                                    cell_info = CELL_TYPES[cell]
+                                    if 'grows_to' in cell_info:
+                                        if random.random() < cell_info.get('growth_rate', 0):
+                                            self.set_grid_cell(screen, x, y, cell_info['grows_to'])
 
                 self.tick += 1
                 self.death_ticks_simulated += 1
 
                 if self.death_ticks_simulated >= ticks_to_simulate:
                     break
+
         else:
+            # Spawn NPCs fresh in nearby zones right before player loads in.
+            # Done here (not during simulation) to avoid entity accumulation.
+            if not getattr(self, '_time_pass_spawned', False):
+                self._time_pass_spawned = True
+                player_sx = self.player['screen_x']
+                player_sy = self.player['screen_y']
+                for dx in range(-2, 3):
+                    for dy in range(-2, 3):
+                        zk = f"{player_sx + dx},{player_sy + dy}"
+                        if zk in self.screens:
+                            zx, zy = player_sx + dx, player_sy + dy
+                            biome = self.screens[zk].get('biome', 'FOREST')
+                            self.spawn_entities_for_screen(zx, zy, biome)
+                print(f"World initialized — {self.death_years} years passed.")
+
             # Respawn player
             self.respawn_player()
 
