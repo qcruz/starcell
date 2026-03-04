@@ -243,6 +243,13 @@ class CellsMixin:
                     if random.random() < decay_rate:
                         new_grid[y][x] = 'DIRT'
 
+        # Sync variant_grid for any cells whose type changed
+        if 'variant_grid' in screen:
+            for vy in range(GRID_HEIGHT):
+                for vx in range(GRID_WIDTH):
+                    if new_grid[vy][vx] != screen['grid'][vy][vx]:
+                        screen['variant_grid'][vy][vx] = self.roll_cell_variant(new_grid[vy][vx])
+
         screen['grid'] = new_grid
 
         self.check_zone_biome_shift(screen_x, screen_y)

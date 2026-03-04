@@ -12,7 +12,6 @@ import random
 from constants import (
     QUEST_TYPES, ITEMS,
     GRID_WIDTH, GRID_HEIGHT,
-    QUEST_XP_MULTIPLIER,
 )
 
 
@@ -499,7 +498,7 @@ class LoreEngineMixin:
                 if entity.is_dead:
                     if entity.killed_by == 'player':
                         completed = True
-                        xp_reward = entity.level * QUEST_XP_MULTIPLIER
+                        xp_reward = 1
                     else:
                         quest.clear_target()
                         return
@@ -524,11 +523,11 @@ class LoreEngineMixin:
                                 current_cell = grid[y][x]
                                 if current_cell != original:
                                     completed = True
-                                    xp_reward = {'FARM': 10, 'GATHER': 15, 'MINE': 20, 'LUMBER': 15}.get(quest_type, 15)
+                                    xp_reward = 1
                 elif quest_type in ('EXPLORE', 'RESCUE', 'SEARCH'):
                     if distance <= 2:
                         completed = True
-                        xp_reward = 20
+                        xp_reward = 1
 
         # Check location-based quests
         elif quest.target_location:
@@ -537,7 +536,7 @@ class LoreEngineMixin:
 
             if target_sx == player_sx and target_sy == player_sy:
                 completed = True
-                xp_reward = 30
+                xp_reward = 1
 
         if completed:
             quest._last_completed_tick = self.tick

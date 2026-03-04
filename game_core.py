@@ -895,7 +895,7 @@ class GameCoreMixin:
                     
                     # Growth
                     if 'grows_to' in cell_info and random.random() < cell_info.get('growth_rate', 0):
-                        screen['grid'][y][x] = cell_info['grows_to']
+                        self.set_grid_cell(screen, x, y, cell_info['grows_to'])
                     
                     # Degradation (for crops and cobblestone)
                     elif 'degrades_to' in cell_info and random.random() < cell_info.get('degrade_rate', 0):
@@ -926,7 +926,7 @@ class GameCoreMixin:
                                 continue
                         
                         # Apply decay
-                        screen['grid'][y][x] = cell_info['degrades_to']
+                        self.set_grid_cell(screen, x, y, cell_info['degrades_to'])
         
         # Track last update
         self.screen_last_update[key] = self.tick
@@ -1182,7 +1182,7 @@ class GameCoreMixin:
 
         if existing and existing.quest.status == 'completed':
             # TURN IN — player and NPC both gain XP
-            xp_reward = 100 * self.player['level']
+            xp_reward = 1
             self.gain_xp(xp_reward)
             entity.gain_xp(100)
             leveled = entity.xp == 0  # gain_xp resets xp to 0 on level-up
@@ -2051,26 +2051,25 @@ class GameCoreMixin:
         self.attack_animations = []
         self.current_screen = self.generate_screen(0, 0)
         
-        # Spawn skeleton follower for testing
-        skeleton = Entity('SKELETON', self.player['x'] + 1, self.player['y'], 0, 0, level=1)
-        skeleton_id = self.next_entity_id
+        # Spawn a random non-human animal follower
+        _follower_types = ['SHEEP', 'DEER', 'WOLF']
+        _follower_type = random.choice(_follower_types)
+        _follower_item = _follower_type.lower()
+        follower_entity = Entity(_follower_type, self.player['x'] + 1, self.player['y'], 0, 0, level=1)
+        follower_id = self.next_entity_id
         self.next_entity_id += 1
-        self.entities[skeleton_id] = skeleton
-        
-        # Add to screen entities
+        self.entities[follower_id] = follower_entity
+
         screen_key = "0,0"
         if screen_key not in self.screen_entities:
             self.screen_entities[screen_key] = []
-        self.screen_entities[screen_key].append(skeleton_id)
-        
-        # Add to followers
-        self.followers.append(skeleton_id)
-        self.follower_items[skeleton_id] = 'skeleton_bones'
+        self.screen_entities[screen_key].append(follower_id)
 
-        # Add to inventory as follower item (use existing skeleton_bones item)
-        self.inventory.add_follower('skeleton_bones', 1)
+        self.followers.append(follower_id)
+        self.follower_items[follower_id] = _follower_item
+        self.inventory.add_follower(_follower_item, 1)
 
-        print(f"Skeleton follower spawned for testing (ID: {skeleton_id})")
+        print(f"{_follower_type} follower spawned (ID: {follower_id})")
         
         # Trigger initial time passage for world generation
         if self.needs_initial_time_passage:

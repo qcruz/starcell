@@ -168,7 +168,7 @@ class ZonesMixin:
                     cell_info = CELL_TYPES[cell]
 
                     if 'grows_to' in cell_info and random.random() < cell_info.get('growth_rate', 0):
-                        screen['grid'][y][x] = cell_info['grows_to']
+                        self.set_grid_cell(screen, x, y, cell_info['grows_to'])
                     elif 'degrades_to' in cell_info and random.random() < cell_info.get('degrade_rate', 0):
                         if cell == 'COBBLESTONE':
                             center_x = GRID_WIDTH // 2
@@ -188,7 +188,7 @@ class ZonesMixin:
                                 continue
 
                         old_cell = cell
-                        screen['grid'][y][x] = cell_info['degrades_to']
+                        self.set_grid_cell(screen, x, y, cell_info['degrades_to'])
 
                         if old_cell == 'HOUSE':
                             self.process_house_destruction(x, y, zone_key)

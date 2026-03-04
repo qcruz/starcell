@@ -1593,17 +1593,24 @@ class NpcAiMixin:
         if hasattr(entity, 'ai_state') and entity.ai_state in ('fleeing', 'flee'):
             return  # Fleeing entities don't attack
         
-        screen_key = f"{entity.screen_x},{entity.screen_y}"
-        
+        # Use subscreen-aware screen_key (mirrors AI setup at lines 63-69)
+        entity_in_subscreen = getattr(entity, 'in_subscreen', False)
+        if entity_in_subscreen and entity.subscreen_key:
+            screen_key = entity.subscreen_key
+            entity_lookup = self.subscreen_entities
+        else:
+            screen_key = f"{entity.screen_x},{entity.screen_y}"
+            entity_lookup = self.screen_entities
+
         closest_enemy = None
         closest_enemy_id = None
         closest_dist = float('inf')
-        
+
         # Warriors scan full zone more aggressively - no distance limit
         is_warrior = entity.type in ['WARRIOR', 'COMMANDER', 'KING']
-        
-        # Find enemies on current screen
-        for other_id in self.screen_entities.get(screen_key, []):
+
+        # Find enemies in the same context (overworld or subscreen)
+        for other_id in entity_lookup.get(screen_key, []):
             if other_id == entity_id:
                 continue
 
@@ -1616,6 +1623,13 @@ class NpcAiMixin:
                 continue
 
             other = self.entities[other_id]
+
+            # Context guard: skip candidates not in the same overworld/subscreen context
+            other_in_subscreen = getattr(other, 'in_subscreen', False)
+            if entity_in_subscreen != other_in_subscreen:
+                continue
+            if entity_in_subscreen and getattr(other, 'subscreen_key', None) != entity.subscreen_key:
+                continue
             
             # Determine if this is an enemy
             is_enemy = False

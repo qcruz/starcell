@@ -32,13 +32,17 @@ from debug.fixes import fix_entity_subscreen_flag
 
 class Watchdog:
     CATEGORIES = ['entities', 'cells', 'zones', 'player', 'subscreens']
-    SAMPLE_INTERVAL   = 300   # ticks between cycles
+    SAMPLE_INTERVAL   = 300    # ticks between cycles (~5 s at 60 fps)
     MAX_ENTRIES_PER_SAMPLE = 200  # max JSON entries per category per cycle
+    BACKUP1_INTERVAL  = 3600   # ~60 s at 60 fps
+    BACKUP2_INTERVAL  = 7200   # ~120 s at 60 fps
 
     def __init__(self, bug_catcher):
         self.bug_catcher = bug_catcher
         self._category_index = 0
         self._last_run_tick = -99999
+        self._last_backup1_tick = -99999
+        self._last_backup2_tick = -99999
 
     # ------------------------------------------------------------------
     # Main entry point
@@ -62,6 +66,7 @@ class Watchdog:
         _SAMPLERS[category](tick, game)
 
         self._check_integrity(tick, game)
+        self._maybe_backup(tick, game)
         self.bug_catcher.flush()
 
     # ------------------------------------------------------------------
@@ -314,4 +319,52 @@ class Watchdog:
                     'entity_type': entity.type,
                     'zone': zone_key,
                     'found_in_subscreens': entity_in_subs[eid],
+                })
+
+    # ------------------------------------------------------------------
+    # Rolling backup saves
+    # ------------------------------------------------------------------
+
+    def _maybe_backup(self, tick: int, game) -> None:
+        """Write rolling backup saves every ~60 s and ~120 s."""
+        import datetime
+        if not hasattr(game, 'save_game'):
+            return
+
+        if tick - self._last_backup1_tick >= self.BACKUP1_INTERVAL:
+            self._last_backup1_tick = tick
+            try:
+                game.save_game(path='savegame_backup1.json')
+                self.bug_catcher.log({
+                    'tick': tick,
+                    'category': 'backup_save',
+                    'file': 'savegame_backup1.json',
+                    'ts': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    'note': 'rolling 60-s backup',
+                })
+            except Exception as exc:
+                self.bug_catcher.log({
+                    'tick': tick,
+                    'category': 'backup_save_error',
+                    'file': 'savegame_backup1.json',
+                    'error': str(exc),
+                })
+
+        if tick - self._last_backup2_tick >= self.BACKUP2_INTERVAL:
+            self._last_backup2_tick = tick
+            try:
+                game.save_game(path='savegame_backup2.json')
+                self.bug_catcher.log({
+                    'tick': tick,
+                    'category': 'backup_save',
+                    'file': 'savegame_backup2.json',
+                    'ts': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    'note': 'rolling 120-s backup',
+                })
+            except Exception as exc:
+                self.bug_catcher.log({
+                    'tick': tick,
+                    'category': 'backup_save_error',
+                    'file': 'savegame_backup2.json',
+                    'error': str(exc),
                 })

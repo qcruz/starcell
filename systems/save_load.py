@@ -9,8 +9,8 @@ from constants import ITEMS, COLORS
 class SaveLoadMixin:
     """Handles saving and loading game state to/from JSON."""
 
-    def save_game(self):
-        """Save game to file"""
+    def save_game(self, path='savegame.json'):
+        """Save game to file. Pass a different path for backup saves."""
         entities_data = {}
         for entity_id, entity in self.entities.items():
             entities_data[entity_id] = {
@@ -159,9 +159,10 @@ class SaveLoadMixin:
                 for nq in getattr(self, 'npc_quests', [])
             ],
         }
-        with open('savegame.json', 'w') as f:
+        with open(path, 'w') as f:
             json.dump(save_data, f)
-        print("Game saved!")
+        if path == 'savegame.json':
+            print("Game saved!")
 
     def load_game(self):
         """Load game from file"""
