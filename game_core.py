@@ -151,6 +151,7 @@ class GameCoreMixin:
         self.active_quest = 'FARM'  # Default active quest
         self.quest_ui_open = False
         self.quest_ui_selected = 0
+        self.npc_quests = []  # list of NpcQuestSlot, max 3
         
         # Initialize all quest types
         for quest_type in QUEST_TYPES.keys():
@@ -995,8 +996,12 @@ class GameCoreMixin:
                         # Place selected item as cell
                         self.place_selected_item()
                     elif event.key == pygame.K_q:
-                        # Toggle quest UI
-                        self.quest_ui_open = not self.quest_ui_open
+                        mods = pygame.key.get_mods()
+                        if (mods & pygame.KMOD_SHIFT) and self.inspected_npc:
+                            self.handle_npc_quest_interaction()
+                        else:
+                            # Toggle quest UI
+                            self.quest_ui_open = not self.quest_ui_open
                     elif event.key == pygame.K_d:
                         # Drop selected item
                         self.drop_selected_item()
@@ -1136,6 +1141,45 @@ class GameCoreMixin:
                 self.active_quest = quest_type
                 print(f"Active quest: {QUEST_TYPES[quest_type]['name']}")
                 return
+
+    def handle_npc_quest_interaction(self):
+        """Handle Shift+Q while inspecting an NPC: give, progress, or turn in quest."""
+        npc_id = self.inspected_npc
+        if npc_id not in self.entities:
+            return
+
+        entity = self.entities[npc_id]
+        npc_name = entity.name if entity.name else entity.type
+
+        # Find existing slot for this NPC
+        existing = next((nq for nq in self.npc_quests if nq.npc_id == npc_id), None)
+
+        if existing and existing.quest.status == 'completed':
+            # TURN IN
+            xp_reward = 100 * self.player['level']
+            self.gain_xp(xp_reward)
+            self.npc_quests.remove(existing)
+            print(f"Quest turned in! +{xp_reward} XP from {npc_name}.")
+            return
+
+        if existing and existing.quest.status == 'active':
+            print(f"Quest from {npc_name} still in progress.")
+            return
+
+        if len(self.npc_quests) >= 3:
+            print("Quest log full (max 3 NPC quests).")
+            return
+
+        # RECEIVE: pick random quest type, generate target via loreEngine
+        quest_type = random.choice(list(QUEST_TYPES.keys()))
+        quest = Quest(quest_type)
+        success = self.loreEngine(quest)
+        if success:
+            self.npc_quests.append(NpcQuestSlot(npc_id, quest))
+            q_name = QUEST_TYPES[quest_type]['name']
+            print(f"Received quest [{q_name}] from {npc_name}!")
+        else:
+            print(f"No quest available from {npc_name} right now.")
 
     def select_inventory_slot(self, slot_index):
         """Select an inventory slot by number (0-9)"""
@@ -1947,6 +1991,7 @@ class GameCoreMixin:
         self.enchanted_entities = {}
         self.followers = []
         self.follower_items = {}
+        self.npc_quests = []
         self.zone_keepers = {}
         self.subscreens = {}
         self.opened_chests = set()

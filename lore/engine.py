@@ -558,6 +558,9 @@ class LoreEngineMixin:
         # Check for quest completion
         self.check_quest_completion()
 
+        # Check NPC quest completions
+        self.check_npc_quest_completions()
+
         # Assign targets to inactive quests that are off cooldown
         for quest_type, quest in self.quests.items():
             if quest.status == 'inactive' and quest.cooldown_remaining == 0:
@@ -565,6 +568,77 @@ class LoreEngineMixin:
 
         # Run background lore events (throttled to once every ~10 s)
         self.update_lore()
+
+    def check_npc_quest_completions(self):
+        """Check completion of all active NPC quests."""
+        for nq in getattr(self, 'npc_quests', []):
+            quest = nq.quest
+            if quest.status != 'active':
+                continue
+
+            # Guard against same-tick re-completion
+            if hasattr(quest, '_last_completed_tick') and quest._last_completed_tick == self.tick:
+                continue
+
+            completed = False
+            xp_reward = 0
+
+            if quest.target_entity_id:
+                if quest.target_entity_id not in self.entities:
+                    quest.clear_target()
+                    continue
+                entity = self.entities[quest.target_entity_id]
+                if entity.is_dead:
+                    if entity.killed_by == 'player':
+                        completed = True
+                        xp_reward = entity.level * QUEST_XP_MULTIPLIER
+                    else:
+                        quest.clear_target()
+                        continue
+
+            elif quest.target_cell:
+                sx, sy, x, y = quest.target_cell
+                player_sx = self.player['screen_x']
+                player_sy = self.player['screen_y']
+                player_x  = self.player['x']
+                player_y  = self.player['y']
+
+                if sx == player_sx and sy == player_sy:
+                    distance = abs(x - player_x) + abs(y - player_y)
+                    if quest.quest_type in ('FARM', 'GATHER'):
+                        if distance <= 2 and quest._original_cell is not None:
+                            screen_key = f"{sx},{sy}"
+                            if screen_key in self.screens:
+                                grid = self.screens[screen_key]['grid']
+                                if 0 <= y < len(grid) and 0 <= x < len(grid[0]):
+                                    if grid[y][x] != quest._original_cell:
+                                        completed = True
+                                        xp_reward = 10 if quest.quest_type == 'FARM' else 15
+                    elif quest.quest_type in ('EXPLORE', 'RESCUE', 'SEARCH'):
+                        if distance <= 2:
+                            completed = True
+                            xp_reward = 20
+
+            elif quest.target_location:
+                target_sx, target_sy = quest.target_location
+                if (target_sx == self.player['screen_x'] and
+                        target_sy == self.player['screen_y']):
+                    completed = True
+                    xp_reward = 30
+
+            if completed:
+                quest._last_completed_tick = self.tick
+                if xp_reward > 0:
+                    self.gain_xp(xp_reward)
+                    print(f"NPC quest [{quest.quest_type}] objective done! +{xp_reward} XP")
+                # Mark completed and point arrow back at NPC giver for HUD
+                quest.status = 'completed'
+                quest.completed_count += 1
+                quest.cooldown_remaining = 0
+                quest.target_entity_id = nq.npc_id
+                giver = self.entities.get(nq.npc_id)
+                giver_name = (giver.name or giver.type) if giver else "NPC"
+                quest.target_info = f"Return to {giver_name}"
 
     # -------------------------------------------------------------------------
     # Lore world events

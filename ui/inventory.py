@@ -227,3 +227,34 @@ class InventoryUIMixin:
             # Slot number (for future number key selection)
             num_text = self.tiny_font.render(str((i + 1) % 10), True, COLORS['GRAY'])
             self.screen.blit(num_text, (slot_x + 2, slot_y + slot_size - 12))
+
+        # Draw NPC quest slots (offset by 1 gap for visual separation)
+        npc_slots = getattr(self, 'npc_quests', [])
+        for j, nq in enumerate(npc_slots):
+            slot_x = start_x + (len(quest_types) + 1 + j) * (slot_size + 2)
+            slot_y = start_y
+            quest_info = QUEST_TYPES.get(nq.quest.quest_type, {})
+            q_color = quest_info.get('color', (180, 180, 180))
+
+            if nq.quest.status == 'completed':
+                # Solid filled block — turn-in indicator
+                pygame.draw.rect(self.screen, q_color,
+                                 (slot_x, slot_y, slot_size, slot_size))
+                pygame.draw.rect(self.screen, COLORS['WHITE'],
+                                 (slot_x, slot_y, slot_size, slot_size), 1)
+            else:
+                pygame.draw.rect(self.screen, COLORS['BLACK'],
+                                 (slot_x, slot_y, slot_size, slot_size))
+                pygame.draw.rect(self.screen, q_color,
+                                 (slot_x, slot_y, slot_size, slot_size), 2)
+                symbol_text = self.font.render(quest_info.get('symbol', '?'), True, q_color)
+                symbol_rect = symbol_text.get_rect(
+                    center=(slot_x + slot_size // 2, slot_y + slot_size // 2))
+                self.screen.blit(symbol_text, symbol_rect)
+
+            # NPC name label top-left
+            giver = self.entities.get(nq.npc_id)
+            if giver:
+                lbl = self.tiny_font.render(
+                    (giver.name or giver.type)[:5], True, COLORS['WHITE'])
+                self.screen.blit(lbl, (slot_x + 2, slot_y + 2))

@@ -1062,3 +1062,10 @@ class Quest:
         else:
             self.cooldown_remaining = QUEST_COOLDOWN
         self.clear_target()
+
+
+class NpcQuestSlot:
+    """A quest given to the player by a specific NPC."""
+    def __init__(self, npc_id, quest):
+        self.npc_id = npc_id   # entity ID of the quest-giver
+        self.quest  = quest    # Quest object (quest_type, target, status)

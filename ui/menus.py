@@ -291,6 +291,19 @@ class MenusMixin:
             if hasattr(entity, 'alignment'):
                 info_lines.append(f"({entity.alignment})")
 
+        # Quest hint
+        nq = next((n for n in getattr(self, 'npc_quests', [])
+                   if n.npc_id == self.inspected_npc), None)
+        if nq:
+            if nq.quest.status == 'completed':
+                info_lines.append("Quest done! (Shift+Q)")
+            else:
+                q_name = QUEST_TYPES.get(nq.quest.quest_type, {}).get('name', nq.quest.quest_type)
+                info_lines.append(f"Quest: {q_name}")
+        else:
+            if len(getattr(self, 'npc_quests', [])) < 3:
+                info_lines.append("Shift+Q: Get quest")
+
         # Draw each line (no background box)
         for i, line in enumerate(info_lines):
             text = self.tiny_font.render(line, True, (255, 255, 255))

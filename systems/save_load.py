@@ -2,7 +2,7 @@ import json
 import os
 import random
 
-from entity import Entity
+from entity import Entity, Quest, NpcQuestSlot
 from constants import ITEMS, COLORS
 
 
@@ -141,6 +141,20 @@ class SaveLoadMixin:
             'next_structure_zone_id': self.next_structure_zone_id,
             'active_quest': self.active_quest,
             'zone_keepers': self.zone_keepers,
+            'npc_quests': [
+                {
+                    'npc_id':           nq.npc_id,
+                    'quest_type':       nq.quest.quest_type,
+                    'status':           nq.quest.status,
+                    'target_entity_id': nq.quest.target_entity_id,
+                    'target_location':  list(nq.quest.target_location) if nq.quest.target_location else None,
+                    'target_cell':      list(nq.quest.target_cell) if nq.quest.target_cell else None,
+                    'target_info':      nq.quest.target_info,
+                    'target_zone':      nq.quest.target_zone,
+                    'completed_count':  nq.quest.completed_count,
+                }
+                for nq in getattr(self, 'npc_quests', [])
+            ],
         }
         with open('savegame.json', 'w') as f:
             json.dump(save_data, f)
@@ -353,6 +367,18 @@ class SaveLoadMixin:
             self.state = 'playing'
             # Restore active quest (default to FARM for older saves)
             self.active_quest = save_data.get('active_quest', 'FARM')
+            # Restore NPC quests
+            self.npc_quests = []
+            for d in save_data.get('npc_quests', []):
+                q = Quest(d['quest_type'])
+                q.status           = d.get('status', 'active')
+                q.target_entity_id = d.get('target_entity_id')
+                q.target_location  = tuple(d['target_location']) if d.get('target_location') else None
+                q.target_cell      = tuple(d['target_cell'])     if d.get('target_cell')     else None
+                q.target_info      = d.get('target_info', '')
+                q.target_zone      = d.get('target_zone')
+                q.completed_count  = d.get('completed_count', 0)
+                self.npc_quests.append(NpcQuestSlot(d['npc_id'], q))
             # Autopilot grace period: don't engage for 15 seconds after loading
             self.last_input_tick = self.tick + 900
             self.bug_catcher.clear()

@@ -734,6 +734,18 @@ class HudMixin:
                 quest_text = self.tiny_font.render(quest_display, True, quest_color)
                 self.screen.blit(quest_text, (10, ui_y + 45))
 
+            # NPC quest return hint (first completed slot)
+            for nq in getattr(self, 'npc_quests', []):
+                if nq.quest.status == 'completed':
+                    giver = self.entities.get(nq.npc_id)
+                    npc_name = (giver.name or giver.type) if giver else "NPC"
+                    q_name = QUEST_TYPES.get(nq.quest.quest_type, {}).get('name', '')
+                    ret_text = self.tiny_font.render(
+                        f"Return to {npc_name} [{q_name}] (Shift+Q)",
+                        True, (255, 220, 100))
+                    self.screen.blit(ret_text, (10, ui_y + 56))
+                    break  # show only first completed
+
             # ── Row 4: Interaction hint + controls ─────────────────────────
             target = self.get_target_cell()
             hint_text = "SPACE: Attack"
