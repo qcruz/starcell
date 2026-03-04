@@ -948,12 +948,6 @@ class ZonesMixin:
                 elif cell == 'GRASS' and 1 <= counts.get('flower', 0) <= 2:
                     change_prob = min(cycles_missed * 0.01, 0.3)
                     new_cell = 'FLOWER'
-                elif cell in CELL_TYPES and CELL_TYPES[cell].get('grows_to') and change_prob == 0:
-                    # Unconditional grows_to growth — ensures cells like DIRT convert to GRASS
-                    # even with no water neighbors, scaled so most cells convert over long time passage
-                    growth_rate = CELL_TYPES[cell].get('growth_rate', 0)
-                    change_prob = min(cycles_missed * growth_rate * 3, 0.6)
-                    new_cell = CELL_TYPES[cell]['grows_to']
 
                 if random.random() < change_prob:
                     self.set_grid_cell(screen, x, y, new_cell)
