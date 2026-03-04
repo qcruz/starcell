@@ -203,86 +203,64 @@ class CombatMixin:
                 self.inventory.selected[cat] = None
 
     def update_death_screen(self):
-        """Update during death - accelerated time passage"""
-        ticks_to_simulate = self.death_years * 10  # 10 ticks per "year"
-        cycles_per_frame = 5  # Reduced from 10
+        """Update during death - accelerated time passage.
+
+        Runs ALL normal game systems at full fidelity, just without the real-time
+        pacing. Every system that runs during normal gameplay runs here:
+        weather/rain, cellular automata, grows_to, entity AI, spawning, decay.
+        catch_up_screen is intentionally NOT called — its Tier-2 bulk GRASS→DIRT
+        conversion (10%/call) would massively counteract the grows_to DIRT→GRASS
+        (0.3%/call), leaving zones full of dirt instead of developing properly.
+        """
+        ticks_to_simulate = self.death_years * 60  # 60 ticks per simulated year
+        cycles_per_frame = 20  # simulation ticks processed per render frame
 
         if self.death_ticks_simulated < ticks_to_simulate:
-            # Minimal updates for performance
             for _ in range(cycles_per_frame):
-                # Age all entities (10 ticks = 1 year)
-                if self.death_ticks_simulated % 10 == 0:  # Every simulated year
-                    current_year = self.death_ticks_simulated // 10
+                current_year = self.death_ticks_simulated // 60
 
-                    entities_to_remove = []
-                    for entity_id, entity in list(self.entities.items()):
-                        # Age entity (no longer manually apply old age damage here - handled by decay_stats)
+                # === Weather — enables rain which drives DIRT→GRASS conversion ===
+                self.update_weather()
+                self.update_day_night_cycle()
+
+                # === Entity lifecycle — once per simulated year ===
+                if self.death_ticks_simulated % 60 == 0:
+                    for entity in list(self.entities.values()):
                         if entity.type != 'SKELETON':
                             entity.age += 1
 
-                        # Don't manually decay hunger/thirst - let catch_up and entity AI handle it
-                        # Entities will eat/drink naturally through behavior updates below
+                    # Cull entities that died of natural causes
+                    dead = [eid for eid, e in self.entities.items() if not e.is_alive()]
+                    for eid in dead:
+                        self.remove_entity(eid)
 
-                    # Remove dead entities
-                    for entity_id in entities_to_remove:
-                        self.remove_entity(entity_id)
-
-                    # Spawn new NPCs more frequently (every 10 years instead of 30)
-                    if current_year > 0 and current_year % 10 == 0:
-                        # Spawn in more zones (5 instead of 3)
-                        zones_to_spawn = random.sample(list(self.instantiated_zones),
-                                                       min(5, len(self.instantiated_zones)))
-
-                        for zone_key in zones_to_spawn:
-                            parts = zone_key.split(',')
-                            zone_x = int(parts[0])
-                            zone_y = int(parts[1])
-
-                            # Spawn entities for this zone
+                    # Spawn NPCs across ALL instantiated zones every 5 simulated years.
+                    # Random 5-zone sampling was causing player zone to often be skipped.
+                    if current_year > 0 and current_year % 5 == 0:
+                        for zone_key in list(self.instantiated_zones):
                             if zone_key in self.screens:
+                                zx, zy = map(int, zone_key.split(','))
                                 biome = self.screens[zone_key].get('biome', 'FOREST')
-                                self.spawn_entities_for_screen(zone_x, zone_y, biome)
+                                self.spawn_entities_for_screen(zx, zy, biome)
+                        print(f"Year {current_year}: NPC spawn wave ({len(self.instantiated_zones)} zones)")
 
-                        print(f"Year {current_year}: New NPCs spawned in {len(zones_to_spawn)} zones")
+                # === Zone updates — same priority queue used in normal gameplay ===
+                player_sx = self.player['screen_x']
+                player_sy = self.player['screen_y']
 
-                # Update zones per cycle with entity AI actions
-                # During initial generation, update MORE zones and MORE frequently for world building
-                if hasattr(self, 'is_initial_generation') and self.is_initial_generation:
-                    zones_to_update = random.sample(list(self.instantiated_zones),
-                                                    min(8, len(self.instantiated_zones)))  # 8 zones
-                    update_chance = 0.5  # 100% chance to update
-                    catchup_cycles = 5  # More cycles for building
-                    behavior_chance = 0.5  # 80% behavior chance - NPCs actively build/farm/mine
-                else:
-                    zones_to_update = random.sample(list(self.instantiated_zones),
-                                                    min(8, len(self.instantiated_zones)))  # 8 zones
-                    update_chance = 0.8  # 80% chance
-                    catchup_cycles = 5  # More cycles
-                    behavior_chance = 0.3  # 30% behavior chance
+                for zone_key in list(self.instantiated_zones):
+                    try:
+                        zone_x, zone_y = map(int, zone_key.split(','))
+                    except (ValueError, AttributeError):
+                        continue
 
-                for zone_key in zones_to_update:
-                    parts = zone_key.split(',')
-                    zone_x = int(parts[0])
-                    zone_y = int(parts[1])
+                    dist = abs(zone_x - player_sx) + abs(zone_y - player_sy)
+                    update_chance = max(0.1, 1.0 / (1 + dist))
 
                     if random.random() < update_chance:
-                        # Use catch_up with configured cycles for cell updates
-                        self.catch_up_screen(zone_x, zone_y, catchup_cycles)
-
-                        # CRITICAL: Also run full zone update for farming, building, spawning
-                        # This is what creates the world structures
+                        # Full zone update: cellular automata, grows_to, entity AI,
+                        # farming/building, decay, rain (if self.is_raining is True).
                         self.update_zone_with_coverage(zone_x, zone_y, 1.0, 1.0)
-
-                        # Additionally update entity behaviors in this zone
-                        if zone_key in self.screen_entities:
-                            for entity_id in list(self.screen_entities[zone_key]):
-                                if entity_id in self.entities:
-                                    entity = self.entities[entity_id]
-
-                                    # Run special behaviors during time passage
-                                    behavior_config = entity.props.get('behavior_config')
-                                    if behavior_config and random.random() < behavior_chance:
-                                        self.execute_entity_behavior(entity, behavior_config)
 
                 self.tick += 1
                 self.death_ticks_simulated += 1
@@ -335,27 +313,31 @@ class CombatMixin:
         # Regenerate current screen to reflect time passage
         self.current_screen = self.generate_screen(self.player['screen_x'], self.player['screen_y'])
 
-        # Respawn skeleton follower for testing
-        screen_key = f"{self.player['screen_x']},{self.player['screen_y']}"
-        skeleton = Entity('SKELETON', self.player['x'] + 1, self.player['y'],
-                          self.player['screen_x'], self.player['screen_y'], level=1)
-        skeleton_id = self.next_entity_id
-        self.next_entity_id += 1
-        self.entities[skeleton_id] = skeleton
-
-        # Add to screen entities
-        if screen_key not in self.screen_entities:
-            self.screen_entities[screen_key] = []
-        self.screen_entities[screen_key].append(skeleton_id)
-
-        # Add to followers
-        self.followers.append(skeleton_id)
-        self.follower_items[skeleton_id] = 'skeleton_bones'
-
-        # Add to inventory as follower item (use existing skeleton_bones item)
-        self.inventory.add_follower('skeleton_bones', 1)
-
-        print(f"Skeleton follower respawned (ID: {skeleton_id})")
+        # Spawn deferred follower (set in new_game(), skipped during time pass to
+        # prevent it being killed by hostile NPCs before the player loads in).
+        pending = getattr(self, '_pending_follower_type', None)
+        if pending:
+            self._pending_follower_type = None
+            follower_entity = Entity(pending, self.player['x'] + 1, self.player['y'],
+                                     self.player['screen_x'], self.player['screen_y'], level=1)
+            follower_id = self.next_entity_id
+            self.next_entity_id += 1
+            self.entities[follower_id] = follower_entity
+            if screen_key not in self.screen_entities:
+                self.screen_entities[screen_key] = []
+            self.screen_entities[screen_key].append(follower_id)
+            self.followers.append(follower_id)
+            follower_item = f"{pending.lower()}_{follower_id}"
+            self.follower_items[follower_id] = follower_item
+            if follower_item not in ITEMS:
+                ITEMS[follower_item] = {
+                    'color': follower_entity.props['color'],
+                    'name': f"{pending.title()} Follower",
+                    'is_follower': True,
+                    'entity_id': follower_id,
+                }
+            self.inventory.add_follower(follower_item, 1)
+            print(f"{pending} follower spawned (ID: {follower_id})")
 
         self.state = 'playing'
         # Autopilot grace period: don't engage for 15 seconds after entering game

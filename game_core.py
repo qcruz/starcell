@@ -2050,26 +2050,11 @@ class GameCoreMixin:
         self.screen_entities = {}
         self.attack_animations = []
         self.current_screen = self.generate_screen(0, 0)
-        
-        # Spawn a random non-human animal follower
-        _follower_types = ['SHEEP', 'DEER', 'WOLF']
-        _follower_type = random.choice(_follower_types)
-        _follower_item = _follower_type.lower()
-        follower_entity = Entity(_follower_type, self.player['x'] + 1, self.player['y'], 0, 0, level=1)
-        follower_id = self.next_entity_id
-        self.next_entity_id += 1
-        self.entities[follower_id] = follower_entity
 
-        screen_key = "0,0"
-        if screen_key not in self.screen_entities:
-            self.screen_entities[screen_key] = []
-        self.screen_entities[screen_key].append(follower_id)
-
-        self.followers.append(follower_id)
-        self.follower_items[follower_id] = _follower_item
-        self.inventory.add_follower(_follower_item, 1)
-
-        print(f"{_follower_type} follower spawned (ID: {follower_id})")
+        # Choose follower type now but defer actual spawning until after time pass.
+        # Spawning immediately puts the entity in screen_entities where hostile NPCs
+        # can kill it during the 150-250 year simulation before the player even loads.
+        self._pending_follower_type = random.choice(['SHEEP', 'DEER', 'WOLF', 'BAT', 'GOBLIN', 'SKELETON', 'TERMITE'])
         
         # Trigger initial time passage for world generation
         if self.needs_initial_time_passage:
