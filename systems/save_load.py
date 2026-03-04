@@ -153,6 +153,7 @@ class SaveLoadMixin:
                     'target_info':      nq.quest.target_info,
                     'target_zone':      nq.quest.target_zone,
                     'completed_count':  nq.quest.completed_count,
+                    'original_cell':    getattr(nq.quest, '_original_cell', None),
                 }
                 for nq in getattr(self, 'npc_quests', [])
             ],
@@ -379,6 +380,7 @@ class SaveLoadMixin:
                 q.target_info      = d.get('target_info', '')
                 q.target_zone      = d.get('target_zone')
                 q.completed_count  = d.get('completed_count', 0)
+                q._original_cell   = d.get('original_cell')
                 self.npc_quests.append(NpcQuestSlot(d['npc_id'], q))
             self.active_npc_quest_npc_id = save_data.get('active_npc_quest_npc_id')
             # Autopilot grace period: don't engage for 15 seconds after loading

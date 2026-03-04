@@ -1025,6 +1025,7 @@ class Quest:
         self.status = 'inactive'       # 'inactive', 'active', 'completed'
         self.cooldown_remaining = 0
         self.completed_count = 0
+        self._original_cell = None     # Cell type at target before player action
     
     def set_target(self, target_type, target_data, info=''):
         """Set quest target"""

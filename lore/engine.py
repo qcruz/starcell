@@ -514,16 +514,17 @@ class LoreEngineMixin:
                 distance = abs(x - player_x) + abs(y - player_y)
                 quest_type = self.active_quest
 
-                if quest_type in ('FARM', 'GATHER'):
-                    if distance <= 2 and quest._original_cell is not None:
+                if quest_type in ('FARM', 'GATHER', 'MINE', 'LUMBER'):
+                    original = getattr(quest, '_original_cell', None)
+                    if distance <= 2 and original is not None:
                         screen_key = f"{sx},{sy}"
                         if screen_key in self.screens:
                             grid = self.screens[screen_key]['grid']
                             if 0 <= y < len(grid) and 0 <= x < len(grid[0]):
                                 current_cell = grid[y][x]
-                                if current_cell != quest._original_cell:
+                                if current_cell != original:
                                     completed = True
-                                    xp_reward = 10 if quest_type == 'FARM' else 15
+                                    xp_reward = {'FARM': 10, 'GATHER': 15, 'MINE': 20, 'LUMBER': 15}.get(quest_type, 15)
                 elif quest_type in ('EXPLORE', 'RESCUE', 'SEARCH'):
                     if distance <= 2:
                         completed = True
@@ -605,15 +606,16 @@ class LoreEngineMixin:
 
                 if sx == player_sx and sy == player_sy:
                     distance = abs(x - player_x) + abs(y - player_y)
-                    if quest.quest_type in ('FARM', 'GATHER'):
-                        if distance <= 2 and quest._original_cell is not None:
+                    if quest.quest_type in ('FARM', 'GATHER', 'MINE', 'LUMBER'):
+                        original = getattr(quest, '_original_cell', None)
+                        if distance <= 2 and original is not None:
                             screen_key = f"{sx},{sy}"
                             if screen_key in self.screens:
                                 grid = self.screens[screen_key]['grid']
                                 if 0 <= y < len(grid) and 0 <= x < len(grid[0]):
-                                    if grid[y][x] != quest._original_cell:
+                                    if grid[y][x] != original:
                                         completed = True
-                                        xp_reward = 10 if quest.quest_type == 'FARM' else 15
+                                        xp_reward = {'FARM': 10, 'GATHER': 15, 'MINE': 20, 'LUMBER': 15}.get(quest.quest_type, 15)
                     elif quest.quest_type in ('EXPLORE', 'RESCUE', 'SEARCH'):
                         if distance <= 2:
                             completed = True
