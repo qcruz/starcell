@@ -725,6 +725,11 @@ class GameCoreMixin:
         if screen_key in self.screen_entities:
             if entity_id in self.screen_entities[screen_key]:
                 self.screen_entities[screen_key].remove(entity_id)
+
+        # Remove from any subscreen entities lists (catches entities that die inside structures)
+        for sub_list in self.subscreen_entities.values():
+            if entity_id in sub_list:
+                sub_list.remove(entity_id)
         
         # Check if this was a hostile entity and zone is now clear
         if entity.props.get('hostile', False):

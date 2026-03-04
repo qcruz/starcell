@@ -1274,6 +1274,7 @@ class NpcAiMixin:
                 else:
                     # Target dead or invalid
                     entity.ai_state = 'wandering'
+                    entity.in_combat = False
                     entity.current_target = None
                     entity.ai_state_timer = 2
                     return
@@ -1289,11 +1290,13 @@ class NpcAiMixin:
                 else:
                     # Player left zone
                     entity.ai_state = 'wandering'
+                    entity.in_combat = False
                     entity.current_target = None
                     entity.ai_state_timer = 2
                 return
             else:
                 entity.ai_state = 'wandering'
+                entity.in_combat = False
                 entity.current_target = None
                 entity.ai_state_timer = 2
                 return
@@ -2651,6 +2654,9 @@ class NpcAiMixin:
     
     def npc_seek_shelter(self, entity):
         """NPCs seek shelter (house/camp) at night and enter idle state when there"""
+        # Already inside a structure — don't scan overworld grid or re-enter
+        if entity.in_subscreen:
+            return False
         screen_key = entity.screen_key
         if screen_key not in self.screens:
             return False

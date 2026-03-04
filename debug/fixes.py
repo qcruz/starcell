@@ -103,6 +103,12 @@ def fix_entity_subscreen_flag(entity_id, entity, game, bug_catcher=None,
         })
 
     if apply:
+        # Remove from subscreen_entities before clearing the key
+        old_sub_key = getattr(entity, 'subscreen_key', None)
+        if old_sub_key is not None:
+            sub_list = getattr(game, 'subscreen_entities', {}).get(old_sub_key, [])
+            if entity_id in sub_list:
+                sub_list.remove(entity_id)
         entity.in_subscreen = False
         entity.subscreen_key = None
         return FixResult(True, True, desc)
