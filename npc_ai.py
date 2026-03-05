@@ -91,11 +91,17 @@ class NpcAiMixin:
                         dist = abs(entity.x - self.player['x']) + abs(entity.y - self.player['y'])
                         if dist == 1:
                             # Adjacent — attack player
+                            entity.in_combat = True  # show combat stance even while waiting
                             if entity.move_cooldown <= 0:
-                                damage = max(1, (entity.props.get('strength', 5) + entity.level) // 5)
+                                damage = max(1, entity.strength // 5)
+                                damage += self.calculate_weapon_bonus(entity.inventory)
+                                magic_damage, magic_type = self.calculate_magic_damage(entity.inventory)
+                                damage += magic_damage
+                                if entity.props.get('hostile', False):
+                                    damage *= 1.2
                                 self.player_take_damage(damage)
+                                self.show_attack_animation(self.player['x'], self.player['y'], entity=entity, magic_type=magic_type)
                                 entity.move_cooldown = max(1, int(NPC_COMBAT_MOVE_INTERVAL / entity.props.get('speed', 1.0)))
-                                entity.in_combat = True
                                 # Bat disengage after hitting
                                 if entity.props.get('flying', False) and random.random() < 0.4:
                                     entity.ai_state = 'wandering'
@@ -1156,7 +1162,9 @@ class NpcAiMixin:
                         closest_hostile_id = other_id
             
             # Check player as potential target (hostile entities target the player)
-            if entity_is_hostile:
+            # Followers never target the player regardless of hostile flag
+            _is_follower_entity = entity_id in getattr(self, 'followers', [])
+            if entity_is_hostile and not _is_follower_entity:
                 if self._same_context_as_player(entity):
                     player_dist = abs(entity.x - self.player['x']) + abs(entity.y - self.player['y'])
                     if player_dist < closest_hostile_dist:
