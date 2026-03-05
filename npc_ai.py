@@ -1768,6 +1768,8 @@ class NpcAiMixin:
                 # STAND STILL - no movement, only attack
                 # Combat entities lock in position when adjacent to enemy
                 
+                _tp = getattr(self, 'time_pass_speed', 1.0)
+
                 if closest_enemy == 'player':
                     damage = max(1, entity.strength // 5)
 
@@ -1782,30 +1784,36 @@ class NpcAiMixin:
                     if entity.props.get('hostile', True):
                         damage *= 1.2
 
+                    # Scale damage by time pass speed
+                    damage *= _tp
+
                     self.player_take_damage(damage)
                     self.show_attack_animation(self.player['x'], self.player['y'], entity=entity, magic_type=magic_type)
                 else:
                     damage = entity.strength
-                    
+
                     # Add weapon bonus from inventory
                     damage += self.calculate_weapon_bonus(entity.inventory)
-                    
+
                     # Add magic damage from runestones
                     magic_damage, magic_type = self.calculate_magic_damage(entity.inventory)
                     damage += magic_damage
-                    
+
                     # Hostile entities do more damage (1.2x)
                     if entity.props.get('hostile', True):
                         damage *= 1.2
-                    
+
+                    # Scale damage by time pass speed
+                    damage *= _tp
+
                     # Apply blocking reduction
                     if closest_enemy.combat_state == 'blocking':
                         damage *= (1 - closest_enemy.block_reduction)
                     closest_enemy.take_damage(damage, entity_id)
                     self.show_attack_animation(closest_enemy.x, closest_enemy.y, entity=entity, target_entity=closest_enemy, magic_type=magic_type)
-                    
-                    # Grant XP from hit: only target's level
-                    xp_gain = closest_enemy.level
+
+                    # Grant XP from hit: only target's level (scaled by time pass speed)
+                    xp_gain = int(closest_enemy.level * _tp)
                     entity.xp += xp_gain
                     if entity.xp >= entity.xp_to_level:
                         entity.level_up()

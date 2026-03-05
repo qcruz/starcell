@@ -43,8 +43,9 @@ class NpcAiActionsMixin:
                 if actor.xp >= actor.xp_to_level:
                     actor.level_up()
 
-            # Success roll
-            if random.random() < success_rate:
+            # Success roll (boosted during time pass)
+            _tp = getattr(self, 'time_pass_speed', 1.0)
+            if random.random() < min(1.0, success_rate * _tp):
                 # Apply drops from CELL_TYPES
                 drops = CELL_TYPES.get(cell, {}).get('drops', [])
                 for drop in drops:
@@ -111,7 +112,8 @@ class NpcAiActionsMixin:
                 if actor.xp >= actor.xp_to_level:
                     actor.level_up()
 
-            if random.random() < success_rate:
+            _tp = getattr(self, 'time_pass_speed', 1.0)
+            if random.random() < min(1.0, success_rate * _tp):
                 screen['grid'][cy][cx] = result_cell
                 if not is_player and activity:
                     actor.level_up_from_activity(activity, self)
@@ -162,7 +164,8 @@ class NpcAiActionsMixin:
                 if actor.xp >= actor.xp_to_level:
                     actor.level_up()
 
-            if random.random() < success_rate:
+            _tp = getattr(self, 'time_pass_speed', 1.0)
+            if random.random() < min(1.0, success_rate * _tp):
                 screen['grid'][cy][cx] = result_cell
                 # Consume item
                 if consume_items:
@@ -478,7 +481,8 @@ class NpcAiActionsMixin:
             entity.xp += 1
             if entity.xp >= entity.xp_to_level:
                 entity.level_up()
-            if random.random() < FARMER_PLANT_SUCCESS:
+            _tp = getattr(self, 'time_pass_speed', 1.0)
+            if random.random() < min(1.0, FARMER_PLANT_SUCCESS * _tp):
                 screen['grid'][cy][cx] = 'CARROT1'
                 if has_carrot:
                     entity.inventory['carrot'] -= 1
@@ -601,7 +605,8 @@ class NpcAiActionsMixin:
                                 if entity.xp >= entity.xp_to_level:
                                     entity.level_up()
 
-                                if random.random() < LUMBERJACK_BUILD_SUCCESS:
+                                _tp = getattr(self, 'time_pass_speed', 1.0)
+                                if random.random() < min(1.0, LUMBERJACK_BUILD_SUCCESS * _tp):
                                     screen['grid'][check_y][check_x] = 'HOUSE'
                                     entity.inventory['wood'] -= 10
                                     entity.level_up_from_activity('build', self)

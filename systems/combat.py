@@ -213,9 +213,9 @@ class CombatMixin:
         Simulation runs cycles_per_frame steps per render frame. The game world is
         NOT rendered during this state — only the death/years-passing screen is drawn.
         """
-        TICKS_PER_YEAR   = 60   # simulated ticks counted as one year
-        CYCLES_PER_FRAME = 15   # priority-queue calls per render frame
         TIME_PASS_SPEED  = 20.0 # rate multiplier applied to all probabilistic systems
+        TICKS_PER_YEAR   = max(1, int(60 // TIME_PASS_SPEED))  # 3 — scaled by speed
+        CYCLES_PER_FRAME = 15   # priority-queue calls per render frame
 
         ticks_to_simulate = self.death_years * TICKS_PER_YEAR
 
@@ -429,7 +429,7 @@ class CombatMixin:
         """Draw death screen with years passing — no game world rendered."""
         self.screen.fill(COLORS['BLACK'])
 
-        years_passed = self.death_ticks_simulated // 60
+        years_passed = self.death_ticks_simulated // max(1, int(60 // 20))
         years_text = f"{years_passed} / {self.death_years} YEARS PASSING..."
         text = self.font.render(years_text, True, (100, 100, 100))
         text_rect = text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
