@@ -25,7 +25,7 @@ class ZonesMixin:
     def probabilistic_zone_updates(self):
         """Priority queue based zone updates. Zones scored by distance, staleness,
         connections, quests, and structures. Higher priority = updated first."""
-        if self.tick % UPDATE_FREQUENCY != 0:
+        if not getattr(self, 'time_pass_active', False) and self.tick % UPDATE_FREQUENCY != 0:
             return
 
         self.update_weather()
@@ -158,6 +158,8 @@ class ZonesMixin:
 
         self.apply_cellular_automata(zone_x, zone_y)
 
+        _tp = getattr(self, 'time_pass_speed', 1.0)
+
         for y in range(1, GRID_HEIGHT - 1):
             for x in range(1, GRID_WIDTH - 1):
                 if self.is_cell_enchanted(x, y, zone_key):
@@ -167,9 +169,9 @@ class ZonesMixin:
                 if cell in CELL_TYPES:
                     cell_info = CELL_TYPES[cell]
 
-                    if 'grows_to' in cell_info and random.random() < cell_info.get('growth_rate', 0):
+                    if 'grows_to' in cell_info and random.random() < min(1.0, cell_info.get('growth_rate', 0) * _tp):
                         self.set_grid_cell(screen, x, y, cell_info['grows_to'])
-                    elif 'degrades_to' in cell_info and random.random() < cell_info.get('degrade_rate', 0):
+                    elif 'degrades_to' in cell_info and random.random() < min(1.0, cell_info.get('degrade_rate', 0) * _tp):
                         if cell == 'COBBLESTONE':
                             center_x = GRID_WIDTH // 2
                             center_y = GRID_HEIGHT // 2
@@ -287,8 +289,9 @@ class ZonesMixin:
 
                             print(f"{entity.name} defected from {old_faction} to {new_faction}!")
 
-                # Age entities every 600 ticks
-                if self.tick % 600 == 0 and entity.type != 'SKELETON':
+                # Age entities every 600 ticks (accelerated during time pass)
+                age_interval = max(1, int(600 / _tp))
+                if self.tick % age_interval == 0 and entity.type != 'SKELETON':
                     entity.age += 1
 
                 entity.decay_stats()

@@ -374,7 +374,7 @@ CELL_TYPES = {
     'WELL': {
         'color': COLORS['WELL'],
         'label': 'Wel',
-        'solid': False,
+        'solid': True,
         'interactable': True,
     },
     'CACTUS': {

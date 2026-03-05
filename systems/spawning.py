@@ -11,10 +11,47 @@ from constants import (
 )
 from entity import Entity
 
+# NPC types that get random starting resources on spawn
+_HUMANOID_NPC_TYPES = frozenset([
+    'FARMER', 'GUARD', 'WARRIOR', 'COMMANDER', 'KING',
+    'TRADER', 'BLACKSMITH', 'WIZARD', 'LUMBERJACK', 'MINER', 'BANDIT',
+])
+
+# Combined item pool drawn from ITEMS + CELL_PICKUP (structural/meta entries excluded)
+_SPAWN_ITEM_POOL = [
+    'wood', 'planks', 'stone', 'carrot', 'seeds', 'gold', 'bones',
+    'fur', 'meat', 'cooked_meat', 'stew', 'rope', 'leather',
+    'axe', 'hoe', 'shovel', 'pickaxe', 'bucket',
+    'stone_pickaxe', 'stone_axe', 'watering_can',
+    'hilt', 'bone_sword', 'club', 'leather_armor',
+    'iron_ore', 'iron_ingot', 'sandstone',
+    'grass', 'dirt', 'soil', 'sand', 'tree_sapling', 'flower',
+]
+
 
 class SpawningMixin:
     """Handles all entity spawning: initial zone population, raids, cave hostiles,
     night skeletons, termites, runestones, and quest entities."""
+
+    # -------------------------------------------------------------------------
+    # Spawn inventory helpers
+    # -------------------------------------------------------------------------
+
+    def _give_random_starting_inventory(self, entity):
+        """Give a humanoid NPC random starting resources.
+
+        Always rolls 0-30 for wood, stone, and meat independently.
+        Also gives 0-2 random items drawn from the shared item pool.
+        """
+        for resource in ('wood', 'stone', 'meat'):
+            amount = random.randint(0, 30)
+            if amount > 0:
+                entity.inventory[resource] = entity.inventory.get(resource, 0) + amount
+
+        extra_count = random.randint(0, 2)
+        for _ in range(extra_count):
+            item = random.choice(_SPAWN_ITEM_POOL)
+            entity.inventory[item] = entity.inventory.get(item, 0) + random.randint(1, 5)
 
     # -------------------------------------------------------------------------
     # Initial zone population
@@ -143,6 +180,8 @@ class SpawningMixin:
                         self.next_entity_id += 1
 
                         entity = Entity(entity_type, x, y, screen_x, screen_y)
+                        if entity_type in _HUMANOID_NPC_TYPES:
+                            self._give_random_starting_inventory(entity)
                         self.entities[entity_id] = entity
                         self.screen_entities[screen_key].append(entity_id)
 
@@ -904,6 +943,8 @@ class SpawningMixin:
                 self.next_entity_id += 1
 
                 entity = Entity(entity_type, x, y, screen_x, screen_y)
+                if entity_type in _HUMANOID_NPC_TYPES:
+                    self._give_random_starting_inventory(entity)
                 self.entities[entity_id] = entity
 
                 if screen_key not in self.screen_entities:

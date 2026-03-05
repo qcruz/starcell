@@ -120,7 +120,7 @@ CELL_TYPES = {
     'WELL': {
         'color': (100, 80, 60),
         'label': 'Wel',
-        'solid': False,
+        'solid': True,
         'interactable': True,
     },
     'CACTUS': {

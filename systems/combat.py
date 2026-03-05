@@ -203,65 +203,43 @@ class CombatMixin:
                 self.inventory.selected[cat] = None
 
     def update_death_screen(self):
-        """Update during death - accelerated time passage.
+        """Update during death/init — accelerated time passage.
 
-        Focuses on cell-level simulation only (cellular automata + grows_to) for
-        the player zone and immediate neighbors. This is sufficient to convert
-        DIRT→GRASS reliably without the overhead of full entity AI or zone-level
-        systems, which caused frame stalls when run for all 49 instantiated zones.
+        Uses the real probabilistic_zone_updates() priority queue (with tick-gate
+        bypassed) so ALL game systems run: cellular automata, grows_to, entity AI,
+        zone checks, weather, etc. A time_pass_speed multiplier (default 20×) is
+        applied to every probabilistic rate so the world develops in compressed time.
 
-        NPCs are spawned once right before respawn so they are fresh and alive.
-        catch_up_screen is intentionally NOT called — its Tier-2 bulk path converts
-        GRASS→DIRT at 10%/call, massively counteracting grows_to DIRT→GRASS (0.3%).
+        Simulation runs cycles_per_frame steps per render frame. The game world is
+        NOT rendered during this state — only the death/years-passing screen is drawn.
         """
-        ticks_to_simulate = self.death_years * 5   # 5 ticks per simulated year
-        cycles_per_frame = 10                       # years processed per render frame
+        TICKS_PER_YEAR   = 60   # simulated ticks counted as one year
+        CYCLES_PER_FRAME = 15   # priority-queue calls per render frame
+        TIME_PASS_SPEED  = 20.0 # rate multiplier applied to all probabilistic systems
+
+        ticks_to_simulate = self.death_years * TICKS_PER_YEAR
 
         if self.death_ticks_simulated < ticks_to_simulate:
-            for _ in range(cycles_per_frame):
-                # Weather drives rain → water → DIRT→GRASS via cellular automata
-                self.update_weather()
+            # Activate the speed multiplier for this batch of cycles
+            self.time_pass_active = True
+            self.time_pass_speed  = TIME_PASS_SPEED
 
-                player_sx = self.player['screen_x']
-                player_sy = self.player['screen_y']
-
-                # Cell updates for player zone + 3×3 neighbors only.
-                # update_zone_with_coverage is too heavy (entity AI + raid checks
-                # + threat checks for all 49 zones) — stalls every frame.
-                for dx in range(-1, 2):
-                    for dy in range(-1, 2):
-                        zx, zy = player_sx + dx, player_sy + dy
-                        zone_key = f"{zx},{zy}"
-                        if zone_key not in self.screens:
-                            continue
-                        screen = self.screens[zone_key]
-
-                        # Rain effect if currently raining
-                        if self.is_raining:
-                            self.apply_rain(zx, zy)
-
-                        # Cellular automata (handles DIRT→GRASS with water neighbors)
-                        self.apply_cellular_automata(zx, zy)
-
-                        # grows_to: unconditional DIRT→GRASS at 0.3%/cell/tick
-                        for y in range(1, GRID_HEIGHT - 1):
-                            for x in range(1, GRID_WIDTH - 1):
-                                cell = screen['grid'][y][x]
-                                if cell in CELL_TYPES:
-                                    cell_info = CELL_TYPES[cell]
-                                    if 'grows_to' in cell_info:
-                                        if random.random() < cell_info.get('growth_rate', 0):
-                                            self.set_grid_cell(screen, x, y, cell_info['grows_to'])
-
+            for _ in range(CYCLES_PER_FRAME):
                 self.tick += 1
                 self.death_ticks_simulated += 1
-
+                # Full priority-queue update — tick gate bypassed via time_pass_active
+                self.probabilistic_zone_updates()
                 if self.death_ticks_simulated >= ticks_to_simulate:
                     break
 
         else:
+            # Simulation complete — restore normal speed
+            self.time_pass_active = False
+            self.time_pass_speed  = 1.0
+
             # Spawn NPCs fresh in nearby zones right before player loads in.
-            # Done here (not during simulation) to avoid entity accumulation.
+            # Done here (not during simulation) to avoid entity accumulation from
+            # repeated spawn waves overwriting screen_entities mid-simulation.
             if not getattr(self, '_time_pass_spawned', False):
                 self._time_pass_spawned = True
                 player_sx = self.player['screen_x']
@@ -280,6 +258,10 @@ class CombatMixin:
 
     def respawn_player(self):
         """Respawn player in same zone at a random safe location"""
+        # Ensure time pass acceleration is cleared
+        self.time_pass_active = False
+        self.time_pass_speed  = 1.0
+
         # Clear initial generation flag if it exists
         if hasattr(self, 'is_initial_generation'):
             self.is_initial_generation = False
@@ -444,10 +426,10 @@ class CombatMixin:
                              (x_pos + 10, y_pos + 5), (x_pos + 30, y_pos + 35), 3)
 
     def draw_death_screen(self):
-        """Draw death screen with years passing"""
+        """Draw death screen with years passing — no game world rendered."""
         self.screen.fill(COLORS['BLACK'])
 
-        years_passed = self.death_ticks_simulated // 10
+        years_passed = self.death_ticks_simulated // 60
         years_text = f"{years_passed} / {self.death_years} YEARS PASSING..."
         text = self.font.render(years_text, True, (100, 100, 100))
         text_rect = text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))

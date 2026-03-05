@@ -160,6 +160,10 @@ class GameCoreMixin:
         
         # Flag for initial world generation time passage
         self.needs_initial_time_passage = True
+
+        # Time pass acceleration
+        self.time_pass_active = False   # True while death/init simulation is running
+        self.time_pass_speed  = 1.0     # Rate multiplier applied to all probabilistic systems
         
         # Trading System
         self.trader_display = None  # {entity_id: {recipes: [...], position: (x,y)}}

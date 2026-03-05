@@ -96,6 +96,8 @@ class CellsMixin:
         screen = self.screens[key]
         new_grid = [row[:] for row in screen['grid']]  # shallow copy per row
 
+        _tp = getattr(self, 'time_pass_speed', 1.0)
+
         for y in range(GRID_HEIGHT):
             for x in range(GRID_WIDTH):
                 cell = screen['grid'][y][x]
@@ -142,27 +144,27 @@ class CellsMixin:
 
                 # Dirt → Grass (needs water)
                 if cell == 'DIRT' and total_water >= 2:
-                    if random.random() < DIRT_TO_GRASS_RATE:
+                    if random.random() < min(1.0, DIRT_TO_GRASS_RATE * _tp):
                         new_grid[y][x] = 'GRASS'
 
                 # Grass → Dirt (lack of water)
                 elif cell == 'GRASS' and total_water == 0:
-                    if random.random() < GRASS_TO_DIRT_RATE:
+                    if random.random() < min(1.0, GRASS_TO_DIRT_RATE * _tp):
                         new_grid[y][x] = 'DIRT'
 
                 # Dirt → Sand (severe drought)
                 elif cell == 'DIRT' and total_water == 0 and (sand_count >= 2 or grass_count == 0):
-                    if random.random() < DIRT_TO_SAND_RATE:
+                    if random.random() < min(1.0, DIRT_TO_SAND_RATE * _tp):
                         new_grid[y][x] = 'SAND'
 
                 # Tree spread (needs grass and water)
                 elif cell == 'GRASS' and 1 <= tree_count <= 2 and total_water >= 1:
-                    if random.random() < TREE_GROWTH_RATE:
+                    if random.random() < min(1.0, TREE_GROWTH_RATE * _tp):
                         new_grid[y][x] = 'TREE1'
 
                 # Sand reclamation (water converts sand back to dirt)
                 elif cell == 'SAND' and total_water >= 2:
-                    if random.random() < SAND_RECLAIM_RATE:
+                    if random.random() < min(1.0, SAND_RECLAIM_RATE * _tp):
                         new_grid[y][x] = 'DIRT'
 
                 # Deep water formation: all 4 cardinal neighbors must be water/deepwater
@@ -172,34 +174,34 @@ class CellsMixin:
                         if 0 <= x + cdx < GRID_WIDTH and 0 <= y + cdy < GRID_HEIGHT
                         and screen['grid'][y + cdy][x + cdx] in ('WATER', 'DEEP_WATER')
                     )
-                    if cardinal_water == 4 and random.random() < DEEP_WATER_FORM_RATE:
+                    if cardinal_water == 4 and random.random() < min(1.0, DEEP_WATER_FORM_RATE * _tp):
                         new_grid[y][x] = 'DEEP_WATER'
-                    elif total_water <= 1 and random.random() < WATER_TO_DIRT_RATE:
+                    elif total_water <= 1 and random.random() < min(1.0, WATER_TO_DIRT_RATE * _tp):
                         new_grid[y][x] = 'DIRT'
 
                 # Deep water evaporation
                 elif cell == 'DEEP_WATER' and (water_count + deep_water_count) < 2:
-                    if random.random() < DEEP_WATER_EVAPORATE_RATE:
+                    if random.random() < min(1.0, DEEP_WATER_EVAPORATE_RATE * _tp):
                         new_grid[y][x] = 'WATER'
 
                 # Flooding (water spreads to dirt when abundant)
                 elif cell == 'DIRT' and total_water >= 3:
-                    if random.random() < FLOODING_RATE:
+                    if random.random() < min(1.0, FLOODING_RATE * _tp):
                         new_grid[y][x] = 'WATER'
 
                 # Flower spread
                 elif cell == 'GRASS' and 1 <= flower_count <= 2 and total_water >= 1:
-                    if random.random() < FLOWER_SPREAD_RATE:
+                    if random.random() < min(1.0, FLOWER_SPREAD_RATE * _tp):
                         new_grid[y][x] = 'FLOWER'
 
                 # Flower death (overcrowding or drought)
                 elif cell == 'FLOWER' and (flower_count >= 4 or total_water == 0):
-                    if random.random() < FLOWER_DECAY_RATE:
+                    if random.random() < min(1.0, FLOWER_DECAY_RATE * _tp):
                         new_grid[y][x] = 'GRASS'
 
                 # Tree overcrowding death
                 elif cell.startswith('TREE') and tree_count >= 4:
-                    if random.random() < TREE_DECAY_RATE:
+                    if random.random() < min(1.0, TREE_DECAY_RATE * _tp):
                         new_grid[y][x] = 'GRASS'
 
                 # General neighbor-copy: base terrain may adopt a random NSEW neighbor's type
@@ -208,17 +210,17 @@ class CellsMixin:
                     if 0 <= nx < GRID_WIDTH and 0 <= ny < GRID_HEIGHT:
                         neighbor = screen['grid'][ny][nx]
                         if neighbor in ('GRASS', 'DIRT', 'SAND', 'WATER') and neighbor != cell:
-                            if random.random() < BIOME_SPREAD_RATE:
+                            if random.random() < min(1.0, BIOME_SPREAD_RATE * _tp):
                                 new_grid[y][x] = neighbor
 
                 # Wood decay to dirt (outside structures)
                 elif cell == 'WOOD' and not self.is_near_structure(x, y, key):
-                    if random.random() < 0.05:
+                    if random.random() < min(1.0, 0.05 * _tp):
                         new_grid[y][x] = 'DIRT'
 
                 # Planks decay to dirt (outside structures)
                 elif cell == 'PLANKS' and not self.is_near_structure(x, y, key):
-                    if random.random() < 0.03:
+                    if random.random() < min(1.0, 0.03 * _tp):
                         new_grid[y][x] = 'DIRT'
 
                 # Crop decay without rain (drought)
@@ -240,7 +242,7 @@ class CellsMixin:
                     if not has_farmer:
                         decay_rate *= 2.0
 
-                    if random.random() < decay_rate:
+                    if random.random() < min(1.0, decay_rate * _tp):
                         new_grid[y][x] = 'DIRT'
 
         # Sync variant_grid for any cells whose type changed

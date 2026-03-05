@@ -1680,8 +1680,10 @@ class NpcAiMixin:
                     closest_enemy = other
                     closest_enemy_id = other_id
         
-        # Check for player as potential enemy (only if in same subscreen state)
-        if entity.props.get('hostile'):
+        # Check for player as potential enemy (only if in same subscreen state).
+        # Followers never attack the player regardless of their own hostile flag.
+        is_follower = entity_id in getattr(self, 'followers', [])
+        if not is_follower and entity.props.get('hostile'):
             # Check if both entity and player are in same screen/subscreen
             entity_in_subscreen = hasattr(entity, 'in_subscreen') and entity.in_subscreen
             player_in_subscreen = self.player.get('in_subscreen', False)
