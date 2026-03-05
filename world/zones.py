@@ -652,6 +652,22 @@ class ZonesMixin:
         for entity_id in entities_to_remove:
             self.remove_entity(entity_id)
 
+        # Overcrowding: beyond 3 non-keeper occupants, each excess NPC has 10%
+        # chance per update to head for the exit. Keepers are permanent anchors
+        # and are never displaced.
+        occupants = [
+            eid for eid in self.subscreen_entities.get(struct_zone_key, [])
+            + self.screen_entities.get(struct_zone_key, [])
+            if eid in self.entities
+            and self.entities[eid].is_alive()
+            and not getattr(self.entities[eid], 'keeper', False)
+        ]
+        if len(occupants) > 3:
+            random.shuffle(occupants)
+            for eid in occupants[3:]:
+                if random.random() < 0.10:
+                    self.npc_exit_subscreen(self.entities[eid])
+
         self.assign_zone_keepers(struct_zone_key)
 
     # -------------------------------------------------------------------------
