@@ -415,6 +415,15 @@
 
 ---
 
+### NPC Quest Source Mechanic
+- [ ] Shift+Q on an inspected NPC receives a random quest from that NPC (uses existing loreEngine targeting)
+- [ ] Up to 3 active NPC quest slots at once (one per NPC); distinct from the player's main quest row
+- [ ] Completed slot shows a solid color block; Shift+Q again on the same NPC turns it in for a large XP reward
+- [ ] NPC quest slots persist across save/load
+- [ ] HUD shows "Return to \<NPC\>" hint and directional arrow when an NPC quest is completed
+
+---
+
 ### Quest Select System
 - [ ] When inventory and quest panel are both open, quest target defaults to the currently selected item type if applicable
 
@@ -457,11 +466,15 @@
 - [x] ~~Secret cave exit routing (maps to overworld cave entrance or back to house)~~ — completed!
 - [x] ~~Energy system — replaces magic_pool; HP and energy bars in HUD~~ — completed!
 - [x] ~~Iron ore pipeline — IRON_ORE cave cell, iron_ore item, iron_ingot, iron_sword; recipes; loot tables~~ — completed!
-- [x] ~~Water Well — WELL cell; 10% per zone; humanoid NPCs use as water source; Miner builds when 2+ houses present~~ — completed!
-- [x] ~~Follower combat fix — followers no longer attack each other; follower_items dict fixes skeleton death cleanup~~ — completed!
+- [x] ~~Water Well — WELL cell; 10% per zone; humanoid NPCs use as water source; Miner builds when 2+ houses present; solid collision cell~~ — completed!
+- [x] ~~Follower combat fix — followers no longer attack each other; follower_items dict fixes skeleton death cleanup; hostile followers never target player (guarded in both find_and_attack_enemy and AI state machine proximity check)~~ — completed!
 - [x] ~~LAKE biome — CLIFF border, SAND perimeter, WATER interior, deep water center, no entity spawns, ~3% generation chance~~ — completed!
-- [x] ~~Combat fix — entities now correctly attack the player; tick throttle removed for on-screen entity combat~~ — completed!
+- [x] ~~Combat fix — entities now correctly attack the player: attack animation shown on hit, level-scaled strength damage (entity.strength // 5), weapon and magic bonuses, 1.2× hostile multiplier; entity.in_combat set before cooldown check so combat stance is shown while waiting~~ — completed!
 - [x] ~~Biome spreading — general NSEW neighbor-copy rule (BIOME_SPREAD_RATE = 0.001); zone entrance cells pinned to adjacent biome's primary type~~ — completed!
 - [x] ~~BugCatcher debug logging system — JSON-lines format, in-memory buffer, rolling 2 MB cap~~ — completed!
 - [x] ~~Debug Watchdog system — 300-tick rotating sampler, integrity checks, anomaly logging~~ — completed!
 - [x] ~~XP on player actions — chop tree, plant crop, hit enemy, cast spell each grant 1 XP~~ — completed!
+- [x] ~~NPC starting inventory — all humanoid NPCs spawn with 0–30 wood/stone/meat and 0–2 random items from the full item/cell pickup pool~~ — completed!
+- [x] ~~Time pass overhaul — death screen and new game time skip now run full probabilistic zone simulation (real update queue, all automata, grows_to, entity aging) at 20× speed; year counter advances at matching rate; NPC XP gain, damage, and action success rates scale by time_pass_speed during simulation~~ — completed!
+- [x] ~~Structure overcrowding mechanic — NPCs in a structure where local population exceeds 3 have a 10% chance per extra entity to seek the exit each AI update; Keepers are exempt~~ — completed!
+- [x] ~~Keeper system — LoreEngine assigns Keeper NPCs to zones/structures; Keepers never leave their domain; TRADER eligible as Keeper type; Shift+inspect shows keeper info~~ — completed!

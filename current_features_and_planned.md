@@ -84,6 +84,7 @@ For planned and desired future features, see [`roadmap.md`](roadmap.md).
 | C | Crafting tab |
 | X | Attempt craft with selected items |
 | Q | Toggle quest panel |
+| Shift+Q | Get / turn in quest from inspected NPC (NPC Quest Source) |
 | 1–9, 0 | Select inventory slot |
 
 **Combat**
@@ -130,7 +131,7 @@ For planned and desired future features, see [`roadmap.md`](roadmap.md).
 |---|---|
 | Terrain | GRASS, DIRT, WATER, DEEP_WATER, SAND |
 | Biome borders | CLIFF (LAKE biome border, solid) |
-| Structures | HOUSE, STONE_HOUSE, CAVE, MINESHAFT, CAMP, FORGE, WALL, WELL |
+| Structures | HOUSE, STONE_HOUSE, CAVE, MINESHAFT, CAMP, FORGE, WALL, WELL (solid) |
 | Farming | SOIL, CARROT1/2/3, FLOWER, CACTUS |
 | Building materials | WOOD, PLANKS, COBBLESTONE |
 | Trees | TREE1, TREE2 |
@@ -179,7 +180,8 @@ For planned and desired future features, see [`roadmap.md`](roadmap.md).
 - Health (scales with level), Hunger/Thirst (decay 0.02/0.015 per tick)
 - Strength (base × level), Speed (per-type multiplier)
 - Age (65–100 year lifespan, old age damage 0.05 HP/tick)
-- Level & XP (100 × level to next), Type-specific starting inventory
+- Level & XP (100 × level to next)
+- Starting inventory: all humanoid NPCs spawn with 0–30 wood, stone, and meat plus 0–2 random items from the full item/cell pool
 
 **AI States**: `idle` (60t), `wandering` (120t), `targeting` (180t), `combat` (120t), `fleeing` (120t)
 
@@ -244,11 +246,13 @@ For planned and desired future features, see [`roadmap.md`](roadmap.md).
 - Magic weapons: enchanted sword (25), enchanted axe (20)
 
 **NPC Combat**
-- 8-cell detection radius
-- Locked combat for 2–3 seconds minimum
-- Disengage: 5% chance per 2 seconds
-- Flee when health < 30%, 40% flee chance
-- Strategies vary by type (warriors attack, traders flee)
+- 8-cell detection radius; hostile entities detect and pursue player automatically
+- State machine: targeting → adjacent → combat; attack every ~18 ticks (0.3 s)
+- Damage: `entity.strength // 5` (level-scaled) + weapon bonus + magic bonus + 1.2× hostile multiplier
+- Attack animation shown on hit; `entity.in_combat` flag set immediately on adjacency (combat stance visible between attacks)
+- Flee when health low; flee_chance scaled by threat level ratio
+- Followers never target the player (guarded in both state machine proximity check and find_and_attack_enemy)
+- Non-combat NPCs have 10% chance to counterattack when adjacent; otherwise flee
 
 ---
 
@@ -403,6 +407,35 @@ For planned and desired future features, see [`roadmap.md`](roadmap.md).
 
 ---
 
+### Time Pass Simulation (Death / New Game)
+
+- On player death and new game start, 100–200 in-game years of world simulation run before play resumes
+- Uses the full probabilistic zone update queue (all automata, grows_to, ageing, entity AI) — not simplified custom logic
+- `time_pass_active` flag bypasses the tick gate; `time_pass_speed = 20.0` multiplies all probabilistic rates
+- NPC XP gain, damage, and action success rates scale by `time_pass_speed` during simulation
+- Year counter advances at the same 20× rate; 15 update cycles run per rendered frame to keep the death screen responsive
+- Death screen displays years elapsed in real time; simulation stops when the target year count is reached
+
+---
+
+### Keeper System
+
+- A Keeper is an NPC permanently assigned to a zone or structure; Keepers never leave their domain
+- LoreEngine assigns Keeper status when a qualifying zone or structure condition is met; assignment persists in save
+- Keeper types: WOLF, BAT, GOBLIN, BANDIT, SKELETON, TERMITE, SHEEP, DEER (zone-specific)
+- TRADER is eligible as a Keeper (zone trader)
+- Shift+inspect on a Keeper NPC shows keeper status; Keepers are exempt from the structure overcrowding eviction mechanic
+
+---
+
+### Structure Overcrowding
+
+- When a structure's local population exceeds 3 NPCs, each NPC beyond that threshold has a 10% chance per extra entity to seek the zone exit each AI update
+- Keepers are always exempt from this mechanic
+- Prevents structures from accumulating arbitrarily large populations over time
+
+---
+
 ### UI / HUD
 
 - Top-left: level, XP bar, health bar
@@ -479,4 +512,4 @@ For planned and desired future features, see [`roadmap.md`](roadmap.md).
 
 ---
 
-*Last updated: 2026-03-02*
+*Last updated: 2026-03-04*

@@ -5,6 +5,46 @@ order.  Entries are grouped into Features, Fixes, and Systems.
 
 ---
 
+## 2026-03-04 — Combat Quality, Keeper Polish, Time Pass, Overcrowding
+
+### Features
+- **NPC starting inventory** — all humanoid NPCs (FARMER, GUARD, WARRIOR, COMMANDER,
+  KING, TRADER, BLACKSMITH, WIZARD, LUMBERJACK, MINER, BANDIT) spawn with 0–30
+  wood, stone, and meat plus 0–2 random items from the full item/cell pickup pool.
+- **Time pass overhaul** — death screen and new-game time skip now run the full
+  probabilistic zone simulation (real update priority queue, all automata, grows_to,
+  entity aging, entity AI) at 20× speed via `time_pass_active` / `time_pass_speed`
+  flags.  NPC XP gain, damage, and action success rates scale by `time_pass_speed`
+  during the simulation.  Year counter advances 20× faster to match.  15 update
+  cycles per rendered frame keeps the death screen responsive.
+- **Structure overcrowding mechanic** — when a structure's local population exceeds 3,
+  each entity beyond that has a 10% chance per extra entity per AI update to seek the
+  zone exit.  Keepers are always exempt.
+- **WELL as solid collision cell** — Water Well is now impassable (`solid: True`)
+  in both `constants.py` and `data/cells.py`.
+- **Keeper system polish** — TRADER is now eligible as a zone Keeper; Shift+inspect
+  on a Keeper shows keeper status; Keepers are excluded from the overcrowding eviction
+  mechanic.  Fixes: AttributeError on `entity.keeper` resolved via `getattr`; subscreen
+  context check (`_same_context_as_player`) corrected for Keeper NPCs inside structures;
+  ghost `subscreen_entities` registrations cleared; stale `in_combat` flags reset on
+  Keeper exit.
+
+### Fixes
+- **NPC player-combat animation and damage** — the state machine inline player-attack
+  path was missing `show_attack_animation`, making hits visually invisible.  Formula
+  changed from base-strength + level to `entity.strength // 5` (level-scaled) plus
+  weapon bonus, magic bonus, and 1.2× hostile multiplier — matching `find_and_attack_enemy`
+  quality.  `entity.in_combat` now set before the cooldown check so the combat stance
+  is shown while waiting between hits.
+- **Follower guard in state machine proximity check** — hostile followers (e.g. GOBLIN)
+  could still have `current_target = 'player'` set by `update_entity_ai_state`'s
+  proximity check even after the `find_and_attack_enemy` guard was added.  Both paths
+  now block followers from targeting the player.
+- **Goblin follower friendly-fire** — `find_and_attack_enemy` follower FF guard added
+  in a prior session; state machine guard added this session for complete coverage.
+
+---
+
 ## [Unreleased]
 
 ### Features
