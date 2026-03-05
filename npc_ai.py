@@ -401,6 +401,20 @@ class NpcAiMixin:
                 # Nighttime + nocturnal = want to be outside hunting
                 wants_to_exit = True
 
+            # Overcrowding: keepers never leave; everyone else may be pushed out
+            # when the structure is too full. Chance = local_pop * 10% per update.
+            if not getattr(entity, 'keeper', False):
+                subscreen_key = entity.subscreen_key or ''
+                local_pop = len([
+                    eid for eid in (
+                        self.subscreen_entities.get(subscreen_key, []) +
+                        self.screen_entities.get(subscreen_key, [])
+                    )
+                    if eid in self.entities and self.entities[eid].is_alive()
+                ])
+                if local_pop > 3 and random.random() < local_pop * 0.10:
+                    wants_to_exit = True
+
             # Combat-capable NPCs (guards/warriors) detect nearby hostiles outside and rush to defend
             if not wants_to_exit and entity.type in ('GUARD', 'WARRIOR') \
                     and entity.subscreen_key in self.subscreens:
