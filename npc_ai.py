@@ -68,15 +68,6 @@ class NpcAiMixin:
         else:
             screen_key = f"{entity.screen_x},{entity.screen_y}"
         
-        # Movement cooldown - only move every N ticks based on speed
-        if not hasattr(entity, 'move_cooldown'):
-            # Initialize with random cooldown to prevent synchronized movement on spawn/load
-            base_cooldown = max(1, int(20 / entity.props.get('speed', 1.0)))
-            entity.move_cooldown = random.randint(0, base_cooldown)
-        
-        if entity.move_cooldown > 0:
-            entity.move_cooldown -= 1
-        
         # EXECUTE BEHAVIOR BASED ON STATE
         if hasattr(entity, 'ai_state'):
             if entity.ai_state == 'combat':
@@ -90,9 +81,10 @@ class NpcAiMixin:
                     else:
                         dist = abs(entity.x - self.player['x']) + abs(entity.y - self.player['y'])
                         if dist == 1:
-                            # Adjacent — attack player
-                            entity.in_combat = True  # show combat stance even while waiting
-                            if entity.move_cooldown <= 0:
+                            # Adjacent — probabilistic attack based on entity's attack_chance
+                            entity.in_combat = True
+                            attack_chance = entity.props.get('ai_params', {}).get('attack_chance', 0.0)
+                            if random.random() < attack_chance:
                                 damage = max(1, entity.strength // 5)
                                 damage += self.calculate_weapon_bonus(entity.inventory)
                                 magic_damage, magic_type = self.calculate_magic_damage(entity.inventory)
@@ -101,7 +93,6 @@ class NpcAiMixin:
                                     damage *= 1.2
                                 self.player_take_damage(damage)
                                 self.show_attack_animation(self.player['x'], self.player['y'], entity=entity, magic_type=magic_type)
-                                entity.move_cooldown = max(1, int(NPC_COMBAT_MOVE_INTERVAL / entity.props.get('speed', 1.0)))
                                 # Bat disengage after hitting
                                 if entity.props.get('flying', False) and random.random() < 0.4:
                                     entity.ai_state = 'wandering'
@@ -109,10 +100,9 @@ class NpcAiMixin:
                                     entity.in_combat = False
                                     entity.ai_state_timer = 3
                         elif dist <= 8:
-                            # Move toward player
-                            if entity.move_cooldown <= 0:
+                            # Move toward player — probabilistic based on speed
+                            if random.random() < entity.props.get('speed', 1.0) / 20:
                                 self.move_toward_position(entity, self.player['x'], self.player['y'], screen_key)
-                                entity.move_cooldown = max(1, int(NPC_COMBAT_MOVE_INTERVAL / entity.props.get('speed', 1.0)))
                         else:
                             # Too far — lose interest
                             entity.ai_state = 'wandering'
@@ -122,11 +112,6 @@ class NpcAiMixin:
                 elif entity.current_target and isinstance(entity.current_target, int):
                     if entity.current_target in self.entities:
                         target = self.entities[entity.current_target]
-                        
-                        # DEBUG: Track warrior combat behavior (disabled to reduce spam)
-                        # if entity.type == 'WARRIOR':
-                        #     dist = abs(entity.x - target.x) + abs(entity.y - target.y)
-                        #     print(f"WARRIOR {entity.name} COMBAT: pos=({entity.x},{entity.y}), target_pos=({target.x},{target.y}), dist={dist}, cooldown={entity.move_cooldown}")
                         
                         # Check if target is alive
                         if not target.is_alive():
@@ -210,9 +195,8 @@ class NpcAiMixin:
                         entity.ai_state_timer = 2
             
             elif entity.ai_state == 'flee':
-                # Fleeing - move away from threat, gated by move_cooldown so smooth
-                # interpolation (world_x/y) can keep up with grid position changes.
-                if entity.move_cooldown <= 0:
+                # Fleeing - move away from threat, probabilistic based on entity speed
+                if random.random() < entity.props.get('speed', 1.0) / 20:
                     threat_x, threat_y = None, None
                     if entity.flee_target == 'player':
                         if self._same_context_as_player(entity):
@@ -234,7 +218,10 @@ class NpcAiMixin:
                         new_x = entity.x + move_x
                         new_y = entity.y + move_y
                         self.move_toward_position(entity, new_x, new_y, screen_key)
-                        entity.move_cooldown = max(1, int(NPC_COMBAT_MOVE_INTERVAL / entity.props.get('speed', 1.0)))
+
+            elif entity.ai_state == 'exit':
+                # Exit state — move toward zone exit (triggered by overcrowding, day/night, etc.)
+                self.seek_zone_exit(entity, entity_id)
             
             elif entity.ai_state == 'targeting':
                 # Moving toward target
@@ -1787,88 +1774,88 @@ class NpcAiMixin:
             
             # If adjacent, stand still and attack
             if closest_dist <= 1:
-                # STAND STILL - no movement, only attack
-                # Combat entities lock in position when adjacent to enemy
-                
-                _tp = getattr(self, 'time_pass_speed', 1.0)
+                # Probabilistic attack — roll attack_chance from entity props each update
+                attack_chance = entity.props.get('ai_params', {}).get('attack_chance', 0.0)
+                if random.random() < attack_chance:
+                    _tp = getattr(self, 'time_pass_speed', 1.0)
 
-                if closest_enemy == 'player':
-                    damage = max(1, entity.strength // 5)
+                    if closest_enemy == 'player':
+                        damage = max(1, entity.strength // 5)
 
-                    # Add weapon bonus from inventory
-                    damage += self.calculate_weapon_bonus(entity.inventory)
+                        # Add weapon bonus from inventory
+                        damage += self.calculate_weapon_bonus(entity.inventory)
 
-                    # Add magic damage from runestones
-                    magic_damage, magic_type = self.calculate_magic_damage(entity.inventory)
-                    damage += magic_damage
+                        # Add magic damage from runestones
+                        magic_damage, magic_type = self.calculate_magic_damage(entity.inventory)
+                        damage += magic_damage
 
-                    # Hostile entities do more damage (1.2x)
-                    if entity.props.get('hostile', True):
-                        damage *= 1.2
+                        # Hostile entities do more damage (1.2x)
+                        if entity.props.get('hostile', True):
+                            damage *= 1.2
 
-                    # Scale damage by time pass speed
-                    damage *= _tp
+                        # Scale damage by time pass speed
+                        damage *= _tp
 
-                    self.player_take_damage(damage)
-                    self.show_attack_animation(self.player['x'], self.player['y'], entity=entity, magic_type=magic_type)
-                else:
-                    damage = entity.strength
+                        self.player_take_damage(damage)
+                        self.show_attack_animation(self.player['x'], self.player['y'], entity=entity, magic_type=magic_type)
+                    else:
+                        damage = entity.strength
 
-                    # Add weapon bonus from inventory
-                    damage += self.calculate_weapon_bonus(entity.inventory)
+                        # Add weapon bonus from inventory
+                        damage += self.calculate_weapon_bonus(entity.inventory)
 
-                    # Add magic damage from runestones
-                    magic_damage, magic_type = self.calculate_magic_damage(entity.inventory)
-                    damage += magic_damage
+                        # Add magic damage from runestones
+                        magic_damage, magic_type = self.calculate_magic_damage(entity.inventory)
+                        damage += magic_damage
 
-                    # Hostile entities do more damage (1.2x)
-                    if entity.props.get('hostile', True):
-                        damage *= 1.2
+                        # Hostile entities do more damage (1.2x)
+                        if entity.props.get('hostile', True):
+                            damage *= 1.2
 
-                    # Scale damage by time pass speed
-                    damage *= _tp
+                        # Scale damage by time pass speed
+                        damage *= _tp
 
-                    # Apply blocking reduction
-                    if closest_enemy.combat_state == 'blocking':
-                        damage *= (1 - closest_enemy.block_reduction)
-                    closest_enemy.take_damage(damage, entity_id)
-                    self.show_attack_animation(closest_enemy.x, closest_enemy.y, entity=entity, target_entity=closest_enemy, magic_type=magic_type)
+                        # Apply blocking reduction
+                        if closest_enemy.combat_state == 'blocking':
+                            damage *= (1 - closest_enemy.block_reduction)
+                        closest_enemy.take_damage(damage, entity_id)
+                        self.show_attack_animation(closest_enemy.x, closest_enemy.y, entity=entity, target_entity=closest_enemy, magic_type=magic_type)
 
-                    # Grant XP from hit: only target's level (scaled by time pass speed)
-                    xp_gain = int(closest_enemy.level * _tp)
-                    entity.xp += xp_gain
-                    if entity.xp >= entity.xp_to_level:
-                        entity.level_up()
-                    
-                    # Auto meat consumption for combat entities (Warriors/Guards/Commanders/Kings)
-                    if entity.type in ['WARRIOR', 'COMMANDER', 'KING', 'GUARD']:
-                        low_health = entity.health < entity.max_health * 0.5
-                        low_hunger = entity.hunger < entity.max_hunger * 0.3
-                        
-                        if (low_health or low_hunger) and 'meat' in entity.inventory and entity.inventory['meat'] > 0:
-                            # Consume meat: heal 25% max health and restore hunger
-                            entity.inventory['meat'] -= 1
-                            heal_amount = entity.max_health * 0.25
-                            entity.health = min(entity.max_health, entity.health + heal_amount)
-                            entity.hunger = min(entity.max_hunger, entity.hunger + 50)
-                            print(f"{entity.name or entity.type} consumed meat and healed {int(heal_amount)} HP!")
-                    
-                    # Check if enemy died and handle king promotion
-                    if not closest_enemy.is_alive():
-                        # Commander killing a king is promoted to king
-                        if entity.type == 'COMMANDER' and closest_enemy.type == 'KING' and entity.faction:
-                            old_name = entity.name
-                            entity.type = 'KING'
-                            entity.props = ENTITY_TYPES['KING']
-                            entity.max_health = entity.props['max_health'] * entity.level
-                            entity.strength = entity.props['strength'] * entity.level
-                            
-                            # Full restore
-                            entity.health = entity.max_health
-                            entity.hunger = entity.max_hunger
-                            entity.thirst = entity.max_thirst
-                            
-                            print(f"{old_name} slew a KING and claims the throne of {entity.faction}!")
+                        # Grant XP from hit: only target's level (scaled by time pass speed)
+                        xp_gain = int(closest_enemy.level * _tp)
+                        entity.xp += xp_gain
+                        if entity.xp >= entity.xp_to_level:
+                            entity.level_up()
+
+                        # Auto meat consumption for combat entities (Warriors/Guards/Commanders/Kings)
+                        if entity.type in ['WARRIOR', 'COMMANDER', 'KING', 'GUARD']:
+                            low_health = entity.health < entity.max_health * 0.5
+                            low_hunger = entity.hunger < entity.max_hunger * 0.3
+
+                            if (low_health or low_hunger) and 'meat' in entity.inventory and entity.inventory['meat'] > 0:
+                                # Consume meat: heal 25% max health and restore hunger
+                                entity.inventory['meat'] -= 1
+                                heal_amount = entity.max_health * 0.25
+                                entity.health = min(entity.max_health, entity.health + heal_amount)
+                                entity.hunger = min(entity.max_hunger, entity.hunger + 50)
+                                print(f"{entity.name or entity.type} consumed meat and healed {int(heal_amount)} HP!")
+
+                        # Check if enemy died and handle king promotion
+                        if not closest_enemy.is_alive():
+                            # Commander killing a king is promoted to king
+                            if entity.type == 'COMMANDER' and closest_enemy.type == 'KING' and entity.faction:
+                                old_name = entity.name
+                                entity.type = 'KING'
+                                entity.props = ENTITY_TYPES['KING']
+                                entity.max_health = entity.props['max_health'] * entity.level
+                                entity.strength = entity.props['strength'] * entity.level
+
+                                # Full restore
+                                entity.health = entity.max_health
+                                entity.hunger = entity.max_hunger
+                                entity.thirst = entity.max_thirst
+
+                                print(f"{old_name} slew a KING and claims the throne of {entity.faction}!")
             else:
                 # Not adjacent - movement handled by state machine (targeting state)
                 # DO NOT set states here

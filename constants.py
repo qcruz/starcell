@@ -630,6 +630,7 @@ ENTITY_TYPES = {
             'idleness': 0.05,
             'flee_chance': 0.20,
             'combat_chance': 0.80,
+            'attack_chance': 0.60,
             'target_types': ['food', 'water', 'hostile']
         }
     },
@@ -717,6 +718,7 @@ ENTITY_TYPES = {
             'idleness': 0.01,        # 1% chance to enter idle state (matched to warriors)
             'flee_chance': 0.10,
             'combat_chance': 0.90,
+            'attack_chance': 0.40,
             'target_types': ['hostile', 'water', 'food']  # What to target
         }
     },
@@ -747,6 +749,7 @@ ENTITY_TYPES = {
             'idleness': 0.01,        # 1% chance to enter idle state (matched to guards)
             'flee_chance': 0.005,    # 0.5% base flee — near-zero, scales up only vs much higher-level enemies
             'combat_chance': 0.95,   # 95% fight when threatened
+            'attack_chance': 0.55,
             'target_types': ['hostile', 'water', 'food', 'structure']  # What to target
         }
     },
@@ -778,6 +781,7 @@ ENTITY_TYPES = {
             'idleness': 0.07,        # 7% - rarely idle
             'flee_chance': 0.002,    # 0.2% base flee — commanders almost never flee
             'combat_chance': 0.97,
+            'attack_chance': 0.55,
             'target_types': ['hostile', 'water', 'food', 'structure']
         }
     },
@@ -809,6 +813,7 @@ ENTITY_TYPES = {
             'idleness': 0.15,        # 15% - sits on throne
             'flee_chance': 0.05,
             'combat_chance': 0.95,
+            'attack_chance': 0.50,
             'target_types': ['hostile', 'water', 'food', 'structure']
         }
     },
@@ -993,6 +998,7 @@ ENTITY_TYPES = {
             'idleness': 0.02,        # Always hunting (was 0.05)
             'flee_chance': 0.10,
             'combat_chance': 0.90,
+            'attack_chance': 0.45,
             'target_types': ['hostile', 'structure', 'resource']
         }
     },
@@ -1020,6 +1026,7 @@ ENTITY_TYPES = {
             'idleness': 0.03,        # More active (was 0.10)
             'flee_chance': 0.15,
             'combat_chance': 0.85,
+            'attack_chance': 0.50,
             'target_types': ['hostile', 'structure', 'resource']
         }
     },
@@ -1045,6 +1052,7 @@ ENTITY_TYPES = {
             'idleness': 0.10,        # Takes more breaks (was 0.05)
             'flee_chance': 0.05,
             'combat_chance': 0.95,
+            'attack_chance': 0.35,
             'target_types': ['hostile', 'structure']
         }
     },
@@ -1078,6 +1086,7 @@ ENTITY_TYPES = {
             'idleness': 0.01,        # Constantly eating trees (was 0.20)
             'flee_chance': 0.80,
             'combat_chance': 0.20,
+            'attack_chance': 0.15,
             'target_types': ['food']  # Trees are their food source
         }
     },
@@ -1106,6 +1115,7 @@ ENTITY_TYPES = {
             'idleness': 0.15,         # Sometimes just hangs around
             'flee_chance': 0.20,      # Will flee if threatened
             'combat_chance': 0.80,    # Usually fights back
+            'attack_chance': 0.30,
             'target_types': ['hostile']  # Attacks other NPCs
         }
     }
