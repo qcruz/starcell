@@ -142,6 +142,7 @@ class SaveLoadMixin:
             'active_quest': self.active_quest,
             'active_npc_quest_npc_id': getattr(self, 'active_npc_quest_npc_id', None),
             'zone_keepers': self.zone_keepers,
+            'zone_cave_systems': getattr(self, 'zone_cave_systems', {}),
             'npc_quests': [
                 {
                     'npc_id':           nq.npc_id,
@@ -302,6 +303,12 @@ class SaveLoadMixin:
                             x, y = map(int, chest_key_str.split(','))
                             deserialized_chests[(x, y)] = loot_type
                         deserialized_subscreen[key] = deserialized_chests
+                    elif key in ('parent_screen', 'parent_cell', 'entrance', 'exit') and isinstance(value, list):
+                        # JSON serialises tuples as lists — convert back so door-lookup
+                        # comparisons (parent_cell == (x, y)) succeed on load.
+                        deserialized_subscreen[key] = tuple(value)
+                    elif key == 'entrances' and isinstance(value, list):
+                        deserialized_subscreen[key] = [tuple(e) if isinstance(e, list) else e for e in value]
                     else:
                         deserialized_subscreen[key] = value
                 self.subscreens[subscreen_key] = deserialized_subscreen
@@ -324,6 +331,7 @@ class SaveLoadMixin:
             self.zone_structures = save_data.get('zone_structures', {})
             self.next_structure_zone_id = save_data.get('next_structure_zone_id', 0)
             self.zone_keepers = save_data.get('zone_keepers', {})
+            self.zone_cave_systems = save_data.get('zone_cave_systems', {})
 
             # Restore tuple keys in screen data (chests, parent_screen, etc.)
             for screen_key, screen_data in self.screens.items():
