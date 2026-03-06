@@ -73,25 +73,30 @@ def update_or_clone(branch="main"):
     """Pull latest changes for the given branch; clone if not present."""
     if (GAME_DIR / ".git").exists():
         info(f"Game directory: {GAME_DIR}")
-        info(f"Switching to branch '{branch}' and pulling…")
-        # Fetch all branches then checkout the chosen one
+        info(f"Fetching '{branch}' from GitHub…")
+        # Fetch all remote branches
         subprocess.run(
             ["git", "-C", str(GAME_DIR), "fetch", "--all", "--quiet"],
             capture_output=True, text=True,
         )
+        # Hard reset to the chosen remote branch — works even with local modifications
+        result = subprocess.run(
+            ["git", "-C", str(GAME_DIR), "reset", "--hard", f"origin/{branch}"],
+            capture_output=True, text=True,
+        )
+        # Also update HEAD to track the chosen branch
         subprocess.run(
             ["git", "-C", str(GAME_DIR), "checkout", branch],
             capture_output=True, text=True,
         )
-        result = subprocess.run(
-            ["git", "-C", str(GAME_DIR), "pull", "--ff-only", "origin", branch],
+        subprocess.run(
+            ["git", "-C", str(GAME_DIR), "reset", "--hard", f"origin/{branch}"],
             capture_output=True, text=True,
         )
         if result.returncode == 0:
-            msg = result.stdout.strip() or "Already up to date."
-            ok(msg)
+            ok(f"Up to date with {branch}.")
         else:
-            warn("git pull failed — running with existing local files.")
+            warn("git reset failed — running with existing local files.")
             info(result.stderr.strip())
     else:
         info(f"First launch — cloning StarCell to {GAME_DIR} …")
