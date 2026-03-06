@@ -74,25 +74,41 @@ def update_or_clone(branch="main"):
     if (GAME_DIR / ".git").exists():
         info(f"Game directory: {GAME_DIR}")
         info(f"Fetching '{branch}' from GitHub…")
+
+        # Preserve save files before git reset — git reset --hard deletes files
+        # that were previously tracked and later removed from the repo.
+        save_patterns = [
+            "savegame.json",
+            "savegame_backup1.json",
+            "savegame_backup2.json",
+            "savegame_backup3.json",
+        ]
+        preserved = {}
+        for name in save_patterns:
+            p = GAME_DIR / name
+            if p.exists():
+                preserved[name] = p.read_bytes()
+
         # Fetch all remote branches
         subprocess.run(
             ["git", "-C", str(GAME_DIR), "fetch", "--all", "--quiet"],
             capture_output=True, text=True,
         )
-        # Hard reset to the chosen remote branch — works even with local modifications
-        result = subprocess.run(
-            ["git", "-C", str(GAME_DIR), "reset", "--hard", f"origin/{branch}"],
-            capture_output=True, text=True,
-        )
-        # Also update HEAD to track the chosen branch
+        # Checkout the chosen branch, then hard reset to match remote exactly
         subprocess.run(
             ["git", "-C", str(GAME_DIR), "checkout", branch],
             capture_output=True, text=True,
         )
-        subprocess.run(
+        result = subprocess.run(
             ["git", "-C", str(GAME_DIR), "reset", "--hard", f"origin/{branch}"],
             capture_output=True, text=True,
         )
+
+        # Restore save files after reset
+        for name, data in preserved.items():
+            (GAME_DIR / name).write_bytes(data)
+            ok(f"Save file preserved: {name}")
+
         if result.returncode == 0:
             ok(f"Up to date with {branch}.")
         else:
