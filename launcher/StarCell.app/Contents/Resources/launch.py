@@ -47,13 +47,44 @@ def check_git():
     return False
 
 
-def update_or_clone():
-    """Pull latest changes if repo exists; clone it if not."""
+def choose_branch():
+    """Show a macOS dialog asking which branch to run. Returns 'main' or 'dev'."""
+    script = (
+        'tell application "System Events"\n'
+        '  activate\n'
+        '  set choice to button returned of (display dialog '
+        '"Which version would you like to run?" '
+        'buttons {"Stable (main)", "Dev (latest)"} '
+        'default button "Stable (main)" '
+        'with title "StarCell Launcher")\n'
+        'end tell\n'
+        'return choice'
+    )
+    result = subprocess.run(
+        ["osascript", "-e", script],
+        capture_output=True, text=True,
+    )
+    if "Dev" in result.stdout:
+        return "dev"
+    return "main"
+
+
+def update_or_clone(branch="main"):
+    """Pull latest changes for the given branch; clone if not present."""
     if (GAME_DIR / ".git").exists():
         info(f"Game directory: {GAME_DIR}")
-        info("Checking for updates from GitHub…")
+        info(f"Switching to branch '{branch}' and pulling…")
+        # Fetch all branches then checkout the chosen one
+        subprocess.run(
+            ["git", "-C", str(GAME_DIR), "fetch", "--all", "--quiet"],
+            capture_output=True, text=True,
+        )
+        subprocess.run(
+            ["git", "-C", str(GAME_DIR), "checkout", branch],
+            capture_output=True, text=True,
+        )
         result = subprocess.run(
-            ["git", "-C", str(GAME_DIR), "pull", "--ff-only"],
+            ["git", "-C", str(GAME_DIR), "pull", "--ff-only", "origin", branch],
             capture_output=True, text=True,
         )
         if result.returncode == 0:
@@ -66,7 +97,7 @@ def update_or_clone():
         info(f"First launch — cloning StarCell to {GAME_DIR} …")
         GAME_DIR.parent.mkdir(parents=True, exist_ok=True)
         result = subprocess.run(
-            ["git", "clone", REPO_URL, str(GAME_DIR)],
+            ["git", "clone", "--branch", branch, REPO_URL, str(GAME_DIR)],
             capture_output=True, text=True,
         )
         if result.returncode != 0:
@@ -116,7 +147,10 @@ if __name__ == "__main__":
         input("Press Enter to close…")
         sys.exit(1)
 
-    if not update_or_clone():
+    branch = choose_branch()
+    info(f"Branch: {branch}")
+
+    if not update_or_clone(branch):
         input("Press Enter to close…")
         sys.exit(1)
 
