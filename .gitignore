@@ -2,6 +2,9 @@ __pycache__/
 *.pyc
 saves/
 .DS_Store
+savegame.json
+savegame_backup*.json
+debug/bugcatcher.log
 
 # Old versioned archive files
 starcellv1-1-*.py
