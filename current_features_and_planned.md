@@ -260,7 +260,7 @@ For planned and desired future features, see [`roadmap.md`](roadmap.md).
 
 **NPC Combat**
 - 8-cell detection radius; hostile entities detect and pursue player automatically
-- State machine: targeting → adjacent → combat; attack every ~18 ticks (0.3 s)
+- State machine: targeting → adjacent → combat; attack resolved via per-update `attack_chance` probability roll (replaces fixed cooldown)
 - Damage: `entity.strength // 5` (level-scaled) + weapon bonus + magic bonus + 1.2× hostile multiplier
 - Attack animation shown on hit; `entity.in_combat` flag set immediately on adjacency (combat stance visible between attacks)
 - Flee when health low; flee_chance scaled by threat level ratio
@@ -350,12 +350,22 @@ For planned and desired future features, see [`roadmap.md`](roadmap.md).
 
 ---
 
-### Dungeon System (Subscreens)
+### Structure System (Unified Zone Model)
+
+Structure interiors (houses, caves, mineshafts) are full zone objects sharing the same
+update pipeline as overworld zones.  Each interior has its own cell grid, entity list, item
+list, weather state, and cellular automata pass.  Entity AI, spawning, decay, and catch-up
+simulation work identically inside and outside structures.
 
 **Interior Types**
 - House: wood floors, walls, 1 chest (random loot), 1 NPC resident, stairs
 - Cave: stone floors/walls, multiple depth levels (1–3), hostile spawns (5%/update), chests at depth
 - Mineshaft: cave variant by miners, higher mineral/loot density
+
+**NPC Structure Entry**
+- CAVE / MINESHAFT: entity must be in `targeting` or `combat` state with a confirmed target inside the structure
+- HOUSE / other: 10% random chance when adjacent
+- Cross-structure targeting: entities detect hostiles inside connected caves and navigate to the door first
 
 **Chest Loot**
 
@@ -365,7 +375,7 @@ For planned and desired future features, see [`roadmap.md`](roadmap.md).
 | CAVE_CHEST | Gold 10–50 (90%), Stone 5–15 (70%), Bones 1–3 (50%), Stone pickaxe (30%) |
 | CAVE_DEEP_CHEST | Gold 50–200 (100%), Enchanted sword (40%), Leather armor (30%), Magic stone (20%) |
 
-**Exit Mechanics**: NPCs exit dungeons (60% chance/update), items consolidate to chest on exit
+**Exit Mechanics**: NPCs exit structures (60% chance/update); Keepers never exit their assigned structure; items consolidate to chest on exit
 
 ---
 

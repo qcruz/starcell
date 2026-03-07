@@ -7,6 +7,64 @@ order.  Entries are grouped into Features, Fixes, and Systems.
 
 ## 2026-03-07 — Cellular Automata Overhaul, Drought System, Biome Balance
 
+> Also includes: rename of "subscreen" → "structure" throughout the active codebase
+> (`game_core.py`, `npc_ai.py`, `ai/`, `systems/`, `ui/`, `debug/`, `world/`).  All
+> internal variable names, method names, dict keys, and log fields updated.
+> No behavior change.
+
+---
+
+## 2026-03-06 — Subscreen Overhaul, Probabilistic Combat, Launcher Improvements
+
+### Features
+- **Subscreen unified zone model** — structure interiors (houses, caves, mineshafts) are
+  now full zone objects sharing the same update pipeline as overworld zones.  Each interior
+  has its own cell grid, entity list, item list, weather state, and cellular automata pass.
+  Entity AI, spawning, decay, and catch-up simulation all work identically inside and
+  outside structures.
+- **Probabilistic combat** — NPC attack system replaced `move_cooldown` countdown with a
+  per-update `attack_chance` probability roll.  Attacks feel more natural and are no longer
+  locked to a fixed cooldown interval.  Rate is tunable per entity type.
+- **Keeper guard in AI** — NPC `exit` state now checks for `keeper` flag; keepers
+  immediately revert to `wandering` rather than walking to the zone edge.
+- **NPC subscreen entry targeting** — CAVE/MINESHAFT entry now only fires when the entity
+  is in `targeting` or `combat` state and its current target is confirmed inside the
+  structure.  HOUSE entry keeps the existing 10% random chance.
+- **Cross-subscreen targeting** — entities can detect hostile targets inside connected
+  caves/mineshafts and navigate to the door before entering.
+- **Launcher branch selection** — macOS launcher now shows a dialog to choose between
+  Stable (main) and Dev branches before launching.
+- **Launcher save preservation** — save files and debug logs are backed up and restored
+  around `git reset --hard` during branch switches so player progress is never lost.
+- **DEVELOPMENT_STRATEGY.md** — new doc covering commit discipline, branch map, session
+  sizing guidelines, and rotation schedule.
+
+### Fixes
+- **Structure interiors randomizing on every load** — interior cell grids were regenerated
+  from scratch on each load instead of restoring saved state.  Fixed by saving and loading
+  interior grids as part of the zone save data.
+- **`remove_entity` never deleted entities** — `check_follower_integrity` was defined
+  inside `remove_entity`, shadowing the class method and never actually cleaning up the
+  entity from tracking dicts.  Moved to correct class scope.
+- **Bat follower targeting** — bat followers could re-enter targeting state against the
+  player during daytime structure transitions.  Guard added to AI state machine.
+- **Guard/follower combat + trader not leaving structure** — guards and followers attacked
+  each other in structure interiors; trader exit behavior failed inside unified zone model.
+  Both corrected.
+- **Entity info panel not showing inside structures** — inspect/tab overlay used wrong
+  context check when player was in a structure interior.  Fixed context guard.
+- **`KeyError 'exits'`** — structure-zone dicts lacked an `exits` key, crashing
+  `try_travel_behavior` and zone transition functions.  All structure zone dicts now
+  initialized with empty `exits`.
+- **Stale `entity_in_subscreen` guard** — `find_and_attack_enemy` had a legacy context
+  guard referencing the old `entity_in_subscreen` variable (renamed).  Removed.
+- **Watchdog `NameError`** — `entity_in_subs` reference in `debug/watchdog.py` updated
+  to `entity_in_structures` after rename.
+- **Follower integrity method scope** — periodic `check_follower_integrity` was unreachable
+  due to incorrect indentation placing it inside another method body.
+
+---
+
 ### Features
 - **Drought system** — growth multiplier decreases and decay multiplier increases every tick
   without rain.  `drought_severity = min(elapsed_ticks / 9000, 1.0)`; growth floors at 10%
