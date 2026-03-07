@@ -22,18 +22,8 @@ class WorldGenerationMixin:
         if key in self.screens:
             return self.screens[key]
 
-        # Determine biome (LAKE at ~3%, others proportionally reduced)
-        biome_roll = random.random()
-        if biome_roll < 0.58:
-            biome_name = 'FOREST'
-        elif biome_roll < 0.77:
-            biome_name = 'PLAINS'
-        elif biome_roll < 0.92:
-            biome_name = 'MOUNTAINS'
-        elif biome_roll < 0.97:
-            biome_name = 'DESERT'
-        else:
-            biome_name = 'LAKE'
+        # Determine biome — equal chance for all biomes
+        biome_name = random.choice(list(BIOMES.keys()))
         biome = BIOMES[biome_name]
 
         # Create exits - check neighboring screens for matching exits
