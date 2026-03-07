@@ -1635,13 +1635,6 @@ class NpcAiMixin:
 
             other = self.entities[other_id]
 
-            # Context guard: skip candidates not in the same overworld/subscreen context
-            other_in_subscreen = getattr(other, 'in_subscreen', False)
-            if entity_in_subscreen != other_in_subscreen:
-                continue
-            if entity_in_subscreen and getattr(other, 'subscreen_key', None) != entity.subscreen_key:
-                continue
-            
             # Determine if this is an enemy
             is_enemy = False
 
