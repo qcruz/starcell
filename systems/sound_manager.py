@@ -90,7 +90,7 @@ class SoundManager:
                 continue
             try:
                 with open(path, 'rb') as f:
-                    self._music_bufs[key] = (io.BytesIO(f.read()),
+                    self._music_bufs[key] = (f.read(),
                                              os.path.basename(path))
             except Exception as e:
                 print(f"[Sound] failed to buffer music '{key}': {e}")
@@ -120,10 +120,9 @@ class SoundManager:
         entry = self._music_bufs.get(track_key)
         if not entry:
             return
-        buf, ext = entry
-        buf.seek(0)
-        # Load from in-memory buffer — no disk I/O, no main-thread stall
-        pygame.mixer.music.load(buf, ext)
+        data, namehint = entry
+        # Fresh BytesIO each time — pygame closes the buffer after load()
+        pygame.mixer.music.load(io.BytesIO(data), namehint)
         pygame.mixer.music.set_volume(self.music_volume)
         pygame.mixer.music.play(-1, fade_ms=fade_ms)
         self.current_music = track_key
