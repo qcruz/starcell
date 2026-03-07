@@ -778,15 +778,10 @@ class NpcAiMovementMixin:
                     closest_exit = (exit_x, exit_y)
 
         if closest_exit:
-            # Move towards exit with urgency (triple speed since desperate)
-            for _ in range(3):
-                self.move_entity_towards(entity, closest_exit[0], closest_exit[1])
-                # Check if reached exit (at edge)
-                if (entity.x <= 1 or entity.x >= GRID_WIDTH - 2 or
-                    entity.y <= 1 or entity.y >= GRID_HEIGHT - 2):
-                    # At edge, try to transition
-                    self.try_entity_zone_transition(entity_id, entity)
-                    break
+            self.move_entity_towards(entity, closest_exit[0], closest_exit[1])
+            if (entity.x <= 1 or entity.x >= GRID_WIDTH - 2 or
+                entity.y <= 1 or entity.y >= GRID_HEIGHT - 2):
+                self.try_entity_zone_transition(entity_id, entity)
 
     def npc_enter_subscreen(self, entity, screen_key, entrance_x, entrance_y, entrance_type):
         """Move NPC into subscreen"""
@@ -1043,6 +1038,26 @@ class NpcAiMovementMixin:
                     entity.facing = 'right' if step_x > 0 else 'left'
                     return
 
+    def has_target_in_subscreen(self, entity, screen_key, check_x, check_y):
+        """Check if entity's current_target is inside the subscreen at (check_x, check_y)."""
+        target_id = getattr(entity, 'current_target', None)
+        if target_id is None or target_id == 'player':
+            return False
+
+        # Try CAVE lookup (unified cave system per zone)
+        sub_key = self.zone_cave_systems.get(screen_key)
+        if sub_key and target_id in self.subscreen_entities.get(sub_key, []):
+            return True
+
+        # Try house/MINESHAFT lookup (by entrance coordinates stored on subscreen)
+        for key, sub in self.subscreens.items():
+            if (sub.get('entrance_x') == check_x and sub.get('entrance_y') == check_y and
+                    f"{entity.screen_x},{entity.screen_y}" in key):
+                if target_id in self.subscreen_entities.get(key, []):
+                    return True
+
+        return False
+
     def try_npc_enter_subscreen(self, entity, screen_key):
         """NPC enters subscreen if standing adjacent to entrance (like zone transitions)"""
         # Already in subscreen
@@ -1074,11 +1089,20 @@ class NpcAiMovementMixin:
 
                 # Must be standing on it or immediately adjacent (like zone transitions)
                 if dist <= 1:
-                    # Any entity may wander into any enterable structure.
-                    # This lets keepers anchor naturally to houses, caves, etc.
-                    if random.random() < 0.1:
-                        self.npc_enter_subscreen(entity, screen_key, check_x, check_y, cell)
-                        return
+                    if cell in ('CAVE', 'MINESHAFT'):
+                        # Combat-driven entry only — entity must be targeting/attacking a
+                        # subscreen occupant, then walks to the door and enters.
+                        state = getattr(entity, 'ai_state', 'idle')
+                        if state in ('targeting', 'combat'):
+                            if self.has_target_in_subscreen(entity, screen_key, check_x, check_y):
+                                entity.target_door = None
+                                self.npc_enter_subscreen(entity, screen_key, check_x, check_y, cell)
+                                return
+                    else:
+                        # Original random entry for HOUSE, STONE_HOUSE, etc.
+                        if random.random() < 0.1:
+                            self.npc_enter_subscreen(entity, screen_key, check_x, check_y, cell)
+                            return
 
     def try_npc_exit_subscreen(self, entity):
         """NPC tries to exit subscreen back to overworld"""
@@ -1381,6 +1405,69 @@ class NpcAiMovementMixin:
 
         return closest
 
+    def find_hostile_in_connected_subscreens(self, entity, screen_key):
+        """Scan CAVE/MINESHAFT subscreens in this zone for a hostile entity.
+
+        Returns (entity_id, door_dist, (door_x, door_y)) or (None, inf, None).
+        door_dist is Manhattan distance from entity to the cave/shaft entrance cell.
+        """
+        if screen_key not in self.screens:
+            return None, float('inf'), None
+
+        entity_is_hostile = entity.props.get('hostile', False)
+        screen = self.screens[screen_key]
+
+        closest_id = None
+        closest_dist = float('inf')
+        closest_door = None
+
+        for cy in range(GRID_HEIGHT):
+            for cx in range(GRID_WIDTH):
+                cell = screen['grid'][cy][cx]
+                if cell not in ('CAVE', 'MINESHAFT'):
+                    continue
+
+                # Resolve the subscreen key for this entrance
+                if cell == 'CAVE':
+                    sub_key = self.zone_cave_systems.get(screen_key)
+                else:
+                    sub_key = None
+                    for key, sub in self.subscreens.items():
+                        if (sub.get('entrance_x') == cx and sub.get('entrance_y') == cy and
+                                f"{entity.screen_x},{entity.screen_y}" in key):
+                            sub_key = key
+                            break
+
+                if sub_key is None:
+                    continue
+
+                for other_id in self.subscreen_entities.get(sub_key, []):
+                    if other_id not in self.entities:
+                        continue
+                    other = self.entities[other_id]
+                    if not other.is_alive():
+                        continue
+
+                    other_is_hostile = other.props.get('hostile', False)
+                    is_enemy = False
+                    if entity_is_hostile:
+                        if not other_is_hostile or other.type != entity.type:
+                            is_enemy = True
+                    elif other_is_hostile:
+                        is_enemy = True
+                    elif (hasattr(entity, 'faction') and hasattr(other, 'faction') and
+                          entity.faction and other.faction and entity.faction != other.faction):
+                        is_enemy = True
+
+                    if is_enemy:
+                        door_dist = abs(entity.x - cx) + abs(entity.y - cy)
+                        if door_dist < closest_dist:
+                            closest_dist = door_dist
+                            closest_id = other_id
+                            closest_door = (cx, cy)
+
+        return closest_id, closest_dist, closest_door
+
     def find_closest_hostile_entity(self, entity, screen_key):
         """Find closest hostile or enemy faction entity"""
         if screen_key not in self.screen_entities:
@@ -1435,6 +1522,17 @@ class NpcAiMovementMixin:
                 if dist < closest_dist:
                     closest_dist = dist
                     closest = other_id
+
+        # Also scan CAVE/MINESHAFT subscreens for hostile entities
+        sub_id, sub_dist, sub_door = self.find_hostile_in_connected_subscreens(entity, screen_key)
+        if sub_id is not None and sub_dist < closest_dist:
+            entity.target_door = sub_door
+            if debug:
+                print(f"  [FIND_HOSTILE] Subscreen result: {sub_id} via door {sub_door}")
+            return sub_id
+        else:
+            # Clear stale target_door if we're using an overworld target
+            entity.target_door = None
 
         if debug:
             print(f"  [FIND_HOSTILE] Result: {closest}")

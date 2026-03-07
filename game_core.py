@@ -538,10 +538,12 @@ class GameCoreMixin:
                     screen_x = self.player['screen_x'] + dx
                     screen_y = self.player['screen_y'] + dy
                     screen_key = f"{screen_x},{screen_y}"
-                    
+
                     if screen_key in self.screens:
                         self.apply_cellular_automata(screen_x, screen_y)
                         self.decay_dropped_items(screen_x, screen_y)
+            # Periodic follower integrity check
+            self.check_follower_integrity()
 
     def update_entities(self):
         """Update all entities - AI, movement, stats.
@@ -653,6 +655,23 @@ class GameCoreMixin:
             if item_name and self.inventory.has_item(item_name):
                 self.inventory.remove_item(item_name, 1)
             print(f"{entity.type} follower has died!")
+
+    def check_follower_integrity(self):
+        """Periodic cleanup: ensure follower_items and followers list match live entity state."""
+        stale_ids = []
+        for entity_id in list(self.followers):
+            entity = self.entities.get(entity_id)
+            if entity is None or not getattr(entity, 'alive', True):
+                stale_ids.append(entity_id)
+        for entity_id in stale_ids:
+            self.followers.remove(entity_id)
+            item_name = self.follower_items.pop(entity_id, None)
+            if item_name and self.inventory.has_item(item_name):
+                self.inventory.remove_item(item_name, 1)
+        # Clean up follower_items entries with no matching follower
+        for entity_id in list(self.follower_items.keys()):
+            if entity_id not in self.followers:
+                self.follower_items.pop(entity_id, None)
         
         # Drop items if entity has drops (with probability)
         if 'drops' in entity.props:

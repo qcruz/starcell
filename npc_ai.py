@@ -220,8 +220,11 @@ class NpcAiMixin:
                         self.move_toward_position(entity, new_x, new_y, screen_key)
 
             elif entity.ai_state == 'exit':
-                # Exit state — move toward zone exit (triggered by overcrowding, day/night, etc.)
-                self.seek_zone_exit(entity, entity_id)
+                if getattr(entity, 'keeper', False):
+                    entity.ai_state = 'wandering'
+                else:
+                    # Exit state — move toward zone exit (triggered by overcrowding, day/night, etc.)
+                    self.seek_zone_exit(entity, entity_id)
             
             elif entity.ai_state == 'targeting':
                 # Moving toward target
@@ -238,8 +241,21 @@ class NpcAiMixin:
                         if entity.current_target in self.entities:
                             target = self.entities[entity.current_target]
                             target_zone = f"{target.screen_x},{target.screen_y}"
-                            if target_zone == screen_key:
-                                # Same zone — move directly toward target
+
+                            if getattr(target, 'in_subscreen', False) and target_zone == screen_key:
+                                # Target is inside a subscreen (CAVE/MINESHAFT) — navigate to door
+                                target_door = getattr(entity, 'target_door', None)
+                                if target_door:
+                                    door_x, door_y = target_door
+                                    if abs(entity.x - door_x) + abs(entity.y - door_y) > 1:
+                                        self.move_toward_position(entity, door_x, door_y, screen_key)
+                                    # else: adjacent to door; try_npc_enter_subscreen fires
+                                else:
+                                    # No door info — drop target
+                                    entity.current_target = None
+                                    entity.ai_state = 'wandering'
+                            elif target_zone == screen_key:
+                                # Same zone, both overworld — move directly toward target
                                 self.move_toward_position(entity, target.x, target.y, screen_key)
                             else:
                                 # Cross-zone: route toward the exit closest to target zone
