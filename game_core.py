@@ -1142,8 +1142,13 @@ class GameCoreMixin:
                             inv_dst[item_name] = inv_dst.get(item_name, 0) + 1
                             self.inventory.selected[other] = item_name
                             print(f"Moved {item_name} → {other} inventory")
+                            self.sound.on_inventory_select()
                     else:
                         self.inventory.selected[category] = item_name
+                        if ITEMS.get(item_name, {}).get('damage'):
+                            self.sound.on_equip_sword()
+                        else:
+                            self.sound.on_inventory_select()
                     return
             
             y_offset += slot_size + 15  # Stack next category above
