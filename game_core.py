@@ -657,78 +657,64 @@ class GameCoreMixin:
                 self.inventory.remove_item(item_name, 1)
             print(f"{entity.type} follower has died!")
 
-        # Drop items if entity has drops (with probability)
+        # Collect all item drops into a single dict before placing them
+        all_item_drops = {}  # {item_name: count}
+
+        # Cell-placement drops (not items — apply immediately)
         if 'drops' in entity.props:
             for drop in entity.props['drops']:
                 if random.random() < drop['chance']:
                     if 'cell' in drop:
-                        # Cell placement drop — change the grid cell at entity position
                         if screen_key in self.screens:
                             cx = max(1, min(GRID_WIDTH - 2, entity.x))
                             cy = max(1, min(GRID_HEIGHT - 2, entity.y))
                             self.screens[screen_key]['grid'][cy][cx] = drop['cell']
                     elif 'item' in drop:
-                        for _ in range(drop['amount']):
-                            # Add some randomness to drop position
-                            drop_x = entity.x + random.randint(-1, 1)
-                            drop_y = entity.y + random.randint(-1, 1)
-                            
-                            # Clamp to valid positions
-                            drop_x = max(1, min(GRID_WIDTH - 2, drop_x))
-                            drop_y = max(1, min(GRID_HEIGHT - 2, drop_y))
-                            
-                            # Create the drop
-                            if screen_key not in self.dropped_items:
-                                self.dropped_items[screen_key] = {}
-                            
-                            cell_key = (drop_x, drop_y)
-                            if cell_key not in self.dropped_items[screen_key]:
-                                self.dropped_items[screen_key][cell_key] = {}
-                            
-                            item_name = drop['item']
-                            self.dropped_items[screen_key][cell_key][item_name] = \
-                                self.dropped_items[screen_key][cell_key].get(item_name, 0) + 1
-        
-        # All entities have a chance to drop a magic_rune on death
+                        item_name = drop['item']
+                        all_item_drops[item_name] = all_item_drops.get(item_name, 0) + drop.get('amount', 1)
+
+        # Magic rune chance
         if random.random() < 0.15:
-            drop_x = max(1, min(GRID_WIDTH - 2, entity.x))
-            drop_y = max(1, min(GRID_HEIGHT - 2, entity.y))
-            if screen_key not in self.dropped_items:
-                self.dropped_items[screen_key] = {}
-            cell_key = (drop_x, drop_y)
-            if cell_key not in self.dropped_items[screen_key]:
-                self.dropped_items[screen_key][cell_key] = {}
-            self.dropped_items[screen_key][cell_key]['magic_rune'] = \
-                self.dropped_items[screen_key][cell_key].get('magic_rune', 0) + 1
-        
-        # Drop all items from inventory (excluding magic and wood/planks)
+            all_item_drops['magic_rune'] = all_item_drops.get('magic_rune', 0) + 1
+
+        # Entity inventory drops (skip spells and wood/planks)
         for item_name, count in entity.inventory.items():
-            # Skip dropping magic items (spells are permanent)
             if item_name in ITEMS and ITEMS[item_name].get('is_spell', False):
                 continue
-            # Skip wood and planks — they clutter the map as overlays
             if item_name in ('wood', 'planks'):
                 continue
-            
-            for _ in range(count):
-                # Add some randomness to drop position
-                drop_x = entity.x + random.randint(-1, 1)
-                drop_y = entity.y + random.randint(-1, 1)
-                
-                # Clamp to valid positions
-                drop_x = max(1, min(GRID_WIDTH - 2, drop_x))
-                drop_y = max(1, min(GRID_HEIGHT - 2, drop_y))
-                
-                # Create the drop
-                if screen_key not in self.dropped_items:
-                    self.dropped_items[screen_key] = {}
-                
-                cell_key = (drop_x, drop_y)
+            all_item_drops[item_name] = all_item_drops.get(item_name, 0) + count
+
+        if all_item_drops:
+            if screen_key not in self.dropped_items:
+                self.dropped_items[screen_key] = {}
+
+            # Scatter 1-2 individual items nearby so they display as item sprites
+            scatter_pool = [(k, v) for k, v in all_item_drops.items() if v >= 1]
+            n_scatter = min(random.randint(1, 2), len(scatter_pool))
+            scattered = random.sample(scatter_pool, n_scatter)
+            for item_name, _ in scattered:
+                all_item_drops[item_name] -= 1
+                if all_item_drops[item_name] <= 0:
+                    del all_item_drops[item_name]
+                sx = max(1, min(GRID_WIDTH - 2, entity.x + random.randint(-2, 2)))
+                sy = max(1, min(GRID_HEIGHT - 2, entity.y + random.randint(-2, 2)))
+                cell_key = (sx, sy)
                 if cell_key not in self.dropped_items[screen_key]:
                     self.dropped_items[screen_key][cell_key] = {}
-                
                 self.dropped_items[screen_key][cell_key][item_name] = \
                     self.dropped_items[screen_key][cell_key].get(item_name, 0) + 1
+
+            # Consolidate remaining items into one pile at entity position → shows as itembag
+            if all_item_drops:
+                pile_x = max(1, min(GRID_WIDTH - 2, entity.x))
+                pile_y = max(1, min(GRID_HEIGHT - 2, entity.y))
+                pile_key = (pile_x, pile_y)
+                if pile_key not in self.dropped_items[screen_key]:
+                    self.dropped_items[screen_key][pile_key] = {}
+                for item_name, count in all_item_drops.items():
+                    self.dropped_items[screen_key][pile_key][item_name] = \
+                        self.dropped_items[screen_key][pile_key].get(item_name, 0) + count
         
         # Remove from screen entities list
         if screen_key in self.screen_entities:
