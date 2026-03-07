@@ -5,6 +5,56 @@ order.  Entries are grouped into Features, Fixes, and Systems.
 
 ---
 
+## 2026-03-07 — Cellular Automata Overhaul, Drought System, Biome Balance
+
+### Features
+- **Drought system** — growth multiplier decreases and decay multiplier increases every tick
+  without rain.  `drought_severity = min(elapsed_ticks / 9000, 1.0)`; growth floors at 10%
+  of normal rate at maximum drought; decay peaks at 1.5×.  All cell automata rules use
+  `_growth` / `_decay` multipliers instead of raw tick probability.
+- **Extended dry periods** — `RAIN_FREQUENCY_MIN` raised from 30 → 1800 ticks;
+  `RAIN_FREQUENCY_MAX` raised from 250 → 18000 ticks.  Zones can now experience sustained
+  droughts between rainfall events.
+- **Rain-gated water spread** — flooding (DIRT→WATER when 3+ adjacent water) and grass
+  absorption (GRASS→WATER when 1+ adjacent water) now only trigger while `is_raining` is
+  True, but at much higher base rates (`FLOODING_RATE 0.08`, `GRASS_WATER_ABSORB_RATE 0.02`).
+- **Tree crowding decay** — new `TREE_CROWD_DECAY_RATE = 0.001` rule: any tree adjacent to
+  another tree has a per-update chance to decay to GRASS, producing naturally spaced
+  checkerboard forest patterns.  Replaces the old `tree_count >= 4` overcrowding rule.
+- **Desert stability** — `DIRT_SAND_SPREAD_RATE = 0.008` ensures dirt adjacent to sand
+  reverts faster than biome spreading can convert it; `GRASS_SAND_DECAY_RATE = 0.003`
+  similarly reclaims grass cells on desert edges.
+- **Item drop consolidation** — on entity death, 1–2 items scatter individually near the
+  body (render as individual item sprites); all remaining drops consolidate into a single
+  pile at the entity's position (renders as itembag).
+- **Equal biome distribution** — zone biome on generation now selected via
+  `random.choice(list(BIOMES.keys()))` instead of a weighted probability roll.  All biomes
+  have equal instantiation chance.
+
+### Fixes
+- **Cobblestone cascade** — tree→COBBLESTONE conversion now requires 5+ cobblestone
+  neighbors; trees with 1–4 cobblestone neighbors decay to GRASS instead.  Prevents a
+  single cobblestone cell from triggering a chain reaction across surrounding tree cells.
+- **Player float on structure entry/exit** — `world_x/y` now snapped to the new grid
+  position in all 5 transition functions (`enter_structure`, `exit_structure`,
+  `descend_cave`, `ascend_cave`, `_exit_secret_cave_entrance`), preventing smooth
+  interpolation from sliding the player from the old position.
+- **Follower cleanup after save/load** — `follower_items` dict was never serialized; after
+  loading it was always empty so follower item removal on death was silently skipped.  Both
+  save and load now serialize `follower_items` with int↔str key conversion; a fallback
+  reconstructs the mapping for old saves.
+- **`check_follower_integrity` alive check** — `getattr(entity, 'alive', True)` always
+  returned True since Entity uses `is_alive()` method, not an `alive` attribute.  Fixed to
+  call `entity.is_alive()`.
+- **Biome shift thresholds** — PLAINS threshold tightened to `tree_pct < 0.05` (was
+  `< 0.1`); FOREST threshold lowered to `tree_pct > 0.1` (was `> 0.15`) to prevent
+  forest-to-plains drift under the new crowding rules.
+- **Sand reclamation threshold** — sand-adjacent-to-water threshold lowered from 2+ water
+  neighbors to 1+ so desert borders recover from minor flooding without full water
+  saturation.
+
+---
+
 ## 2026-03-04 — Combat Quality, Keeper Polish, Time Pass, Overcrowding
 
 ### Features

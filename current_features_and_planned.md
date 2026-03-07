@@ -116,14 +116,16 @@ For planned and desired future features, see [`roadmap.md`](roadmap.md).
 ### World Generation & Structure
 
 **Biome System** (`constants.py` — `BIOMES` dict)
-- Forest: 58% chance — grass, dirt, trees, water
-- Plains: 19% chance — grass, dirt, carrots, trees
-- Mountains: 15% chance — dirt, stone, grass, trees
-- Desert: 5% chance — sand, dirt, stone, cactus
-- Lake: 3% chance — water interior, SAND perimeter, CLIFF border; no entity spawns; deep water forms in centre
+- Forest — grass, dirt, trees, water
+- Plains — grass, dirt, carrots, trees
+- Mountains — dirt, stone, grass, trees
+- Desert — sand, dirt, stone, cactus
+- Lake — water interior, SAND perimeter, CLIFF border; no entity spawns; deep water forms in centre
+- All biomes have **equal generation chance** (random selection, no weights)
 - Procedurally generated, seeded by zone (screen_x, screen_y)
-- Zone entrance cells pinned to adjacent zone's primary biome type; base terrain spreads via NSEW neighbor-copy rule (rate 0.001/update)
+- Zone entrance cells pinned to adjacent zone's primary biome type; base terrain spreads via NSEW neighbor-copy rule (rate 0.004/update)
 - Zone biome label auto-updates when dominant cell type shifts (e.g. 50%+ water → LAKE)
+- Biome shift thresholds: PLAINS requires `tree_pct < 0.05`; FOREST requires `tree_pct > 0.1`
 
 **Cell Types**
 
@@ -139,10 +141,13 @@ For planned and desired future features, see [`roadmap.md`](roadmap.md).
 | Interior | FLOOR_WOOD, CAVE_FLOOR, CAVE_WALL, CHEST, STAIRS_UP, STAIRS_DOWN |
 | Decorative | BARREL, RUINED_SANDSTONE_COLUMN |
 
-**Cell Growth/Decay Rates**
-- Tree growth: 0.00005 / Flower spread: 0.0001 / Carrot 1→2: 0.02 / 2→3: 0.015
+**Cell Growth/Decay Rates** (base rates; scaled by drought `_growth`/`_decay` multipliers each update)
+- Tree growth: 0.0001 / Tree decay: 0.0005 / Tree crowding decay (adjacent tree): 0.001
+- Flower spread: 0.0001 / Carrot 1→2: 0.02 / 2→3: 0.015
 - Grass recovery: 0.0001 / Deep water formation: 0.05
-- Grass→Dirt decay: 0.00001 / Dirt→Sand: 0.000005 / Tree decay: 0.0005
+- Grass→Dirt decay: 0.00001 / Dirt→Sand spread: 0.008 / Grass→Sand decay: 0.003
+- Biome neighbor-copy spread: 0.004 / Sand reclamation (1+ water neighbor): 0.05
+- Flooding (rain only, 3+ water): 0.08 / Grass→Water absorption (rain only): 0.02
 - House decay: 0.0001 / Water evaporation: 0.005
 
 ---
@@ -150,9 +155,15 @@ For planned and desired future features, see [`roadmap.md`](roadmap.md).
 ### Environment & Weather
 
 **Weather System**
-- Rain events: 30–250 ticks between events, 10–60 ticks duration
-- Effects: 5 water spawns + 8 grass conversions per rain tick
+- Rain events: 1800–18000 ticks between events (~30 s to 5 min), 10–60 ticks duration
+- Effects: flooding and grass→water absorption only trigger while raining (rain-gated)
 - Per-zone tracking via `zone_last_rain`
+
+**Drought System**
+- `drought_severity = min((tick - zone_last_rain) / 9000, 1.0)` computed per zone per update
+- `_growth = max(0.1, 1.0 - drought_severity × 0.9) × _tp` — floors at 10% of normal rate
+- `_decay = (1.0 + drought_severity × 0.5) × _tp` — peaks at 1.5× normal rate
+- All cellular automata growth/decay rules use these multipliers instead of raw tick probability
 
 **Day/Night Cycle**
 - 150 ticks day + 150 ticks night (~5 min total)
@@ -161,7 +172,9 @@ For planned and desired future features, see [`roadmap.md`](roadmap.md).
 
 **Cellular Automata**
 - Offscreen zones updated periodically
-- Water spreading, sand/dirt transitions, neighbor-influenced growth/decay
+- Water spreading (rain-gated), sand/dirt transitions, drought-scaled growth/decay
+- Tree crowding: any tree adjacent to another tree decays at TREE_CROWD_DECAY_RATE (produces checkerboard spacing)
+- Cobblestone conversion: trees only convert to cobblestone when 5+ cobblestone neighbors; 1–4 neighbors decay to grass
 
 ---
 
@@ -303,7 +316,7 @@ For planned and desired future features, see [`roadmap.md`](roadmap.md).
 
 **Item Decay** (`ITEM_DECAY_CONFIG`): Bones (5%), Meat (10% — spoils completely), Carrot (3% — can replant)
 
-**Dropped Items**: Cell-based pickup, consolidate to nearest chest, decay over time
+**Dropped Items**: On entity death, 1–2 items scatter individually near body; remaining drops consolidate into a single itembag pile at entity position.  All pickups decay over time.
 
 ---
 
@@ -323,7 +336,7 @@ For planned and desired future features, see [`roadmap.md`](roadmap.md).
 
 ### Save / Load System
 - JSON save files
-- Saves: player state, world cells, all entities, quests, factions, enchantments, dropped items, weather, day/night cycle
+- Saves: player state, world cells, all entities, quests, factions, enchantments, dropped items, weather, day/night cycle, follower_items mapping
 - Starting inventory: axe, hoe, shovel, pickaxe, bucket, bone_sword, star_spell
 - Starting quest: FARM, starting position: (12, 9)
 
@@ -512,4 +525,4 @@ For planned and desired future features, see [`roadmap.md`](roadmap.md).
 
 ---
 
-*Last updated: 2026-03-04*
+*Last updated: 2026-03-07*
