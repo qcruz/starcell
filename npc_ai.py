@@ -2615,8 +2615,12 @@ class NpcAiMixin:
         screen_key = f"{entity.screen_x},{entity.screen_y}"
         if screen_key not in self.screens:
             return
-        
+
         screen = self.screens[screen_key]
+
+        # Structure zones have no overworld exits — traders don't travel inside structures
+        if 'exits' not in screen:
+            return
         
         # Path building: Only build paths when reasonably aligned with exits
         # This ensures paths go through the middle of zones, not random wandering

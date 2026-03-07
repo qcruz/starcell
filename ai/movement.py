@@ -347,6 +347,11 @@ class NpcAiMovementMixin:
             return
 
         screen = self.screens[screen_key]
+
+        # Structure zones have no overworld exits — entity exits via npc_exit_subscreen instead
+        if 'exits' not in screen:
+            return
+
         exits = screen['exits']
 
         # Center coordinates for entrance locations
@@ -460,6 +465,11 @@ class NpcAiMovementMixin:
             return
 
         screen = self.screens[screen_key]
+
+        # Structure zones have no overworld exits — entity exits via npc_exit_subscreen instead
+        if 'exits' not in screen:
+            return
+
         center_x = GRID_WIDTH // 2
         center_y = GRID_HEIGHT // 2
         new_screen_x = entity.screen_x
