@@ -104,12 +104,12 @@ FLOWER_DECAY_RATE = 0.0005      # Flowers die from overcrowding/drought (was 0.0
 DEEP_WATER_FORM_RATE = 0.05     # Water becomes deep water (apply_cellular_automata)
 DEEP_WATER_EVAPORATE_RATE = 0.03 # Deep water becomes water (apply_cellular_automata)
 WATER_TO_DIRT_RATE = 0.005      # Water slowly evaporates to dirt without neighbors (apply_cellular_automata)
-FLOODING_RATE = 0.015           # Water spreads to dirt (apply_cellular_automata)
+FLOODING_RATE = 0.08            # Water spreads to dirt during rain only (apply_cellular_automata)
 BIOME_SPREAD_RATE = 0.004          # Chance per update a base cell copies a different NSEW neighbor type (4x increase)
 TREE_CROWD_DECAY_RATE = 0.001      # Trees thin when touching any adjacent tree (produces checkerboard spacing)
 GRASS_SAND_DECAY_RATE = 0.003      # Grass near sand erodes to dirt (desertification edge)
 DIRT_SAND_SPREAD_RATE = 0.008      # Dirt near sand becomes sand when dry (must overpower BIOME_SPREAD_RATE)
-GRASS_WATER_ABSORB_RATE = 0.00005  # Grass adjacent to water has tiny chance to flood
+GRASS_WATER_ABSORB_RATE = 0.02     # Grass adjacent to water floods during rain only
 DIRT_WATER_EXTRA_GRASS_RATE = 0.0002  # Dirt with even 1 water neighbor gets extra grass chance
 
 # Entity Survival

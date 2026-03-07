@@ -145,8 +145,8 @@ class CellsMixin:
 
                 total_water = water_count + deep_water_count
 
-                # Dirt → Water (flooding, highest priority for dirt)
-                if cell == 'DIRT' and total_water >= 3:
+                # Dirt → Water (flooding, rain only — highest priority for dirt)
+                if cell == 'DIRT' and total_water >= 3 and self.is_raining:
                     if random.random() < min(1.0, FLOODING_RATE * _tp):
                         new_grid[y][x] = 'WATER'
 
@@ -217,8 +217,8 @@ class CellsMixin:
                     if random.random() < min(1.0, FLOWER_DECAY_RATE * _tp):
                         new_grid[y][x] = 'GRASS'
 
-                # Grass → Water (tiny flood absorption chance)
-                elif cell == 'GRASS' and total_water >= 1:
+                # Grass → Water (rain flooding only)
+                elif cell == 'GRASS' and total_water >= 1 and self.is_raining:
                     if random.random() < min(1.0, GRASS_WATER_ABSORB_RATE * _tp):
                         new_grid[y][x] = 'WATER'
 
