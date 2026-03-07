@@ -33,6 +33,10 @@ ITEMS = {
     # Magic items
     'star_spell': {'color': (255, 215, 0), 'name': 'Star Spell', 'is_spell': True,
                    'description': 'Enchants cells and entities'},
+    'rain_spell': {'color': (100, 150, 220), 'name': 'Rain Spell', 'is_spell': True,
+                   'description': 'Toggles rain on and off'},
+    'day_spell':  {'color': (255, 230, 100), 'name': 'Day Spell',  'is_spell': True,
+                   'description': 'Toggles day and night'},
     'magic_stone': {'color': (138, 43, 226), 'name': 'Magic Stone', 'is_spell': True, 'damage': 12},
     'magic_wand': {'color': (255, 140, 255), 'name': 'Magic Wand', 'is_spell': True, 'damage': 10},
     'enchanted_sword': {'color': (147, 112, 219), 'name': 'Enchanted Sword', 'is_tool': True, 'damage': 25},
@@ -65,6 +69,10 @@ ITEMS = {
     'stone_house':             {'color': (110, 110, 120),  'name': 'Stone House'},
     'ruined_sandstone_column': {'color': (200, 160, 90),   'name': 'Ruined Column'},
     'forge':                   {'color': (180, 60, 20),    'name': 'Forge'},
+
+    # Actions
+    'shove': {'color': (220, 120, 60), 'name': 'Shove', 'is_action': True,
+              'description': 'Push target back one cell'},
 
     # Special
     'skeleton_bones': {'color': (240, 240, 230), 'name': 'Skeleton Bones', 'is_follower': True},

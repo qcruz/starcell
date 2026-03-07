@@ -23,11 +23,12 @@ class InventoryUIMixin:
         start_y = SCREEN_HEIGHT - 90  # Above UI bar
 
         # Stack categories vertically from bottom
-        categories = ['tools', 'items', 'magic', 'followers', 'crafting']
+        categories = ['tools', 'items', 'magic', 'actions', 'followers', 'crafting']
         category_colors = {
             'tools': (100, 100, 120),
             'items': (80, 120, 80),
             'magic': (120, 80, 120),
+            'actions': (220, 120, 60),
             'followers': (120, 100, 80),
             'crafting': (180, 140, 60)  # Gold color for crafting
         }
@@ -154,7 +155,7 @@ class InventoryUIMixin:
         # Calculate y_offset from open inventory panels
         y_offset = 0
         if self.inventory.open_menus:
-            categories = ['tools', 'items', 'magic', 'followers', 'crafting']
+            categories = ['tools', 'items', 'magic', 'actions', 'followers', 'crafting']
             for category in categories:
                 if category in self.inventory.open_menus:
                     items = (self.inventory.get_all_craftable_items()

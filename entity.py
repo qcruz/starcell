@@ -861,16 +861,18 @@ class Inventory:
         self.tools = {}  # {tool_name: count}
         self.magic = {}  # {spell_name: count}
         self.followers = {}  # {follower_name: count}
+        self.actions = {}  # {action_name: count}
         self.max_slots = 20
-        
+
         # Track which menus are open
-        self.open_menus = set()  # Can contain 'items', 'tools', 'magic', 'followers', 'crafting'
-        
+        self.open_menus = set()  # Can contain 'items', 'tools', 'magic', 'actions', 'followers', 'crafting'
+
         # Track selected item in each menu
         self.selected = {
             'items': None,
             'tools': None,
             'magic': None,
+            'actions': None,
             'followers': None,
             'crafting': None  # For crafting screen selection
         }
@@ -884,6 +886,8 @@ class Inventory:
                     category = 'tools'
                 elif ITEMS[item_name].get('is_spell'):
                     category = 'magic'
+                elif ITEMS[item_name].get('is_action'):
+                    category = 'actions'
                 elif ITEMS[item_name].get('is_follower'):
                     category = 'followers'
                 else:
@@ -902,7 +906,7 @@ class Inventory:
     
     def remove_item(self, item_name, amount=1):
         """Remove item from any category"""
-        for category in ['items', 'tools', 'magic', 'followers']:
+        for category in ['items', 'tools', 'magic', 'actions', 'followers']:
             inv = getattr(self, category)
             if item_name in inv and inv[item_name] >= amount:
                 inv[item_name] -= amount
@@ -931,7 +935,7 @@ class Inventory:
     
     def has_item(self, item_name, amount=1):
         """Check if item exists in any category"""
-        for category in ['items', 'tools', 'magic', 'followers']:
+        for category in ['items', 'tools', 'magic', 'actions', 'followers']:
             inv = getattr(self, category)
             if item_name in inv and inv[item_name] >= amount:
                 return True

@@ -982,10 +982,20 @@ class GameCoreMixin:
                     if event.key == pygame.K_ESCAPE:
                         self.state = 'paused'
                     elif event.key == pygame.K_SPACE:
+                        if 'actions' in self.inventory.open_menus:
+                            selected_action = self.inventory.selected.get('actions')
+                            if selected_action:
+                                self.execute_action(selected_action)
+                                continue
                         self.interact()
                     elif event.key == pygame.K_l:
-                        # Cast star spell
-                        self.cast_star_spell()
+                        selected = self.inventory.selected_magic
+                        if selected == 'rain_spell':
+                            self.cast_rain_spell()
+                        elif selected == 'day_spell':
+                            self.cast_day_spell()
+                        else:
+                            self.cast_star_spell()
                     elif event.key == pygame.K_k:
                         # Release all enchantments
                         self.release_enchantments()
@@ -1025,11 +1035,20 @@ class GameCoreMixin:
                         self.inventory.toggle_menu('magic')
                         if not _was_open:
                             self.sound.on_inventory_open()
-                    elif event.key == pygame.K_f:
-                        _was_open = 'followers' in self.inventory.open_menus
-                        self.inventory.toggle_menu('followers')
+                    elif event.key == pygame.K_r:
+                        _was_open = 'actions' in self.inventory.open_menus
+                        self.inventory.toggle_menu('actions')
                         if not _was_open:
                             self.sound.on_inventory_open()
+                    elif event.key == pygame.K_f:
+                        if pygame.key.get_mods() & pygame.KMOD_SHIFT:
+                            if self.inspected_npc:
+                                self.handle_npc_follow_interaction()
+                        else:
+                            _was_open = 'followers' in self.inventory.open_menus
+                            self.inventory.toggle_menu('followers')
+                            if not _was_open:
+                                self.sound.on_inventory_open()
                     elif event.key == pygame.K_e:
                         # Pick up cell or items from target
                         self.pickup_cell_or_items()
@@ -1107,13 +1126,13 @@ class GameCoreMixin:
         start_y = SCREEN_HEIGHT - 90  # Above UI bar
         
         # Stack categories vertically from bottom
-        categories = ['tools', 'items', 'magic', 'followers', 'crafting']
+        categories = ['tools', 'items', 'magic', 'actions', 'followers', 'crafting']
         y_offset = 0
-        
+
         for category in categories:
             if category not in self.inventory.open_menus:
                 continue
-            
+
             # Special handling for crafting screen
             if category == 'crafting':
                 items = self.inventory.get_all_craftable_items()
@@ -1176,14 +1195,14 @@ class GameCoreMixin:
         base_y = SCREEN_HEIGHT - 90
         y_offset = 0
         if self.inventory.open_menus:
-            categories = ['tools', 'items', 'magic', 'followers', 'crafting']
+            categories = ['tools', 'items', 'magic', 'actions', 'followers', 'crafting']
             for category in categories:
                 if category in self.inventory.open_menus:
                     items = self.inventory.get_all_craftable_items() if category == 'crafting' else self.inventory.get_item_list(category)
                     y_offset += slot_size + 15
-        
+
         start_y = base_y - y_offset
-        
+
         quest_types = list(QUEST_TYPES.keys())
         for i, quest_type in enumerate(quest_types):
             slot_x = start_x + i * (slot_size + 2)
@@ -1210,6 +1229,72 @@ class GameCoreMixin:
                 q_name = QUEST_TYPES.get(nq.quest.quest_type, {}).get('name', nq.quest.quest_type)
                 print(f"Tracking NPC quest [{q_name}] from {npc_name}")
                 return
+
+    def cast_rain_spell(self):
+        self.is_raining = not self.is_raining
+        if self.is_raining:
+            self.rain_timer = 0
+            self.rain_duration = getattr(self, 'rain_duration', 600)
+        print(f"[Spell] Rain {'started' if self.is_raining else 'stopped'}.")
+
+    def cast_day_spell(self):
+        self.is_night = not self.is_night
+        if self.is_night:
+            self.day_night_timer = DAY_LENGTH + 1
+        else:
+            self.day_night_timer = 0
+        print(f"[Spell] Now {'night' if self.is_night else 'day'}.")
+
+    def execute_action(self, action_name):
+        if action_name == 'shove':
+            self.do_shove()
+
+    def do_shove(self):
+        px, py = self.player['x'], self.player['y']
+        facing = self.player.get('facing', 'down')
+        dx, dy = {'up': (0, -1), 'down': (0, 1), 'left': (-1, 0), 'right': (1, 0)}[facing]
+        tx, ty = px + dx, py + dy
+        screen_key = f"{self.player['screen_x']},{self.player['screen_y']}"
+        for eid in list(self.screen_entities.get(screen_key, [])):
+            e = self.entities.get(eid)
+            if e and int(e.x) == tx and int(e.y) == ty and not getattr(e, 'in_subscreen', False):
+                nx, ny = tx + dx, ty + dy
+                if 0 <= nx < GRID_WIDTH and 0 <= ny < GRID_HEIGHT:
+                    target_cell = self.current_screen['grid'][ny][nx]
+                    if not CELL_TYPES.get(target_cell, {}).get('solid', True):
+                        e.x, e.y = nx, ny
+                        print(f"[Shove] Pushed {e.type}!")
+                break
+
+    def handle_npc_follow_interaction(self):
+        npc_id = self.inspected_npc
+        if npc_id not in self.entities:
+            return
+        entity = self.entities[npc_id]
+        npc_name = entity.name if entity.name else entity.type
+
+        if npc_id in self.followers:
+            print(f"{npc_name} is already following you.")
+            return
+
+        if random.random() < 0.5:
+            self.followers.append(npc_id)
+            follower_name = f"{entity.type.lower()}_{npc_id}"
+            entry = {
+                'color': entity.props.get('color', (180, 180, 180)),
+                'name': npc_name,
+                'is_follower': True,
+                'entity_id': npc_id,
+            }
+            ITEMS[follower_name] = entry
+            from data.items import ITEMS as DATA_ITEMS
+            DATA_ITEMS[follower_name] = entry
+            self.inventory.add_item(follower_name, 1)
+            if hasattr(self, 'follower_items'):
+                self.follower_items[npc_id] = follower_name
+            print(f"{npc_name} has decided to follow you!")
+        else:
+            print(f"{npc_name} declined to follow.")
 
     def handle_npc_quest_interaction(self):
         """Handle Shift+Q while inspecting an NPC: give, progress, or turn in quest."""
@@ -1260,7 +1345,7 @@ class GameCoreMixin:
     def select_inventory_slot(self, slot_index):
         """Select an inventory slot by number (0-9)"""
         # Find first open menu and select that slot
-        for category in ['tools', 'items', 'magic', 'followers']:
+        for category in ['tools', 'items', 'magic', 'actions', 'followers']:
             if category in self.inventory.open_menus:
                 items = self.inventory.get_item_list(category)
                 if slot_index < len(items):
@@ -1269,7 +1354,7 @@ class GameCoreMixin:
 
     def cycle_inventory_slot(self, direction):
         """Cycle selected slot in the first open inventory menu by direction (+1 or -1)."""
-        for category in ['tools', 'items', 'magic', 'followers']:
+        for category in ['tools', 'items', 'magic', 'actions', 'followers']:
             if category in self.inventory.open_menus:
                 items = self.inventory.get_item_list(category)
                 if not items:
@@ -2109,6 +2194,9 @@ class GameCoreMixin:
         self.inventory.add_item('pickaxe', 1)
         self.inventory.add_item('bucket', 1)
         self.inventory.add_magic('star_spell', 1)
+        self.inventory.add_item('rain_spell', 1)
+        self.inventory.add_item('day_spell', 1)
+        self.inventory.add_item('shove', 1)
         self.inventory.add_item('bone_sword', 1)
         self.inventory.add_item('carrot', 5)
         self.inventory.add_item('tree_sapling', 3)
