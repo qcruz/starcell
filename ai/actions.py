@@ -376,7 +376,7 @@ class NpcAiActionsMixin:
 
         # Calculate mine rate with density bonus (similar to lumberjack)
         mine_rate = LUMBERJACK_BASE_CHOP_RATE + (nearby_rocks * LUMBERJACK_DENSITY_BONUS)
-        mine_rate = min(mine_rate, 0.6)  # Cap at 60%
+        mine_rate = min(mine_rate, 0.85)  # Cap at 85%
 
         # Try to mine adjacent rock
         found_rock = False

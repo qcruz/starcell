@@ -624,9 +624,9 @@ NPC_BEHAVIORS = {
          'activity': 'build'},
     ],
     'MINER': [
-        # Mine stone
-        {'action': 'harvest_cell', 'cells': ['STONE'],
-         'rate': 0.3, 'success': 0.7,
+        # Mine stone and ore — aggressive rate
+        {'action': 'harvest_cell', 'cells': ['STONE', 'IRON_ORE'],
+         'rate': 0.65, 'success': 0.8,
          'activity': 'mine'},
     ],
     'GUARD': [

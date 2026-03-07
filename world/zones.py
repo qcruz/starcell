@@ -10,6 +10,7 @@ from constants import (
     CAMP_HEALING_MULTIPLIER, HOUSE_HEALING_MULTIPLIER,
     NPC_CAMP_PLACE_RATE, ENHANCED_SETTLEMENT_RATE,
     KEEPER_ENTITY_TYPE, KEEPER_ASSIGNMENT_RATE,
+    DESERT_ROCK_FORMATION_RATE, DESERT_ORE_FORMATION_RATE,
 )
 from entity import Entity
 
@@ -193,6 +194,17 @@ class ZonesMixin:
 
                         if old_cell == 'HOUSE':
                             self.process_house_destruction(x, y, zone_key)
+
+        # Desert rock/ore formation — SAND slowly solidifies into STONE;
+        # existing STONE rarely yields IRON_ORE
+        if screen.get('biome') == 'DESERT':
+            for y in range(1, GRID_HEIGHT - 1):
+                for x in range(1, GRID_WIDTH - 1):
+                    cell = screen['grid'][y][x]
+                    if cell == 'SAND' and random.random() < min(1.0, DESERT_ROCK_FORMATION_RATE * _tp):
+                        self.set_grid_cell(screen, x, y, 'STONE')
+                    elif cell == 'STONE' and random.random() < min(1.0, DESERT_ORE_FORMATION_RATE * _tp):
+                        self.set_grid_cell(screen, x, y, 'IRON_ORE')
 
         # === BIOME REVERSION & SPREADING ===
         biome = screen.get('biome', 'FOREST')

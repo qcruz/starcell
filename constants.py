@@ -168,7 +168,7 @@ FARMER_TILL_SUCCESS = 0.25      # 25% till success
 FARMER_PLANT_SUCCESS = 0.3      # 30% plant success
 LUMBERJACK_CHOP_SUCCESS = 0.85   # 85% chop success (increased for much faster work)
 LUMBERJACK_BUILD_SUCCESS = 0.35 # 35% build success
-MINER_MINE_SUCCESS = 0.2        # 20% mine success
+MINER_MINE_SUCCESS = 0.5        # 50% mine success (increased for aggression)
 PEACEFUL_NPC_MIGRATE_RATE = 0.05 # Chance to migrate if duplicate type in zone (update_entity_ai)
 ZONE_CHANGE_COOLDOWN = 1800  # Ticks (30 seconds at 60 FPS) before entity can change zones again (seek_zone_exit path)
 NPC_SEAMLESS_CROSS_COOLDOWN = 30   # Ticks (0.5 s) anti-bounce cooldown for seamless zone crossing
@@ -209,6 +209,8 @@ MINESHAFT_DEPTH_DIVISOR = 2.0  # Each depth level halves the mineshaft creation 
 MINER_MINESHAFT_CHANCE = 0.03  # 3% chance per mine action for NPC miners
 MINESHAFT_MAX_PER_ZONE = 2     # Max mineshafts NPCs can create in one zone
 MINER_WELL_BUILD_RATE = 0.02   # 2% chance per action for miner to build a well
+DESERT_ROCK_FORMATION_RATE = 0.00008  # Sand slowly forms into stone in deserts
+DESERT_ORE_FORMATION_RATE  = 0.00002  # Stone very rarely yields ore in deserts
 WARRIOR_PROMOTION_CHANCE = 0.60 # 60% chance highest level entity becomes warrior after raid clear
 KEEPER_ASSIGNMENT_RATE = 0.02  # 2% chance per zone update to assign a vacant keeper slot
 
@@ -388,7 +390,7 @@ CELL_TYPES = {
         'label': 'Cct',
         'solid': True,
         'degrades_to': 'SAND',
-        'degrade_rate': 0.0002,
+        'degrade_rate': 0.00002,  # Very low — cacti persist in deserts
     },
     'BARREL': {
         'color': COLORS['BARREL'],
@@ -1423,9 +1425,9 @@ NPC_BEHAVIORS = {
          'activity': 'build'},
     ],
     'MINER': [
-        # Mine stone
-        {'action': 'harvest_cell', 'cells': ['STONE'],
-         'rate': 0.3, 'success': 0.7,
+        # Mine stone and ore — high rate for aggressive targeting
+        {'action': 'harvest_cell', 'cells': ['STONE', 'IRON_ORE'],
+         'rate': 0.65, 'success': 0.8,
          'activity': 'mine'},
     ],
     'GUARD': [

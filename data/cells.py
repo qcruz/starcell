@@ -128,7 +128,7 @@ CELL_TYPES = {
         'label': 'Cct',
         'solid': True,
         'degrades_to': 'SAND',
-        'degrade_rate': 0.0002,
+        'degrade_rate': 0.00002,
     },
     'BARREL': {
         'color': (120, 80, 40),
