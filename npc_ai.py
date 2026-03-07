@@ -561,16 +561,18 @@ class NpcAiMixin:
         
         is_proxy = entity.props.get('is_autopilot_proxy', False)
         
-        # Night behavior: peaceful NPCs seek shelter in houses
-        if self.is_night and not is_follower and not is_proxy:
+        is_keeper = getattr(entity, 'keeper', False)
+
+        # Night behavior: peaceful NPCs seek shelter in houses (keepers excluded — already anchored)
+        if self.is_night and not is_follower and not is_proxy and not is_keeper:
             peaceful_types = ['FARMER', 'TRADER', 'GUARD', 'LUMBERJACK', 'MINER',
-                              'WARRIOR', 'COMMANDER', 'KING']
+                              'WARRIOR', 'COMMANDER', 'KING', 'BLACKSMITH', 'WIZARD']
             if entity.type in peaceful_types and not entity.in_subscreen:
                 if self.npc_seek_shelter(entity):
                     return  # Sheltered, don't wander or do work behaviors
-        
-        # Daytime: NPCs in subscreens have a chance to leave
-        if not self.is_night and entity.in_subscreen and not is_follower and not is_proxy:
+
+        # Daytime: peaceful NPCs in structures leave (keepers excluded — anchored to their zone)
+        if not self.is_night and entity.in_subscreen and not is_follower and not is_proxy and not is_keeper:
             if random.random() < 0.02:  # 2% per update to leave
                 self.npc_exit_subscreen(entity)
                 return
@@ -1126,23 +1128,30 @@ class NpcAiMixin:
                     continue
                 
                 other_is_hostile = other.props.get('hostile', False)
-                
+
                 # Determine if enemy
                 is_enemy = False
-                # Follower FF guard in proximity check
-                is_follower_check = other_id in getattr(self, 'followers', [])
-                if is_follower_check:
-                    continue  # Never target fellow followers
+                # Never target fellow followers
+                if other_id in getattr(self, 'followers', []):
+                    continue
                 entity_base_check = entity.type.replace('_double', '')
                 other_base_check = other.type.replace('_double', '')
-                if entity_is_hostile:
-                    # Hostile entities attack everyone: non-hostiles AND other hostile types
+                _is_this_follower = entity_id in getattr(self, 'followers', [])
+                ff_on = self.player.get('friendly_fire', False)
+                if entity_is_hostile and not _is_this_follower:
+                    # Non-follower hostile: attack peaceful NPCs + different hostile species
                     if not other_is_hostile:
-                        is_enemy = True  # Attack peaceful NPCs
+                        is_enemy = True
                     elif other_base_check != entity_base_check:
-                        is_enemy = True  # Attack different hostile species
+                        is_enemy = True
+                elif entity_is_hostile and _is_this_follower:
+                    # Follower with hostile type (e.g. bat): only attack other hostiles
+                    if other_is_hostile and other_base_check != entity_base_check:
+                        is_enemy = True
+                    elif ff_on and other_base_check != entity_base_check:
+                        is_enemy = True  # FF unlocks attacks on any type
                 elif other_is_hostile:
-                    # Non-hostile entity sees hostile — it's an enemy
+                    # Peaceful entity sees hostile — defend
                     is_enemy = True
                 elif (hasattr(entity, 'faction') and hasattr(other, 'faction') and
                       entity.faction and other.faction and entity.faction != other.faction):
