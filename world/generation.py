@@ -9,7 +9,7 @@ from entity import Entity
 
 
 class WorldGenerationMixin:
-    """Handles procedural world generation: screens, subscreens, interiors,
+    """Handles procedural world generation: screens, structures, interiors,
     chest placement, zone connections, and exit management."""
 
     # -------------------------------------------------------------------------
@@ -359,7 +359,7 @@ class WorldGenerationMixin:
     # Subscreen (interior) generation
     # -------------------------------------------------------------------------
 
-    def generate_subscreen(self, parent_screen_x, parent_screen_y, cell_x, cell_y, structure_type, depth=1):
+    def generate_structure_zone(self, parent_screen_x, parent_screen_y, cell_x, cell_y, structure_type, depth=1):
         """Generate interior for house/cave as a real zone at virtual coordinates.
 
         Structure zones are assigned coordinates far in the negative-x range
@@ -375,13 +375,13 @@ class WorldGenerationMixin:
                 return self.zone_cave_systems[parent_key]
 
         # Assign real virtual coordinates: far negative x, never reachable by walking
-        subscreen_id = self.next_subscreen_id
-        self.next_subscreen_id += 1
-        vx = -(1000 + subscreen_id * 10)
+        structure_id = self.next_structure_id
+        self.next_structure_id += 1
+        vx = -(1000 + structure_id * 10)
         vy = 0
         zone_key = f"{vx},{vy}"
 
-        if zone_key in self.subscreens:
+        if zone_key in self.structures:
             return zone_key
 
         # Generate interior grid
@@ -394,7 +394,7 @@ class WorldGenerationMixin:
 
         entrance_pos = (GRID_WIDTH // 2, GRID_HEIGHT - 2)
 
-        subscreen_data = {
+        structure_data = {
             'type': structure_type,
             'parent_screen': (parent_screen_x, parent_screen_y),
             'parent_cell': (cell_x, cell_y),
@@ -410,8 +410,8 @@ class WorldGenerationMixin:
         }
 
         # Register as a full zone (in both dicts for backward-compat metadata lookups)
-        self.subscreens[zone_key] = subscreen_data
-        self.screens[zone_key] = subscreen_data
+        self.structures[zone_key] = structure_data
+        self.screens[zone_key] = structure_data
         self.screen_last_update[zone_key] = self.tick
         if zone_key not in self.screen_entities:
             self.screen_entities[zone_key] = []
@@ -427,11 +427,11 @@ class WorldGenerationMixin:
 
         # Place chests and spawn entities
         if structure_type == 'HOUSE_INTERIOR':
-            self.place_house_chests(subscreen_data)
+            self.place_house_chests(structure_data)
             if random.random() < 0.5:
-                self.spawn_house_npc(subscreen_data)
+                self.spawn_house_npc(structure_data)
         elif structure_type == 'CAVE':
-            self.place_cave_chests(subscreen_data, depth)
+            self.place_cave_chests(structure_data, depth)
 
         # Register in zone priority system
         if zone_key not in self.structure_zones:
@@ -448,15 +448,15 @@ class WorldGenerationMixin:
 
         # Fix up any entities spawned during placement: give them the zone's coords
         # and register them in screen_entities
-        for eid in subscreen_data.get('entities', []):
+        for eid in structure_data.get('entities', []):
             if eid not in self.screen_entities[zone_key]:
                 self.screen_entities[zone_key].append(eid)
             if eid in self.entities:
                 e = self.entities[eid]
                 e.screen_x = vx
                 e.screen_y = vy
-                e.in_subscreen = True
-                e.subscreen_key = zone_key
+                e.in_structure = True
+                e.structure_key = zone_key
 
         return zone_key
 
@@ -569,9 +569,9 @@ class WorldGenerationMixin:
     # Chest placement
     # -------------------------------------------------------------------------
 
-    def place_house_chests(self, subscreen_data):
+    def place_house_chests(self, structure_data):
         """Place chests in house interior"""
-        grid = subscreen_data['grid']
+        grid = structure_data['grid']
         num_chests = random.randint(1, 2)
         placed = 0
         attempts = 0
@@ -582,14 +582,14 @@ class WorldGenerationMixin:
 
             if grid[y][x] in ['FLOOR_WOOD', 'WOOD'] and y < GRID_HEIGHT - 4:
                 grid[y][x] = 'CHEST'
-                subscreen_data['chests'][(x, y)] = 'HOUSE_CHEST'
+                structure_data['chests'][(x, y)] = 'HOUSE_CHEST'
                 placed += 1
 
             attempts += 1
 
-    def place_cave_chests(self, subscreen_data, depth):
+    def place_cave_chests(self, structure_data, depth):
         """Place chests in cave interior"""
-        grid = subscreen_data['grid']
+        grid = structure_data['grid']
         num_chests = random.randint(1, 1 + depth)
         placed = 0
         attempts = 0
@@ -601,7 +601,7 @@ class WorldGenerationMixin:
 
             if grid[y][x] == 'CAVE_FLOOR':
                 grid[y][x] = 'CHEST'
-                subscreen_data['chests'][(x, y)] = loot_type
+                structure_data['chests'][(x, y)] = loot_type
                 placed += 1
 
             attempts += 1
@@ -610,9 +610,9 @@ class WorldGenerationMixin:
     # House NPC spawn
     # -------------------------------------------------------------------------
 
-    def spawn_house_npc(self, subscreen_data):
+    def spawn_house_npc(self, structure_data):
         """Spawn a single NPC (farmer or trader) in a house"""
-        grid = subscreen_data['grid']
+        grid = structure_data['grid']
         npc_type = random.choice(['FARMER', 'TRADER'])
 
         attempts = 0
@@ -621,13 +621,13 @@ class WorldGenerationMixin:
             y = random.randint(3, GRID_HEIGHT - 6)
 
             if grid[y][x] in ['FLOOR_WOOD', 'WOOD']:
-                entity = Entity(npc_type, x, y, 0, 0, 1)  # coords fixed up by generate_subscreen
+                entity = Entity(npc_type, x, y, 0, 0, 1)  # coords fixed up by generate_structure_zone
                 entity_id = self.next_entity_id
                 self.next_entity_id += 1
                 self.entities[entity_id] = entity
 
-                subscreen_data.setdefault('entities', [])
-                subscreen_data['entities'].append(entity_id)
+                structure_data.setdefault('entities', [])
+                structure_data['entities'].append(entity_id)
 
                 print(f"Spawned {npc_type} in house")
                 return entity_id

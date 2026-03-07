@@ -226,7 +226,7 @@ class MenusMixin:
 
         # Zone key check above (lines 222-225) already ensures entity and player share
         # the same zone (overworld or structure virtual coords). No further context
-        # filtering needed — the unified zone model makes in_subscreen redundant here.
+        # filtering needed — the unified zone model makes in_structure redundant here.
 
         # Position info to the right of the NPC
         npc_screen_x = entity.x * CELL_SIZE
@@ -375,11 +375,11 @@ class MenusMixin:
         if color is None:
             color = QUEST_TYPES.get(self.active_quest, {}).get('color', (200, 200, 200))
 
-        # If player is in a subscreen, always point to the exit
-        if self.player.get('in_subscreen'):
-            subscreen = self.subscreens.get(self.player.get('subscreen_key'))
-            if subscreen:
-                exit_pos = subscreen.get('exit', subscreen.get('entrance'))
+        # If player is in a structure, always point to the exit
+        if self.player.get('in_structure'):
+            structure = self.structures.get(self.player.get('structure_key'))
+            if structure:
+                exit_pos = structure.get('exit', structure.get('entrance'))
                 if exit_pos:
                     ex, ey = exit_pos
                     px, py = self.player['x'], self.player['y']

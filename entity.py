@@ -292,9 +292,9 @@ class Entity:
         self.is_moving = False
         self.move_speed = 0.05  # Cells per tick (configurable per entity)
         
-        # Subscreen state
-        self.in_subscreen = False
-        self.subscreen_key = None
+        # Structure state
+        self.in_structure = False
+        self.structure_key = None
         
         # Animation state
         self.facing = 'down'  # 'up', 'down', 'left', 'right'
@@ -332,9 +332,9 @@ class Entity:
         self.last_home_return_check = 0  # Tick of last home zone check
         self.was_trading = False  # Track if entity was recently trading
         
-        # Subscreen state
-        self.in_subscreen = False  # True when entity is in a house/cave subscreen
-        self.subscreen_key = None  # Key of subscreen entity is in
+        # Structure state
+        self.in_structure = False  # True when entity is in a house/cave structure
+        self.structure_key = None  # Key of structure entity is in
         
         # Unified AI Behavior State System
         # Set initial state based on entity type
@@ -516,7 +516,7 @@ class Entity:
 
         # Flying entities flap even when standing still (unless inside a structure)
         is_flying_idle = (self.props.get('flying', False) and not is_moving
-                          and not (hasattr(self, 'in_subscreen') and self.in_subscreen))
+                          and not (hasattr(self, 'in_structure') and self.in_structure))
 
         if is_moving or is_flying_idle:
             self.anim_timer += 1

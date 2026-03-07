@@ -46,7 +46,7 @@ class HudMixin:
                 'FLOOR_WOOD', 'CAVE_FLOOR',
             }
 
-            # Precompute biome/subscreen fallback base — same for every cell this frame
+            # Precompute biome/structure fallback base — same for every cell this frame
             if self.current_screen and 'parent_screen' in self.current_screen:
                 _ss_type = self.current_screen.get('type', 'HOUSE_INTERIOR')
                 _fallback_base = 'CAVE_FLOOR' if 'CAVE' in _ss_type else 'FLOOR_WOOD'
@@ -68,7 +68,7 @@ class HudMixin:
                             if _nc in _VALID_NEIGHBOR_BASE:
                                 _neighbor_base = _nc
                                 break
-                    # Resolved base: neighbor wins, biome/subscreen as fallback
+                    # Resolved base: neighbor wins, biome/structure as fallback
                     _base = _neighbor_base or _fallback_base
 
                     # ── Layering decision ──────────────────────────────────────
@@ -278,7 +278,7 @@ class HudMixin:
                                (highlight_x * CELL_SIZE, highlight_y * CELL_SIZE,
                                 CELL_SIZE, CELL_SIZE), 3)
 
-            # Draw entities on current screen or subscreen
+            # Draw entities on current screen or structure
             # Unified zone system: player screen_x/y reflects virtual coords in structure zones
             entities_to_draw = []
             screen_key = f"{self.player['screen_x']},{self.player['screen_y']}"
@@ -682,11 +682,11 @@ class HudMixin:
 
             # ── Row 2: Location / status info ──────────────────────────────
             info_text = ""
-            if self.player.get('in_subscreen'):
-                subscreen = self.subscreens.get(self.player['subscreen_key'])
-                if subscreen:
-                    depth_info = f" (Depth {subscreen['depth']})" if subscreen['type'] == 'CAVE' else ""
-                    info_text += f"Location: {subscreen['type']}{depth_info}"
+            if self.player.get('in_structure'):
+                structure = self.structures.get(self.player['structure_key'])
+                if structure:
+                    depth_info = f" (Depth {structure['depth']})" if structure['type'] == 'CAVE' else ""
+                    info_text += f"Location: {structure['type']}{depth_info}"
             else:
                 info_text += f"Screen: ({self.player['screen_x']}, {self.player['screen_y']}) | "
                 info_text += f"Biome: {self.current_screen['biome'] if self.current_screen else 'Unknown'}"

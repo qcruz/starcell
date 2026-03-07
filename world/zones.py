@@ -623,7 +623,7 @@ class ZonesMixin:
 
         entity_list = self.screen_entities.get(struct_zone_key, [])
         if not entity_list:
-            entity_list = self.subscreen_entities.get(struct_zone_key, [])
+            entity_list = self.screen_entities.get(struct_zone_key, [])
 
         if getattr(self, 'autopilot', False):
             for eid in list(entity_list):
@@ -1290,11 +1290,11 @@ class ZonesMixin:
     def assign_zone_keepers(self, zone_key):
         """Check entities in zone_key and assign keeper status to fill vacant slots.
 
-        Called once per zone update cycle.  Each zone/subscreen maintains a dict
+        Called once per zone update cycle.  Each zone/structure maintains a dict
         of keeper slots keyed by keeper_type.  If a slot is vacant and an eligible
         entity is present, there is a KEEPER_ASSIGNMENT_RATE chance per call to
         assign one as keeper.  Keepers are permanent anchors — they cannot exit
-        the zone or subscreen they were assigned in.
+        the zone or structure they were assigned in.
         """
         if zone_key not in self.zone_keepers:
             self.zone_keepers[zone_key] = {}

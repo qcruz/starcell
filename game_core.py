@@ -34,9 +34,9 @@ class GameCoreMixin:
             'blocking': False,
             'friendly_fire': False,      # OFF = cannot damage peaceful entities (press V to toggle)
             'last_attack_tick': 0,
-            'in_subscreen': False,
-            'subscreen_key': None,
-            'subscreen_parent': None  # (parent_screen_x, parent_screen_y, parent_cell_x, parent_cell_y)
+            'in_structure': False,
+            'structure_key': None,
+            'structure_parent': None  # (parent_screen_x, parent_screen_y, parent_cell_x, parent_cell_y)
         }
         self.screens = {}
         self.current_screen = None
@@ -60,11 +60,11 @@ class GameCoreMixin:
         # Track last update tick for each screen
         self.screen_last_update = {}
         
-        # Subscreen system (legacy — being migrated to zone connections)
-        self.subscreens = {}  # {subscreen_key: subscreen_data}
+        # Structure system
+        self.structures = {}  # {structure_key: structure_data}
         self.opened_chests = set()  # Track which chests have been looted
-        self.next_subscreen_id = 0  # For generating unique subscreen IDs
-        self.zone_cave_systems = {}  # {screen_key: cave_subscreen_key} - one cave system per zone
+        self.next_structure_id = 0  # For generating unique structure IDs
+        self.zone_cave_systems = {}  # {screen_key: cave_structure_key} - one cave system per zone
         
         # Zone connection and priority system
         # Connections map: {zone_key: [(connected_zone_key, connection_type, cell_x, cell_y), ...]}
@@ -142,9 +142,6 @@ class GameCoreMixin:
         
         # Entities per zone (overworld and structure): {zone_key: [entity_ids]}
         self.screen_entities = {}
-        # Alias — structure zones now live in screen_entities under their virtual coord key.
-        # All legacy code that writes/reads subscreen_entities still works transparently.
-        self.subscreen_entities = self.screen_entities
 
         # Door mapping: {(zone_key, cell_x, cell_y): (target_zone_key, target_x, target_y)}
         # Links overworld entrance cells to structure zone entrances and back.
@@ -613,15 +610,15 @@ class GameCoreMixin:
             # ── AI update: on-screen every tick, off-screen throttled ──────
             if screen_distance == 0:
                 self.update_entity_ai(entity_id, entity)
-                self.update_subscreen_npc_behavior(entity_id, entity)
+                self.update_structure_npc_behavior(entity_id, entity)
             elif screen_distance == 1:
                 if self.tick % 60 == 0:
                     self.update_entity_ai(entity_id, entity)
-                    self.update_subscreen_npc_behavior(entity_id, entity)
+                    self.update_structure_npc_behavior(entity_id, entity)
             else:
                 if self.tick % 90 == 0:
                     self.update_entity_ai(entity_id, entity)
-                    self.update_subscreen_npc_behavior(entity_id, entity)
+                    self.update_structure_npc_behavior(entity_id, entity)
 
         for entity_id in entities_to_remove:
             self.remove_entity(entity_id)
@@ -738,8 +735,8 @@ class GameCoreMixin:
             if entity_id in self.screen_entities[screen_key]:
                 self.screen_entities[screen_key].remove(entity_id)
 
-        # Remove from any subscreen entities lists (catches entities that die inside structures)
-        for sub_list in self.subscreen_entities.values():
+        # Remove from any structure entities lists (catches entities that die inside structures)
+        for sub_list in self.screen_entities.values():
             if entity_id in sub_list:
                 sub_list.remove(entity_id)
         
@@ -1277,17 +1274,17 @@ class GameCoreMixin:
         
         if not any_movement_key:
             if getattr(self, 'autopilot_locked', False):
-                # If in a subscreen, navigate toward the exit instead of autopiloting
-                if self.player.get('in_subscreen'):
-                    subscreen = self.subscreens.get(self.player.get('subscreen_key'))
-                    if subscreen:
-                        exit_pos = subscreen.get('exit', subscreen.get('entrance'))
+                # If in a structure, navigate toward the exit instead of autopiloting
+                if self.player.get('in_structure'):
+                    structure = self.structures.get(self.player.get('structure_key'))
+                    if structure:
+                        exit_pos = structure.get('exit', structure.get('entrance'))
                         if exit_pos:
                             px, py = self.player['x'], self.player['y']
                             ex, ey = exit_pos
                             # If at exit, leave
                             if px == ex and py == ey:
-                                self.exit_subscreen()
+                                self.exit_structure()
                                 return
                             # Move toward exit
                             if self.tick % 18 == 0:
@@ -1341,22 +1338,22 @@ class GameCoreMixin:
         # Screen transitions - check BEFORE updating position
         screen_changed = False
         
-        # Check if in subscreen and trying to exit through doorway
-        if self.player.get('in_subscreen'):
-            current_subscreen = self.subscreens.get(self.player['subscreen_key'])
+        # Check if in structure and trying to exit through doorway
+        if self.player.get('in_structure'):
+            current_structure = self.structures.get(self.player['structure_key'])
             # Exit when walking out the bottom (doorway area)
             # Only for houses or cave depth 1 (deeper caves use STAIRS_UP)
-            if current_subscreen:
-                is_depth_1 = current_subscreen.get('depth', 1) == 1
+            if current_structure:
+                is_depth_1 = current_structure.get('depth', 1) == 1
                 if is_depth_1 and new_y >= GRID_HEIGHT - 1:
-                    self.exit_subscreen()
+                    self.exit_structure()
                     return
         
         # Normal screen transitions for overworld
         # Exits are only open at the center corridor (±1 of center edge).
         # Require player to be inside that corridor before allowing transition,
         # matching the NPC zone transition requirement in try_entity_zone_transition.
-        if not self.player.get('in_subscreen'):
+        if not self.player.get('in_structure'):
             center_x = GRID_WIDTH // 2
             center_y = GRID_HEIGHT // 2
             if new_y < 0 and self.current_screen['exits']['top'] and abs(new_x - center_x) <= 1:
@@ -1500,17 +1497,17 @@ class GameCoreMixin:
         
         cell = self.current_screen['grid'][check_y][check_x]
         
-        # Check for subscreen exit (STAIRS_UP)
+        # Check for structure exit (STAIRS_UP)
         if cell == 'STAIRS_UP':
             # Check if in a deep cave level
-            if self.player.get('in_subscreen'):
-                current_subscreen = self.subscreens.get(self.player['subscreen_key'])
-                if current_subscreen and current_subscreen['type'] == 'CAVE' and current_subscreen['depth'] > 1:
+            if self.player.get('in_structure'):
+                current_structure = self.structures.get(self.player['structure_key'])
+                if current_structure and current_structure['type'] == 'CAVE' and current_structure['depth'] > 1:
                     # Ascend to previous cave level
                     self.ascend_cave()
                     return
-            # Otherwise, exit subscreen completely
-            self.exit_subscreen()
+            # Otherwise, exit structure completely
+            self.exit_structure()
             return
         
         # Check for deeper cave level (STAIRS_DOWN)
@@ -1525,7 +1522,7 @@ class GameCoreMixin:
         
         # Check for enterable structure (HOUSE, CAVE)
         if CELL_TYPES.get(cell, {}).get('enterable'):
-            self.enter_subscreen(check_x, check_y)
+            self.enter_structure(check_x, check_y)
             return
         
         # Weapon check — swords only attack and enter/exit; no world tool interactions
@@ -1555,10 +1552,10 @@ class GameCoreMixin:
             self.player['energy'] = max(0, self.player.get('energy', 0) - 1)
             depth = 1
             in_cave = False
-            if self.player.get('in_subscreen'):
-                subscreen = self.subscreens.get(self.player.get('subscreen_key'))
-                if subscreen and subscreen.get('type') == 'CAVE':
-                    depth = subscreen.get('depth', 1)
+            if self.player.get('in_structure'):
+                structure = self.structures.get(self.player.get('structure_key'))
+                if structure and structure.get('type') == 'CAVE':
+                    depth = structure.get('depth', 1)
                     in_cave = True
 
             mineshaft_chance = PLAYER_MINESHAFT_BASE_CHANCE / (MINESHAFT_DEPTH_DIVISOR ** (depth - 1))
@@ -1605,8 +1602,8 @@ class GameCoreMixin:
             
             # Add bones to dropped items (as overlay decoration)
             screen_key = f"{self.player['screen_x']},{self.player['screen_y']}"
-            if self.player.get('in_subscreen'):
-                screen_key = self.player.get('subscreen_key', screen_key)
+            if self.player.get('in_structure'):
+                screen_key = self.player.get('structure_key', screen_key)
             
             if screen_key not in self.dropped_items:
                 self.dropped_items[screen_key] = {}
@@ -1619,40 +1616,40 @@ class GameCoreMixin:
                 self.dropped_items[screen_key][cell_key].get('bones', 0) + 1
             return
     
-    def enter_subscreen(self, cell_x, cell_y):
+    def enter_structure(self, cell_x, cell_y):
         """Player enters a house, cave, or mineshaft"""
         cell = self.current_screen['grid'][cell_y][cell_x]
-        structure_type = CELL_TYPES[cell].get('subscreen_type')
+        structure_type = CELL_TYPES[cell].get('interior_type')
         
         if not structure_type:
             return
         
         # If entering a MINESHAFT from inside a cave — descend deeper
-        if cell == 'MINESHAFT' and self.player.get('in_subscreen'):
-            current_subscreen = self.subscreens.get(self.player.get('subscreen_key'))
-            if current_subscreen and current_subscreen.get('type') == 'CAVE':
+        if cell == 'MINESHAFT' and self.player.get('in_structure'):
+            current_structure = self.structures.get(self.player.get('structure_key'))
+            if current_structure and current_structure.get('type') == 'CAVE':
                 self.descend_cave()
                 return
 
-        # Check if subscreen already exists for this location
+        # Check if structure already exists for this location
         parent_screen_x = self.player['screen_x']
         parent_screen_y = self.player['screen_y']
 
-        # If entering a CAVE/MINESHAFT from inside a house, record which subscreen
+        # If entering a CAVE/MINESHAFT from inside a house, record which structure
         # we came from so ascend_cave() can return the player to the right place.
-        came_from_subscreen = None
+        came_from_structure = None
         came_from_pos = None
-        if structure_type == 'CAVE' and self.player.get('in_subscreen'):
-            origin_sub = self.subscreens.get(self.player.get('subscreen_key'))
+        if structure_type == 'CAVE' and self.player.get('in_structure'):
+            origin_sub = self.structures.get(self.player.get('structure_key'))
             if origin_sub and origin_sub.get('type') == 'HOUSE_INTERIOR':
-                came_from_subscreen = self.player['subscreen_key']
+                came_from_structure = self.player['structure_key']
                 came_from_pos = (cell_x, cell_y)
 
-        # Look for existing subscreen at this location
+        # Look for existing structure at this location
         existing_key = None
-        for key, subscreen in self.subscreens.items():
-            if (subscreen['parent_screen'] == (parent_screen_x, parent_screen_y) and
-                subscreen['parent_cell'] == (cell_x, cell_y)):
+        for key, structure in self.structures.items():
+            if (structure['parent_screen'] == (parent_screen_x, parent_screen_y) and
+                structure['parent_cell'] == (cell_x, cell_y)):
                 existing_key = key
                 break
 
@@ -1662,15 +1659,15 @@ class GameCoreMixin:
             if parent_key in self.zone_cave_systems:
                 existing_key = self.zone_cave_systems[parent_key]
                 # Add this entrance to the cave system's entrance list
-                subscreen = self.subscreens.get(existing_key)
-                if subscreen and (cell_x, cell_y) not in subscreen.get('entrances', []):
-                    subscreen.setdefault('entrances', []).append((cell_x, cell_y))
+                structure = self.structures.get(existing_key)
+                if structure and (cell_x, cell_y) not in structure.get('entrances', []):
+                    structure.setdefault('entrances', []).append((cell_x, cell_y))
 
-        # Generate or retrieve subscreen
+        # Generate or retrieve structure
         if existing_key:
-            subscreen_key = existing_key
+            structure_key = existing_key
         else:
-            subscreen_key = self.generate_subscreen(
+            structure_key = self.generate_structure_zone(
                 parent_screen_x, parent_screen_y,
                 cell_x, cell_y,
                 structure_type,
@@ -1678,24 +1675,24 @@ class GameCoreMixin:
             )
 
         # Save player's parent location for exit routing
-        self.player['in_subscreen'] = True
-        self.player['subscreen_key'] = subscreen_key
-        self.player['subscreen_parent'] = (parent_screen_x, parent_screen_y, cell_x, cell_y)
+        self.player['in_structure'] = True
+        self.player['structure_key'] = structure_key
+        self.player['structure_parent'] = (parent_screen_x, parent_screen_y, cell_x, cell_y)
         # Secret-entrance context so ascend_cave knows how to exit
-        self.player['cave_via_subscreen'] = came_from_subscreen
+        self.player['cave_via_structure'] = came_from_structure
         self.player['cave_via_pos'] = came_from_pos
 
         # Update player zone coords to the structure's virtual coordinates
-        vx, vy = map(int, subscreen_key.split(','))
+        vx, vy = map(int, structure_key.split(','))
         self.player['screen_x'] = vx
         self.player['screen_y'] = vy
 
-        # Switch to subscreen grid
-        subscreen = self.subscreens[subscreen_key]
-        self.current_screen = subscreen
+        # Switch to structure grid
+        structure = self.structures[structure_key]
+        self.current_screen = structure
 
         # Position player at entrance
-        entrance = subscreen['entrance']
+        entrance = structure['entrance']
         self.player['x'] = entrance[0]
         self.player['y'] = entrance[1]
 
@@ -1703,9 +1700,9 @@ class GameCoreMixin:
         self._teleport_followers_with_player()
 
     def _teleport_followers_with_player(self):
-        """Teleport all followers to wherever the player currently is (overworld or subscreen)."""
-        in_sub = self.player.get('in_subscreen', False)
-        sub_key = self.player.get('subscreen_key')
+        """Teleport all followers to wherever the player currently is (overworld or structure)."""
+        in_sub = self.player.get('in_structure', False)
+        sub_key = self.player.get('structure_key')
         player_screen_key = f"{self.player['screen_x']},{self.player['screen_y']}"
 
         for fid in list(self.followers):
@@ -1725,15 +1722,15 @@ class GameCoreMixin:
                     self.screen_entities[sub_key] = []
                 if fid not in self.screen_entities[sub_key]:
                     self.screen_entities[sub_key].append(fid)
-                f.in_subscreen = True
-                f.subscreen_key = sub_key
+                f.in_structure = True
+                f.structure_key = sub_key
             else:
                 if player_screen_key not in self.screen_entities:
                     self.screen_entities[player_screen_key] = []
                 if fid not in self.screen_entities[player_screen_key]:
                     self.screen_entities[player_screen_key].append(fid)
-                f.in_subscreen = False
-                f.subscreen_key = None
+                f.in_structure = False
+                f.structure_key = None
 
             # Snap to player's current zone coords (virtual when in structure)
             f.screen_x = self.player['screen_x']
@@ -1743,13 +1740,13 @@ class GameCoreMixin:
             f.world_x = float(f.x)
             f.world_y = float(f.y)
 
-    def exit_subscreen(self):
+    def exit_structure(self):
         """Player exits back to parent screen"""
-        if not self.player['in_subscreen']:
+        if not self.player['in_structure']:
             return
         
         # Get parent location
-        parent_info = self.player['subscreen_parent']
+        parent_info = self.player['structure_parent']
         if not parent_info:
             return
         
@@ -1768,41 +1765,41 @@ class GameCoreMixin:
         self.player['screen_x'] = parent_screen_x
         self.player['screen_y'] = parent_screen_y
 
-        # Clear subscreen state
-        self.player['in_subscreen'] = False
-        self.player['subscreen_key'] = None
-        self.player['subscreen_parent'] = None
+        # Clear structure state
+        self.player['in_structure'] = False
+        self.player['structure_key'] = None
+        self.player['structure_parent'] = None
         
         print("Exited to outside!")
         self._teleport_followers_with_player()
 
     def descend_cave(self):
         """Go deeper into a cave"""
-        if not self.player['in_subscreen']:
+        if not self.player['in_structure']:
             return
         
-        current_subscreen = self.subscreens.get(self.player['subscreen_key'])
-        if not current_subscreen or current_subscreen['type'] != 'CAVE':
+        current_structure = self.structures.get(self.player['structure_key'])
+        if not current_structure or current_structure['type'] != 'CAVE':
             return
         
         # Get parent info
-        parent_screen_x, parent_screen_y = current_subscreen['parent_screen']
-        parent_cell_x, parent_cell_y = current_subscreen['parent_cell']
-        new_depth = current_subscreen['depth'] + 1
+        parent_screen_x, parent_screen_y = current_structure['parent_screen']
+        parent_cell_x, parent_cell_y = current_structure['parent_cell']
+        new_depth = current_structure['depth'] + 1
         
         # Look for existing deeper level first
         deeper_key = None
-        for key, subscreen in self.subscreens.items():
-            if (subscreen['parent_screen'] == (parent_screen_x, parent_screen_y) and
-                subscreen['parent_cell'] == (parent_cell_x, parent_cell_y) and
-                subscreen['type'] == 'CAVE' and
-                subscreen['depth'] == new_depth):
+        for key, structure in self.structures.items():
+            if (structure['parent_screen'] == (parent_screen_x, parent_screen_y) and
+                structure['parent_cell'] == (parent_cell_x, parent_cell_y) and
+                structure['type'] == 'CAVE' and
+                structure['depth'] == new_depth):
                 deeper_key = key
                 break
         
         # If not found, generate new deeper level
         if not deeper_key:
-            deeper_key = self.generate_subscreen(
+            deeper_key = self.generate_structure_zone(
                 parent_screen_x, parent_screen_y,
                 parent_cell_x, parent_cell_y,
                 'CAVE',
@@ -1811,14 +1808,14 @@ class GameCoreMixin:
         
         # Update player to new structure zone
         vx, vy = map(int, deeper_key.split(','))
-        self.player['subscreen_key'] = deeper_key
+        self.player['structure_key'] = deeper_key
         self.player['screen_x'] = vx
         self.player['screen_y'] = vy
-        deeper_subscreen = self.subscreens[deeper_key]
-        self.current_screen = deeper_subscreen
+        deeper_structure = self.structures[deeper_key]
+        self.current_screen = deeper_structure
 
         # Position player at entrance
-        entrance = deeper_subscreen['entrance']
+        entrance = deeper_structure['entrance']
         self.player['x'] = entrance[0]
         self.player['y'] = entrance[1]
         
@@ -1830,41 +1827,41 @@ class GameCoreMixin:
     
     def ascend_cave(self):
         """Go up one level in a cave"""
-        if not self.player['in_subscreen']:
+        if not self.player['in_structure']:
             return
         
-        current_subscreen = self.subscreens.get(self.player['subscreen_key'])
-        if not current_subscreen or current_subscreen['type'] != 'CAVE':
+        current_structure = self.structures.get(self.player['structure_key'])
+        if not current_structure or current_structure['type'] != 'CAVE':
             return
         
-        current_depth = current_subscreen['depth']
+        current_depth = current_structure['depth']
         if current_depth <= 1:
-            via_key = self.player.get('cave_via_subscreen')
+            via_key = self.player.get('cave_via_structure')
             if via_key:
                 self._exit_secret_cave_entrance()
             else:
-                self.exit_subscreen()
+                self.exit_structure()
             return
         
         # Get parent info for generating/finding the level above
-        parent_screen_x, parent_screen_y = current_subscreen['parent_screen']
-        parent_cell_x, parent_cell_y = current_subscreen['parent_cell']
+        parent_screen_x, parent_screen_y = current_structure['parent_screen']
+        parent_cell_x, parent_cell_y = current_structure['parent_cell']
         target_depth = current_depth - 1
         
         # Find or generate the level above
-        # Look for existing subscreen at this depth
+        # Look for existing structure at this depth
         upper_level_key = None
-        for key, subscreen in self.subscreens.items():
-            if (subscreen['parent_screen'] == (parent_screen_x, parent_screen_y) and
-                subscreen['parent_cell'] == (parent_cell_x, parent_cell_y) and
-                subscreen['type'] == 'CAVE' and
-                subscreen['depth'] == target_depth):
+        for key, structure in self.structures.items():
+            if (structure['parent_screen'] == (parent_screen_x, parent_screen_y) and
+                structure['parent_cell'] == (parent_cell_x, parent_cell_y) and
+                structure['type'] == 'CAVE' and
+                structure['depth'] == target_depth):
                 upper_level_key = key
                 break
         
         # If not found, generate it (shouldn't normally happen, but just in case)
         if not upper_level_key:
-            upper_level_key = self.generate_subscreen(
+            upper_level_key = self.generate_structure_zone(
                 parent_screen_x, parent_screen_y,
                 parent_cell_x, parent_cell_y,
                 'CAVE',
@@ -1873,14 +1870,14 @@ class GameCoreMixin:
         
         # Update player to upper structure zone
         vx, vy = map(int, upper_level_key.split(','))
-        self.player['subscreen_key'] = upper_level_key
+        self.player['structure_key'] = upper_level_key
         self.player['screen_x'] = vx
         self.player['screen_y'] = vy
-        upper_subscreen = self.subscreens[upper_level_key]
-        self.current_screen = upper_subscreen
+        upper_structure = self.structures[upper_level_key]
+        self.current_screen = upper_structure
 
         # Position player at entrance
-        entrance = upper_subscreen['entrance']
+        entrance = upper_structure['entrance']
         self.player['x'] = entrance[0]
         self.player['y'] = entrance[1]
         
@@ -1894,22 +1891,22 @@ class GameCoreMixin:
           1. Overworld CAVE/MINESHAFT entrance for this zone (teleports player there).
           2. Back inside the house interior at the MINESHAFT tile.
         """
-        parent_info = self.player['subscreen_parent']
+        parent_info = self.player['structure_parent']
         psx, psy = parent_info[0], parent_info[1]
         zone_key = f"{psx},{psy}"
-        via_key = self.player.get('cave_via_subscreen')
+        via_key = self.player.get('cave_via_structure')
         via_pos = self.player.get('cave_via_pos')
 
         # Clear secret-entrance tracking
-        self.player['cave_via_subscreen'] = None
+        self.player['cave_via_structure'] = None
         self.player['cave_via_pos'] = None
 
         # ── Option 1: find a real overworld cave entrance ─────────────────────
         zone_grid = self.screens.get(zone_key, {}).get('grid', [])
         overworld_entrance = None
         cave_system_key = self.zone_cave_systems.get(zone_key)
-        if cave_system_key and cave_system_key in self.subscreens:
-            cx, cy = self.subscreens[cave_system_key].get('parent_cell', (None, None))
+        if cave_system_key and cave_system_key in self.structures:
+            cx, cy = self.structures[cave_system_key].get('parent_cell', (None, None))
             if (cx is not None and
                     0 <= cy < len(zone_grid) and 0 <= cx < len(zone_grid[cy]) and
                     zone_grid[cy][cx] in ('CAVE', 'MINESHAFT')):
@@ -1923,36 +1920,36 @@ class GameCoreMixin:
             self.player['y'] = oy
             self.player['screen_x'] = psx
             self.player['screen_y'] = psy
-            self.player['in_subscreen'] = False
-            self.player['subscreen_key'] = None
-            self.player['subscreen_parent'] = None
+            self.player['in_structure'] = False
+            self.player['structure_key'] = None
+            self.player['structure_parent'] = None
             print("Exited secret cave — arrived at overworld cave entrance.")
             return
 
         # ── Option 2: return to house interior at the MINESHAFT tile ─────────
-        house_sub = self.subscreens.get(via_key)
+        house_sub = self.structures.get(via_key)
         if house_sub:
             self.current_screen = house_sub
             self.player['x'] = via_pos[0] if via_pos else house_sub['entrance'][0]
             self.player['y'] = via_pos[1] if via_pos else house_sub['entrance'][1]
-            self.player['in_subscreen'] = True
-            self.player['subscreen_key'] = via_key
+            self.player['in_structure'] = True
+            self.player['structure_key'] = via_key
             vx, vy = map(int, via_key.split(','))
             self.player['screen_x'] = vx
             self.player['screen_y'] = vy
             hp = house_sub.get('parent_screen', (psx, psy))
             hc = house_sub.get('parent_cell', (0, 0))
-            self.player['subscreen_parent'] = (hp[0], hp[1], hc[0], hc[1])
+            self.player['structure_parent'] = (hp[0], hp[1], hc[0], hc[1])
             print("Exited secret cave — returned to house interior.")
             return
 
         # Fallback: normal exit to overworld
-        self.exit_subscreen()
+        self.exit_structure()
 
-    def spawn_cave_entities(self, subscreen_key, depth):
+    def spawn_cave_entities(self, structure_key, depth):
         """Spawn enemies in cave based on depth"""
-        subscreen = self.subscreens[subscreen_key]
-        grid = subscreen['grid']
+        structure = self.structures[structure_key]
+        grid = structure['grid']
         
         # Number of enemies scales with depth (1-3 + depth)
         num_enemies = random.randint(1 + depth, 3 + depth)
@@ -1971,17 +1968,17 @@ class GameCoreMixin:
                 # Level scales with depth
                 level = random.randint(depth, depth + 1)
                 
-                vx, vy = map(int, subscreen_key.split(','))
+                vx, vy = map(int, structure_key.split(','))
                 entity = Entity(enemy_type, x, y, vx, vy, level)
-                entity.in_subscreen = True
-                entity.subscreen_key = subscreen_key
+                entity.in_structure = True
+                entity.structure_key = structure_key
                 entity_id = self.next_entity_id
                 self.next_entity_id += 1
                 self.entities[entity_id] = entity
 
-                if subscreen_key not in self.screen_entities:
-                    self.screen_entities[subscreen_key] = []
-                self.screen_entities[subscreen_key].append(entity_id)
+                if structure_key not in self.screen_entities:
+                    self.screen_entities[structure_key] = []
+                self.screen_entities[structure_key].append(entity_id)
 
                 spawned += 1
             
@@ -1990,8 +1987,8 @@ class GameCoreMixin:
     def interact_with_chest(self, chest_x, chest_y):
         """Open chest and give loot to player"""
         # Create unique chest identifier
-        if self.player['in_subscreen']:
-            chest_id = f"{self.player['subscreen_key']}:{chest_x},{chest_y}"
+        if self.player['in_structure']:
+            chest_id = f"{self.player['structure_key']}:{chest_x},{chest_y}"
         else:
             screen_key = f"{self.player['screen_x']},{self.player['screen_y']}"
             chest_id = f"{screen_key}:{chest_x},{chest_y}"
@@ -2002,9 +1999,9 @@ class GameCoreMixin:
             return
         
         # Get loot table type
-        if self.player['in_subscreen']:
-            current_subscreen = self.subscreens.get(self.player['subscreen_key'])
-            loot_table_name = current_subscreen['chests'].get((chest_x, chest_y), 'HOUSE_CHEST')
+        if self.player['in_structure']:
+            current_structure = self.structures.get(self.player['structure_key'])
+            loot_table_name = current_structure['chests'].get((chest_x, chest_y), 'HOUSE_CHEST')
         else:
             loot_table_name = 'HOUSE_CHEST'  # Default
         
@@ -2047,9 +2044,9 @@ class GameCoreMixin:
             'blocking': False,
             'friendly_fire': False,      # OFF = cannot damage peaceful entities
             'last_attack_tick': 0,
-            'in_subscreen': False,
-            'subscreen_key': None,
-            'subscreen_parent': None,
+            'in_structure': False,
+            'structure_key': None,
+            'structure_parent': None,
             'facing': 'down',
             'anim_frame': 'still',
             'anim_timer': 0,
@@ -2078,14 +2075,13 @@ class GameCoreMixin:
         self.npc_quests = []
         self.active_npc_quest_npc_id = None
         self.zone_keepers = {}
-        self.subscreens = {}
+        self.structures = {}
         self.opened_chests = set()
-        self.next_subscreen_id = 0
+        self.next_structure_id = 0
         self.door_map = {}
         self.entities = {}
         self.next_entity_id = 0
         self.screen_entities = {}
-        self.subscreen_entities = self.screen_entities  # re-establish alias after reset
         self.attack_animations = []
         self.current_screen = self.generate_screen(0, 0)
 

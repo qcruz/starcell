@@ -147,8 +147,8 @@ COMBAT_FLEE_CHANCE = 0.4        # 40% chance to flee when health critical
 COMBAT_DISENGAGE_CHANCE = 0.05  # 5% chance to disengage from combat
 HOSTILE_DETECTION_RANGE = 8     # Cells within which to detect hostiles (for fleeing)
 
-# NPC Subscreen Behavior
-NPC_SUBSCREEN_EXIT_CHANCE = 0.60  # 60% chance per update to try exiting subscreen
+# NPC Structure Behavior
+NPC_STRUCTURE_EXIT_CHANCE = 0.60  # 60% chance per update to try exiting structure
 
 # Wizard System
 WIZARD_SPELL_COOLDOWN = 180     # Ticks between spell casts (3 seconds)
@@ -344,10 +344,10 @@ CELL_TYPES = {
     'SAND': {'color': COLORS['SAND'], 'label': 'Snd', 'solid': False, 'grows_to': 'CACTUS', 'growth_rate': 0.0001},
     'COBBLESTONE': {'color': COLORS['COBBLESTONE'], 'label': 'Cob', 'solid': False, 'degrades_to': 'DIRT', 'degrade_rate': 0.00001},  # Very persistent
     'WALL': {'color': COLORS['WALL'], 'label': '█', 'solid': True},
-    'HOUSE': {'color': COLORS['HOUSE'], 'label': 'Hos', 'solid': True, 'enterable': True, 'subscreen_type': 'HOUSE_INTERIOR', 'grows_to': 'STONE_HOUSE', 'growth_rate': 0.00002},
+    'HOUSE': {'color': COLORS['HOUSE'], 'label': 'Hos', 'solid': True, 'enterable': True, 'interior_type': 'HOUSE_INTERIOR', 'grows_to': 'STONE_HOUSE', 'growth_rate': 0.00002},
     'FORGE': {'color': COLORS['FORGE'], 'label': 'Frg', 'solid': True},
-    'CAVE': {'color': COLORS['CAVE'], 'label': 'Cav', 'solid': True, 'enterable': True, 'subscreen_type': 'CAVE'},
-    'MINESHAFT': {'color': (90, 70, 50), 'label': 'Mine', 'solid': True, 'enterable': True, 'subscreen_type': 'CAVE', 'sprite_name': 'mineshaft'},
+    'CAVE': {'color': COLORS['CAVE'], 'label': 'Cav', 'solid': True, 'enterable': True, 'interior_type': 'CAVE'},
+    'MINESHAFT': {'color': (90, 70, 50), 'label': 'Mine', 'solid': True, 'enterable': True, 'interior_type': 'CAVE', 'sprite_name': 'mineshaft'},
     'HIDDEN_CAVE': {'color': (40, 35, 30), 'label': 'HCav', 'solid': False, 'degrades_to': 'CAVE', 'degrade_rate': 0.005},
     'CAMP': {'color': (200, 100, 50), 'label': 'Camp', 'solid': False, 'grows_to': 'HOUSE', 'growth_rate': 0.001},
     'SOIL': {'color': COLORS['SOIL'], 'label': 'Soil', 'solid': False},
@@ -364,7 +364,7 @@ CELL_TYPES = {
     'CAVE_WALL': {'color': (30, 30, 30), 'label': 'Cw', 'solid': True},
     'CHEST': {'color': (139, 69, 19), 'label': 'Chst', 'solid': True, 'interactable': True},
     'STAIRS_DOWN': {'color': (100, 80, 60), 'label': '↓', 'solid': False, 'goes_deeper': True},
-    'STAIRS_UP': {'color': (120, 100, 80), 'label': '↑', 'solid': False, 'exits_subscreen': True},
+    'STAIRS_UP': {'color': (120, 100, 80), 'label': '↑', 'solid': False, 'exits_structure': True},
     'IRON_ORE': {
         'color': COLORS['IRON_ORE'],
         'label': 'Fe',
@@ -395,7 +395,7 @@ CELL_TYPES = {
         'label': 'StH',
         'solid': True,
         'enterable': True,
-        'subscreen_type': 'HOUSE_INTERIOR',
+        'interior_type': 'HOUSE_INTERIOR',
     },
     'RUINED_SANDSTONE_COLUMN': {
         'color': COLORS['RUINED_SANDSTONE_COLUMN'],
