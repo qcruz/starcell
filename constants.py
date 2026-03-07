@@ -76,8 +76,8 @@ HOSTILE_FACTION_SYMBOLS = ['Fang', 'Claw', 'Knife', 'Death', 'Hunger', 'Blade', 
 # ============================================================================
 
 # Weather System
-RAIN_FREQUENCY_MIN = 30  # Minimum ticks between rain (1 minute at 60 FPS)
-RAIN_FREQUENCY_MAX = 250  # Maximum ticks between rain (2 minutes at 60 FPS)
+RAIN_FREQUENCY_MIN = 1800   # Minimum ticks between rain (~30 s at 60 FPS)
+RAIN_FREQUENCY_MAX = 18000  # Maximum ticks between rain (~5 min at 60 FPS)
 RAIN_DURATION_MIN = 10    # Minimum rain duration (5 seconds)
 RAIN_DURATION_MAX = 60    # Maximum rain duration (15 seconds)
 RAIN_WATER_SPAWNS = 5      # Water cells created per rain tick per screen
@@ -96,16 +96,21 @@ QUEST_XP_MULTIPLIER = 10  # XP reward = target_level × this value
 GRASS_TO_DIRT_RATE = 0.00001    # Grass decays to dirt without water (was 0.0001)
 DIRT_TO_SAND_RATE = 0.000005    # Dirt becomes sand in severe drought (was 0.00005)
 DIRT_TO_GRASS_RATE = 0.0001     # Dirt becomes grass with water (was 0.0005)
-TREE_GROWTH_RATE = 0.00005      # Grass becomes tree (was 0.0001)
+TREE_GROWTH_RATE = 0.0001       # Grass becomes tree (increased to offset crowding decay)
 TREE_DECAY_RATE = 0.0005        # Trees decay when overcrowded (was 0.001)
-SAND_RECLAIM_RATE = 0.0005      # Sand becomes dirt with water (was 0.001)
+SAND_RECLAIM_RATE = 0.05        # Sand becomes dirt when touching water (high rate)
 FLOWER_SPREAD_RATE = 0.0001     # Flowers spread to nearby grass (was 0.0005)
 FLOWER_DECAY_RATE = 0.0005      # Flowers die from overcrowding/drought (was 0.002)
 DEEP_WATER_FORM_RATE = 0.05     # Water becomes deep water (apply_cellular_automata)
 DEEP_WATER_EVAPORATE_RATE = 0.03 # Deep water becomes water (apply_cellular_automata)
 WATER_TO_DIRT_RATE = 0.005      # Water slowly evaporates to dirt without neighbors (apply_cellular_automata)
-FLOODING_RATE = 0.015           # Water spreads to dirt (apply_cellular_automata)
-BIOME_SPREAD_RATE = 0.001       # Chance per update a base cell copies a different NSEW neighbor type
+FLOODING_RATE = 0.08            # Water spreads to dirt during rain only (apply_cellular_automata)
+BIOME_SPREAD_RATE = 0.004          # Chance per update a base cell copies a different NSEW neighbor type (4x increase)
+TREE_CROWD_DECAY_RATE = 0.001      # Trees thin when touching any adjacent tree (produces checkerboard spacing)
+GRASS_SAND_DECAY_RATE = 0.003      # Grass near sand erodes to dirt (desertification edge)
+DIRT_SAND_SPREAD_RATE = 0.008      # Dirt near sand becomes sand when dry (must overpower BIOME_SPREAD_RATE)
+GRASS_WATER_ABSORB_RATE = 0.02     # Grass adjacent to water floods during rain only
+DIRT_WATER_EXTRA_GRASS_RATE = 0.0002  # Dirt with even 1 water neighbor gets extra grass chance
 
 # Entity Survival
 HUNGER_DECAY_RATE = 0.02        # Hunger loss per tick (slowed down further)
@@ -147,8 +152,8 @@ COMBAT_FLEE_CHANCE = 0.4        # 40% chance to flee when health critical
 COMBAT_DISENGAGE_CHANCE = 0.05  # 5% chance to disengage from combat
 HOSTILE_DETECTION_RANGE = 8     # Cells within which to detect hostiles (for fleeing)
 
-# NPC Subscreen Behavior
-NPC_SUBSCREEN_EXIT_CHANCE = 0.60  # 60% chance per update to try exiting subscreen
+# NPC Structure Behavior
+NPC_STRUCTURE_EXIT_CHANCE = 0.60  # 60% chance per update to try exiting structure
 
 # Wizard System
 WIZARD_SPELL_COOLDOWN = 180     # Ticks between spell casts (3 seconds)
@@ -344,10 +349,10 @@ CELL_TYPES = {
     'SAND': {'color': COLORS['SAND'], 'label': 'Snd', 'solid': False, 'grows_to': 'CACTUS', 'growth_rate': 0.0001},
     'COBBLESTONE': {'color': COLORS['COBBLESTONE'], 'label': 'Cob', 'solid': False, 'degrades_to': 'DIRT', 'degrade_rate': 0.00001},  # Very persistent
     'WALL': {'color': COLORS['WALL'], 'label': '█', 'solid': True},
-    'HOUSE': {'color': COLORS['HOUSE'], 'label': 'Hos', 'solid': True, 'enterable': True, 'subscreen_type': 'HOUSE_INTERIOR', 'grows_to': 'STONE_HOUSE', 'growth_rate': 0.00002},
+    'HOUSE': {'color': COLORS['HOUSE'], 'label': 'Hos', 'solid': True, 'enterable': True, 'interior_type': 'HOUSE_INTERIOR', 'grows_to': 'STONE_HOUSE', 'growth_rate': 0.00002},
     'FORGE': {'color': COLORS['FORGE'], 'label': 'Frg', 'solid': True},
-    'CAVE': {'color': COLORS['CAVE'], 'label': 'Cav', 'solid': True, 'enterable': True, 'subscreen_type': 'CAVE'},
-    'MINESHAFT': {'color': (90, 70, 50), 'label': 'Mine', 'solid': True, 'enterable': True, 'subscreen_type': 'CAVE', 'sprite_name': 'mineshaft'},
+    'CAVE': {'color': COLORS['CAVE'], 'label': 'Cav', 'solid': True, 'enterable': True, 'interior_type': 'CAVE'},
+    'MINESHAFT': {'color': (90, 70, 50), 'label': 'Mine', 'solid': True, 'enterable': True, 'interior_type': 'CAVE', 'sprite_name': 'mineshaft'},
     'HIDDEN_CAVE': {'color': (40, 35, 30), 'label': 'HCav', 'solid': False, 'degrades_to': 'CAVE', 'degrade_rate': 0.005},
     'CAMP': {'color': (200, 100, 50), 'label': 'Camp', 'solid': False, 'grows_to': 'HOUSE', 'growth_rate': 0.001},
     'SOIL': {'color': COLORS['SOIL'], 'label': 'Soil', 'solid': False},
@@ -364,7 +369,7 @@ CELL_TYPES = {
     'CAVE_WALL': {'color': (30, 30, 30), 'label': 'Cw', 'solid': True},
     'CHEST': {'color': (139, 69, 19), 'label': 'Chst', 'solid': True, 'interactable': True},
     'STAIRS_DOWN': {'color': (100, 80, 60), 'label': '↓', 'solid': False, 'goes_deeper': True},
-    'STAIRS_UP': {'color': (120, 100, 80), 'label': '↑', 'solid': False, 'exits_subscreen': True},
+    'STAIRS_UP': {'color': (120, 100, 80), 'label': '↑', 'solid': False, 'exits_structure': True},
     'IRON_ORE': {
         'color': COLORS['IRON_ORE'],
         'label': 'Fe',
@@ -395,7 +400,7 @@ CELL_TYPES = {
         'label': 'StH',
         'solid': True,
         'enterable': True,
-        'subscreen_type': 'HOUSE_INTERIOR',
+        'interior_type': 'HOUSE_INTERIOR',
     },
     'RUINED_SANDSTONE_COLUMN': {
         'color': COLORS['RUINED_SANDSTONE_COLUMN'],
@@ -630,6 +635,7 @@ ENTITY_TYPES = {
             'idleness': 0.05,
             'flee_chance': 0.20,
             'combat_chance': 0.80,
+            'attack_chance': 0.60,
             'target_types': ['food', 'water', 'hostile']
         }
     },
@@ -717,6 +723,7 @@ ENTITY_TYPES = {
             'idleness': 0.01,        # 1% chance to enter idle state (matched to warriors)
             'flee_chance': 0.10,
             'combat_chance': 0.90,
+            'attack_chance': 0.40,
             'target_types': ['hostile', 'water', 'food']  # What to target
         }
     },
@@ -747,6 +754,7 @@ ENTITY_TYPES = {
             'idleness': 0.01,        # 1% chance to enter idle state (matched to guards)
             'flee_chance': 0.005,    # 0.5% base flee — near-zero, scales up only vs much higher-level enemies
             'combat_chance': 0.95,   # 95% fight when threatened
+            'attack_chance': 0.55,
             'target_types': ['hostile', 'water', 'food', 'structure']  # What to target
         }
     },
@@ -778,6 +786,7 @@ ENTITY_TYPES = {
             'idleness': 0.07,        # 7% - rarely idle
             'flee_chance': 0.002,    # 0.2% base flee — commanders almost never flee
             'combat_chance': 0.97,
+            'attack_chance': 0.55,
             'target_types': ['hostile', 'water', 'food', 'structure']
         }
     },
@@ -809,6 +818,7 @@ ENTITY_TYPES = {
             'idleness': 0.15,        # 15% - sits on throne
             'flee_chance': 0.05,
             'combat_chance': 0.95,
+            'attack_chance': 0.50,
             'target_types': ['hostile', 'water', 'food', 'structure']
         }
     },
@@ -993,6 +1003,7 @@ ENTITY_TYPES = {
             'idleness': 0.02,        # Always hunting (was 0.05)
             'flee_chance': 0.10,
             'combat_chance': 0.90,
+            'attack_chance': 0.45,
             'target_types': ['hostile', 'structure', 'resource']
         }
     },
@@ -1020,6 +1031,7 @@ ENTITY_TYPES = {
             'idleness': 0.03,        # More active (was 0.10)
             'flee_chance': 0.15,
             'combat_chance': 0.85,
+            'attack_chance': 0.50,
             'target_types': ['hostile', 'structure', 'resource']
         }
     },
@@ -1045,6 +1057,7 @@ ENTITY_TYPES = {
             'idleness': 0.10,        # Takes more breaks (was 0.05)
             'flee_chance': 0.05,
             'combat_chance': 0.95,
+            'attack_chance': 0.35,
             'target_types': ['hostile', 'structure']
         }
     },
@@ -1078,6 +1091,7 @@ ENTITY_TYPES = {
             'idleness': 0.01,        # Constantly eating trees (was 0.20)
             'flee_chance': 0.80,
             'combat_chance': 0.20,
+            'attack_chance': 0.15,
             'target_types': ['food']  # Trees are their food source
         }
     },
@@ -1106,6 +1120,7 @@ ENTITY_TYPES = {
             'idleness': 0.15,         # Sometimes just hangs around
             'flee_chance': 0.20,      # Will flee if threatened
             'combat_chance': 0.80,    # Usually fights back
+            'attack_chance': 0.30,
             'target_types': ['hostile']  # Attacks other NPCs
         }
     }

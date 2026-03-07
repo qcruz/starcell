@@ -5,12 +5,14 @@ from constants import (
     CELL_TYPES, BIOMES,
     # Cellular automata rates
     DIRT_TO_GRASS_RATE, GRASS_TO_DIRT_RATE, DIRT_TO_SAND_RATE,
-    TREE_GROWTH_RATE, TREE_DECAY_RATE,
+    TREE_GROWTH_RATE, TREE_DECAY_RATE, TREE_CROWD_DECAY_RATE,
     SAND_RECLAIM_RATE,
     FLOWER_SPREAD_RATE, FLOWER_DECAY_RATE,
     DEEP_WATER_FORM_RATE, DEEP_WATER_EVAPORATE_RATE,
     WATER_TO_DIRT_RATE, FLOODING_RATE,
     BIOME_SPREAD_RATE,
+    GRASS_SAND_DECAY_RATE, DIRT_SAND_SPREAD_RATE,
+    GRASS_WATER_ABSORB_RATE, DIRT_WATER_EXTRA_GRASS_RATE,
     # Rain
     RAIN_WATER_SPAWNS, RAIN_GRASS_SPAWNS,
     RAIN_FREQUENCY_MIN, RAIN_FREQUENCY_MAX,
@@ -98,6 +100,13 @@ class CellsMixin:
 
         _tp = getattr(self, 'time_pass_speed', 1.0)
 
+        # Drought modifier: growth slows and decay accelerates the longer it hasn't rained.
+        # Full drought severity is reached at 9000 ticks (~2.5 min) without rain.
+        drought_ticks = self.tick - self.zone_last_rain.get(key, self.tick)
+        drought_severity = min(drought_ticks / 9000.0, 1.0)   # 0.0 = just rained, 1.0 = max drought
+        _growth = max(0.1, 1.0 - drought_severity * 0.9) * _tp  # decays to 10% of base at max drought
+        _decay  = (1.0 + drought_severity * 0.5) * _tp           # rises to 1.5x base at max drought
+
         for y in range(GRID_HEIGHT):
             for x in range(GRID_WIDTH):
                 cell = screen['grid'][y][x]
@@ -139,32 +148,53 @@ class CellsMixin:
                 tree_count = self.count_cell_type(neighbors, 'TREE')
                 sand_count = self.count_cell_type(neighbors, 'SAND')
                 flower_count = self.count_cell_type(neighbors, 'FLOWER')
+                cobblestone_count = self.count_cell_type(neighbors, 'COBBLESTONE')
 
                 total_water = water_count + deep_water_count
 
-                # Dirt → Grass (needs water)
-                if cell == 'DIRT' and total_water >= 2:
-                    if random.random() < min(1.0, DIRT_TO_GRASS_RATE * _tp):
+                # Dirt → Water (flooding, rain only — highest priority for dirt)
+                if cell == 'DIRT' and total_water >= 3 and self.is_raining:
+                    if random.random() < min(1.0, FLOODING_RATE * _tp):
+                        new_grid[y][x] = 'WATER'
+
+                # Dirt → Grass (water >= 2)
+                elif cell == 'DIRT' and total_water >= 2:
+                    if random.random() < min(1.0, DIRT_TO_GRASS_RATE * _growth):
                         new_grid[y][x] = 'GRASS'
 
-                # Grass → Dirt (lack of water)
-                elif cell == 'GRASS' and total_water == 0:
-                    if random.random() < min(1.0, GRASS_TO_DIRT_RATE * _tp):
-                        new_grid[y][x] = 'DIRT'
+                # Dirt → Grass (water == 1, extra small chance)
+                elif cell == 'DIRT' and total_water == 1 and sand_count == 0:
+                    if random.random() < min(1.0, DIRT_WATER_EXTRA_GRASS_RATE * _growth):
+                        new_grid[y][x] = 'GRASS'
 
-                # Dirt → Sand (severe drought)
-                elif cell == 'DIRT' and total_water == 0 and (sand_count >= 2 or grass_count == 0):
-                    if random.random() < min(1.0, DIRT_TO_SAND_RATE * _tp):
+                # Dirt → Sand (any sand neighbor, no water — desertification spread)
+                elif cell == 'DIRT' and total_water == 0 and sand_count >= 1:
+                    if random.random() < min(1.0, DIRT_SAND_SPREAD_RATE * _decay):
                         new_grid[y][x] = 'SAND'
 
-                # Tree spread (needs grass and water)
-                elif cell == 'GRASS' and 1 <= tree_count <= 2 and total_water >= 1:
-                    if random.random() < min(1.0, TREE_GROWTH_RATE * _tp):
+                # Dirt → Sand (severe drought, no grass at all — original fallback)
+                elif cell == 'DIRT' and total_water == 0 and grass_count == 0:
+                    if random.random() < min(1.0, DIRT_TO_SAND_RATE * _decay):
+                        new_grid[y][x] = 'SAND'
+
+                # Grass → Dirt (sand erosion — desertification edge, higher rate)
+                elif cell == 'GRASS' and sand_count >= 1:
+                    if random.random() < min(1.0, GRASS_SAND_DECAY_RATE * _decay):
+                        new_grid[y][x] = 'DIRT'
+
+                # Grass → Dirt (drought, no water)
+                elif cell == 'GRASS' and total_water == 0:
+                    if random.random() < min(1.0, GRASS_TO_DIRT_RATE * _decay):
+                        new_grid[y][x] = 'DIRT'
+
+                # Tree spread (needs grass, water, and no cobblestone adjacency)
+                elif cell == 'GRASS' and cobblestone_count == 0 and 1 <= tree_count <= 2 and total_water >= 1:
+                    if random.random() < min(1.0, TREE_GROWTH_RATE * _growth):
                         new_grid[y][x] = 'TREE1'
 
                 # Sand reclamation (water converts sand back to dirt)
-                elif cell == 'SAND' and total_water >= 2:
-                    if random.random() < min(1.0, SAND_RECLAIM_RATE * _tp):
+                elif cell == 'SAND' and total_water >= 1:
+                    if random.random() < min(1.0, SAND_RECLAIM_RATE * _growth):
                         new_grid[y][x] = 'DIRT'
 
                 # Deep water formation: all 4 cardinal neighbors must be water/deepwater
@@ -176,32 +206,44 @@ class CellsMixin:
                     )
                     if cardinal_water == 4 and random.random() < min(1.0, DEEP_WATER_FORM_RATE * _tp):
                         new_grid[y][x] = 'DEEP_WATER'
-                    elif total_water <= 1 and random.random() < min(1.0, WATER_TO_DIRT_RATE * _tp):
+                    elif total_water <= 1 and random.random() < min(1.0, WATER_TO_DIRT_RATE * _decay):
                         new_grid[y][x] = 'DIRT'
 
                 # Deep water evaporation
                 elif cell == 'DEEP_WATER' and (water_count + deep_water_count) < 2:
-                    if random.random() < min(1.0, DEEP_WATER_EVAPORATE_RATE * _tp):
-                        new_grid[y][x] = 'WATER'
-
-                # Flooding (water spreads to dirt when abundant)
-                elif cell == 'DIRT' and total_water >= 3:
-                    if random.random() < min(1.0, FLOODING_RATE * _tp):
+                    if random.random() < min(1.0, DEEP_WATER_EVAPORATE_RATE * _decay):
                         new_grid[y][x] = 'WATER'
 
                 # Flower spread
                 elif cell == 'GRASS' and 1 <= flower_count <= 2 and total_water >= 1:
-                    if random.random() < min(1.0, FLOWER_SPREAD_RATE * _tp):
+                    if random.random() < min(1.0, FLOWER_SPREAD_RATE * _growth):
                         new_grid[y][x] = 'FLOWER'
 
                 # Flower death (overcrowding or drought)
                 elif cell == 'FLOWER' and (flower_count >= 4 or total_water == 0):
-                    if random.random() < min(1.0, FLOWER_DECAY_RATE * _tp):
+                    if random.random() < min(1.0, FLOWER_DECAY_RATE * _decay):
                         new_grid[y][x] = 'GRASS'
 
-                # Tree overcrowding death
-                elif cell.startswith('TREE') and tree_count >= 4:
-                    if random.random() < min(1.0, TREE_DECAY_RATE * _tp):
+                # Grass → Water (rain flooding only)
+                elif cell == 'GRASS' and total_water >= 1 and self.is_raining:
+                    if random.random() < min(1.0, GRASS_WATER_ABSORB_RATE * _tp):
+                        new_grid[y][x] = 'WATER'
+
+                # Tree → Cobblestone (tree stranded inside a cobblestone road — 5+ of 8 neighbors cobblestone)
+                # High threshold prevents cascade: edge trees are untouched, only truly embedded ones convert
+                elif cell.startswith('TREE') and cobblestone_count >= 5:
+                    if random.random() < min(1.0, TREE_DECAY_RATE * _decay):
+                        new_grid[y][x] = 'COBBLESTONE'
+
+                # Tree → Grass (near cobblestone road but not embedded — clears treeline)
+                elif cell.startswith('TREE') and cobblestone_count > 0:
+                    if random.random() < min(1.0, TREE_CROWD_DECAY_RATE * _decay):
+                        new_grid[y][x] = 'GRASS'
+
+                # Tree crowding decay — any adjacent tree triggers decay chance
+                # Naturally produces checkerboard spacing as isolated trees survive
+                elif cell.startswith('TREE') and tree_count >= 1:
+                    if random.random() < min(1.0, TREE_CROWD_DECAY_RATE * _decay):
                         new_grid[y][x] = 'GRASS'
 
                 # General neighbor-copy: base terrain may adopt a random NSEW neighbor's type

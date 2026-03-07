@@ -53,9 +53,8 @@ class ZonesMixin:
         total_cells_updated = 0
 
         # Always update the player's zone first at full coverage
+        # player screen_x/y reflects virtual coords when in structure zone — no special case needed
         player_zone_key = f"{self.player['screen_x']},{self.player['screen_y']}"
-        if self.player.get('in_subscreen') and self.player.get('subscreen_key'):
-            player_zone_key = self.player['subscreen_key']
 
         # Build set of mandatory zones: player + 4 cardinal neighbors
         psx, psy = self.player['screen_x'], self.player['screen_y']
@@ -624,7 +623,7 @@ class ZonesMixin:
 
         entity_list = self.screen_entities.get(struct_zone_key, [])
         if not entity_list:
-            entity_list = self.subscreen_entities.get(struct_zone_key, [])
+            entity_list = self.screen_entities.get(struct_zone_key, [])
 
         if getattr(self, 'autopilot', False):
             for eid in list(entity_list):
@@ -999,8 +998,7 @@ class ZonesMixin:
         player_y = self.player['screen_y']
         player_zone = f"{player_x},{player_y}"
 
-        if self.player.get('in_subscreen') and self.player.get('subscreen_key'):
-            player_zone = self.player['subscreen_key']
+        # player screen_x/y already reflects virtual coords in structure zones — no special case needed
 
         if self.is_overworld_zone(zone_key):
             parts = zone_key.split(',')
@@ -1085,9 +1083,10 @@ class ZonesMixin:
         if len(parts) != 2:
             return False
         try:
-            int(parts[0])
+            x = int(parts[0])
             int(parts[1])
-            return True
+            # Structure zones use virtual coords with x <= -1000
+            return x > -500
         except ValueError:
             return False
 
@@ -1110,6 +1109,10 @@ class ZonesMixin:
         """Ensure zones around player are generated"""
         player_x = self.player['screen_x']
         player_y = self.player['screen_y']
+
+        # Structure zones use virtual coords (x <= -1000) — don't generate nearby overworld zones
+        if player_x < -500:
+            return
 
         for dx in range(-4, 4):
             for dy in range(-4, 4):
@@ -1165,9 +1168,9 @@ class ZonesMixin:
             new_biome = 'DESERT'
         elif stone_pct > 0.3:
             new_biome = 'MOUNTAINS'
-        elif grass_pct > 0.5 and tree_pct < 0.1:
+        elif grass_pct > 0.5 and tree_pct < 0.05:
             new_biome = 'PLAINS'
-        elif grass_pct > 0.3 and tree_pct > 0.15:
+        elif grass_pct > 0.3 and tree_pct > 0.1:
             new_biome = 'FOREST'
 
         if new_biome != current_biome:
@@ -1287,11 +1290,11 @@ class ZonesMixin:
     def assign_zone_keepers(self, zone_key):
         """Check entities in zone_key and assign keeper status to fill vacant slots.
 
-        Called once per zone update cycle.  Each zone/subscreen maintains a dict
+        Called once per zone update cycle.  Each zone/structure maintains a dict
         of keeper slots keyed by keeper_type.  If a slot is vacant and an eligible
         entity is present, there is a KEEPER_ASSIGNMENT_RATE chance per call to
         assign one as keeper.  Keepers are permanent anchors — they cannot exit
-        the zone or subscreen they were assigned in.
+        the zone or structure they were assigned in.
         """
         if zone_key not in self.zone_keepers:
             self.zone_keepers[zone_key] = {}
@@ -1307,8 +1310,7 @@ class ZonesMixin:
                 del keepers[ktype]
 
         # --- Collect candidates from this zone ---
-        entity_ids = (self.screen_entities.get(zone_key, [])
-                      + self.subscreen_entities.get(zone_key, []))
+        entity_ids = list(self.screen_entities.get(zone_key, []))
 
         for eid in entity_ids:
             if eid not in self.entities:

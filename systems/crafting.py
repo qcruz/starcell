@@ -331,10 +331,10 @@ class CraftingMixin:
             del self.dropped_items[screen_key][cell_key]
 
     def drop_item(self, item_name, x, y):
-        """Drop item onto cell (works in both overworld and subscreens)"""
+        """Drop item onto cell (works in both overworld and structures)"""
         screen_key = f"{self.player['screen_x']},{self.player['screen_y']}"
-        if self.player.get('in_subscreen') and self.player.get('subscreen_key'):
-            screen_key = self.player['subscreen_key']
+        if self.player.get('in_structure') and self.player.get('structure_key'):
+            screen_key = self.player['structure_key']
         if screen_key not in self.dropped_items:
             self.dropped_items[screen_key] = {}
 
@@ -355,12 +355,12 @@ class CraftingMixin:
 
         target_x, target_y = target
         screen_key = f"{self.player['screen_x']},{self.player['screen_y']}"
-        in_subscreen = self.player.get('in_subscreen', False)
-        subscreen_key = self.player.get('subscreen_key')
+        in_structure = self.player.get('in_structure', False)
+        structure_key = self.player.get('structure_key')
 
-        # Determine the correct screen key for subscreens
-        if in_subscreen and subscreen_key:
-            screen_key = subscreen_key
+        # Determine the correct screen key for structures
+        if in_structure and structure_key:
+            screen_key = structure_key
 
         # Check if cell is enchanted - cannot pick up enchanted cells
         if self.is_cell_enchanted(target_x, target_y, screen_key):
@@ -386,10 +386,10 @@ class CraftingMixin:
         # Determine structure floor type (what to restore when picking up)
         structure_floor = None
         is_mine = False
-        if in_subscreen and subscreen_key:
-            subscreen = self.subscreens.get(subscreen_key)
-            if subscreen:
-                stype = subscreen.get('type', '')
+        if in_structure and structure_key:
+            structure = self.structures.get(structure_key)
+            if structure:
+                stype = structure.get('type', '')
                 if stype == 'HOUSE_INTERIOR':
                     structure_floor = 'FLOOR_WOOD'
                 elif stype == 'CAVE':
@@ -447,7 +447,7 @@ class CraftingMixin:
 
         target_x, target_y = target
         screen_key = f"{self.player['screen_x']},{self.player['screen_y']}"
-        in_subscreen = self.player.get('in_subscreen', False)
+        in_structure = self.player.get('in_structure', False)
 
         # Cannot place on enchanted cells
         if self.is_cell_enchanted(target_x, target_y, screen_key):
@@ -465,10 +465,10 @@ class CraftingMixin:
                     continue
 
                 # Inside structures: non-structural items always go as overlays
-                if in_subscreen and selected not in structural_items and selected in ITEM_TO_CELL:
+                if in_structure and selected not in structural_items and selected in ITEM_TO_CELL:
                     self.inventory.remove_item(selected, 1)
-                    if in_subscreen and self.player.get('subscreen_key'):
-                        sk = self.player['subscreen_key']
+                    if in_structure and self.player.get('structure_key'):
+                        sk = self.player['structure_key']
                     else:
                         sk = screen_key
                     if sk not in self.dropped_items:

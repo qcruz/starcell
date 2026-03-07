@@ -1,6 +1,6 @@
 """
 NPC AI Movement Mixin
-Methods for entity movement, pathfinding, zone transitions, subscreen transitions,
+Methods for entity movement, pathfinding, zone transitions, structure transitions,
 and the memory-lane obstacle-avoidance system.
 """
 import random
@@ -12,21 +12,14 @@ class NpcAiMovementMixin:
 
     def wander_entity(self, entity):
         """Move entity randomly"""
-        # Resolve the correct grid and peer entity list.
-        # Entities in subscreens must use the subscreen grid, not the overworld grid,
-        # otherwise they check the wrong cells and get stuck at the entrance.
-        if entity.in_subscreen:
-            sub_key = entity.subscreen_key
-            screen = self.subscreens.get(sub_key) or self.screens.get(sub_key)
-            if not screen:
-                return
-            peer_ids = self.subscreen_entities.get(sub_key, [])
-        else:
-            screen_key = f"{entity.screen_x},{entity.screen_y}"
-            if screen_key not in self.screens:
-                return
-            screen = self.screens[screen_key]
-            peer_ids = self.screen_entities.get(screen_key, [])
+        # All entities (overworld and structure) now use the same registry.
+        # Entity screen_x/y is always the actual current zone key — virtual coords
+        # for structure zones, real coords for overworld zones.
+        screen_key = f"{entity.screen_x},{entity.screen_y}"
+        if screen_key not in self.screens:
+            return
+        screen = self.screens[screen_key]
+        peer_ids = self.screen_entities.get(screen_key, [])
 
         # Check if overlapping with another entity — if so, prioritize unstacking
         is_overlapping = False
@@ -57,7 +50,8 @@ class NpcAiMovementMixin:
 
             # Out of bounds
             if new_x < 0 or new_x >= GRID_WIDTH or new_y < 0 or new_y >= GRID_HEIGHT:
-                if not entity.in_subscreen:
+                in_structure = screen_key in self.structure_zones
+                if not in_structure:
                     # Overworld entity: attempt seamless zone crossing
                     old_sk = f"{entity.screen_x},{entity.screen_y}"
                     self.try_entity_screen_crossing(entity, new_x, new_y)
@@ -65,7 +59,7 @@ class NpcAiMovementMixin:
                         entity.is_moving = True
                         entity.moved_this_update = True
                         return
-                # In subscreen: edges are walls — just skip this direction
+                # Structure zone edges are hard walls; exit happens via exit cell
                 continue
 
             # Check memory lane — avoid recently visited cells
@@ -142,8 +136,8 @@ class NpcAiMovementMixin:
         memory is halved; at 4+ cycles it is cleared entirely so the entity
         can backtrack freely.
         """
-        # Support subscreen keys (may be in self.subscreens but not self.screens)
-        screen = self.screens.get(screen_key) or self.subscreens.get(screen_key)
+        # Support structure keys (may be in self.structures but not self.screens)
+        screen = self.screens.get(screen_key) or self.structures.get(screen_key)
         if not screen:
             return
 
@@ -217,14 +211,14 @@ class NpcAiMovementMixin:
             new_y = entity.y + move_y
 
             if new_x < 0 or new_x >= GRID_WIDTH or new_y < 0 or new_y >= GRID_HEIGHT:
-                if not entity.in_subscreen:
+                if not entity.in_structure:
                     # Overworld: try seamless zone crossing
                     old_sk = f"{entity.screen_x},{entity.screen_y}"
                     self.try_entity_screen_crossing(entity, new_x, new_y)
                     if f"{entity.screen_x},{entity.screen_y}" != old_sk:
                         entity.moved_this_update = True
                         return True
-                # In subscreen: edges are walls — treat as blocked
+                # In structure: edges are walls — treat as blocked
                 return False
             cell = screen['grid'][new_y][new_x]
             if CELL_TYPES[cell].get('solid', False):
@@ -353,6 +347,11 @@ class NpcAiMovementMixin:
             return
 
         screen = self.screens[screen_key]
+
+        # Structure zones have no overworld exits — entity exits via npc_exit_structure instead
+        if 'exits' not in screen:
+            return
+
         exits = screen['exits']
 
         # Center coordinates for entrance locations
@@ -448,9 +447,9 @@ class NpcAiMovementMixin:
         Only triggers at the existing 2-tile-wide exit corridors (center of each edge),
         matching the same corridor geometry used by try_entity_zone_transition.
         """
-        # Never cross zones while entity is inside a subscreen — the grid is shared
-        # but the entity is logically in the subscreen space, not the overworld.
-        if entity.in_subscreen:
+        # Never cross zones while entity is inside a structure — the grid is shared
+        # but the entity is logically in the structure space, not the overworld.
+        if entity.in_structure:
             return
 
         # Keepers are anchored to their current zone — never cross
@@ -461,11 +460,16 @@ class NpcAiMovementMixin:
         if self.tick - getattr(entity, 'last_zone_change_tick', -9999) < NPC_SEAMLESS_CROSS_COOLDOWN:
             return
 
-        screen_key = entity.screen_key
+        screen_key = f"{entity.screen_x},{entity.screen_y}"
         if screen_key not in self.screens:
             return
 
         screen = self.screens[screen_key]
+
+        # Structure zones have no overworld exits — entity exits via npc_exit_structure instead
+        if 'exits' not in screen:
+            return
+
         center_x = GRID_WIDTH // 2
         center_y = GRID_HEIGHT // 2
         new_screen_x = entity.screen_x
@@ -525,7 +529,7 @@ class NpcAiMovementMixin:
             return
 
         # Transfer between screen entity lists
-        old_sk = entity.screen_key
+        old_sk = f"{entity.screen_x},{entity.screen_y}"
         if old_sk in self.screen_entities and entity_id in self.screen_entities[old_sk]:
             self.screen_entities[old_sk].remove(entity_id)
         self.screen_entities[new_screen_key].append(entity_id)
@@ -547,7 +551,7 @@ class NpcAiMovementMixin:
 
     def move_entity_towards(self, entity, target_x, target_y):
         """Move entity one step towards target using memory_lane pathfinding"""
-        screen_key = entity.screen_key
+        screen_key = f"{entity.screen_x},{entity.screen_y}"
         if screen_key not in self.screens:
             return
 
@@ -778,18 +782,13 @@ class NpcAiMovementMixin:
                     closest_exit = (exit_x, exit_y)
 
         if closest_exit:
-            # Move towards exit with urgency (triple speed since desperate)
-            for _ in range(3):
-                self.move_entity_towards(entity, closest_exit[0], closest_exit[1])
-                # Check if reached exit (at edge)
-                if (entity.x <= 1 or entity.x >= GRID_WIDTH - 2 or
-                    entity.y <= 1 or entity.y >= GRID_HEIGHT - 2):
-                    # At edge, try to transition
-                    self.try_entity_zone_transition(entity_id, entity)
-                    break
+            self.move_entity_towards(entity, closest_exit[0], closest_exit[1])
+            if (entity.x <= 1 or entity.x >= GRID_WIDTH - 2 or
+                entity.y <= 1 or entity.y >= GRID_HEIGHT - 2):
+                self.try_entity_zone_transition(entity_id, entity)
 
-    def npc_enter_subscreen(self, entity, screen_key, entrance_x, entrance_y, entrance_type):
-        """Move NPC into subscreen"""
+    def npc_enter_structure(self, entity, screen_key, entrance_x, entrance_y, entrance_type):
+        """Move NPC into structure"""
         entity_id = None
         for eid, e in self.entities.items():
             if e is entity:
@@ -799,65 +798,68 @@ class NpcAiMovementMixin:
         if not entity_id:
             return
 
-        # Keepers cannot leave their current zone level — block subscreen entry
+        # Keepers cannot leave their current zone level — block structure entry
         if getattr(entity, 'keeper', False):
             return
 
-        # Check subscreen travel cooldown
-        if not hasattr(entity, 'last_subscreen_change_tick'):
-            entity.last_subscreen_change_tick = -999
+        # Check structure travel cooldown
+        if not hasattr(entity, 'last_structure_change_tick'):
+            entity.last_structure_change_tick = -999
 
-        ticks_since_travel = self.tick - entity.last_subscreen_change_tick
+        ticks_since_travel = self.tick - entity.last_structure_change_tick
         if ticks_since_travel < ZONE_CHANGE_COOLDOWN:  # Reuse same cooldown
             return
 
-        # Get or create subscreen
-        subscreen_type = CELL_TYPES[entrance_type]['subscreen_type']
+        # Get or create structure
+        interior_type = CELL_TYPES[entrance_type]['interior_type']
 
         if entrance_type == 'CAVE':
-            # Use unified cave system
-            zone_key = f"{entity.screen_x},{entity.screen_y}"
-            if zone_key in self.zone_cave_systems:
-                subscreen_key = self.zone_cave_systems[zone_key]
+            # Use unified cave system — key by parent overworld coords, not entity's current
+            # coords which may be virtual if entity is already inside a structure
+            if entity.in_structure:
+                sub_data = self.structures.get(entity.structure_key, {})
+                parent = sub_data.get('parent_screen', (entity.screen_x, entity.screen_y))
+                zone_key = f"{parent[0]},{parent[1]}"
             else:
-                # Create new cave system for this zone
-                subscreen_key = self.generate_subscreen(entity.screen_x, entity.screen_y, entrance_x, entrance_y, 'CAVE')
-                self.zone_cave_systems[zone_key] = subscreen_key
+                zone_key = f"{entity.screen_x},{entity.screen_y}"
+            if zone_key in self.zone_cave_systems:
+                structure_key = self.zone_cave_systems[zone_key]
+            else:
+                px, py = map(int, zone_key.split(','))
+                structure_key = self.generate_structure_zone(px, py, entrance_x, entrance_y, 'CAVE')
+                self.zone_cave_systems[zone_key] = structure_key
         else:
             # House interior - check if this specific house already has an interior
-            temp_key = f"house_{entity.screen_x}_{entity.screen_y}_{entrance_x}_{entrance_y}"
-
-            # Search for existing house interior at this location
-            subscreen_key = None
-            for key in self.subscreens.keys():
-                if temp_key in key or (f"{entity.screen_x},{entity.screen_y}:HOUSE_INTERIOR" in key and
-                                       self.subscreens[key].get('entrance_x') == entrance_x and
-                                       self.subscreens[key].get('entrance_y') == entrance_y):
-                    subscreen_key = key
+            # Use metadata comparison (parent_screen + parent_cell) — old string key format is gone
+            parent_coords = (entity.screen_x, entity.screen_y)
+            structure_key = None
+            for key, sub in self.structures.items():
+                if (sub.get('parent_screen') == parent_coords and
+                        sub.get('parent_cell') == (entrance_x, entrance_y) and
+                        sub.get('type') == 'HOUSE_INTERIOR'):
+                    structure_key = key
                     break
 
-            if not subscreen_key:
+            if not structure_key:
                 # Create new house interior
-                subscreen_key = self.generate_subscreen(entity.screen_x, entity.screen_y, entrance_x, entrance_y, 'HOUSE_INTERIOR')
-                # Store entrance location for future reference
-                if subscreen_key in self.subscreens:
-                    self.subscreens[subscreen_key]['entrance_x'] = entrance_x
-                    self.subscreens[subscreen_key]['entrance_y'] = entrance_y
+                structure_key = self.generate_structure_zone(entity.screen_x, entity.screen_y, entrance_x, entrance_y, 'HOUSE_INTERIOR')
 
-        # Move entity into subscreen
-        # Remove from overworld entities
+        # Move entity into structure zone — unified registry
         if screen_key in self.screen_entities and entity_id in self.screen_entities[screen_key]:
             self.screen_entities[screen_key].remove(entity_id)
 
-        # Add to subscreen entities
-        if subscreen_key not in self.subscreen_entities:
-            self.subscreen_entities[subscreen_key] = []
-        self.subscreen_entities[subscreen_key].append(entity_id)
+        if structure_key not in self.screen_entities:
+            self.screen_entities[structure_key] = []
+        if entity_id not in self.screen_entities[structure_key]:
+            self.screen_entities[structure_key].append(entity_id)
 
-        # Update entity state
-        entity.in_subscreen = True
-        entity.subscreen_key = subscreen_key
-        entity.last_subscreen_change_tick = self.tick
+        # Update entity location to the structure zone's virtual coordinates
+        vx, vy = map(int, structure_key.split(','))
+        entity.screen_x = vx
+        entity.screen_y = vy
+        entity.in_structure = True
+        entity.structure_key = structure_key
+        entity.last_structure_change_tick = self.tick
 
         # Add entrance cells to memory lane
         if not hasattr(entity, 'memory_lane'):
@@ -869,7 +871,7 @@ class NpcAiMovementMixin:
                 if len(entity.memory_lane) < entity.max_memory_length:
                     entity.memory_lane.append(mem_cell)
 
-        # Position in subscreen (near entrance)
+        # Position in structure (near entrance)
         entity.x = GRID_WIDTH // 2
         entity.y = GRID_HEIGHT - 2
         entity.world_x = float(entity.x)
@@ -878,8 +880,8 @@ class NpcAiMovementMixin:
         if entity.name:
             print(f"{entity.name} entered {entrance_type}")
 
-    def npc_exit_subscreen(self, entity):
-        """Move NPC back to overworld from subscreen"""
+    def npc_exit_structure(self, entity):
+        """Move NPC back to overworld from structure"""
         entity_id = None
         for eid, e in self.entities.items():
             if e is entity:
@@ -889,44 +891,54 @@ class NpcAiMovementMixin:
         if not entity_id:
             return
 
-        # Keepers are anchored to their subscreen — cannot exit
+        # Keepers are anchored to their structure — cannot exit
         if getattr(entity, 'keeper', False):
             return
 
-        # Check subscreen travel cooldown
-        if not hasattr(entity, 'last_subscreen_change_tick'):
-            entity.last_subscreen_change_tick = -999
+        # Check structure travel cooldown
+        if not hasattr(entity, 'last_structure_change_tick'):
+            entity.last_structure_change_tick = -999
 
-        ticks_since_travel = self.tick - entity.last_subscreen_change_tick
+        ticks_since_travel = self.tick - entity.last_structure_change_tick
         if ticks_since_travel < ZONE_CHANGE_COOLDOWN:  # Reuse same cooldown
             return
 
-        subscreen_key = entity.subscreen_key
-        screen_key = f"{entity.screen_x},{entity.screen_y}"
+        structure_key = entity.structure_key
 
-        # Remove from subscreen
-        if subscreen_key in self.subscreen_entities and entity_id in self.subscreen_entities[subscreen_key]:
-            self.subscreen_entities[subscreen_key].remove(entity_id)
+        # Get parent zone info from structure metadata
+        sub_data = self.structures.get(structure_key, {})
+        parent_screen = sub_data.get('parent_screen')
+        parent_cell = sub_data.get('parent_cell', (GRID_WIDTH // 2, GRID_HEIGHT // 2))
 
-        # Add back to overworld
-        if screen_key not in self.screen_entities:
-            self.screen_entities[screen_key] = []
-        if entity_id not in self.screen_entities[screen_key]:
-            self.screen_entities[screen_key].append(entity_id)
+        if not parent_screen:
+            return
 
-        # Update entity state
-        entity.in_subscreen = False
-        entity.subscreen_key = None
-        entity.last_subscreen_change_tick = self.tick
+        parent_key = f"{parent_screen[0]},{parent_screen[1]}"
 
-        # Position near structure (find nearby grass/dirt)
-        exit_found = False
-        if screen_key in self.screens:
-            screen = self.screens[screen_key]
+        # Move entity from structure zone to parent overworld zone
+        if structure_key in self.screen_entities and entity_id in self.screen_entities[structure_key]:
+            self.screen_entities[structure_key].remove(entity_id)
+
+        if parent_key not in self.screen_entities:
+            self.screen_entities[parent_key] = []
+        if entity_id not in self.screen_entities[parent_key]:
+            self.screen_entities[parent_key].append(entity_id)
+
+        # Restore entity location to parent overworld zone
+        entity.screen_x = parent_screen[0]
+        entity.screen_y = parent_screen[1]
+        entity.in_structure = False
+        entity.structure_key = None
+        entity.last_structure_change_tick = self.tick
+
+        # Position near the door cell in the parent zone
+        door_x, door_y = parent_cell
+        if parent_key in self.screens:
+            screen = self.screens[parent_key]
             for dy in range(-2, 3):
                 for dx in range(-2, 3):
-                    check_x = entity.x + dx
-                    check_y = entity.y + dy
+                    check_x = door_x + dx
+                    check_y = door_y + dy
                     if 0 <= check_x < GRID_WIDTH and 0 <= check_y < GRID_HEIGHT:
                         cell = screen['grid'][check_y][check_x]
                         if cell in ['GRASS', 'DIRT', 'SAND', 'STONE'] and not CELL_TYPES[cell].get('solid', False):
@@ -934,9 +946,8 @@ class NpcAiMovementMixin:
                             entity.y = check_y
                             entity.world_x = float(check_x)
                             entity.world_y = float(check_y)
-                            exit_found = True
 
-                            # Add exit area to memory lane
+                            # Add exit area to memory lane to prevent immediate re-entry
                             if not hasattr(entity, 'memory_lane'):
                                 entity.memory_lane = []
                             for mdx in range(-1, 2):
@@ -949,21 +960,19 @@ class NpcAiMovementMixin:
                                 print(f"{entity.name} exited to overworld")
                             return
 
-        # Fallback if no exit found
-        if not exit_found:
-            entity.world_x = float(entity.x)
-            entity.world_y = float(entity.y)
+        entity.world_x = float(entity.x)
+        entity.world_y = float(entity.y)
 
-    def update_subscreen_npc_behavior(self, entity_id, entity):
-        """Handle NPC behavior when in house/cave subscreens - healing and exit logic"""
-        if not entity.in_subscreen or entity.subscreen_key not in self.subscreens:
+    def update_structure_npc_behavior(self, entity_id, entity):
+        """Handle NPC behavior when in house/cave structures - healing and exit logic"""
+        if not entity.in_structure or entity.structure_key not in self.structures:
             return
 
-        subscreen = self.subscreens[entity.subscreen_key]
-        subscreen_type = subscreen.get('type', '')
+        structure = self.structures[entity.structure_key]
+        structure_type = structure.get('type', '')
 
         # HOUSE HEALING LOGIC
-        if subscreen_type == 'HOUSE_INTERIOR':
+        if interior_type == 'HOUSE_INTERIOR':
             # Apply accelerated healing in houses
             if entity.health < entity.max_health:
                 heal_amount = BASE_HEALING_RATE * HOUSE_HEALING_MULTIPLIER
@@ -983,28 +992,28 @@ class NpcAiMovementMixin:
 
             if health_full and hunger_ok and thirst_ok:
                 # NPC is healthy, time to leave and get back to work
-                if random.random() < NPC_SUBSCREEN_EXIT_CHANCE:
-                    self.npc_exit_subscreen(entity)
+                if random.random() < NPC_STRUCTURE_EXIT_CHANCE:
+                    self.npc_exit_structure(entity)
 
         # CAVE LOGIC (dangerous, no healing)
-        elif subscreen_type == 'CAVE':
+        elif interior_type == 'CAVE':
             # Caves are dangerous - NPCs should flee if injured
             if entity.health < entity.max_health * 0.5:
                 # Injured in cave - high chance to flee back to surface
                 if random.random() < 0.8:  # 80% chance to exit when injured
-                    self.npc_exit_subscreen(entity)
+                    self.npc_exit_structure(entity)
 
-    def move_npc_toward_subscreen_exit(self, entity):
-        """Move NPC toward the subscreen exit point (bottom center)"""
-        if not entity.in_subscreen or not entity.subscreen_key:
+    def move_npc_toward_structure_exit(self, entity):
+        """Move NPC toward the structure exit point (bottom center)"""
+        if not entity.in_structure or not entity.structure_key:
             return
 
-        subscreen_key = entity.subscreen_key
-        subscreen = self.subscreens.get(subscreen_key)
-        if not subscreen:
+        structure_key = entity.structure_key
+        structure = self.structures.get(structure_key)
+        if not structure:
             # Also check self.screens for structure zones
-            subscreen = self.screens.get(subscreen_key)
-        if not subscreen:
+            structure = self.screens.get(structure_key)
+        if not structure:
             return
 
         # Exit is at bottom center
@@ -1013,7 +1022,7 @@ class NpcAiMovementMixin:
 
         # If already at exit position, try actual exit
         if abs(entity.x - exit_x) <= 1 and entity.y >= exit_y - 1:
-            self.try_npc_exit_subscreen(entity)
+            self.try_npc_exit_structure(entity)
             return
 
         # Move toward exit — one step at a time
@@ -1024,7 +1033,7 @@ class NpcAiMovementMixin:
         if dy > 0:
             new_y = entity.y + 1
             if 0 <= new_y < GRID_HEIGHT:
-                cell = subscreen['grid'][new_y][entity.x]
+                cell = structure['grid'][new_y][entity.x]
                 if not CELL_TYPES.get(cell, {}).get('solid', False):
                     entity.y = new_y
                     entity.world_y = float(new_y)
@@ -1036,17 +1045,41 @@ class NpcAiMovementMixin:
             step_x = 1 if dx > 0 else -1
             new_x = entity.x + step_x
             if 0 <= new_x < GRID_WIDTH:
-                cell = subscreen['grid'][entity.y][new_x]
+                cell = structure['grid'][entity.y][new_x]
                 if not CELL_TYPES.get(cell, {}).get('solid', False):
                     entity.x = new_x
                     entity.world_x = float(new_x)
                     entity.facing = 'right' if step_x > 0 else 'left'
                     return
 
-    def try_npc_enter_subscreen(self, entity, screen_key):
-        """NPC enters subscreen if standing adjacent to entrance (like zone transitions)"""
-        # Already in subscreen
-        if entity.in_subscreen:
+    def has_target_in_structure(self, entity, screen_key, check_x, check_y):
+        """Check if entity's current_target is inside the structure at (check_x, check_y)."""
+        target_id = getattr(entity, 'current_target', None)
+        if target_id is None or target_id == 'player':
+            return False
+
+        # Try CAVE lookup (unified cave system per zone)
+        sub_key = self.zone_cave_systems.get(screen_key)
+        if sub_key and target_id in self.screen_entities.get(sub_key, []):
+            return True
+
+        # Try house/MINESHAFT lookup (match by parent_screen + parent_cell)
+        try:
+            px, py = int(screen_key.split(',')[0]), int(screen_key.split(',')[1])
+        except (ValueError, IndexError):
+            return False
+        for key, sub in self.structures.items():
+            if (sub.get('parent_cell') == (check_x, check_y) and
+                    sub.get('parent_screen') == (px, py)):
+                if target_id in self.screen_entities.get(key, []):
+                    return True
+
+        return False
+
+    def try_npc_enter_structure(self, entity, screen_key):
+        """NPC enters structure if standing adjacent to entrance (like zone transitions)"""
+        # Already in structure
+        if entity.in_structure:
             return
 
         if screen_key not in self.screens:
@@ -1074,55 +1107,56 @@ class NpcAiMovementMixin:
 
                 # Must be standing on it or immediately adjacent (like zone transitions)
                 if dist <= 1:
-                    # Any entity may wander into any enterable structure.
-                    # This lets keepers anchor naturally to houses, caves, etc.
-                    if random.random() < 0.1:
-                        self.npc_enter_subscreen(entity, screen_key, check_x, check_y, cell)
-                        return
+                    if cell in ('CAVE', 'MINESHAFT'):
+                        # Combat-driven entry only — entity must be targeting/attacking a
+                        # structure occupant, then walks to the door and enters.
+                        state = getattr(entity, 'ai_state', 'idle')
+                        if state in ('targeting', 'combat'):
+                            if self.has_target_in_structure(entity, screen_key, check_x, check_y):
+                                entity.target_door = None
+                                self.npc_enter_structure(entity, screen_key, check_x, check_y, cell)
+                                return
+                    else:
+                        # Original random entry for HOUSE, STONE_HOUSE, etc.
+                        if random.random() < 0.1:
+                            self.npc_enter_structure(entity, screen_key, check_x, check_y, cell)
+                            return
 
-    def try_npc_exit_subscreen(self, entity):
-        """NPC tries to exit subscreen back to overworld"""
-        if not entity.in_subscreen:
+    def try_npc_exit_structure(self, entity):
+        """NPC tries to exit structure back to overworld"""
+        if not entity.in_structure:
             return
 
-        subscreen_key = entity.subscreen_key
-        subscreen = self.subscreens.get(subscreen_key)
-        if not subscreen:
-            subscreen = self.screens.get(subscreen_key)
-        if not subscreen:
+        structure_key = entity.structure_key
+        structure = self.structures.get(structure_key)
+        if not structure:
+            structure = self.screens.get(structure_key)
+        if not structure:
             return
 
-        # Find exit (bottom row — any non-solid, non-wall cell)
-        exit_positions = []
-        for x in range(GRID_WIDTH):
-            cell = subscreen['grid'][GRID_HEIGHT - 1][x]
+        # Use stored exit position from structure metadata (set by generate_structure_zone)
+        exit_pos = structure.get('exit', (GRID_WIDTH // 2, GRID_HEIGHT - 2))
+        exit_x, exit_y = exit_pos
+
+        # Check if at or adjacent to exit — trigger actual exit
+        if abs(entity.x - exit_x) <= 1 and abs(entity.y - exit_y) <= 1:
+            self.npc_exit_structure(entity)
+            return
+
+        # Move toward exit one step at a time (vertical priority — get to exit row first)
+        if entity.y < exit_y:
+            new_y = entity.y + 1
+            cell = structure['grid'][new_y][entity.x]
             if not CELL_TYPES.get(cell, {}).get('solid', False):
-                exit_positions.append(x)
-
-        # Also check second-to-bottom row if bottom is all walls
-        if not exit_positions:
-            for x in range(GRID_WIDTH):
-                cell = subscreen['grid'][GRID_HEIGHT - 2][x]
-                if not CELL_TYPES.get(cell, {}).get('solid', False):
-                    exit_positions.append(x)
-
-        if not exit_positions:
-            return
-
-        # Move to nearest exit
-        nearest_exit = min(exit_positions, key=lambda x: abs(x - entity.x))
-
-        # Check if at exit
-        if entity.y == GRID_HEIGHT - 1 and entity.x == nearest_exit:
-            self.npc_exit_subscreen(entity)
-        else:
-            # Move toward exit
-            if entity.x < nearest_exit:
-                entity.x += 1
-            elif entity.x > nearest_exit:
-                entity.x -= 1
-            elif entity.y < GRID_HEIGHT - 1:
-                entity.y += 1
+                entity.y = new_y
+                entity.facing = 'down'
+                return
+        if entity.x < exit_x:
+            entity.x += 1
+            entity.facing = 'right'
+        elif entity.x > exit_x:
+            entity.x -= 1
+            entity.facing = 'left'
 
     def try_travel_behavior(self, entity, screen_key):
         """Move entity toward zone exit (used by traders and other traveling NPCs)"""
@@ -1130,6 +1164,10 @@ class NpcAiMovementMixin:
             return
 
         screen = self.screens[screen_key]
+
+        # Structure zones have no overworld exits — skip travel behavior
+        if 'exits' not in screen:
+            return
 
         # Pick a random exit to travel toward
         if not hasattr(entity, 'travel_target') or entity.travel_target is None:
@@ -1381,6 +1419,70 @@ class NpcAiMovementMixin:
 
         return closest
 
+    def find_hostile_in_connected_structures(self, entity, screen_key):
+        """Scan CAVE/MINESHAFT structures in this zone for a hostile entity.
+
+        Returns (entity_id, door_dist, (door_x, door_y)) or (None, inf, None).
+        door_dist is Manhattan distance from entity to the cave/shaft entrance cell.
+        """
+        if screen_key not in self.screens:
+            return None, float('inf'), None
+
+        entity_is_hostile = entity.props.get('hostile', False)
+        screen = self.screens[screen_key]
+
+        closest_id = None
+        closest_dist = float('inf')
+        closest_door = None
+
+        for cy in range(GRID_HEIGHT):
+            for cx in range(GRID_WIDTH):
+                cell = screen['grid'][cy][cx]
+                if cell not in ('CAVE', 'MINESHAFT'):
+                    continue
+
+                # Resolve the structure key for this entrance
+                if cell == 'CAVE':
+                    sub_key = self.zone_cave_systems.get(screen_key)
+                else:
+                    sub_key = None
+                    parent_coords = (entity.screen_x, entity.screen_y)
+                    for key, sub in self.structures.items():
+                        if (sub.get('parent_cell') == (cx, cy) and
+                                sub.get('parent_screen') == parent_coords):
+                            sub_key = key
+                            break
+
+                if sub_key is None:
+                    continue
+
+                for other_id in self.screen_entities.get(sub_key, []):
+                    if other_id not in self.entities:
+                        continue
+                    other = self.entities[other_id]
+                    if not other.is_alive():
+                        continue
+
+                    other_is_hostile = other.props.get('hostile', False)
+                    is_enemy = False
+                    if entity_is_hostile:
+                        if not other_is_hostile or other.type != entity.type:
+                            is_enemy = True
+                    elif other_is_hostile:
+                        is_enemy = True
+                    elif (hasattr(entity, 'faction') and hasattr(other, 'faction') and
+                          entity.faction and other.faction and entity.faction != other.faction):
+                        is_enemy = True
+
+                    if is_enemy:
+                        door_dist = abs(entity.x - cx) + abs(entity.y - cy)
+                        if door_dist < closest_dist:
+                            closest_dist = door_dist
+                            closest_id = other_id
+                            closest_door = (cx, cy)
+
+        return closest_id, closest_dist, closest_door
+
     def find_closest_hostile_entity(self, entity, screen_key):
         """Find closest hostile or enemy faction entity"""
         if screen_key not in self.screen_entities:
@@ -1396,7 +1498,7 @@ class NpcAiMovementMixin:
         # Check if the PLAYER is a valid target (hostile entities target player)
         if entity_is_hostile:
             player_zone = f"{self.player['screen_x']},{self.player['screen_y']}"
-            if screen_key == player_zone and not self.player.get('in_subscreen'):
+            if screen_key == player_zone:
                 player_dist = abs(entity.x - self.player['x']) + abs(entity.y - self.player['y'])
                 if player_dist < closest_dist:
                     closest_dist = player_dist
@@ -1436,6 +1538,17 @@ class NpcAiMovementMixin:
                     closest_dist = dist
                     closest = other_id
 
+        # Also scan CAVE/MINESHAFT structures for hostile entities
+        sub_id, sub_dist, sub_door = self.find_hostile_in_connected_structures(entity, screen_key)
+        if sub_id is not None and sub_dist < closest_dist:
+            entity.target_door = sub_door
+            if debug:
+                print(f"  [FIND_HOSTILE] Subscreen result: {sub_id} via door {sub_door}")
+            return sub_id
+        else:
+            # Clear stale target_door if we're using an overworld target
+            entity.target_door = None
+
         if debug:
             print(f"  [FIND_HOSTILE] Result: {closest}")
 
@@ -1474,7 +1587,7 @@ class NpcAiMovementMixin:
         if target == 'player':
             player_zone = f"{self.player['screen_x']},{self.player['screen_y']}"
             entity_zone = f"{entity.screen_x},{entity.screen_y}"
-            if player_zone != entity_zone or self.player.get('in_subscreen'):
+            if player_zone != entity_zone:
                 return float('inf')
             return abs(entity.x - self.player['x']) + abs(entity.y - self.player['y'])
 

@@ -727,7 +727,7 @@ class LoreEngineMixin:
         the local cave system at depth 1.
 
         The MINESHAFT cell placed inside the house interior hooks into the
-        existing enter_subscreen / zone_cave_systems machinery — no extra
+        existing enter_structure / zone_cave_systems machinery — no extra
         wiring needed.  When the player interacts with it they descend into
         (or generate) the cave system for that overworld zone.
         """
@@ -755,33 +755,33 @@ class LoreEngineMixin:
         # Pick a random house to receive the secret entrance
         hx, hy = random.choice(house_cells)
 
-        # Find the house's interior subscreen (may not exist yet — generate it)
-        house_subscreen = None
-        house_subscreen_key = None
-        for key, subscreen in self.subscreens.items():
-            if (subscreen.get('parent_screen') == (sx, sy) and
-                    subscreen.get('parent_cell') == (hx, hy) and
-                    subscreen.get('type') == 'HOUSE_INTERIOR'):
-                house_subscreen = subscreen
-                house_subscreen_key = key
+        # Find the house's interior structure (may not exist yet — generate it)
+        house_structure = None
+        house_structure_key = None
+        for key, structure in self.structures.items():
+            if (structure.get('parent_screen') == (sx, sy) and
+                    structure.get('parent_cell') == (hx, hy) and
+                    structure.get('type') == 'HOUSE_INTERIOR'):
+                house_structure = structure
+                house_structure_key = key
                 break
 
-        if house_subscreen is None:
-            house_subscreen_key = self.generate_subscreen(sx, sy, hx, hy, 'HOUSE_INTERIOR', depth=1)
-            house_subscreen = self.subscreens.get(house_subscreen_key)
+        if house_structure is None:
+            house_structure_key = self.generate_structure_zone(sx, sy, hx, hy, 'HOUSE_INTERIOR', depth=1)
+            house_structure = self.structures.get(house_structure_key)
 
-        if house_subscreen is None:
+        if house_structure is None:
             return
 
-        interior = house_subscreen['grid']
+        interior = house_structure['grid']
 
         # Bail early if a mine shaft / cave entrance already exists inside
         for row in interior:
             if 'MINESHAFT' in row or 'CAVE' in row:
                 return
 
-        # Entrance is fixed at center-bottom of every subscreen
-        entrance_x, entrance_y = house_subscreen.get('entrance', (GRID_WIDTH // 2, GRID_HEIGHT - 2))
+        # Entrance is fixed at center-bottom of every structure interior
+        entrance_x, entrance_y = house_structure.get('entrance', (GRID_WIDTH // 2, GRID_HEIGHT - 2))
 
         # Candidate corners (2-cell inset from walls to stay inside the room)
         corners = [

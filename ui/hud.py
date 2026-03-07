@@ -18,11 +18,8 @@ class HudMixin:
         # Draw grid
         if self.current_screen:
             # Determine correct screen key for dropped items
-            # If in subscreen, use subscreen_key; otherwise use overworld coordinates
-            if self.player.get('in_subscreen') and self.player.get('subscreen_key'):
-                screen_key = self.player['subscreen_key']
-            else:
-                screen_key = f"{self.player['screen_x']},{self.player['screen_y']}"
+            # Unified zone system: player screen_x/y reflects virtual coords in structure zones
+            screen_key = f"{self.player['screen_x']},{self.player['screen_y']}"
 
             # Ensure variant_grid exists (backfill for screens generated before variant system)
             if 'variant_grid' not in self.current_screen:
@@ -49,7 +46,7 @@ class HudMixin:
                 'FLOOR_WOOD', 'CAVE_FLOOR',
             }
 
-            # Precompute biome/subscreen fallback base — same for every cell this frame
+            # Precompute biome/structure fallback base — same for every cell this frame
             if self.current_screen and 'parent_screen' in self.current_screen:
                 _ss_type = self.current_screen.get('type', 'HOUSE_INTERIOR')
                 _fallback_base = 'CAVE_FLOOR' if 'CAVE' in _ss_type else 'FLOOR_WOOD'
@@ -71,7 +68,7 @@ class HudMixin:
                             if _nc in _VALID_NEIGHBOR_BASE:
                                 _neighbor_base = _nc
                                 break
-                    # Resolved base: neighbor wins, biome/subscreen as fallback
+                    # Resolved base: neighbor wins, biome/structure as fallback
                     _base = _neighbor_base or _fallback_base
 
                     # ── Layering decision ──────────────────────────────────────
@@ -281,19 +278,12 @@ class HudMixin:
                                (highlight_x * CELL_SIZE, highlight_y * CELL_SIZE,
                                 CELL_SIZE, CELL_SIZE), 3)
 
-            # Draw entities on current screen or subscreen
+            # Draw entities on current screen or structure
+            # Unified zone system: player screen_x/y reflects virtual coords in structure zones
             entities_to_draw = []
-
-            if self.player.get('in_subscreen'):
-                # In subscreen - draw entities that belong to this subscreen
-                current_subscreen_key = self.player.get('subscreen_key')
-                if current_subscreen_key and current_subscreen_key in self.subscreen_entities:
-                    entities_to_draw = self.subscreen_entities[current_subscreen_key]
-            else:
-                # In overworld - draw entities from current screen
-                screen_key = f"{self.player['screen_x']},{self.player['screen_y']}"
-                if screen_key in self.screen_entities:
-                    entities_to_draw = self.screen_entities[screen_key]
+            screen_key = f"{self.player['screen_x']},{self.player['screen_y']}"
+            if screen_key in self.screen_entities:
+                entities_to_draw = self.screen_entities[screen_key]
 
             # Draw the entities
             for entity_id in entities_to_draw:
@@ -308,24 +298,20 @@ class HudMixin:
                         entity.update_animation()
                         continue
 
-                    # Skip entities that are inside a subscreen while the player
-                    # is in the overworld (and vice-versa). npc_enter_subscreen()
-                    # can leave an entity in screen_entities while setting
-                    # in_subscreen=True, causing a ghost render with frozen
-                    # animation (is_flying_idle evaluates False when in_subscreen).
-                    # Still run movement/animation so internal state stays coherent.
-                    if (not self.player.get('in_subscreen', False)
-                            and getattr(entity, 'in_subscreen', False)):
+                    # Skip entities that are in a different zone than the player.
+                    # Can occur during transition ticks when screen_entities hasn't
+                    # been fully reconciled. Still run movement/animation for coherence.
+                    entity_zone = f"{entity.screen_x},{entity.screen_y}"
+                    if entity_zone != screen_key:
                         entity.update_smooth_movement()
                         entity.update_animation()
                         continue
 
                     # BugCatcher: log every frame for tracked entity types + autopilot proxy
                     _STUTTER_TRACKED = ('BAT', 'BAT_double', 'WOLF', 'WOLF_double')
-                    player_zone = f"{self.player['screen_x']},{self.player['screen_y']}"
                     is_proxy = (entity_id == getattr(self, 'autopilot_proxy_id', None))
                     if entity.type in _STUTTER_TRACKED or is_proxy:
-                        self.bug_catcher.log_bat_state(self.tick, entity_id, entity, player_zone)
+                        self.bug_catcher.log_bat_state(self.tick, entity_id, entity, screen_key)
 
                     # Snap stale world position if entity wasn't rendered last frame.
                     # Entities in adjacent zones get AI updates (x/y changes) but
@@ -696,11 +682,11 @@ class HudMixin:
 
             # ── Row 2: Location / status info ──────────────────────────────
             info_text = ""
-            if self.player.get('in_subscreen'):
-                subscreen = self.subscreens.get(self.player['subscreen_key'])
-                if subscreen:
-                    depth_info = f" (Depth {subscreen['depth']})" if subscreen['type'] == 'CAVE' else ""
-                    info_text += f"Location: {subscreen['type']}{depth_info}"
+            if self.player.get('in_structure'):
+                structure = self.structures.get(self.player['structure_key'])
+                if structure:
+                    depth_info = f" (Depth {structure['depth']})" if structure['type'] == 'CAVE' else ""
+                    info_text += f"Location: {structure['type']}{depth_info}"
             else:
                 info_text += f"Screen: ({self.player['screen_x']}, {self.player['screen_y']}) | "
                 info_text += f"Biome: {self.current_screen['biome'] if self.current_screen else 'Unknown'}"

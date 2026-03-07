@@ -11,19 +11,14 @@ class NpcAiMixin:
     """Mixin class for NPC AI. Mixed into Game via multiple inheritance."""
 
     def _same_context_as_player(self, entity):
-        """Return True when entity and player share the same zone/subscreen context.
+        """Return True when entity and player share the same zone context.
 
-        Replaces the old 'screen_key == player_zone and not player.in_subscreen'
-        pattern which broke when entities (and screen_key) moved to subscreen keys.
+        Unified zone system: player and entity screen_x/y both reflect virtual coords
+        when inside structure zones, so a simple zone key comparison suffices.
         """
-        player_in_sub = self.player.get('in_subscreen', False)
-        if player_in_sub:
-            return (entity.in_subscreen and
-                    entity.subscreen_key == self.player.get('subscreen_key'))
-        else:
-            return (not entity.in_subscreen and
-                    entity.screen_x == self.player['screen_x'] and
-                    entity.screen_y == self.player['screen_y'])
+        player_zone = f"{self.player['screen_x']},{self.player['screen_y']}"
+        entity_zone = f"{entity.screen_x},{entity.screen_y}"
+        return entity_zone == player_zone
 
     # ══════════════════════════════════════════════════════════════════════
     # ACTION PRIMITIVES — Reusable building blocks for NPC and player actions
@@ -60,22 +55,9 @@ class NpcAiMixin:
         # UNIFIED AI STATE SYSTEM - Update entity AI state based on parameters
         self.update_entity_ai_state(entity_id, entity)
         
-        # Get screen_key for execution.
-        # Entities in subscreens must use the subscreen key so grid lookups
-        # (move_toward_position, action checks, etc.) use the right map.
-        if entity.in_subscreen and entity.subscreen_key:
-            screen_key = entity.subscreen_key
-        else:
-            screen_key = f"{entity.screen_x},{entity.screen_y}"
-        
-        # Movement cooldown - only move every N ticks based on speed
-        if not hasattr(entity, 'move_cooldown'):
-            # Initialize with random cooldown to prevent synchronized movement on spawn/load
-            base_cooldown = max(1, int(20 / entity.props.get('speed', 1.0)))
-            entity.move_cooldown = random.randint(0, base_cooldown)
-        
-        if entity.move_cooldown > 0:
-            entity.move_cooldown -= 1
+        # screen_key is always the entity's current zone — virtual coords for
+        # structure zones, real coords for overworld zones.
+        screen_key = f"{entity.screen_x},{entity.screen_y}"
         
         # EXECUTE BEHAVIOR BASED ON STATE
         if hasattr(entity, 'ai_state'):
@@ -90,9 +72,10 @@ class NpcAiMixin:
                     else:
                         dist = abs(entity.x - self.player['x']) + abs(entity.y - self.player['y'])
                         if dist == 1:
-                            # Adjacent — attack player
-                            entity.in_combat = True  # show combat stance even while waiting
-                            if entity.move_cooldown <= 0:
+                            # Adjacent — probabilistic attack based on entity's attack_chance
+                            entity.in_combat = True
+                            attack_chance = entity.props.get('ai_params', {}).get('attack_chance', 0.0)
+                            if random.random() < attack_chance:
                                 damage = max(1, entity.strength // 5)
                                 damage += self.calculate_weapon_bonus(entity.inventory)
                                 magic_damage, magic_type = self.calculate_magic_damage(entity.inventory)
@@ -101,7 +84,6 @@ class NpcAiMixin:
                                     damage *= 1.2
                                 self.player_take_damage(damage)
                                 self.show_attack_animation(self.player['x'], self.player['y'], entity=entity, magic_type=magic_type)
-                                entity.move_cooldown = max(1, int(NPC_COMBAT_MOVE_INTERVAL / entity.props.get('speed', 1.0)))
                                 # Bat disengage after hitting
                                 if entity.props.get('flying', False) and random.random() < 0.4:
                                     entity.ai_state = 'wandering'
@@ -109,10 +91,9 @@ class NpcAiMixin:
                                     entity.in_combat = False
                                     entity.ai_state_timer = 3
                         elif dist <= 8:
-                            # Move toward player
-                            if entity.move_cooldown <= 0:
+                            # Move toward player — probabilistic based on speed
+                            if random.random() < entity.props.get('speed', 1.0) / 20:
                                 self.move_toward_position(entity, self.player['x'], self.player['y'], screen_key)
-                                entity.move_cooldown = max(1, int(NPC_COMBAT_MOVE_INTERVAL / entity.props.get('speed', 1.0)))
                         else:
                             # Too far — lose interest
                             entity.ai_state = 'wandering'
@@ -122,11 +103,6 @@ class NpcAiMixin:
                 elif entity.current_target and isinstance(entity.current_target, int):
                     if entity.current_target in self.entities:
                         target = self.entities[entity.current_target]
-                        
-                        # DEBUG: Track warrior combat behavior (disabled to reduce spam)
-                        # if entity.type == 'WARRIOR':
-                        #     dist = abs(entity.x - target.x) + abs(entity.y - target.y)
-                        #     print(f"WARRIOR {entity.name} COMBAT: pos=({entity.x},{entity.y}), target_pos=({target.x},{target.y}), dist={dist}, cooldown={entity.move_cooldown}")
                         
                         # Check if target is alive
                         if not target.is_alive():
@@ -210,9 +186,8 @@ class NpcAiMixin:
                         entity.ai_state_timer = 2
             
             elif entity.ai_state == 'flee':
-                # Fleeing - move away from threat, gated by move_cooldown so smooth
-                # interpolation (world_x/y) can keep up with grid position changes.
-                if entity.move_cooldown <= 0:
+                # Fleeing - move away from threat, probabilistic based on entity speed
+                if random.random() < entity.props.get('speed', 1.0) / 20:
                     threat_x, threat_y = None, None
                     if entity.flee_target == 'player':
                         if self._same_context_as_player(entity):
@@ -234,7 +209,13 @@ class NpcAiMixin:
                         new_x = entity.x + move_x
                         new_y = entity.y + move_y
                         self.move_toward_position(entity, new_x, new_y, screen_key)
-                        entity.move_cooldown = max(1, int(NPC_COMBAT_MOVE_INTERVAL / entity.props.get('speed', 1.0)))
+
+            elif entity.ai_state == 'exit':
+                if getattr(entity, 'keeper', False):
+                    entity.ai_state = 'wandering'
+                else:
+                    # Exit state — move toward zone exit (triggered by overcrowding, day/night, etc.)
+                    self.seek_zone_exit(entity, entity_id)
             
             elif entity.ai_state == 'targeting':
                 # Moving toward target
@@ -251,8 +232,21 @@ class NpcAiMixin:
                         if entity.current_target in self.entities:
                             target = self.entities[entity.current_target]
                             target_zone = f"{target.screen_x},{target.screen_y}"
-                            if target_zone == screen_key:
-                                # Same zone — move directly toward target
+
+                            if getattr(target, 'in_structure', False) and target_zone == screen_key:
+                                # Target is inside a structure (CAVE/MINESHAFT) — navigate to door
+                                target_door = getattr(entity, 'target_door', None)
+                                if target_door:
+                                    door_x, door_y = target_door
+                                    if abs(entity.x - door_x) + abs(entity.y - door_y) > 1:
+                                        self.move_toward_position(entity, door_x, door_y, screen_key)
+                                    # else: adjacent to door; try_npc_enter_structure fires
+                                else:
+                                    # No door info — drop target
+                                    entity.current_target = None
+                                    entity.ai_state = 'wandering'
+                            elif target_zone == screen_key:
+                                # Same zone, both overworld — move directly toward target
                                 self.move_toward_position(entity, target.x, target.y, screen_key)
                             else:
                                 # Cross-zone: route toward the exit closest to target zone
@@ -394,8 +388,8 @@ class NpcAiMixin:
         if hasattr(entity, 'action_animation_timer') and entity.action_animation_timer > 0:
             entity.action_animation_timer -= 1
         
-        # Subscreen behavior - NPCs enter/exit houses and caves
-        if entity.in_subscreen:
+        # Structure behavior - NPCs enter/exit houses and caves
+        if entity.in_structure:
             # Daytime: non-nocturnal NPCs should actively try to exit structures
             # Nighttime: nocturnal entities should actively try to exit
             wants_to_exit = False
@@ -410,12 +404,9 @@ class NpcAiMixin:
             # Overcrowding: keepers never leave; everyone else may be pushed out
             # when the structure is too full. Chance = local_pop * 10% per update.
             if not getattr(entity, 'keeper', False):
-                subscreen_key = entity.subscreen_key or ''
+                zone_key = f"{entity.screen_x},{entity.screen_y}"
                 local_pop = len([
-                    eid for eid in (
-                        self.subscreen_entities.get(subscreen_key, []) +
-                        self.screen_entities.get(subscreen_key, [])
-                    )
+                    eid for eid in self.screen_entities.get(zone_key, [])
                     if eid in self.entities and self.entities[eid].is_alive()
                 ])
                 if local_pop > 3 and random.random() < local_pop * 0.10:
@@ -423,14 +414,19 @@ class NpcAiMixin:
 
             # Combat-capable NPCs (guards/warriors) detect nearby hostiles outside and rush to defend
             if not wants_to_exit and entity.type in ('GUARD', 'WARRIOR') \
-                    and entity.subscreen_key in self.subscreens:
-                sub = self.subscreens[entity.subscreen_key]
-                entrance_x = sub.get('entrance_x', GRID_WIDTH // 2)
-                entrance_y = sub.get('entrance_y', GRID_HEIGHT // 2)
-                overworld_key = f"{entity.screen_x},{entity.screen_y}"
+                    and entity.structure_key in self.structures:
+                sub = self.structures[entity.structure_key]
+                parent_screen = sub.get('parent_screen')
+                parent_cell = sub.get('parent_cell', (GRID_WIDTH // 2, GRID_HEIGHT // 2))
+                entrance_x, entrance_y = parent_cell
+                overworld_key = (f"{parent_screen[0]},{parent_screen[1]}"
+                                 if parent_screen else f"{entity.screen_x},{entity.screen_y}")
                 for oid in self.screen_entities.get(overworld_key, []):
                     if oid in self.entities:
                         other = self.entities[oid]
+                        # Skip player followers — they are friendly regardless of hostile prop
+                        if oid in getattr(self, 'followers', []):
+                            continue
                         if other.props.get('hostile', False):
                             if abs(other.x - entrance_x) + abs(other.y - entrance_y) <= 8:
                                 wants_to_exit = True
@@ -438,31 +434,32 @@ class NpcAiMixin:
             
             if wants_to_exit:
                 # Actively move toward exit and leave
-                self.try_npc_exit_subscreen(entity)
-                if entity.in_subscreen:
+                self.try_npc_exit_structure(entity)
+                if entity.in_structure:
                     # Still inside — keep trying to path toward exit
-                    self.move_npc_toward_subscreen_exit(entity)
+                    self.move_npc_toward_structure_exit(entity)
                     return  # Skip normal AI
             else:
                 # Low chance to exit anyway (restless NPCs)
                 if random.random() < 0.05:
-                    self.try_npc_exit_subscreen(entity)
+                    self.try_npc_exit_structure(entity)
             
-            # If still in subscreen after exit attempt, do subscreen behavior
-            if entity.in_subscreen:
+            # If still in structure after exit attempt, do structure behavior
+            if entity.in_structure:
                 # Miners mine in caves, peaceful NPCs rest in houses
-                if entity.type == 'MINER' and entity.subscreen_key and 'cave' in entity.subscreen_key.lower():
+                zone_biome = self.screens.get(f"{entity.screen_x},{entity.screen_y}", {}).get('biome', '')
+                if entity.type == 'MINER' and zone_biome == 'CAVE':
                     behavior_config = entity.props.get('behavior_config')
                     if behavior_config:
                         self.execute_entity_behavior(entity, behavior_config)
                 else:
-                    # Rest/wander in subscreen
+                    # Rest/wander in structure
                     if random.random() < 0.1:
                         self.wander_entity(entity)
                 return  # Skip normal overworld AI
         else:
-            # In overworld - occasionally try to enter subscreens
-            self.try_npc_enter_subscreen(entity, screen_key)
+            # In overworld - occasionally try to enter structures
+            self.try_npc_enter_structure(entity, screen_key)
         
         # Warrior home zone return behavior
         if entity.type == 'WARRIOR' and hasattr(entity, 'home_zone'):
@@ -567,18 +564,20 @@ class NpcAiMixin:
         
         is_proxy = entity.props.get('is_autopilot_proxy', False)
         
-        # Night behavior: peaceful NPCs seek shelter in houses
-        if self.is_night and not is_follower and not is_proxy:
+        is_keeper = getattr(entity, 'keeper', False)
+
+        # Night behavior: peaceful NPCs seek shelter in houses (keepers excluded — already anchored)
+        if self.is_night and not is_follower and not is_proxy and not is_keeper:
             peaceful_types = ['FARMER', 'TRADER', 'GUARD', 'LUMBERJACK', 'MINER',
-                              'WARRIOR', 'COMMANDER', 'KING']
-            if entity.type in peaceful_types and not entity.in_subscreen:
+                              'WARRIOR', 'COMMANDER', 'KING', 'BLACKSMITH', 'WIZARD']
+            if entity.type in peaceful_types and not entity.in_structure:
                 if self.npc_seek_shelter(entity):
                     return  # Sheltered, don't wander or do work behaviors
-        
-        # Daytime: NPCs in subscreens have a chance to leave
-        if not self.is_night and entity.in_subscreen and not is_follower and not is_proxy:
+
+        # Daytime: peaceful NPCs in structures leave (keepers excluded — anchored to their zone)
+        if not self.is_night and entity.in_structure and not is_follower and not is_proxy and not is_keeper:
             if random.random() < 0.02:  # 2% per update to leave
-                self.npc_exit_subscreen(entity)
+                self.npc_exit_structure(entity)
                 return
         
         # PEACEFUL NPC THREAT DETECTION - DISABLED
@@ -1017,7 +1016,7 @@ class NpcAiMixin:
         if entity.props.get('nocturnal', False):
             if not self.is_night:
                 # DAYTIME: Bats seek shelter — enter structures and go idle
-                if entity.in_subscreen:
+                if entity.in_structure:
                     # Already sheltered — stay idle
                     entity.ai_state = 'idle'
                     entity.ai_state_timer = 5
@@ -1047,9 +1046,9 @@ class NpcAiMixin:
                     return
             else:
                 # NIGHTTIME: Bats emerge from structures
-                if entity.in_subscreen and random.random() < 0.15:
-                    if hasattr(self, 'npc_exit_subscreen'):
-                        self.npc_exit_subscreen(entity)
+                if entity.in_structure and random.random() < 0.15:
+                    if hasattr(self, 'npc_exit_structure'):
+                        self.npc_exit_structure(entity)
         
         # DEBUG: Only for player's current zone
         player_zone = f"{self.player['screen_x']},{self.player['screen_y']}"
@@ -1132,23 +1131,30 @@ class NpcAiMixin:
                     continue
                 
                 other_is_hostile = other.props.get('hostile', False)
-                
+
                 # Determine if enemy
                 is_enemy = False
-                # Follower FF guard in proximity check
-                is_follower_check = other_id in getattr(self, 'followers', [])
-                if is_follower_check:
-                    continue  # Never target fellow followers
+                # Never target fellow followers
+                if other_id in getattr(self, 'followers', []):
+                    continue
                 entity_base_check = entity.type.replace('_double', '')
                 other_base_check = other.type.replace('_double', '')
-                if entity_is_hostile:
-                    # Hostile entities attack everyone: non-hostiles AND other hostile types
+                _is_this_follower = entity_id in getattr(self, 'followers', [])
+                ff_on = self.player.get('friendly_fire', False)
+                if entity_is_hostile and not _is_this_follower:
+                    # Non-follower hostile: attack peaceful NPCs + different hostile species
                     if not other_is_hostile:
-                        is_enemy = True  # Attack peaceful NPCs
+                        is_enemy = True
                     elif other_base_check != entity_base_check:
-                        is_enemy = True  # Attack different hostile species
+                        is_enemy = True
+                elif entity_is_hostile and _is_this_follower:
+                    # Follower with hostile type (e.g. bat): only attack other hostiles
+                    if other_is_hostile and other_base_check != entity_base_check:
+                        is_enemy = True
+                    elif ff_on and other_base_check != entity_base_check:
+                        is_enemy = True  # FF unlocks attacks on any type
                 elif other_is_hostile:
-                    # Non-hostile entity sees hostile — it's an enemy
+                    # Peaceful entity sees hostile — defend
                     is_enemy = True
                 elif (hasattr(entity, 'faction') and hasattr(other, 'faction') and
                       entity.faction and other.faction and entity.faction != other.faction):
@@ -1301,7 +1307,7 @@ class NpcAiMixin:
                     entity.ai_state_timer = 2
                     return
             elif entity.current_target == 'player':
-                # Player target — validate player is alive and in same zone/subscreen
+                # Player target — validate player is alive and in same zone/structure
                 if self._same_context_as_player(entity):
                     dist = abs(entity.x - self.player['x']) + abs(entity.y - self.player['y'])
                     if dist > 1:
@@ -1615,14 +1621,9 @@ class NpcAiMixin:
         if hasattr(entity, 'ai_state') and entity.ai_state in ('fleeing', 'flee'):
             return  # Fleeing entities don't attack
         
-        # Use subscreen-aware screen_key (mirrors AI setup at lines 63-69)
-        entity_in_subscreen = getattr(entity, 'in_subscreen', False)
-        if entity_in_subscreen and entity.subscreen_key:
-            screen_key = entity.subscreen_key
-            entity_lookup = self.subscreen_entities
-        else:
-            screen_key = f"{entity.screen_x},{entity.screen_y}"
-            entity_lookup = self.screen_entities
+        # Unified zone system: screen_x/y always reflects current zone (incl. structure virtual coords)
+        screen_key = f"{entity.screen_x},{entity.screen_y}"
+        entity_lookup = self.screen_entities
 
         closest_enemy = None
         closest_enemy_id = None
@@ -1631,7 +1632,7 @@ class NpcAiMixin:
         # Warriors scan full zone more aggressively - no distance limit
         is_warrior = entity.type in ['WARRIOR', 'COMMANDER', 'KING']
 
-        # Find enemies in the same context (overworld or subscreen)
+        # Find enemies in the same context (overworld or structure)
         for other_id in entity_lookup.get(screen_key, []):
             if other_id == entity_id:
                 continue
@@ -1646,13 +1647,6 @@ class NpcAiMixin:
 
             other = self.entities[other_id]
 
-            # Context guard: skip candidates not in the same overworld/subscreen context
-            other_in_subscreen = getattr(other, 'in_subscreen', False)
-            if entity_in_subscreen != other_in_subscreen:
-                continue
-            if entity_in_subscreen and getattr(other, 'subscreen_key', None) != entity.subscreen_key:
-                continue
-            
             # Determine if this is an enemy
             is_enemy = False
 
@@ -1702,25 +1696,25 @@ class NpcAiMixin:
                     closest_enemy = other
                     closest_enemy_id = other_id
         
-        # Check for player as potential enemy (only if in same subscreen state).
+        # Check for player as potential enemy (only if in same structure state).
         # Followers never attack the player regardless of their own hostile flag.
         is_follower = entity_id in getattr(self, 'followers', [])
         if not is_follower and entity.props.get('hostile'):
-            # Check if both entity and player are in same screen/subscreen
-            entity_in_subscreen = hasattr(entity, 'in_subscreen') and entity.in_subscreen
-            player_in_subscreen = self.player.get('in_subscreen', False)
+            # Check if both entity and player are in same screen/structure
+            entity_in_structure = hasattr(entity, 'in_structure') and entity.in_structure
+            player_in_structure = self.player.get('in_structure', False)
             
-            # Only attack if both in same state (both in overworld or both in same subscreen)
+            # Only attack if both in same state (both in overworld or both in same structure)
             can_attack_player = False
-            if not entity_in_subscreen and not player_in_subscreen:
+            if not entity_in_structure and not player_in_structure:
                 # Both in overworld
                 if entity.screen_x == self.player['screen_x'] and entity.screen_y == self.player['screen_y']:
                     can_attack_player = True
-            elif entity_in_subscreen and player_in_subscreen:
-                # Both in subscreen - check if same subscreen
-                entity_subscreen = getattr(entity, 'subscreen_key', None)
-                player_subscreen = self.player.get('subscreen_key', None)
-                if entity_subscreen == player_subscreen:
+            elif entity_in_structure and player_in_structure:
+                # Both in structure - check if same structure
+                entity_structure = getattr(entity, 'structure_key', None)
+                player_structure_key = self.player.get('structure_key', None)
+                if entity_structure_key == player_structure_key:
                     can_attack_player = True
             
             if can_attack_player:
@@ -1787,88 +1781,88 @@ class NpcAiMixin:
             
             # If adjacent, stand still and attack
             if closest_dist <= 1:
-                # STAND STILL - no movement, only attack
-                # Combat entities lock in position when adjacent to enemy
-                
-                _tp = getattr(self, 'time_pass_speed', 1.0)
+                # Probabilistic attack — roll attack_chance from entity props each update
+                attack_chance = entity.props.get('ai_params', {}).get('attack_chance', 0.0)
+                if random.random() < attack_chance:
+                    _tp = getattr(self, 'time_pass_speed', 1.0)
 
-                if closest_enemy == 'player':
-                    damage = max(1, entity.strength // 5)
+                    if closest_enemy == 'player':
+                        damage = max(1, entity.strength // 5)
 
-                    # Add weapon bonus from inventory
-                    damage += self.calculate_weapon_bonus(entity.inventory)
+                        # Add weapon bonus from inventory
+                        damage += self.calculate_weapon_bonus(entity.inventory)
 
-                    # Add magic damage from runestones
-                    magic_damage, magic_type = self.calculate_magic_damage(entity.inventory)
-                    damage += magic_damage
+                        # Add magic damage from runestones
+                        magic_damage, magic_type = self.calculate_magic_damage(entity.inventory)
+                        damage += magic_damage
 
-                    # Hostile entities do more damage (1.2x)
-                    if entity.props.get('hostile', True):
-                        damage *= 1.2
+                        # Hostile entities do more damage (1.2x)
+                        if entity.props.get('hostile', True):
+                            damage *= 1.2
 
-                    # Scale damage by time pass speed
-                    damage *= _tp
+                        # Scale damage by time pass speed
+                        damage *= _tp
 
-                    self.player_take_damage(damage)
-                    self.show_attack_animation(self.player['x'], self.player['y'], entity=entity, magic_type=magic_type)
-                else:
-                    damage = entity.strength
+                        self.player_take_damage(damage)
+                        self.show_attack_animation(self.player['x'], self.player['y'], entity=entity, magic_type=magic_type)
+                    else:
+                        damage = entity.strength
 
-                    # Add weapon bonus from inventory
-                    damage += self.calculate_weapon_bonus(entity.inventory)
+                        # Add weapon bonus from inventory
+                        damage += self.calculate_weapon_bonus(entity.inventory)
 
-                    # Add magic damage from runestones
-                    magic_damage, magic_type = self.calculate_magic_damage(entity.inventory)
-                    damage += magic_damage
+                        # Add magic damage from runestones
+                        magic_damage, magic_type = self.calculate_magic_damage(entity.inventory)
+                        damage += magic_damage
 
-                    # Hostile entities do more damage (1.2x)
-                    if entity.props.get('hostile', True):
-                        damage *= 1.2
+                        # Hostile entities do more damage (1.2x)
+                        if entity.props.get('hostile', True):
+                            damage *= 1.2
 
-                    # Scale damage by time pass speed
-                    damage *= _tp
+                        # Scale damage by time pass speed
+                        damage *= _tp
 
-                    # Apply blocking reduction
-                    if closest_enemy.combat_state == 'blocking':
-                        damage *= (1 - closest_enemy.block_reduction)
-                    closest_enemy.take_damage(damage, entity_id)
-                    self.show_attack_animation(closest_enemy.x, closest_enemy.y, entity=entity, target_entity=closest_enemy, magic_type=magic_type)
+                        # Apply blocking reduction
+                        if closest_enemy.combat_state == 'blocking':
+                            damage *= (1 - closest_enemy.block_reduction)
+                        closest_enemy.take_damage(damage, entity_id)
+                        self.show_attack_animation(closest_enemy.x, closest_enemy.y, entity=entity, target_entity=closest_enemy, magic_type=magic_type)
 
-                    # Grant XP from hit: only target's level (scaled by time pass speed)
-                    xp_gain = int(closest_enemy.level * _tp)
-                    entity.xp += xp_gain
-                    if entity.xp >= entity.xp_to_level:
-                        entity.level_up()
-                    
-                    # Auto meat consumption for combat entities (Warriors/Guards/Commanders/Kings)
-                    if entity.type in ['WARRIOR', 'COMMANDER', 'KING', 'GUARD']:
-                        low_health = entity.health < entity.max_health * 0.5
-                        low_hunger = entity.hunger < entity.max_hunger * 0.3
-                        
-                        if (low_health or low_hunger) and 'meat' in entity.inventory and entity.inventory['meat'] > 0:
-                            # Consume meat: heal 25% max health and restore hunger
-                            entity.inventory['meat'] -= 1
-                            heal_amount = entity.max_health * 0.25
-                            entity.health = min(entity.max_health, entity.health + heal_amount)
-                            entity.hunger = min(entity.max_hunger, entity.hunger + 50)
-                            print(f"{entity.name or entity.type} consumed meat and healed {int(heal_amount)} HP!")
-                    
-                    # Check if enemy died and handle king promotion
-                    if not closest_enemy.is_alive():
-                        # Commander killing a king is promoted to king
-                        if entity.type == 'COMMANDER' and closest_enemy.type == 'KING' and entity.faction:
-                            old_name = entity.name
-                            entity.type = 'KING'
-                            entity.props = ENTITY_TYPES['KING']
-                            entity.max_health = entity.props['max_health'] * entity.level
-                            entity.strength = entity.props['strength'] * entity.level
-                            
-                            # Full restore
-                            entity.health = entity.max_health
-                            entity.hunger = entity.max_hunger
-                            entity.thirst = entity.max_thirst
-                            
-                            print(f"{old_name} slew a KING and claims the throne of {entity.faction}!")
+                        # Grant XP from hit: only target's level (scaled by time pass speed)
+                        xp_gain = int(closest_enemy.level * _tp)
+                        entity.xp += xp_gain
+                        if entity.xp >= entity.xp_to_level:
+                            entity.level_up()
+
+                        # Auto meat consumption for combat entities (Warriors/Guards/Commanders/Kings)
+                        if entity.type in ['WARRIOR', 'COMMANDER', 'KING', 'GUARD']:
+                            low_health = entity.health < entity.max_health * 0.5
+                            low_hunger = entity.hunger < entity.max_hunger * 0.3
+
+                            if (low_health or low_hunger) and 'meat' in entity.inventory and entity.inventory['meat'] > 0:
+                                # Consume meat: heal 25% max health and restore hunger
+                                entity.inventory['meat'] -= 1
+                                heal_amount = entity.max_health * 0.25
+                                entity.health = min(entity.max_health, entity.health + heal_amount)
+                                entity.hunger = min(entity.max_hunger, entity.hunger + 50)
+                                print(f"{entity.name or entity.type} consumed meat and healed {int(heal_amount)} HP!")
+
+                        # Check if enemy died and handle king promotion
+                        if not closest_enemy.is_alive():
+                            # Commander killing a king is promoted to king
+                            if entity.type == 'COMMANDER' and closest_enemy.type == 'KING' and entity.faction:
+                                old_name = entity.name
+                                entity.type = 'KING'
+                                entity.props = ENTITY_TYPES['KING']
+                                entity.max_health = entity.props['max_health'] * entity.level
+                                entity.strength = entity.props['strength'] * entity.level
+
+                                # Full restore
+                                entity.health = entity.max_health
+                                entity.hunger = entity.max_hunger
+                                entity.thirst = entity.max_thirst
+
+                                print(f"{old_name} slew a KING and claims the throne of {entity.faction}!")
             else:
                 # Not adjacent - movement handled by state machine (targeting state)
                 # DO NOT set states here
@@ -2143,13 +2137,13 @@ class NpcAiMixin:
         """Goblins and bandits attack camps and houses, pick up items, and place loot chests
         Termites attack trees and structures"""
         # Determine which screen the entity is actually in
-        if hasattr(entity, 'in_subscreen') and entity.in_subscreen and entity.subscreen_key:
-            screen_key = entity.subscreen_key
-            if screen_key not in self.subscreens:
+        if hasattr(entity, 'in_structure') and entity.in_structure and entity.structure_key:
+            screen_key = entity.structure_key
+            if screen_key not in self.structures:
                 return
-            screen = self.subscreens[screen_key]
+            screen = self.structures[screen_key]
         else:
-            screen_key = entity.screen_key
+            screen_key = f"{entity.screen_x},{entity.screen_y}"
             if screen_key not in self.screens:
                 return
             screen = self.screens[screen_key]
@@ -2382,7 +2376,7 @@ class NpcAiMixin:
     
     def farmer_behavior(self, entity):
         """Farmer AI: harvest crops, till soil, plant crops"""
-        screen_key = entity.screen_key
+        screen_key = f"{entity.screen_x},{entity.screen_y}"
         if screen_key not in self.screens:
             return
         
@@ -2438,7 +2432,7 @@ class NpcAiMixin:
     
     def lumberjack_behavior(self, entity):
         """Lumberjack AI: chop trees, build houses"""
-        screen_key = entity.screen_key
+        screen_key = f"{entity.screen_x},{entity.screen_y}"
         if screen_key not in self.screens:
             return
         
@@ -2544,7 +2538,7 @@ class NpcAiMixin:
     
     def guard_behavior(self, entity):
         """Guard AI: Patrol center lanes, build cobblestone, hunt hostiles"""
-        screen_key = entity.screen_key
+        screen_key = f"{entity.screen_x},{entity.screen_y}"
         if screen_key not in self.screens:
             return
         
@@ -2630,11 +2624,15 @@ class NpcAiMixin:
     
     def trader_behavior(self, entity):
         """Trader AI: Travel between zone exits, build paths (cellular automata)"""
-        screen_key = entity.screen_key
+        screen_key = f"{entity.screen_x},{entity.screen_y}"
         if screen_key not in self.screens:
             return
-        
+
         screen = self.screens[screen_key]
+
+        # Structure zones have no overworld exits — traders don't travel inside structures
+        if 'exits' not in screen:
+            return
         
         # Path building: Only build paths when reasonably aligned with exits
         # This ensures paths go through the middle of zones, not random wandering
@@ -2701,9 +2699,9 @@ class NpcAiMixin:
     def npc_seek_shelter(self, entity):
         """NPCs seek shelter (house/camp) at night and enter idle state when there"""
         # Already inside a structure — don't scan overworld grid or re-enter
-        if entity.in_subscreen:
+        if entity.in_structure:
             return False
-        screen_key = entity.screen_key
+        screen_key = f"{entity.screen_x},{entity.screen_y}"
         if screen_key not in self.screens:
             return False
         
@@ -2758,7 +2756,7 @@ class NpcAiMixin:
             if min_house_dist <= 1:
                 # Adjacent to house — enter it
                 hx, hy = nearest_house
-                self.npc_enter_subscreen(entity, screen_key, hx, hy, 'HOUSE')
+                self.npc_enter_structure(entity, screen_key, hx, hy, 'HOUSE')
                 entity.is_idle = True
                 return True
             else:
@@ -2801,7 +2799,7 @@ class NpcAiMixin:
         
         if logic_type == 'settlement':
             # Settlement logic - transform based on zone needs
-            screen_key = entity.screen_key
+            screen_key = f"{entity.screen_x},{entity.screen_y}"
             if screen_key not in self.screen_entities:
                 return False
             

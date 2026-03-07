@@ -224,17 +224,9 @@ class MenusMixin:
             self.inspected_npc = None
             return
 
-        # Check subscreen context - only show if in same subscreen context
-        if self.player['in_subscreen']:
-            # Player in subscreen - only show entities in SAME subscreen
-            if not entity.in_subscreen or entity.subscreen_key != self.player['subscreen_key']:
-                self.inspected_npc = None
-                return
-        else:
-            # Player in main zone - don't show entities in subscreens
-            if entity.in_subscreen:
-                self.inspected_npc = None
-                return
+        # Zone key check above (lines 222-225) already ensures entity and player share
+        # the same zone (overworld or structure virtual coords). No further context
+        # filtering needed — the unified zone model makes in_structure redundant here.
 
         # Position info to the right of the NPC
         npc_screen_x = entity.x * CELL_SIZE
@@ -321,8 +313,6 @@ class MenusMixin:
 
         tx, ty = target
         screen_key = f"{self.player['screen_x']},{self.player['screen_y']}"
-        if self.player.get('in_subscreen') and self.player.get('subscreen_key'):
-            screen_key = self.player['subscreen_key']
 
         info_lines = []
 
@@ -385,11 +375,11 @@ class MenusMixin:
         if color is None:
             color = QUEST_TYPES.get(self.active_quest, {}).get('color', (200, 200, 200))
 
-        # If player is in a subscreen, always point to the exit
-        if self.player.get('in_subscreen'):
-            subscreen = self.subscreens.get(self.player.get('subscreen_key'))
-            if subscreen:
-                exit_pos = subscreen.get('exit', subscreen.get('entrance'))
+        # If player is in a structure, always point to the exit
+        if self.player.get('in_structure'):
+            structure = self.structures.get(self.player.get('structure_key'))
+            if structure:
+                exit_pos = structure.get('exit', structure.get('entrance'))
                 if exit_pos:
                     ex, ey = exit_pos
                     px, py = self.player['x'], self.player['y']

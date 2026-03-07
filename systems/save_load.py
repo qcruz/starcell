@@ -56,21 +56,21 @@ class SaveLoadMixin:
                 cell_key_str = f"{cell_tuple[0]},{cell_tuple[1]}"
                 enchanted_cells_serializable[screen_key][cell_key_str] = enchant_level
 
-        # Convert subscreens tuple keys to strings for JSON serialization
-        subscreens_serializable = {}
-        for subscreen_key, subscreen_data in self.subscreens.items():
-            serialized_subscreen = {}
-            for key, value in subscreen_data.items():
+        # Convert structures tuple keys to strings for JSON serialization
+        structures_serializable = {}
+        for structure_key, structure_data in self.structures.items():
+            serialized_structure = {}
+            for key, value in structure_data.items():
                 if key == 'chests':
                     # Convert chest position tuples to strings
                     serialized_chests = {}
                     for chest_pos, loot_type in value.items():
                         chest_key_str = f"{chest_pos[0]},{chest_pos[1]}"
                         serialized_chests[chest_key_str] = loot_type
-                    serialized_subscreen[key] = serialized_chests
+                    serialized_structure[key] = serialized_chests
                 else:
-                    serialized_subscreen[key] = value
-            subscreens_serializable[subscreen_key] = serialized_subscreen
+                    serialized_structure[key] = value
+            structures_serializable[structure_key] = serialized_structure
 
         # Serialize screens — structure zones may have tuple keys in 'chests'
         screens_serializable = {}
@@ -131,9 +131,10 @@ class SaveLoadMixin:
             'enchanted_cells': enchanted_cells_serializable,
             'enchanted_entities': self.enchanted_entities,
             'followers': self.followers,
-            'subscreens': subscreens_serializable,
+            'follower_items': {str(k): v for k, v in self.follower_items.items()},
+            'structures': structures_serializable,
             'opened_chests': list(self.opened_chests),  # Convert set to list for JSON
-            'next_subscreen_id': self.next_subscreen_id,
+            'next_structure_id': self.next_structure_id,
             # Zone priority system
             'zone_connections': zone_connections_serializable,
             'structure_zones': structure_zones_serializable,
@@ -178,11 +179,18 @@ class SaveLoadMixin:
                 self.player['base_damage'] = 10
                 self.player['blocking'] = False
                 self.player['last_attack_tick'] = 0
-            # Ensure player has subscreen fields
-            if 'in_subscreen' not in self.player:
-                self.player['in_subscreen'] = False
-                self.player['subscreen_key'] = None
-                self.player['subscreen_parent'] = None
+            # Migrate old save keys (subscreen → structure)
+            if 'in_subscreen' in self.player and 'in_structure' not in self.player:
+                self.player['in_structure'] = self.player.pop('in_subscreen')
+            if 'subscreen_key' in self.player and 'structure_key' not in self.player:
+                self.player['structure_key'] = self.player.pop('subscreen_key')
+            if 'subscreen_parent' in self.player and 'structure_parent' not in self.player:
+                self.player['structure_parent'] = self.player.pop('subscreen_parent')
+            # Ensure player has structure fields
+            if 'in_structure' not in self.player:
+                self.player['in_structure'] = False
+                self.player['structure_key'] = None
+                self.player['structure_parent'] = None
             # Ensure player has energy fields (added after initial release)
             if 'energy' not in self.player:
                 self.player['energy'] = self.player.get('max_energy', 100)
@@ -237,6 +245,10 @@ class SaveLoadMixin:
             # Load followers list
             self.followers = save_data.get('followers', [])
 
+            # Load follower_items (JSON stores int keys as strings — convert back)
+            raw_fi = save_data.get('follower_items', {})
+            self.follower_items = {int(k): v for k, v in raw_fi.items()}
+
             # Reconstruct entities
             self.entities = {}
             entities_data = save_data.get('entities', {})
@@ -289,32 +301,35 @@ class SaveLoadMixin:
                             'is_follower': True,
                             'entity_id': entity_id
                         }
+                    # Reconstruct follower_items entry if missing (old saves without this field)
+                    if entity_id not in self.follower_items:
+                        self.follower_items[entity_id] = follower_name
 
-            # Load subscreen data and convert string keys back to tuples
-            subscreens_loaded = save_data.get('subscreens', {})
-            self.subscreens = {}
-            for subscreen_key, subscreen_data in subscreens_loaded.items():
-                deserialized_subscreen = {}
-                for key, value in subscreen_data.items():
+            # Load structure data and convert string keys back to tuples
+            structures_loaded = save_data.get('structures', save_data.get('subscreens', {}))
+            self.structures = {}
+            for structure_key, structure_data in structures_loaded.items():
+                deserialized_structure = {}
+                for key, value in structure_data.items():
                     if key == 'chests':
                         # Convert chest position strings back to tuples
                         deserialized_chests = {}
                         for chest_key_str, loot_type in value.items():
                             x, y = map(int, chest_key_str.split(','))
                             deserialized_chests[(x, y)] = loot_type
-                        deserialized_subscreen[key] = deserialized_chests
+                        deserialized_structure[key] = deserialized_chests
                     elif key in ('parent_screen', 'parent_cell', 'entrance', 'exit') and isinstance(value, list):
                         # JSON serialises tuples as lists — convert back so door-lookup
                         # comparisons (parent_cell == (x, y)) succeed on load.
-                        deserialized_subscreen[key] = tuple(value)
+                        deserialized_structure[key] = tuple(value)
                     elif key == 'entrances' and isinstance(value, list):
-                        deserialized_subscreen[key] = [tuple(e) if isinstance(e, list) else e for e in value]
+                        deserialized_structure[key] = [tuple(e) if isinstance(e, list) else e for e in value]
                     else:
-                        deserialized_subscreen[key] = value
-                self.subscreens[subscreen_key] = deserialized_subscreen
+                        deserialized_structure[key] = value
+                self.structures[structure_key] = deserialized_structure
 
             self.opened_chests = set(save_data.get('opened_chests', []))
-            self.next_subscreen_id = save_data.get('next_subscreen_id', 0)
+            self.next_structure_id = save_data.get('next_structure_id', save_data.get('next_subscreen_id', 0))
 
             # Load zone priority system data
             self.zone_connections = {}
@@ -352,24 +367,29 @@ class SaveLoadMixin:
 
             # Ensure structure zones are also in self.screens (backward compat)
             for struct_key, struct_data in self.structure_zones.items():
-                if struct_key not in self.screens and struct_key in self.subscreens:
-                    self.screens[struct_key] = self.subscreens[struct_key]
+                if struct_key not in self.screens and struct_key in self.structures:
+                    self.screens[struct_key] = self.structures[struct_key]
                     self.screen_last_update.setdefault(struct_key, self.tick)
 
-            # If player is in a subscreen, load that as current screen
-            if self.player.get('in_subscreen') and self.player.get('subscreen_key'):
-                subscreen_key = self.player['subscreen_key']
-                if subscreen_key in self.subscreens:
-                    self.current_screen = self.subscreens[subscreen_key]
+            # If player is in a structure, load that as current screen
+            if self.player.get('in_structure') and self.player.get('structure_key'):
+                structure_key = self.player['structure_key']
+                if structure_key in self.structures:
+                    self.current_screen = self.structures[structure_key]
                 else:
-                    # Subscreen doesn't exist, exit player to parent
-                    self.player['in_subscreen'] = False
-                    self.player['subscreen_key'] = None
-                    self.player['subscreen_parent'] = None
-                    self.current_screen = self.generate_screen(
-                        self.player['screen_x'],
-                        self.player['screen_y']
-                    )
+                    # Structure doesn't exist — exit player to parent overworld zone.
+                    # player['screen_x/y'] may be virtual coords; use structure_parent instead.
+                    parent_info = self.player.get('structure_parent')
+                    if parent_info and len(parent_info) >= 2:
+                        parent_x, parent_y = parent_info[0], parent_info[1]
+                    else:
+                        parent_x, parent_y = 0, 0
+                    self.player['in_structure'] = False
+                    self.player['structure_key'] = None
+                    self.player['structure_parent'] = None
+                    self.player['screen_x'] = parent_x
+                    self.player['screen_y'] = parent_y
+                    self.current_screen = self.generate_screen(parent_x, parent_y)
             else:
                 self.current_screen = self.generate_screen(
                     self.player['screen_x'],
