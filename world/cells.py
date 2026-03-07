@@ -222,9 +222,15 @@ class CellsMixin:
                     if random.random() < min(1.0, GRASS_WATER_ABSORB_RATE * _tp):
                         new_grid[y][x] = 'WATER'
 
-                # Tree → Grass (roads push back forest — decays to grass, not cobblestone)
-                elif cell.startswith('TREE') and cobblestone_count > 0:
+                # Tree → Cobblestone (tree stranded inside a cobblestone road — 5+ of 8 neighbors cobblestone)
+                # High threshold prevents cascade: edge trees are untouched, only truly embedded ones convert
+                elif cell.startswith('TREE') and cobblestone_count >= 5:
                     if random.random() < min(1.0, TREE_DECAY_RATE * _tp):
+                        new_grid[y][x] = 'COBBLESTONE'
+
+                # Tree → Grass (near cobblestone road but not embedded — clears treeline)
+                elif cell.startswith('TREE') and cobblestone_count > 0:
+                    if random.random() < min(1.0, TREE_CROWD_DECAY_RATE * _tp):
                         new_grid[y][x] = 'GRASS'
 
                 # Tree overcrowding death (4+ tree neighbors)
