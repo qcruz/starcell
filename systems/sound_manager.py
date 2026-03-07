@@ -83,7 +83,7 @@ class SoundManager:
             try:
                 with open(path, 'rb') as f:
                     self._music_bufs[key] = (io.BytesIO(f.read()),
-                                             os.path.splitext(path)[1])
+                                             os.path.basename(path))
             except Exception as e:
                 print(f"[Sound] failed to buffer music '{key}': {e}")
 
