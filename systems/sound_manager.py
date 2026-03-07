@@ -8,15 +8,16 @@ all methods return silently and the game continues without audio.
 import pygame
 import random
 import os
+import io
 
 
 class SoundManager:
     """Manages music, SFX, and ambient audio."""
 
     MUSIC = {
-        'menu':            'sounds/music/menu.wav',
-        'overworld_day':   'sounds/music/overworld_day.mp3',
-        'overworld_night': 'sounds/music/overworld_night.wav',
+        'menu':            'sounds/music/menu.ogg',
+        'overworld_day':   'sounds/music/overworld_day.ogg',
+        'overworld_night': 'sounds/music/overworld_night.ogg',
         'cave':            'sounds/music/cave.ogg',
     }
 
@@ -37,6 +38,7 @@ class SoundManager:
         self._next_bird_tick    = random.randint(400, 900)
         self._next_cricket_tick = random.randint(800, 1800)
         self.sounds = {}
+        self._music_bufs = {}   # {track_key: (BytesIO, ext)} — pre-read at startup
         self._load_all()
 
     # ------------------------------------------------------------------
@@ -74,9 +76,21 @@ class SoundManager:
                 except Exception:
                     pass
 
+        # Pre-read all music files into memory so transitions hit RAM, not disk
+        for key, path in self.MUSIC.items():
+            if not os.path.exists(path):
+                continue
+            try:
+                with open(path, 'rb') as f:
+                    self._music_bufs[key] = (io.BytesIO(f.read()),
+                                             os.path.splitext(path)[1])
+            except Exception as e:
+                print(f"[Sound] failed to buffer music '{key}': {e}")
+
         loaded = {k: (len(v) if isinstance(v, list) else 1)
                   for k, v in self.sounds.items() if v}
         print(f"[Sound] loaded: {loaded}")
+        print(f"[Sound] music buffered: {list(self._music_bufs)}")
 
     # ------------------------------------------------------------------
     # Playback API
@@ -92,14 +106,16 @@ class SoundManager:
         snd.set_volume(self.sfx_volume)
         snd.play()
 
-    def play_music(self, track_key, fade_ms=1500):
+    def play_music(self, track_key, fade_ms=1000):
         if not self._ok or track_key == self.current_music:
             return
-        path = self.MUSIC.get(track_key)
-        if not path or not os.path.exists(path):
+        entry = self._music_bufs.get(track_key)
+        if not entry:
             return
-        pygame.mixer.music.fadeout(fade_ms)
-        pygame.mixer.music.load(path)
+        buf, ext = entry
+        buf.seek(0)
+        # Load from in-memory buffer — no disk I/O, no main-thread stall
+        pygame.mixer.music.load(buf, ext)
         pygame.mixer.music.set_volume(self.music_volume)
         pygame.mixer.music.play(-1, fade_ms=fade_ms)
         self.current_music = track_key
