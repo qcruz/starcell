@@ -424,6 +424,9 @@ class NpcAiMixin:
                 for oid in self.screen_entities.get(overworld_key, []):
                     if oid in self.entities:
                         other = self.entities[oid]
+                        # Skip player followers — they are friendly regardless of hostile prop
+                        if oid in getattr(self, 'followers', []):
+                            continue
                         if other.props.get('hostile', False):
                             if abs(other.x - entrance_x) + abs(other.y - entrance_y) <= 8:
                                 wants_to_exit = True

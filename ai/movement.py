@@ -1134,37 +1134,29 @@ class NpcAiMovementMixin:
         if not subscreen:
             return
 
-        # Find exit (bottom row — any non-solid, non-wall cell)
-        exit_positions = []
-        for x in range(GRID_WIDTH):
-            cell = subscreen['grid'][GRID_HEIGHT - 1][x]
-            if not CELL_TYPES.get(cell, {}).get('solid', False):
-                exit_positions.append(x)
+        # Use stored exit position from subscreen metadata (set by generate_subscreen)
+        exit_pos = subscreen.get('exit', (GRID_WIDTH // 2, GRID_HEIGHT - 2))
+        exit_x, exit_y = exit_pos
 
-        # Also check second-to-bottom row if bottom is all walls
-        if not exit_positions:
-            for x in range(GRID_WIDTH):
-                cell = subscreen['grid'][GRID_HEIGHT - 2][x]
-                if not CELL_TYPES.get(cell, {}).get('solid', False):
-                    exit_positions.append(x)
-
-        if not exit_positions:
+        # Check if at or adjacent to exit — trigger actual exit
+        if abs(entity.x - exit_x) <= 1 and abs(entity.y - exit_y) <= 1:
+            self.npc_exit_subscreen(entity)
             return
 
-        # Move to nearest exit
-        nearest_exit = min(exit_positions, key=lambda x: abs(x - entity.x))
-
-        # Check if at exit
-        if entity.y == GRID_HEIGHT - 1 and entity.x == nearest_exit:
-            self.npc_exit_subscreen(entity)
-        else:
-            # Move toward exit
-            if entity.x < nearest_exit:
-                entity.x += 1
-            elif entity.x > nearest_exit:
-                entity.x -= 1
-            elif entity.y < GRID_HEIGHT - 1:
-                entity.y += 1
+        # Move toward exit one step at a time (vertical priority — get to exit row first)
+        if entity.y < exit_y:
+            new_y = entity.y + 1
+            cell = subscreen['grid'][new_y][entity.x]
+            if not CELL_TYPES.get(cell, {}).get('solid', False):
+                entity.y = new_y
+                entity.facing = 'down'
+                return
+        if entity.x < exit_x:
+            entity.x += 1
+            entity.facing = 'right'
+        elif entity.x > exit_x:
+            entity.x -= 1
+            entity.facing = 'left'
 
     def try_travel_behavior(self, entity, screen_key):
         """Move entity toward zone exit (used by traders and other traveling NPCs)"""
