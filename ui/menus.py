@@ -224,17 +224,9 @@ class MenusMixin:
             self.inspected_npc = None
             return
 
-        # Check subscreen context - only show if in same subscreen context
-        if self.player['in_subscreen']:
-            # Player in subscreen - only show entities in SAME subscreen
-            if not entity.in_subscreen or entity.subscreen_key != self.player['subscreen_key']:
-                self.inspected_npc = None
-                return
-        else:
-            # Player in main zone - don't show entities in subscreens
-            if entity.in_subscreen:
-                self.inspected_npc = None
-                return
+        # Zone key check above (lines 222-225) already ensures entity and player share
+        # the same zone (overworld or structure virtual coords). No further context
+        # filtering needed — the unified zone model makes in_subscreen redundant here.
 
         # Position info to the right of the NPC
         npc_screen_x = entity.x * CELL_SIZE
@@ -321,8 +313,6 @@ class MenusMixin:
 
         tx, ty = target
         screen_key = f"{self.player['screen_x']},{self.player['screen_y']}"
-        if self.player.get('in_subscreen') and self.player.get('subscreen_key'):
-            screen_key = self.player['subscreen_key']
 
         info_lines = []
 
