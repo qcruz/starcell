@@ -140,11 +140,15 @@ class GameCoreMixin:
         # Maps entity_id → inventory item name used to summon that follower
         self.follower_items = {}  # {entity_id: item_name}
         
-        # Entities per screen: {screen_key: [entity_ids]}
+        # Entities per zone (overworld and structure): {zone_key: [entity_ids]}
         self.screen_entities = {}
-        
-        # Entities per subscreen: {subscreen_key: [entity_ids]}
-        self.subscreen_entities = {}
+        # Alias — structure zones now live in screen_entities under their virtual coord key.
+        # All legacy code that writes/reads subscreen_entities still works transparently.
+        self.subscreen_entities = self.screen_entities
+
+        # Door mapping: {(zone_key, cell_x, cell_y): (target_zone_key, target_x, target_y)}
+        # Links overworld entrance cells to structure zone entrances and back.
+        self.door_map = {}
         
         # Quest System
         self.quests = {}  # {quest_type: Quest object}
@@ -787,13 +791,9 @@ class GameCoreMixin:
         
         check_x, check_y = target
 
-        # Use subscreen entity list when player is inside a structure
-        if self.player.get('in_subscreen'):
-            sub_key = self.player.get('subscreen_key')
-            candidates = self.subscreen_entities.get(sub_key, [])
-        else:
-            screen_key = f"{self.player['screen_x']},{self.player['screen_y']}"
-            candidates = self.screen_entities.get(screen_key, [])
+        # Unified zone system: player screen coords reflect current zone (incl. structure virtual coords)
+        screen_key = f"{self.player['screen_x']},{self.player['screen_y']}"
+        candidates = self.screen_entities.get(screen_key, [])
 
         # Find entity at target cell
         for entity_id in candidates:
@@ -1401,10 +1401,7 @@ class GameCoreMixin:
                 screen_key = f"{self.player['screen_x']},{self.player['screen_y']}"
                 proxy_id = getattr(self, 'autopilot_proxy_id', None)
                 entity_blocked = False
-                if self.player.get('in_subscreen'):
-                    check_list = self.subscreen_entities.get(self.player.get('subscreen_key'), [])
-                else:
-                    check_list = self.screen_entities.get(screen_key, [])
+                check_list = self.screen_entities.get(screen_key, [])
                 for eid in check_list:
                     if eid == proxy_id:
                         continue  # autopilot proxy is not a physical obstacle
@@ -1680,7 +1677,7 @@ class GameCoreMixin:
                 depth=1
             )
 
-        # Save player's parent location
+        # Save player's parent location for exit routing
         self.player['in_subscreen'] = True
         self.player['subscreen_key'] = subscreen_key
         self.player['subscreen_parent'] = (parent_screen_x, parent_screen_y, cell_x, cell_y)
@@ -1688,7 +1685,12 @@ class GameCoreMixin:
         self.player['cave_via_subscreen'] = came_from_subscreen
         self.player['cave_via_pos'] = came_from_pos
 
-        # Switch to subscreen
+        # Update player zone coords to the structure's virtual coordinates
+        vx, vy = map(int, subscreen_key.split(','))
+        self.player['screen_x'] = vx
+        self.player['screen_y'] = vy
+
+        # Switch to subscreen grid
         subscreen = self.subscreens[subscreen_key]
         self.current_screen = subscreen
 
@@ -1711,19 +1713,18 @@ class GameCoreMixin:
                 continue
             f = self.entities[fid]
 
-            # Remove from old location
+            # Remove from old location (unified registry — search all zone entity lists)
             old_sk = f"{f.screen_x},{f.screen_y}"
-            for bucket in [self.screen_entities, self.subscreen_entities]:
-                for sk, lst in bucket.items():
-                    if fid in lst:
-                        lst.remove(fid)
+            for sk, lst in self.screen_entities.items():
+                if fid in lst:
+                    lst.remove(fid)
 
-            # Place in new location
+            # Place in new location (screen_entities is the unified registry)
             if in_sub and sub_key:
-                if sub_key not in self.subscreen_entities:
-                    self.subscreen_entities[sub_key] = []
-                if fid not in self.subscreen_entities[sub_key]:
-                    self.subscreen_entities[sub_key].append(fid)
+                if sub_key not in self.screen_entities:
+                    self.screen_entities[sub_key] = []
+                if fid not in self.screen_entities[sub_key]:
+                    self.screen_entities[sub_key].append(fid)
                 f.in_subscreen = True
                 f.subscreen_key = sub_key
             else:
@@ -1734,7 +1735,7 @@ class GameCoreMixin:
                 f.in_subscreen = False
                 f.subscreen_key = None
 
-            # Snap position to player (offset slightly to avoid overlap)
+            # Snap to player's current zone coords (virtual when in structure)
             f.screen_x = self.player['screen_x']
             f.screen_y = self.player['screen_y']
             f.x = max(1, self.player['x'] - 1)
@@ -1761,12 +1762,12 @@ class GameCoreMixin:
         else:
             self.current_screen = self.generate_screen(parent_screen_x, parent_screen_y)
         
-        # Position player outside the structure
+        # Restore player to parent overworld zone
         self.player['x'] = parent_cell_x
         self.player['y'] = parent_cell_y
         self.player['screen_x'] = parent_screen_x
         self.player['screen_y'] = parent_screen_y
-        
+
         # Clear subscreen state
         self.player['in_subscreen'] = False
         self.player['subscreen_key'] = None
@@ -1808,11 +1809,14 @@ class GameCoreMixin:
                 depth=new_depth
             )
         
-        # Update player state
+        # Update player to new structure zone
+        vx, vy = map(int, deeper_key.split(','))
         self.player['subscreen_key'] = deeper_key
+        self.player['screen_x'] = vx
+        self.player['screen_y'] = vy
         deeper_subscreen = self.subscreens[deeper_key]
         self.current_screen = deeper_subscreen
-        
+
         # Position player at entrance
         entrance = deeper_subscreen['entrance']
         self.player['x'] = entrance[0]
@@ -1867,11 +1871,14 @@ class GameCoreMixin:
                 depth=target_depth
             )
         
-        # Update player state
+        # Update player to upper structure zone
+        vx, vy = map(int, upper_level_key.split(','))
         self.player['subscreen_key'] = upper_level_key
+        self.player['screen_x'] = vx
+        self.player['screen_y'] = vy
         upper_subscreen = self.subscreens[upper_level_key]
         self.current_screen = upper_subscreen
-        
+
         # Position player at entrance
         entrance = upper_subscreen['entrance']
         self.player['x'] = entrance[0]
@@ -1930,6 +1937,9 @@ class GameCoreMixin:
             self.player['y'] = via_pos[1] if via_pos else house_sub['entrance'][1]
             self.player['in_subscreen'] = True
             self.player['subscreen_key'] = via_key
+            vx, vy = map(int, via_key.split(','))
+            self.player['screen_x'] = vx
+            self.player['screen_y'] = vy
             hp = house_sub.get('parent_screen', (psx, psy))
             hc = house_sub.get('parent_cell', (0, 0))
             self.player['subscreen_parent'] = (hp[0], hp[1], hc[0], hc[1])
@@ -1961,15 +1971,18 @@ class GameCoreMixin:
                 # Level scales with depth
                 level = random.randint(depth, depth + 1)
                 
-                # Create entity (note: using 0,0 for subscreen coords)
-                entity = Entity(enemy_type, x, y, 0, 0, level)
+                vx, vy = map(int, subscreen_key.split(','))
+                entity = Entity(enemy_type, x, y, vx, vy, level)
+                entity.in_subscreen = True
+                entity.subscreen_key = subscreen_key
                 entity_id = self.next_entity_id
                 self.next_entity_id += 1
                 self.entities[entity_id] = entity
-                
-                # Track in subscreen (we'll need special handling for subscreen entities)
-                # For now, just add to entities dict
-                
+
+                if subscreen_key not in self.screen_entities:
+                    self.screen_entities[subscreen_key] = []
+                self.screen_entities[subscreen_key].append(entity_id)
+
                 spawned += 1
             
             attempts += 1
@@ -2068,9 +2081,11 @@ class GameCoreMixin:
         self.subscreens = {}
         self.opened_chests = set()
         self.next_subscreen_id = 0
+        self.door_map = {}
         self.entities = {}
         self.next_entity_id = 0
         self.screen_entities = {}
+        self.subscreen_entities = self.screen_entities  # re-establish alias after reset
         self.attack_animations = []
         self.current_screen = self.generate_screen(0, 0)
 

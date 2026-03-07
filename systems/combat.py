@@ -69,12 +69,8 @@ class CombatMixin:
         check_x, check_y = target
         screen_key = f"{self.player['screen_x']},{self.player['screen_y']}"
 
-        # Get correct entity list based on subscreen state
-        if self.player.get('in_subscreen'):
-            subscreen_key = self.player.get('subscreen_key')
-            entities_list = self.subscreen_entities.get(subscreen_key, []) if subscreen_key else []
-        else:
-            entities_list = self.screen_entities.get(screen_key, [])
+        # Unified zone system: player screen coords reflect current zone (incl. structure virtual coords)
+        entities_list = self.screen_entities.get(screen_key, [])
 
         # Check for entity at target
         for entity_id in entities_list:
@@ -366,11 +362,9 @@ class CombatMixin:
             display_x = float(x)
             display_y = float(y)
 
-        # Track which screen/subscreen this animation belongs to
+        # Track which zone this animation belongs to (unified zone system)
         if entity:
-            location_key = entity.screen_key
-        elif self.player.get('in_subscreen'):
-            location_key = self.player.get('subscreen_key')
+            location_key = f"{entity.screen_x},{entity.screen_y}"
         else:
             location_key = f"{self.player['screen_x']},{self.player['screen_y']}"
 
@@ -385,11 +379,8 @@ class CombatMixin:
 
     def draw_attack_animations(self):
         """Draw active attack animations only for current location"""
-        # Determine current location
-        if self.player.get('in_subscreen'):
-            current_location = self.player.get('subscreen_key')
-        else:
-            current_location = f"{self.player['screen_x']},{self.player['screen_y']}"
+        # Unified zone system: player screen coords reflect current zone
+        current_location = f"{self.player['screen_x']},{self.player['screen_y']}"
 
         # Magic type color mapping
         magic_colors = {

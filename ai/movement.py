@@ -12,21 +12,14 @@ class NpcAiMovementMixin:
 
     def wander_entity(self, entity):
         """Move entity randomly"""
-        # Resolve the correct grid and peer entity list.
-        # Entities in subscreens must use the subscreen grid, not the overworld grid,
-        # otherwise they check the wrong cells and get stuck at the entrance.
-        if entity.in_subscreen:
-            sub_key = entity.subscreen_key
-            screen = self.subscreens.get(sub_key) or self.screens.get(sub_key)
-            if not screen:
-                return
-            peer_ids = self.subscreen_entities.get(sub_key, [])
-        else:
-            screen_key = f"{entity.screen_x},{entity.screen_y}"
-            if screen_key not in self.screens:
-                return
-            screen = self.screens[screen_key]
-            peer_ids = self.screen_entities.get(screen_key, [])
+        # All entities (overworld and structure) now use the same registry.
+        # Entity screen_x/y is always the actual current zone key — virtual coords
+        # for structure zones, real coords for overworld zones.
+        screen_key = f"{entity.screen_x},{entity.screen_y}"
+        if screen_key not in self.screens:
+            return
+        screen = self.screens[screen_key]
+        peer_ids = self.screen_entities.get(screen_key, [])
 
         # Check if overlapping with another entity — if so, prioritize unstacking
         is_overlapping = False
@@ -57,7 +50,8 @@ class NpcAiMovementMixin:
 
             # Out of bounds
             if new_x < 0 or new_x >= GRID_WIDTH or new_y < 0 or new_y >= GRID_HEIGHT:
-                if not entity.in_subscreen:
+                in_structure = screen_key in self.structure_zones
+                if not in_structure:
                     # Overworld entity: attempt seamless zone crossing
                     old_sk = f"{entity.screen_x},{entity.screen_y}"
                     self.try_entity_screen_crossing(entity, new_x, new_y)
@@ -65,7 +59,7 @@ class NpcAiMovementMixin:
                         entity.is_moving = True
                         entity.moved_this_update = True
                         return
-                # In subscreen: edges are walls — just skip this direction
+                # Structure zone edges are hard walls; exit happens via exit cell
                 continue
 
             # Check memory lane — avoid recently visited cells
@@ -839,17 +833,19 @@ class NpcAiMovementMixin:
                     self.subscreens[subscreen_key]['entrance_x'] = entrance_x
                     self.subscreens[subscreen_key]['entrance_y'] = entrance_y
 
-        # Move entity into subscreen
-        # Remove from overworld entities
+        # Move entity into structure zone — unified registry
         if screen_key in self.screen_entities and entity_id in self.screen_entities[screen_key]:
             self.screen_entities[screen_key].remove(entity_id)
 
-        # Add to subscreen entities
-        if subscreen_key not in self.subscreen_entities:
-            self.subscreen_entities[subscreen_key] = []
-        self.subscreen_entities[subscreen_key].append(entity_id)
+        if subscreen_key not in self.screen_entities:
+            self.screen_entities[subscreen_key] = []
+        if entity_id not in self.screen_entities[subscreen_key]:
+            self.screen_entities[subscreen_key].append(entity_id)
 
-        # Update entity state
+        # Update entity location to the structure zone's virtual coordinates
+        vx, vy = map(int, subscreen_key.split(','))
+        entity.screen_x = vx
+        entity.screen_y = vy
         entity.in_subscreen = True
         entity.subscreen_key = subscreen_key
         entity.last_subscreen_change_tick = self.tick
@@ -897,31 +893,41 @@ class NpcAiMovementMixin:
             return
 
         subscreen_key = entity.subscreen_key
-        screen_key = f"{entity.screen_x},{entity.screen_y}"
 
-        # Remove from subscreen
-        if subscreen_key in self.subscreen_entities and entity_id in self.subscreen_entities[subscreen_key]:
-            self.subscreen_entities[subscreen_key].remove(entity_id)
+        # Get parent zone info from subscreen metadata
+        sub_data = self.subscreens.get(subscreen_key, {})
+        parent_screen = sub_data.get('parent_screen')
+        parent_cell = sub_data.get('parent_cell', (GRID_WIDTH // 2, GRID_HEIGHT // 2))
 
-        # Add back to overworld
-        if screen_key not in self.screen_entities:
-            self.screen_entities[screen_key] = []
-        if entity_id not in self.screen_entities[screen_key]:
-            self.screen_entities[screen_key].append(entity_id)
+        if not parent_screen:
+            return
 
-        # Update entity state
+        parent_key = f"{parent_screen[0]},{parent_screen[1]}"
+
+        # Move entity from structure zone to parent overworld zone
+        if subscreen_key in self.screen_entities and entity_id in self.screen_entities[subscreen_key]:
+            self.screen_entities[subscreen_key].remove(entity_id)
+
+        if parent_key not in self.screen_entities:
+            self.screen_entities[parent_key] = []
+        if entity_id not in self.screen_entities[parent_key]:
+            self.screen_entities[parent_key].append(entity_id)
+
+        # Restore entity location to parent overworld zone
+        entity.screen_x = parent_screen[0]
+        entity.screen_y = parent_screen[1]
         entity.in_subscreen = False
         entity.subscreen_key = None
         entity.last_subscreen_change_tick = self.tick
 
-        # Position near structure (find nearby grass/dirt)
-        exit_found = False
-        if screen_key in self.screens:
-            screen = self.screens[screen_key]
+        # Position near the door cell in the parent zone
+        door_x, door_y = parent_cell
+        if parent_key in self.screens:
+            screen = self.screens[parent_key]
             for dy in range(-2, 3):
                 for dx in range(-2, 3):
-                    check_x = entity.x + dx
-                    check_y = entity.y + dy
+                    check_x = door_x + dx
+                    check_y = door_y + dy
                     if 0 <= check_x < GRID_WIDTH and 0 <= check_y < GRID_HEIGHT:
                         cell = screen['grid'][check_y][check_x]
                         if cell in ['GRASS', 'DIRT', 'SAND', 'STONE'] and not CELL_TYPES[cell].get('solid', False):
@@ -929,9 +935,8 @@ class NpcAiMovementMixin:
                             entity.y = check_y
                             entity.world_x = float(check_x)
                             entity.world_y = float(check_y)
-                            exit_found = True
 
-                            # Add exit area to memory lane
+                            # Add exit area to memory lane to prevent immediate re-entry
                             if not hasattr(entity, 'memory_lane'):
                                 entity.memory_lane = []
                             for mdx in range(-1, 2):
@@ -944,10 +949,8 @@ class NpcAiMovementMixin:
                                 print(f"{entity.name} exited to overworld")
                             return
 
-        # Fallback if no exit found
-        if not exit_found:
-            entity.world_x = float(entity.x)
-            entity.world_y = float(entity.y)
+        entity.world_x = float(entity.x)
+        entity.world_y = float(entity.y)
 
     def update_subscreen_npc_behavior(self, entity_id, entity):
         """Handle NPC behavior when in house/cave subscreens - healing and exit logic"""
@@ -1046,14 +1049,18 @@ class NpcAiMovementMixin:
 
         # Try CAVE lookup (unified cave system per zone)
         sub_key = self.zone_cave_systems.get(screen_key)
-        if sub_key and target_id in self.subscreen_entities.get(sub_key, []):
+        if sub_key and target_id in self.screen_entities.get(sub_key, []):
             return True
 
-        # Try house/MINESHAFT lookup (by entrance coordinates stored on subscreen)
+        # Try house/MINESHAFT lookup (match by parent_screen + parent_cell)
+        try:
+            px, py = int(screen_key.split(',')[0]), int(screen_key.split(',')[1])
+        except (ValueError, IndexError):
+            return False
         for key, sub in self.subscreens.items():
-            if (sub.get('entrance_x') == check_x and sub.get('entrance_y') == check_y and
-                    f"{entity.screen_x},{entity.screen_y}" in key):
-                if target_id in self.subscreen_entities.get(key, []):
+            if (sub.get('parent_cell') == (check_x, check_y) and
+                    sub.get('parent_screen') == (px, py)):
+                if target_id in self.screen_entities.get(key, []):
                     return True
 
         return False
@@ -1441,7 +1448,7 @@ class NpcAiMovementMixin:
                 if sub_key is None:
                     continue
 
-                for other_id in self.subscreen_entities.get(sub_key, []):
+                for other_id in self.screen_entities.get(sub_key, []):
                     if other_id not in self.entities:
                         continue
                     other = self.entities[other_id]
@@ -1483,7 +1490,7 @@ class NpcAiMovementMixin:
         # Check if the PLAYER is a valid target (hostile entities target player)
         if entity_is_hostile:
             player_zone = f"{self.player['screen_x']},{self.player['screen_y']}"
-            if screen_key == player_zone and not self.player.get('in_subscreen'):
+            if screen_key == player_zone:
                 player_dist = abs(entity.x - self.player['x']) + abs(entity.y - self.player['y'])
                 if player_dist < closest_dist:
                     closest_dist = player_dist
@@ -1572,7 +1579,7 @@ class NpcAiMovementMixin:
         if target == 'player':
             player_zone = f"{self.player['screen_x']},{self.player['screen_y']}"
             entity_zone = f"{entity.screen_x},{entity.screen_y}"
-            if player_zone != entity_zone or self.player.get('in_subscreen'):
+            if player_zone != entity_zone:
                 return float('inf')
             return abs(entity.x - self.player['x']) + abs(entity.y - self.player['y'])
 

@@ -11,19 +11,14 @@ class NpcAiMixin:
     """Mixin class for NPC AI. Mixed into Game via multiple inheritance."""
 
     def _same_context_as_player(self, entity):
-        """Return True when entity and player share the same zone/subscreen context.
+        """Return True when entity and player share the same zone context.
 
-        Replaces the old 'screen_key == player_zone and not player.in_subscreen'
-        pattern which broke when entities (and screen_key) moved to subscreen keys.
+        Unified zone system: player and entity screen_x/y both reflect virtual coords
+        when inside structure zones, so a simple zone key comparison suffices.
         """
-        player_in_sub = self.player.get('in_subscreen', False)
-        if player_in_sub:
-            return (entity.in_subscreen and
-                    entity.subscreen_key == self.player.get('subscreen_key'))
-        else:
-            return (not entity.in_subscreen and
-                    entity.screen_x == self.player['screen_x'] and
-                    entity.screen_y == self.player['screen_y'])
+        player_zone = f"{self.player['screen_x']},{self.player['screen_y']}"
+        entity_zone = f"{entity.screen_x},{entity.screen_y}"
+        return entity_zone == player_zone
 
     # ══════════════════════════════════════════════════════════════════════
     # ACTION PRIMITIVES — Reusable building blocks for NPC and player actions
@@ -60,13 +55,9 @@ class NpcAiMixin:
         # UNIFIED AI STATE SYSTEM - Update entity AI state based on parameters
         self.update_entity_ai_state(entity_id, entity)
         
-        # Get screen_key for execution.
-        # Entities in subscreens must use the subscreen key so grid lookups
-        # (move_toward_position, action checks, etc.) use the right map.
-        if entity.in_subscreen and entity.subscreen_key:
-            screen_key = entity.subscreen_key
-        else:
-            screen_key = f"{entity.screen_x},{entity.screen_y}"
+        # screen_key is always the entity's current zone — virtual coords for
+        # structure zones, real coords for overworld zones.
+        screen_key = f"{entity.screen_x},{entity.screen_y}"
         
         # EXECUTE BEHAVIOR BASED ON STATE
         if hasattr(entity, 'ai_state'):
@@ -413,12 +404,9 @@ class NpcAiMixin:
             # Overcrowding: keepers never leave; everyone else may be pushed out
             # when the structure is too full. Chance = local_pop * 10% per update.
             if not getattr(entity, 'keeper', False):
-                subscreen_key = entity.subscreen_key or ''
+                zone_key = f"{entity.screen_x},{entity.screen_y}"
                 local_pop = len([
-                    eid for eid in (
-                        self.subscreen_entities.get(subscreen_key, []) +
-                        self.screen_entities.get(subscreen_key, [])
-                    )
+                    eid for eid in self.screen_entities.get(zone_key, [])
                     if eid in self.entities and self.entities[eid].is_alive()
                 ])
                 if local_pop > 3 and random.random() < local_pop * 0.10:
@@ -428,9 +416,11 @@ class NpcAiMixin:
             if not wants_to_exit and entity.type in ('GUARD', 'WARRIOR') \
                     and entity.subscreen_key in self.subscreens:
                 sub = self.subscreens[entity.subscreen_key]
-                entrance_x = sub.get('entrance_x', GRID_WIDTH // 2)
-                entrance_y = sub.get('entrance_y', GRID_HEIGHT // 2)
-                overworld_key = f"{entity.screen_x},{entity.screen_y}"
+                parent_screen = sub.get('parent_screen')
+                parent_cell = sub.get('parent_cell', (GRID_WIDTH // 2, GRID_HEIGHT // 2))
+                entrance_x, entrance_y = parent_cell
+                overworld_key = (f"{parent_screen[0]},{parent_screen[1]}"
+                                 if parent_screen else f"{entity.screen_x},{entity.screen_y}")
                 for oid in self.screen_entities.get(overworld_key, []):
                     if oid in self.entities:
                         other = self.entities[oid]
@@ -454,7 +444,8 @@ class NpcAiMixin:
             # If still in subscreen after exit attempt, do subscreen behavior
             if entity.in_subscreen:
                 # Miners mine in caves, peaceful NPCs rest in houses
-                if entity.type == 'MINER' and entity.subscreen_key and 'cave' in entity.subscreen_key.lower():
+                zone_biome = self.screens.get(f"{entity.screen_x},{entity.screen_y}", {}).get('biome', '')
+                if entity.type == 'MINER' and zone_biome == 'CAVE':
                     behavior_config = entity.props.get('behavior_config')
                     if behavior_config:
                         self.execute_entity_behavior(entity, behavior_config)
@@ -1618,14 +1609,9 @@ class NpcAiMixin:
         if hasattr(entity, 'ai_state') and entity.ai_state in ('fleeing', 'flee'):
             return  # Fleeing entities don't attack
         
-        # Use subscreen-aware screen_key (mirrors AI setup at lines 63-69)
-        entity_in_subscreen = getattr(entity, 'in_subscreen', False)
-        if entity_in_subscreen and entity.subscreen_key:
-            screen_key = entity.subscreen_key
-            entity_lookup = self.subscreen_entities
-        else:
-            screen_key = f"{entity.screen_x},{entity.screen_y}"
-            entity_lookup = self.screen_entities
+        # Unified zone system: screen_x/y always reflects current zone (incl. structure virtual coords)
+        screen_key = f"{entity.screen_x},{entity.screen_y}"
+        entity_lookup = self.screen_entities
 
         closest_enemy = None
         closest_enemy_id = None
