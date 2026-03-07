@@ -1677,10 +1677,12 @@ class GameCoreMixin:
         structure = self.structures[structure_key]
         self.current_screen = structure
 
-        # Position player at entrance
+        # Position player at entrance — snap world coords to prevent interpolation slide
         entrance = structure['entrance']
         self.player['x'] = entrance[0]
         self.player['y'] = entrance[1]
+        self.player['world_x'] = float(entrance[0])
+        self.player['world_y'] = float(entrance[1])
 
         print(f"Entered {structure_type}!")
         self._teleport_followers_with_player()
@@ -1745,11 +1747,13 @@ class GameCoreMixin:
         else:
             self.current_screen = self.generate_screen(parent_screen_x, parent_screen_y)
         
-        # Restore player to parent overworld zone
+        # Restore player to parent overworld zone — snap world coords to prevent interpolation slide
         self.player['x'] = parent_cell_x
         self.player['y'] = parent_cell_y
         self.player['screen_x'] = parent_screen_x
         self.player['screen_y'] = parent_screen_y
+        self.player['world_x'] = float(parent_cell_x)
+        self.player['world_y'] = float(parent_cell_y)
 
         # Clear structure state
         self.player['in_structure'] = False
@@ -1800,11 +1804,13 @@ class GameCoreMixin:
         deeper_structure = self.structures[deeper_key]
         self.current_screen = deeper_structure
 
-        # Position player at entrance
+        # Position player at entrance — snap world coords to prevent interpolation slide
         entrance = deeper_structure['entrance']
         self.player['x'] = entrance[0]
         self.player['y'] = entrance[1]
-        
+        self.player['world_x'] = float(entrance[0])
+        self.player['world_y'] = float(entrance[1])
+
         print(f"Descended to cave level {new_depth}!")
         self._teleport_followers_with_player()
 
@@ -1862,11 +1868,13 @@ class GameCoreMixin:
         upper_structure = self.structures[upper_level_key]
         self.current_screen = upper_structure
 
-        # Position player at entrance
+        # Position player at entrance — snap world coords to prevent interpolation slide
         entrance = upper_structure['entrance']
         self.player['x'] = entrance[0]
         self.player['y'] = entrance[1]
-        
+        self.player['world_x'] = float(entrance[0])
+        self.player['world_y'] = float(entrance[1])
+
         print(f"Ascended to cave level {target_depth}!")
         self._teleport_followers_with_player()
 
@@ -1904,6 +1912,8 @@ class GameCoreMixin:
                                    else self.generate_screen(psx, psy))
             self.player['x'] = ox
             self.player['y'] = oy
+            self.player['world_x'] = float(ox)
+            self.player['world_y'] = float(oy)
             self.player['screen_x'] = psx
             self.player['screen_y'] = psy
             self.player['in_structure'] = False
@@ -1916,8 +1926,12 @@ class GameCoreMixin:
         house_sub = self.structures.get(via_key)
         if house_sub:
             self.current_screen = house_sub
-            self.player['x'] = via_pos[0] if via_pos else house_sub['entrance'][0]
-            self.player['y'] = via_pos[1] if via_pos else house_sub['entrance'][1]
+            px = via_pos[0] if via_pos else house_sub['entrance'][0]
+            py = via_pos[1] if via_pos else house_sub['entrance'][1]
+            self.player['x'] = px
+            self.player['y'] = py
+            self.player['world_x'] = float(px)
+            self.player['world_y'] = float(py)
             self.player['in_structure'] = True
             self.player['structure_key'] = via_key
             vx, vy = map(int, via_key.split(','))
