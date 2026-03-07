@@ -233,12 +233,8 @@ class CellsMixin:
                     if random.random() < min(1.0, TREE_CROWD_DECAY_RATE * _tp):
                         new_grid[y][x] = 'GRASS'
 
-                # Tree overcrowding death (4+ tree neighbors)
-                elif cell.startswith('TREE') and tree_count >= 4:
-                    if random.random() < min(1.0, TREE_DECAY_RATE * _tp):
-                        new_grid[y][x] = 'GRASS'
-
-                # Tree thinning (any adjacent tree — gradual natural thinning)
+                # Tree crowding decay — any adjacent tree triggers decay chance
+                # Naturally produces checkerboard spacing as isolated trees survive
                 elif cell.startswith('TREE') and tree_count >= 1:
                     if random.random() < min(1.0, TREE_CROWD_DECAY_RATE * _tp):
                         new_grid[y][x] = 'GRASS'
