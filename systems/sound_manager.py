@@ -63,13 +63,21 @@ class SoundManager:
         return pool
 
     def _load_all(self):
-        self.sounds['footstep_dirt']  = self._load_pool('footstep_dirt')
-        self.sounds['footstep_water'] = self._load_pool('footstep_water')
-        self.sounds['pickup']         = self._load_pool('pickup')
-        self.sounds['bird']           = self._load_pool('bird',    'sounds/ambient')
-        self.sounds['cricket']        = self._load_pool('cricket', 'sounds/ambient')
+        self.sounds['footstep_dirt']    = self._load_pool('footstep_dirt')
+        self.sounds['footstep_water']   = self._load_pool('footstep_water')
+        self.sounds['pickup']           = self._load_pool('pickup')
+        self.sounds['sword_swing']      = self._load_pool('sword_swing')
+        self.sounds['bird']             = self._load_pool('bird',    'sounds/ambient')
+        self.sounds['cricket']          = self._load_pool('cricket', 'sounds/ambient')
         # Single sounds
-        for key, path in [('menu_select', 'sounds/sfx/menu_select.wav')]:
+        for key, path in [
+            ('menu_select',      'sounds/sfx/menu_select.wav'),
+            ('inventory_open',   'sounds/sfx/inventory_open_0.wav'),
+            ('equip_sword',      'sounds/sfx/equip_sword_0.wav'),
+            ('quest_received',   'sounds/sfx/quest_received_0.ogg'),
+            ('quest_complete',   'sounds/sfx/quest_complete_0.wav'),
+            ('enter_structure',  'sounds/sfx/enter_structure_0.wav'),
+        ]:
             if os.path.exists(path):
                 try:
                     self.sounds[key] = pygame.mixer.Sound(path)
@@ -140,6 +148,27 @@ class SoundManager:
 
     def on_menu_select(self):
         self.play_sfx('menu_select')
+
+    def on_inventory_open(self):
+        self.play_sfx('inventory_open')
+
+    def on_inventory_select(self):
+        self.play_sfx('menu_select')
+
+    def on_equip_sword(self):
+        self.play_sfx('equip_sword')
+
+    def on_attack(self):
+        self.play_sfx('sword_swing')
+
+    def on_quest_received(self):
+        self.play_sfx('quest_received')
+
+    def on_quest_complete(self):
+        self.play_sfx('quest_complete')
+
+    def on_enter_structure(self):
+        self.play_sfx('enter_structure')
 
     # ------------------------------------------------------------------
     # Per-tick update (music switching + periodic ambient)

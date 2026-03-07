@@ -545,6 +545,7 @@ class LoreEngineMixin:
                 tag = " (autopilot)" if self.autopilot else ""
                 print(f"Quest [{self.active_quest}] completed{tag}! +{xp_reward} XP")
             quest.complete()
+            self.sound.on_quest_complete()
 
     def update_quests(self):
         """Update quest system — assign targets, check completion, run lore events."""
@@ -627,6 +628,7 @@ class LoreEngineMixin:
                 quest.target_info = f"Return to {giver_name}"
                 qt_name = QUEST_TYPES.get(quest.quest_type, {}).get('name', quest.quest_type)
                 print(f"NPC quest [{qt_name}] complete! Return to {giver_name} for XP.")
+                self.sound.on_quest_complete()
 
     def _npc_quest_zone(self, quest):
         """Return the target zone key for a quest, trying all possible sources."""

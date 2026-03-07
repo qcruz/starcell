@@ -992,18 +992,33 @@ class GameCoreMixin:
                         print(f"Friendly Fire: {state}")
                     elif event.key == pygame.K_c:
                         # Toggle crafting screen
+                        _was_open = 'crafting' in self.inventory.open_menus
                         self.inventory.toggle_menu('crafting')
+                        if not _was_open:
+                            self.sound.on_inventory_open()
                     elif event.key == pygame.K_x:
                         # Attempt to craft with selected items
                         self.attempt_craft()
                     elif event.key == pygame.K_i:
+                        _was_open = 'items' in self.inventory.open_menus
                         self.inventory.toggle_menu('items')
+                        if not _was_open:
+                            self.sound.on_inventory_open()
                     elif event.key == pygame.K_t:
+                        _was_open = 'tools' in self.inventory.open_menus
                         self.inventory.toggle_menu('tools')
+                        if not _was_open:
+                            self.sound.on_inventory_open()
                     elif event.key == pygame.K_m:
+                        _was_open = 'magic' in self.inventory.open_menus
                         self.inventory.toggle_menu('magic')
+                        if not _was_open:
+                            self.sound.on_inventory_open()
                     elif event.key == pygame.K_f:
+                        _was_open = 'followers' in self.inventory.open_menus
                         self.inventory.toggle_menu('followers')
+                        if not _was_open:
+                            self.sound.on_inventory_open()
                     elif event.key == pygame.K_e:
                         # Pick up cell or items from target
                         self.pickup_cell_or_items()
@@ -1220,6 +1235,7 @@ class GameCoreMixin:
         if success:
             self.npc_quests.append(NpcQuestSlot(npc_id, quest))
             self.active_npc_quest_npc_id = npc_id  # auto-select as active NPC quest
+            self.sound.on_quest_received()
             q_name = QUEST_TYPES[quest_type]['name']
             print(f"Received quest [{q_name}] from {npc_name}!")
         else:
@@ -1249,6 +1265,10 @@ class GameCoreMixin:
                 else:
                     idx = 0 if direction > 0 else len(names) - 1
                 self.inventory.selected[category] = names[idx]
+                if ITEMS.get(names[idx], {}).get('damage'):
+                    self.sound.on_equip_sword()
+                else:
+                    self.sound.on_inventory_select()
                 break
     
     def move_player(self):
@@ -1615,9 +1635,10 @@ class GameCoreMixin:
         """Player enters a house, cave, or mineshaft"""
         cell = self.current_screen['grid'][cell_y][cell_x]
         structure_type = CELL_TYPES[cell].get('interior_type')
-        
+
         if not structure_type:
             return
+        self.sound.on_enter_structure()
         
         # If entering a MINESHAFT from inside a cave — descend deeper
         if cell == 'MINESHAFT' and self.player.get('in_structure'):

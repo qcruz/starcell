@@ -60,6 +60,7 @@ class CombatMixin:
             return False
 
         self.player['last_attack_tick'] = self.tick
+        self.sound.on_attack()
 
         # Get target cell
         target = self.get_target_cell()
