@@ -1168,9 +1168,9 @@ class ZonesMixin:
             new_biome = 'DESERT'
         elif stone_pct > 0.3:
             new_biome = 'MOUNTAINS'
-        elif grass_pct > 0.5 and tree_pct < 0.1:
+        elif grass_pct > 0.5 and tree_pct < 0.05:
             new_biome = 'PLAINS'
-        elif grass_pct > 0.3 and tree_pct > 0.15:
+        elif grass_pct > 0.3 and tree_pct > 0.1:
             new_biome = 'FOREST'
 
         if new_biome != current_biome:
