@@ -291,7 +291,7 @@ class Watchdog:
         entity_in_structures: dict = {}
         for sub_key, sub_list in structure_entities.items():
             for eid in sub_list:
-                entity_in_subs.setdefault(eid, []).append(sub_key)
+                entity_in_structures.setdefault(eid, []).append(sub_key)
 
         for eid, entity in game.entities.items():
             entity_in_structure_flag = getattr(entity, 'in_structure', False)
