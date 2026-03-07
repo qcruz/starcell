@@ -2131,7 +2131,7 @@ class NpcAiMixin:
                 return
             screen = self.subscreens[screen_key]
         else:
-            screen_key = entity.screen_key
+            screen_key = f"{entity.screen_x},{entity.screen_y}"
             if screen_key not in self.screens:
                 return
             screen = self.screens[screen_key]
@@ -2364,7 +2364,7 @@ class NpcAiMixin:
     
     def farmer_behavior(self, entity):
         """Farmer AI: harvest crops, till soil, plant crops"""
-        screen_key = entity.screen_key
+        screen_key = f"{entity.screen_x},{entity.screen_y}"
         if screen_key not in self.screens:
             return
         
@@ -2420,7 +2420,7 @@ class NpcAiMixin:
     
     def lumberjack_behavior(self, entity):
         """Lumberjack AI: chop trees, build houses"""
-        screen_key = entity.screen_key
+        screen_key = f"{entity.screen_x},{entity.screen_y}"
         if screen_key not in self.screens:
             return
         
@@ -2526,7 +2526,7 @@ class NpcAiMixin:
     
     def guard_behavior(self, entity):
         """Guard AI: Patrol center lanes, build cobblestone, hunt hostiles"""
-        screen_key = entity.screen_key
+        screen_key = f"{entity.screen_x},{entity.screen_y}"
         if screen_key not in self.screens:
             return
         
@@ -2612,7 +2612,7 @@ class NpcAiMixin:
     
     def trader_behavior(self, entity):
         """Trader AI: Travel between zone exits, build paths (cellular automata)"""
-        screen_key = entity.screen_key
+        screen_key = f"{entity.screen_x},{entity.screen_y}"
         if screen_key not in self.screens:
             return
         
@@ -2685,7 +2685,7 @@ class NpcAiMixin:
         # Already inside a structure — don't scan overworld grid or re-enter
         if entity.in_subscreen:
             return False
-        screen_key = entity.screen_key
+        screen_key = f"{entity.screen_x},{entity.screen_y}"
         if screen_key not in self.screens:
             return False
         
@@ -2783,7 +2783,7 @@ class NpcAiMixin:
         
         if logic_type == 'settlement':
             # Settlement logic - transform based on zone needs
-            screen_key = entity.screen_key
+            screen_key = f"{entity.screen_x},{entity.screen_y}"
             if screen_key not in self.screen_entities:
                 return False
             

@@ -362,14 +362,19 @@ class SaveLoadMixin:
                 if subscreen_key in self.subscreens:
                     self.current_screen = self.subscreens[subscreen_key]
                 else:
-                    # Subscreen doesn't exist, exit player to parent
+                    # Subscreen doesn't exist — exit player to parent overworld zone.
+                    # player['screen_x/y'] may be virtual coords; use subscreen_parent instead.
+                    parent_info = self.player.get('subscreen_parent')
+                    if parent_info and len(parent_info) >= 2:
+                        parent_x, parent_y = parent_info[0], parent_info[1]
+                    else:
+                        parent_x, parent_y = 0, 0
                     self.player['in_subscreen'] = False
                     self.player['subscreen_key'] = None
                     self.player['subscreen_parent'] = None
-                    self.current_screen = self.generate_screen(
-                        self.player['screen_x'],
-                        self.player['screen_y']
-                    )
+                    self.player['screen_x'] = parent_x
+                    self.player['screen_y'] = parent_y
+                    self.current_screen = self.generate_screen(parent_x, parent_y)
             else:
                 self.current_screen = self.generate_screen(
                     self.player['screen_x'],

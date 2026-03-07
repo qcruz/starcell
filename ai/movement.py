@@ -455,7 +455,7 @@ class NpcAiMovementMixin:
         if self.tick - getattr(entity, 'last_zone_change_tick', -9999) < NPC_SEAMLESS_CROSS_COOLDOWN:
             return
 
-        screen_key = entity.screen_key
+        screen_key = f"{entity.screen_x},{entity.screen_y}"
         if screen_key not in self.screens:
             return
 
@@ -519,7 +519,7 @@ class NpcAiMovementMixin:
             return
 
         # Transfer between screen entity lists
-        old_sk = entity.screen_key
+        old_sk = f"{entity.screen_x},{entity.screen_y}"
         if old_sk in self.screen_entities and entity_id in self.screen_entities[old_sk]:
             self.screen_entities[old_sk].remove(entity_id)
         self.screen_entities[new_screen_key].append(entity_id)
@@ -541,7 +541,7 @@ class NpcAiMovementMixin:
 
     def move_entity_towards(self, entity, target_x, target_y):
         """Move entity one step towards target using memory_lane pathfinding"""
-        screen_key = entity.screen_key
+        screen_key = f"{entity.screen_x},{entity.screen_y}"
         if screen_key not in self.screens:
             return
 
@@ -804,34 +804,35 @@ class NpcAiMovementMixin:
         subscreen_type = CELL_TYPES[entrance_type]['subscreen_type']
 
         if entrance_type == 'CAVE':
-            # Use unified cave system
-            zone_key = f"{entity.screen_x},{entity.screen_y}"
+            # Use unified cave system — key by parent overworld coords, not entity's current
+            # coords which may be virtual if entity is already inside a structure
+            if entity.in_subscreen:
+                sub_data = self.subscreens.get(entity.subscreen_key, {})
+                parent = sub_data.get('parent_screen', (entity.screen_x, entity.screen_y))
+                zone_key = f"{parent[0]},{parent[1]}"
+            else:
+                zone_key = f"{entity.screen_x},{entity.screen_y}"
             if zone_key in self.zone_cave_systems:
                 subscreen_key = self.zone_cave_systems[zone_key]
             else:
-                # Create new cave system for this zone
-                subscreen_key = self.generate_subscreen(entity.screen_x, entity.screen_y, entrance_x, entrance_y, 'CAVE')
+                px, py = map(int, zone_key.split(','))
+                subscreen_key = self.generate_subscreen(px, py, entrance_x, entrance_y, 'CAVE')
                 self.zone_cave_systems[zone_key] = subscreen_key
         else:
             # House interior - check if this specific house already has an interior
-            temp_key = f"house_{entity.screen_x}_{entity.screen_y}_{entrance_x}_{entrance_y}"
-
-            # Search for existing house interior at this location
+            # Use metadata comparison (parent_screen + parent_cell) — old string key format is gone
+            parent_coords = (entity.screen_x, entity.screen_y)
             subscreen_key = None
-            for key in self.subscreens.keys():
-                if temp_key in key or (f"{entity.screen_x},{entity.screen_y}:HOUSE_INTERIOR" in key and
-                                       self.subscreens[key].get('entrance_x') == entrance_x and
-                                       self.subscreens[key].get('entrance_y') == entrance_y):
+            for key, sub in self.subscreens.items():
+                if (sub.get('parent_screen') == parent_coords and
+                        sub.get('parent_cell') == (entrance_x, entrance_y) and
+                        sub.get('type') == 'HOUSE_INTERIOR'):
                     subscreen_key = key
                     break
 
             if not subscreen_key:
                 # Create new house interior
                 subscreen_key = self.generate_subscreen(entity.screen_x, entity.screen_y, entrance_x, entrance_y, 'HOUSE_INTERIOR')
-                # Store entrance location for future reference
-                if subscreen_key in self.subscreens:
-                    self.subscreens[subscreen_key]['entrance_x'] = entrance_x
-                    self.subscreens[subscreen_key]['entrance_y'] = entrance_y
 
         # Move entity into structure zone — unified registry
         if screen_key in self.screen_entities and entity_id in self.screen_entities[screen_key]:
@@ -1439,9 +1440,10 @@ class NpcAiMovementMixin:
                     sub_key = self.zone_cave_systems.get(screen_key)
                 else:
                     sub_key = None
+                    parent_coords = (entity.screen_x, entity.screen_y)
                     for key, sub in self.subscreens.items():
-                        if (sub.get('entrance_x') == cx and sub.get('entrance_y') == cy and
-                                f"{entity.screen_x},{entity.screen_y}" in key):
+                        if (sub.get('parent_cell') == (cx, cy) and
+                                sub.get('parent_screen') == parent_coords):
                             sub_key = key
                             break
 
