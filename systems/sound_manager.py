@@ -1,0 +1,165 @@
+"""
+SoundManager — centralizes all audio playback for StarCell.
+
+Gracefully degrades: if pygame.mixer fails to init or any file is missing,
+all methods return silently and the game continues without audio.
+"""
+
+import pygame
+import random
+import os
+
+
+class SoundManager:
+    """Manages music, SFX, and ambient audio."""
+
+    MUSIC = {
+        'menu':            'sounds/music/menu.wav',
+        'overworld_day':   'sounds/music/overworld_day.mp3',
+        'overworld_night': 'sounds/music/overworld_night.wav',
+        'cave':            'sounds/music/cave.ogg',
+    }
+
+    def __init__(self):
+        try:
+            pygame.mixer.init()
+        except Exception as e:
+            print(f"[Sound] mixer init failed: {e}")
+            self._ok = False
+            return
+        self._ok = True
+        pygame.mixer.set_num_channels(8)
+        self.music_volume   = 0.35
+        self.sfx_volume     = 0.65
+        self.ambient_volume = 0.25
+        self.current_music  = None
+        self._ambient_ch    = pygame.mixer.Channel(7)
+        self._next_bird_tick    = random.randint(400, 900)
+        self._next_cricket_tick = random.randint(800, 1800)
+        self.sounds = {}
+        self._load_all()
+
+    # ------------------------------------------------------------------
+    # Loading helpers
+    # ------------------------------------------------------------------
+
+    def _load_pool(self, prefix, sfx_dir='sounds/sfx'):
+        """Load prefix_0, prefix_1, … until a file is missing."""
+        pool = []
+        i = 0
+        while True:
+            path = f'{sfx_dir}/{prefix}_{i}.wav'
+            if not os.path.exists(path):
+                path = f'{sfx_dir}/{prefix}_{i}.ogg'
+                if not os.path.exists(path):
+                    break
+            try:
+                pool.append(pygame.mixer.Sound(path))
+            except Exception:
+                pass
+            i += 1
+        return pool
+
+    def _load_all(self):
+        self.sounds['footstep_dirt']  = self._load_pool('footstep_dirt')
+        self.sounds['footstep_water'] = self._load_pool('footstep_water')
+        self.sounds['pickup']         = self._load_pool('pickup')
+        self.sounds['bird']           = self._load_pool('bird',    'sounds/ambient')
+        self.sounds['cricket']        = self._load_pool('cricket', 'sounds/ambient')
+        # Single sounds
+        for key, path in [('menu_select', 'sounds/sfx/menu_select.wav')]:
+            if os.path.exists(path):
+                try:
+                    self.sounds[key] = pygame.mixer.Sound(path)
+                except Exception:
+                    pass
+
+        loaded = {k: (len(v) if isinstance(v, list) else 1)
+                  for k, v in self.sounds.items() if v}
+        print(f"[Sound] loaded: {loaded}")
+
+    # ------------------------------------------------------------------
+    # Playback API
+    # ------------------------------------------------------------------
+
+    def play_sfx(self, key):
+        if not self._ok:
+            return
+        pool = self.sounds.get(key)
+        if not pool:
+            return
+        snd = random.choice(pool) if isinstance(pool, list) else pool
+        snd.set_volume(self.sfx_volume)
+        snd.play()
+
+    def play_music(self, track_key, fade_ms=1500):
+        if not self._ok or track_key == self.current_music:
+            return
+        path = self.MUSIC.get(track_key)
+        if not path or not os.path.exists(path):
+            return
+        pygame.mixer.music.fadeout(fade_ms)
+        pygame.mixer.music.load(path)
+        pygame.mixer.music.set_volume(self.music_volume)
+        pygame.mixer.music.play(-1, fade_ms=fade_ms)
+        self.current_music = track_key
+
+    def stop_music(self, fade_ms=1000):
+        if self._ok:
+            pygame.mixer.music.fadeout(fade_ms)
+        self.current_music = None
+
+    # ------------------------------------------------------------------
+    # Convenience hooks
+    # ------------------------------------------------------------------
+
+    def on_footstep(self, cell_type):
+        if cell_type in ('WATER', 'DEEP_WATER'):
+            self.play_sfx('footstep_water')
+        else:
+            self.play_sfx('footstep_dirt')
+
+    def on_pickup(self):
+        self.play_sfx('pickup')
+
+    def on_menu_select(self):
+        self.play_sfx('menu_select')
+
+    # ------------------------------------------------------------------
+    # Per-tick update (music switching + periodic ambient)
+    # ------------------------------------------------------------------
+
+    def update(self, tick, state, is_night, in_structure, cell_at_player):
+        if not self._ok:
+            return
+
+        # Music context switching
+        if state == 'menu':
+            self.play_music('menu')
+        elif state == 'playing':
+            if in_structure:
+                self.play_music('cave')
+            elif is_night:
+                self.play_music('overworld_night')
+            else:
+                self.play_music('overworld_day')
+
+        # Birds — outdoors daytime only
+        if state == 'playing' and not in_structure and not is_night:
+            if tick >= self._next_bird_tick:
+                pool = self.sounds.get('bird', [])
+                if pool:
+                    snd = random.choice(pool)
+                    snd.set_volume(self.ambient_volume)
+                    self._ambient_ch.play(snd)
+                self._next_bird_tick = tick + random.randint(400, 1000)
+
+        # Crickets/frogs — outdoors nighttime only, less frequent
+        if state == 'playing' and not in_structure and is_night:
+            if tick >= self._next_cricket_tick:
+                pool = self.sounds.get('cricket', [])
+                if pool:
+                    snd = random.choice(pool)
+                    snd.set_volume(self.ambient_volume)
+                    self._ambient_ch.play(snd)
+                self._next_cricket_tick = tick + random.randint(900, 2000)

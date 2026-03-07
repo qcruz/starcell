@@ -32,6 +32,7 @@ import json
 import os
 
 # Initialize Pygame
+pygame.mixer.pre_init(44100, -16, 2, 512)
 pygame.init()
 
 # Constants

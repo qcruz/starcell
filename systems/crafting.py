@@ -378,6 +378,7 @@ class CraftingMixin:
                 for item_name, count in self.dropped_items[screen_key][cell_key].items():
                     self.inventory.add_item(item_name, count)
                 del self.dropped_items[screen_key][cell_key]
+                self.sound.on_pickup()
                 return
 
         # Pick up the cell EXACTLY as it is
@@ -427,6 +428,7 @@ class CraftingMixin:
         if cell_type in exact_pickup_map:
             item_name = exact_pickup_map[cell_type]
             self.inventory.add_item(item_name, 1)
+            self.sound.on_pickup()
 
             # Replace cell: inside structures → restore structure floor, else biome base
             base = self.get_biome_base_cell()

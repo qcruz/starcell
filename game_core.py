@@ -6,6 +6,7 @@ from constants import *
 from entity import *
 from debug.bug_catcher import BugCatcher
 from debug.watchdog import Watchdog
+from systems.sound_manager import SoundManager
 
 class GameCoreMixin:
     """Core game systems. Mixed into Game via multiple inheritance."""
@@ -175,6 +176,9 @@ class GameCoreMixin:
         # Debug / bug-tracking
         self.bug_catcher = BugCatcher()
         self.watchdog = Watchdog(self.bug_catcher)
+
+        # Audio
+        self.sound = SoundManager()
 
         # Last git push timestamp (shown on pause screen)
         try:
@@ -955,8 +959,10 @@ class GameCoreMixin:
             if event.type == pygame.KEYDOWN:
                 if self.state == 'menu':
                     if event.key == pygame.K_1:
+                        self.sound.on_menu_select()
                         self.new_game()
                     elif event.key == pygame.K_2:
+                        self.sound.on_menu_select()
                         self.load_game()
                     elif event.key == pygame.K_q:
                         self.running = False
@@ -1400,6 +1406,9 @@ class GameCoreMixin:
                 self.player['screen_x'] = new_screen_x
                 self.player['screen_y'] = new_screen_y
                 self.player['is_moving'] = True
+                # Footstep sound on successful grid move
+                _stepped_cell = self.current_screen['grid'][new_y][new_x]
+                self.sound.on_footstep(_stepped_cell)
 
     def get_target_cell(self):
         """Get the cell coordinates the player is targeting.
@@ -2138,7 +2147,12 @@ class GameCoreMixin:
             
             if self.state == 'playing':
                 self.move_player()
-                
+
+                # Sound: update music context + ambient each tick
+                _in_struct = bool(self.player.get('in_structure', False))
+                _cell_at_player = self.current_screen['grid'][self.player['y']][self.player['x']] if self.current_screen else None
+                self.sound.update(self.tick, 'playing', self.is_night, _in_struct, _cell_at_player)
+
                 # Check if targeting peaceful NPC for inspection
                 self.check_npc_inspection()
                 
@@ -2189,6 +2203,7 @@ class GameCoreMixin:
                 self.update_death_screen()
                 self.draw_death_screen()
             elif self.state == 'menu':
+                self.sound.update(self.tick, 'menu', False, False, None)
                 self.draw_menu()
             elif self.state == 'paused':
                 self.draw_paused()
