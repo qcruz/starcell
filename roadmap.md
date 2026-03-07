@@ -18,9 +18,39 @@
 
 ---
 
+## Emergent World Vision
+
+StarCell does not script stories — it builds systems that produce them. Every mechanic is a probabilistic rule; the collision of rules over simulated time generates narratives that feel authored even though no one wrote them. The goal is a living world in the tradition of Tolkien and tabletop D&D: a place where history accumulates, factions rise and fall, ancient evils stir in forgotten places, and the player's presence changes the course of events.
+
+The examples below illustrate the kinds of stories the game should naturally produce. None require a designer to write them — they emerge from the same simulation that runs while the player is offline.
+
+---
+
+**The Dragon in the Mountain**
+A rare Dragon spawns deep in a mountain cave zone and begins accumulating loot from every entity it kills. Over decades of simulated time, nearby Trader Keepers spread rumors of vanished caravans and missing miners. Local Warriors level up through goblin raids, slowly building toward a force capable of confronting the beast. The player hears the rumor at a tavern, follows the quest arrow into the highlands, and descends through dungeon levels layered with the bones of previous adventurers, scorched walls, and a hoard chest the dragon has been filling for generations. Lair actions trigger mid-fight — tunnels collapse, rivers of lava rise. Defeating it yields a procedurally named legendary weapon and ends the threat to the trade routes. The empty lair soon attracts something else.
+
+**The Fallen Kingdom**
+A prosperous zone cluster watches its King die of old age, his castle fall into disrepair, and goblin warlords fill the vacuum. The LoreEngine cascades invasion events outward. Over the next century of simulated time, ruin spreads — structures crumble, farmland reverts to scrub, survivors scatter to adjacent zones. When the player arrives they find a broken castle, an Evergael sealing the zone exit, and lore-note fragments in dungeon chests — dispatches, last orders, a royal seal — hinting at the civilization that once stood there. Defeating the Evergael, clearing the Goblin King, and helping a surviving Guard rebuild triggers a zone rebirth. Eventually a new King rises from the rubble, and the domain system registers the land as reclaimed.
+
+**The Lich's Tower**
+A Wizard NPC levels up across centuries, acquires shadow and fire runestones, and reaches the threshold where the Lifetime System's dark-path mechanic converts them into a Lich — an undead archmage immune to hunger and thirst, radiating necrotic damage, commanding skeleton thralls harvested from fallen enemies over the years. They claim a tower as their Keeper domain. The rumor system spreads word across taverns in adjacent zones: *"an ancient sorcerer who cannot die."* The player battles through the thralls, defeats the Lich — and watches it reform. The Phylactery, hidden in a puzzle-locked vault in the dungeon below, is the only permanent solution. Destroying it grants access to centuries of accumulated loot and a Tome of Ancient Magic teaching a unique spell.
+
+**The Underground City**
+Goblin NPCs gradually claim a network of deep cave zones spanning multiple screens. Over generations they build structures, form faction hierarchies, establish trade — a Goblin King emerges, commanders are assigned, surface raids strike on coordinated schedules. The overworld shows only dark cave entrances with faint torchlight below. Descending reveals a hostile subterranean civilization with its own Keeper assignments and dungeon mechanics: locked doors between districts, a throne room boss at the deepest level, loot hoarded from years of surface raids. A Dungeonkeeper NPC at the cave mouth gives depth-based quests — clear a level, retrieve a stolen artifact, assassinate the Warchief. Fully clearing the underground city is a multi-session arc. Afterward, the empty halls become a blank canvas.
+
+**The War of Domains**
+A human kingdom holds three zones; a goblin warlord clan holds two. Both factions need one more zone to form a Domain — a 2×2 block granting powerful persistent bonuses. The resulting territorial conflict plays out autonomously: raids, counter-raids, NPC deaths, structure burning, zone control shifts. The player can observe, intervene on one side, play kingmaker, or fight to hold the pivotal zone themselves. Domain bonuses cascade — the winning faction's NPCs heal faster, resources spawn more frequently, new Warriors emerge. An unopposed domain holder becomes nearly impossible to dislodge without allies, artifacts, or coordinated multi-zone strategy.
+
+**The Ancient Prophecy**
+The LoreEngine generates a Prophecy fragment found in a dungeon chest: *"the sword of starlight sleeps beneath the mountain of the dead, sealed by a lock that has never known a key."* Quest arrows guide the player through three overworld zones and into a cave biome, down through dungeon levels themed around ancient ruins — Mechanica guardians, crumbling inscriptions, puzzle rooms gating each descent. The final boss vault holds an Ancient Mechanica guarding a chest with a procedurally named legendary blade, dual-enchanted with lore text hinting at the civilization that forged it millennia before the player arrived. Carrying it back through the dungeon is a gauntlet of its own. Other factions have heard the same Prophecy.
+
+---
+
 ## Pending Features
 
 ### Structure Progression
+> Structures are the visible record of a zone's history. A thriving zone builds upward — camp to house to fort to castle. A conquered zone burns downward. Over many in-game years, zones accumulate architectural personality: a dwarven hall carved into a mountainside, a goblin-held ruin that was once a human citadel, a lone tower inhabited by something ancient and dangerous.
+
 - [ ] Houses upgrade over time based on zone conditions
 - [ ] Zone with lumberjack + miner → stone house variant
 - [ ] Zone with stone house + blacksmith → fort
@@ -28,31 +58,49 @@
 - [ ] Fort → Castle progression
 - [ ] Castle has interior guards and a King who retreats inside when health is low
 - [ ] When zone is attacked, guards and a commander spawn from the castle (if not already present)
-- [ ] Tavern / Inn structure — NPCs gather here to rest, trade rumors, and recover health; player can sleep here to skip time and restore stats
-- [ ] Temple / Shrine structure — visiting grants a brief buff (cure curse, restore stats, or temporary protection); unique quest giver
+- [ ] Tavern / Inn structure — NPCs gather here to rest, trade rumors, and recover health; player can sleep here to skip time and restore stats; the classic adventurer's hub where Prophecy fragments and dragon rumors circulate
+- [ ] Temple / Shrine structure — visiting grants a brief buff (cure curse, restore stats, or temporary protection); unique quest giver; only location where a Cursed Crown or cursed item can be exorcised
 - [ ] Staircase sprites for dungeon entry/exit transitions — distinct descend and ascend graphics per depth level
+- [ ] Ancient Ruins structure — crumbling remnants of a past civilization; no living NPC residents; contains lore-note items describing the zone's history; spawns Golem and Mechanica guardians; Archaeologist quest giver may take up residence nearby
+- [ ] Crypt — sealed underground structure accessed from a graveyard zone; spawns undead (skeletons, zombies, ghosts, banshees); contains a coffin cell that may house a Vampire Keeper; boss room at the deepest level holds a Lich or Undead Dragon
+- [ ] Underground City — when a goblin or outcast faction claims multiple adjacent cave zones, structures build organically into a subterranean settlement with its own Keeper hierarchy, economy, raid schedules, and dungeon architecture; emergent from existing cave and faction systems; a Moria-scale arc for a dedicated player to clear
+- [ ] Library / Archive — Wizard Keeper assigns research quests; contains readable Tome items teaching rare spells and recording world history; may be guarded by a Beholder or ghost scholars; burning it is a crime against every faction
 
 ---
 
 ### New Entity Types
 
 **Hostile / Rare**
-- [ ] Rare enemy type variants (TBD — design pass needed)
-- [ ] Golem (stone) — very slow, high defense and health, attacks only when attacked; used to block entries
-- [ ] Dragon — rare, powerful boss-tier enemy; guards a hoard; fire breath as ranged attack
-- [ ] Troll — regenerates health slowly; weak to fire
-- [ ] Zombie — slow, spreads contagion on hit; spawns in graveyards
-- [ ] Ghost — passes through walls; immune to physical damage; weak to holy/magic
-- [ ] Werewolf — normal human NPC at day; transforms at night; weak to silver weapons
-- [ ] Mimic — disguised as a chest; attacks when opened
-- [ ] Slime — splits into smaller slimes on death
-- [ ] Witch — ranged spell attacks; curses player on hit
+- [ ] Rare enemy type variants — color and stat variants of existing types; rare spawns with a named title and unique loot (e.g. "Grothak, the Scarred" — a bandit with double health and a unique sword)
+- [ ] Golem (stone) — very slow, high defense and health, attacks only when attacked; guards dungeon entries and ancient ruins; immune to poison and cold
+- [ ] Dragon — rare boss-tier enemy; claims a cave zone as its lair and accumulates a hoard over simulated time; fire breath as ranged attack; the subject of tavern rumors and Prophecy quests
+- [ ] Troll — regenerates health slowly and must be killed quickly; weak to fire (Burning status prevents regen); found under bridges and in swamp biomes
+- [ ] Zombie — slow, spreads Contagion status on hit (gradual stat decay); spawns in graveyards and crypts at night; weak to holy damage
+- [ ] Ghost — passes through walls; immune to physical damage; weak to holy and shadow magic; haunts locations where NPCs died; may speak a final message from the deceased
+- [ ] Werewolf — a human NPC by day, transforms into a beast at night or when attacked; weak to silver weapons; a bitten NPC may gradually transform over subsequent nights
+- [ ] Mimic — disguised as a chest or barrel until the player attempts to open it; drops a real item on defeat as an apology
+- [ ] Slime — splits into two smaller slimes on death; smaller slimes split again; weak to fire and ice; dissolves wooden items on hit
+- [ ] Witch — ranged spell attacks; curses player on hit (halves a random stat); may brew potions and trade them if the player builds sufficient favor
+- [ ] Lich — ancient undead archmage; immune to hunger and thirst; commands skeleton thralls; can only be permanently killed by destroying its Phylactery artifact hidden in a vault below its tower; carries centuries of accumulated loot
+- [ ] Vampire — drains life on each hit; retreats to a coffin structure during daylight and cannot be killed while resting there; transforms into bat form when fleeing; weak to sunlight, silver, and holy; a bitten humanoid NPC may turn over several nights
+- [ ] Banshee — wailing spirit; AoE scream applies Stunned to all living entities in the zone; only spawns at night in zones with gravestone cells; immune to physical damage; weak to holy
+- [ ] Basilisk — petrifying gaze applies Frozen status on eye contact; converts slain victims to gravestone cells; found in cave ruins and deep dungeons; averting gaze (blocking) reduces effect
+- [ ] Treant — awakened ancient tree; neutral and passive unless trees in its zone are being chopped or burned; enormous health pool; slow; drops Ancient Heartwood used in druidic crafting
+- [ ] Hydra — regrows a head (partial heal) on each hit unless killed within a rapid burst; found in swamp and lake-adjacent zones; each active head adds a melee attack per turn; fire damage prevents regeneration
+- [ ] Doppelganger — disguises itself as a nearby NPC or the player until attacked; sows confusion in faction trust; drops a Disguise Kit item on death usable by the player for one-time NPC impersonation
+- [ ] Beholder — floating multi-eyed aberration found only in deep dungeon boss rooms; each eye ray applies a different status effect (stun, sleep, petrify, charm, fear); closing its central eye briefly pauses all rays
+- [ ] Manticore — flying armored beast with a spiked tail ranged attack; patrols mountain and highland zones; drops Spines used in trap crafting and Manticore Hide for high-tier armor
 
 **Boss Enemies**
-- [ ] Boss rooms in deep dungeon levels — unique high-health enemy with special attack patterns and a guaranteed rare loot drop
-- [ ] Dungeon boss has a "lair action" that triggers once per zone update (environmental hazard — falling rocks, rising water, etc.)
-- [ ] Dragonknight — armored dragon-humanoid hybrid; fire breath (ranged AoE) + heavy melee; guards a keep or fort; drops rare armor on defeat
-- [ ] Ancient Mechanica — mechanical golem boss from a lost civilization; shock attacks that chain to nearby metal-armored entities; found in hidden ruins zones; drops unique schematics
+- [ ] Boss rooms in deep dungeon levels — unique high-health named enemy with special attack patterns and a guaranteed rare or artifact loot drop; the dungeon's final encounter
+- [ ] Dungeon boss has a "lair action" that triggers once per zone update — an environmental hazard tied to the theme (falling rocks in a mine, rising lava in a volcanic lair, flooding in a sunken ruin)
+- [ ] Dragonknight — armored dragon-humanoid hybrid; fire breath (ranged AoE) + crushing melee; guards a keep or fort as its Keeper; drops Dragon Scale Armor on defeat; may serve a Dragon lord in adjacent cave zones
+- [ ] Ancient Mechanica — a mechanical construct from a lost civilization; shock attacks that chain between metal-armored entities in the room; found in hidden ruins zones; drops unique schematics teaching advanced crafting recipes and hinting at the civilization that built it
+- [ ] Lich King — supreme undead sovereign commanding an army of undead across multiple zones; its Phylactery protected by a multi-stage puzzle lock requiring keys from three separate dungeon wings; drops the Necronomicon Tome on final, permanent death
+- [ ] Undead Dragon — a slain Dragon reanimated by dark magic; crypt or shadow dungeon boss; breath attack deals necrotic damage instead of fire; immune to poison and cold; its hoard has decomposed into cursed items and rare shadow-element loot
+- [ ] Kraken — ancient sea titan; boss of deep lake zones and flooded dungeon levels; tentacle attacks pull entities into deep water cells; drops Kraken Ink (rare alchemy ingredient) and a fragment of an Ancient Map
+- [ ] Forest Ancient — an enormous Treant boss, oldest entity in the world; guardian of a Sacred Grove artifact; summons smaller Treants mid-combat; peaceful unless the grove is threatened; killing it curses the zone with permanent hostile spawns
+- [ ] Goblin Warchief — elite goblin leader who fortifies a zone into a military stronghold; commands coordinated warband attacks; drops a War Banner artifact on death that boosts all allied NPC morale for one in-game day
 
 **Peaceful / Animals**
 - [ ] Birds
@@ -114,9 +162,28 @@
 - [ ] Poison Flask — throwable; applies poison to target area
 - [ ] Smoke Bomb — throwable; creates obscuring cloud; breaks NPC line of sight
 
-**Artisan Goods** *(Stardew Valley)*
+**Artisan Goods**
 - [ ] Flour (from wheat), Bread (from flour), Cheese (from milk), Cloth (from wool), Honey (from beehive)
-- [ ] Artisan goods have higher trade value than raw materials
+- [ ] Artisan goods have higher trade value than raw materials; a Trader Keeper's shop carries them and updates prices based on supply and demand
+
+**Artifacts & Legendary Items**
+> Artifacts are rare named items with unique properties. Most cannot be crafted — they are found in boss rooms, Prophecy vaults, or ancient ruins. Each has procedurally generated flavor lore text hinting at its origin. Artifacts persist through death (they pass to the zone's loot pool rather than vanishing) and may be stolen by rival NPCs or factions.
+
+- [ ] Phylactery — the soul vessel of a Lich; as long as it exists, the Lich reforms after death; destroying it in a temple fire or magical forge is the only path to permanent victory; finding one without knowing its owner is itself a mystery
+- [ ] Rings of Power — equippable ring-slot items with significant passive effects: Ring of Invisibility (NPCs cannot detect player until attacked), Ring of Regeneration (constant slow HP heal), Ring of Fire Resistance (immunity to Burning status), Ring of the Wyrm (fire immunity and unique dialogue options with Dragon-type entities)
+- [ ] Staff of Power — legendary wizard weapon; amplifies all spell damage and allows two spells to be channeled simultaneously; found only in deep dungeon boss vaults or a Lich's personal chamber
+- [ ] Sword of Stars — the procedurally generated legendary blade pointed to by Prophecy quests; each world generates a unique name and dual enchantment; carrying it into combat causes hostile NPCs to prioritize targeting the player first
+- [ ] Tome of Ancient Magic — readable item; permanently teaches a rare or unique spell not otherwise obtainable; found in a Lich's tower, a Cursed Library, or as a divine temple reward
+- [ ] Crystal Ball — reveals the current state (entity count, structures, dominant faction, weather) of any previously visited zone without traveling there; awarded by a Wizard Keeper as a high-tier quest reward
+- [ ] Dragon Scale Armor — crafted from Dragon Scale drops; the highest armor tier in the game; grants fire resistance; visually distinct; only one can exist per Dragon slain
+- [ ] Philosopher's Stone — legendary crafted artifact; halts player aging permanently; recipe requires components from across multiple biomes and dungeon depths; the ultimate goal of the Lifetime System
+- [ ] Cursed Crown — equipping triggers a global Bounty from every faction; grants massive stat bonuses while worn; cannot be removed without a Temple visit or Identify spell; finding it in a dungeon chest is a dilemma
+- [ ] Ancient Map Fragment — combine three fragments to reveal the location of a hidden dungeon zone on the world map; fragments drop from named bosses and deep chests; each world's fragments point to a different location
+- [ ] War Banner — dropped by a Goblin Warchief; planting it in a zone boosts all allied NPC morale (attack speed, flee resistance) for one full in-game day; rival factions will attempt to steal or destroy it
+- [ ] Elder Scroll — a prophetic document; reading it reveals the next LoreEngine world event (invasion, disaster, dragon awakening) before it triggers; can be traded for maximum faction favor or used to prepare a response
+- [ ] Holy Grail — single use; cures all status effects, restores full health, and removes one year of aging; found only in Temple boss rooms or offered as a divine quest reward after a long favor arc
+- [ ] Moonstone — a rare gem that only appears during a specific moon phase; required in the highest-tier crafting recipes (enchanted armor, legendary weapon components); NPCs will pay extremely high prices for one
+- [ ] Sacred Grove Heart — the artifact guarded by the Forest Ancient; planting it in a zone turns it permanently peaceful and accelerates all plant growth; the most powerful environmental item in the game
 
 **Crafting**
 - [ ] Design pass: new recipes creating natural progression — iron tools, iron armor, potions, artisan goods
@@ -178,15 +245,24 @@
 
 ---
 
-### Dungeon Mechanics *(Zelda / D&D / Minecraft)*
-- [ ] Dungeon rooms with environmental puzzles — pressure plates, levers, locked doors, push-block puzzles
-- [ ] Small keys — found in chests or dropped by enemies; open locked doors in the same dungeon
-- [ ] Boss key — opens boss room door
-- [ ] Dungeon map item — reveals layout of current dungeon level
-- [ ] Compass item — reveals chest locations on dungeon map
-- [ ] Traps — floor spikes, arrow traps, falling ceiling; triggered by pressure plates or tripwires
-- [ ] Hidden rooms — pushable wall cells revealing secret passages *(Zelda)*
-- [ ] Dungeon-specific themes: crypt (undead), mine (golem/ore), ice cave (frozen), volcanic cave (fire)
+### Dungeon Mechanics
+> Dungeons are the beating heart of the D&D experience — dark places full of danger, treasure, and secrets. In StarCell they generate procedurally under the overworld, shaped by the zone's biome and history. A dungeon in a mountain zone feels like a dwarven mine; one under a graveyard feels like a crypt; one under a ruined city feels like a lost civilization. Clearing a dungeon changes the zone above it.
+
+- [ ] Dungeon rooms with environmental puzzles — pressure plates, levers, locked doors, push-block puzzles; a lever that floods a corridor or opens a shortcut
+- [ ] Small keys — found in chests or dropped by miniboss enemies; open locked doors in the same dungeon; running out of keys means backtracking
+- [ ] Boss key — opens the final boss room door; guarded by the dungeon's hardest non-boss encounter
+- [ ] Dungeon map item — reveals the full layout of the current dungeon level; turns a confusing labyrinth into a navigable map
+- [ ] Compass item — shows chest and key locations on the dungeon map; the difference between a thorough run and a rushed one
+- [ ] Traps — floor spikes, arrow traps, falling ceilings; triggered by pressure plates or tripwires; some traps can be disarmed with tools or a high DEX score
+- [ ] Hidden rooms — pushable wall cells revealing secret passages and bonus treasure vaults; some contain lore notes describing what happened here
+- [ ] Dungeon-specific themes — each theme changes cell layout, entity spawns, lighting, traps, and loot tables:
+  - **Crypt** — stone floors, coffin cells, skeleton/zombie/ghost spawns, necrotic traps; Vampire or Lich boss; lore notes are last wills and burial rites
+  - **Ancient Dwarven Hall** — carved stone corridors, ore vein cells, forge structures, Golem sentinels, Mechanica boss guarding an artificer vault; loot is tools and schematics
+  - **Ice Cavern** — frozen floors (slippery movement), ice wall cells, Frozen status hazards from cryo-traps, Blizzard-casting boss; loot includes cold-resistance gear and rare ice-element runestones
+  - **Volcanic Lair** — FIRE cell hazards spread between rooms, lava pool cells (instant damage), Dragonknight or Dragon boss, fire-immune loot including Dragon Scales
+  - **Flooded Ruins** — deep water fills lower levels, Drowned undead spawns, Kraken boss in the deepest chamber; loot includes aquatic materials and Ancient Map Fragments
+  - **Cursed Library** — bookshelf cells as impassable maze walls, ghost scholar spawns, Beholder boss in the reading hall, Tome of Ancient Magic guaranteed in the vault
+  - **Shadow Crypt** — Shadow Realm variant; all entities deal bonus shadow damage; unique shadow-element loot not found in the overworld; accessible only via a portal or the Spectral State spell
 
 ---
 
@@ -248,12 +324,15 @@
 
 ---
 
-### Social & Dialogue *(Stardew Valley / Zelda / D&D)*
-- [ ] Gift giving — offer items to NPCs to increase favor; each NPC has preferred gifts
-- [ ] NPC schedules — NPCs follow daily routines (go to field at dawn, tavern at night, temple on rest day)
-- [ ] NPC birthdays / named calendar events — special interactions on those days
-- [ ] Rumor system — NPCs at taverns share information about zone events, rare loot, and hidden locations
-- [ ] Guild membership — join faction guilds for perks, special quests, and unique items
+### Social & Dialogue
+> The social layer is where the world stops being a simulation and starts feeling like a community. An innkeeper who knows where the dragon sleeps. A farmer who needs the bandits cleared before the harvest. A guard who owes the player a favor and will look the other way. These relationships emerge from simple numerical favor scores, but they produce the texture of a living D&D town.
+
+- [ ] Gift giving — offer items to NPCs to increase favor; each NPC type has preferred gifts (Warriors want weapons, Farmers want seeds, Wizards want runestones); high favor unlocks unique dialogue, quests, and eventually follower loyalty
+- [ ] NPC schedules — NPCs follow daily routines: fields at dawn, tavern at evening, temple on rest days; a zone feels populated differently at noon versus midnight; some NPCs only appear at specific times
+- [ ] NPC birthdays / named calendar events — seasonal celebrations (harvest festival, midsummer feast, midwinter vigil) bring NPCs together; special dialogue, gifting bonuses, and rare item availability on those days
+- [ ] Rumor system — NPCs at taverns share information about world events; a dragon spotted in the mountains, a cave that glows at night, a chest no one has been able to open; rumors are seeds for emergent quest arcs and point toward Prophecy targets
+- [ ] Guild membership — join faction guilds for perks, exclusive quests, and unique items: Fighters' Guild (weapon training, combat bounties), Mages' Guild (spell research, spell tome access), Thieves' Guild (stealth bonuses, fence for stolen goods), Adventurers' Guild (dungeon maps, bounties on named villains)
+- [ ] NPC memory — NPCs remember being attacked, saved, or gifted by the player; a guard the player helped three sessions ago may offer a discount or a rumor; a Wizard the player stole from refuses all trade permanently
 
 ---
 
@@ -303,35 +382,37 @@
 ---
 
 ### Keeper System
-> A **Keeper** is an NPC permanently assigned to a zone, structure, or entity. Unlike normal NPCs, Keepers never leave their assigned domain. They enable unique quest types, shop interactions, and zone-level behaviors tied to their role.
+> A **Keeper** is an NPC permanently assigned to a zone, structure, or domain. Unlike ordinary NPCs, Keepers never leave — they are the zone's permanent personality. A grizzled Tavernkeeper who has seen three kings rise and fall. A Dungeonkeeper who has watched adventurers descend and not return. An Evergael who has stood at the zone's only exit for centuries, offering the same terrible bargain to everyone who finds it.
 
 **Keeper Roles**
-- [ ] **Zonekeeper** — assigned to a whole zone; manages zone defense and resource collection; gives zone-wide quests (clear bandits, plant crops, build structures)
-- [ ] **Tavernkeeper** — assigned to a Tavern structure; sells food and drink; hosts rumors; lets player rent a room to rest
-- [ ] **Dungeonkeeper** — assigned to a dungeon entrance or cave zone; manages dungeon difficulty; gives depth-based quests (clear level, retrieve artifact)
-- [ ] **Towerkeeper** — assigned to a fort or castle tower; trains warriors; sells weapons and armor; gives combat-oriented quests
+- [ ] **Zonekeeper** — assigned to a whole zone; manages zone defense and resource collection; gives zone-wide quests (clear the bandits, plant the harvest before winter, rebuild the wall)
+- [ ] **Tavernkeeper** — assigned to a Tavern structure; sells food and drink; hosts rumors from passing NPCs; lets player rent a room for a long rest; knows where the dragon sleeps if the player buys enough rounds
+- [ ] **Dungeonkeeper** — assigned to a dungeon entrance or cave zone; manages dungeon difficulty scaling; gives depth-based quests (clear the first level, retrieve the artifact from level three, bring back proof the boss is dead)
+- [ ] **Towerkeeper** — assigned to a fort or castle tower; trains Warriors; sells weapons and armor; gives combat-oriented quests (defend the pass, escort the caravan, eliminate the named villain)
+- [ ] **Archaeologist** — assigned to Ancient Ruins structures; researches the zone's history; gives lore-note collection quests; may decode an artifact's properties or point toward a buried treasure location
 
 **Keeper Mechanics**
-- [ ] Keeper assignment — LoreEngine assigns a suitable NPC as Keeper when a qualifying structure or zone condition is met; assignment persists in save
-- [ ] Keepers have expanded dialogue unique to their role — greetings, quest offers, lore hints, and zone status reports
-- [ ] Keeper health and status tracked; if Keeper dies the role is vacant until a new NPC is promoted
+- [ ] Keeper assignment — LoreEngine assigns a suitable NPC as Keeper when a qualifying structure or zone condition is met; assignment persists in save; a zone that loses its Keeper feels noticeably emptier
+- [ ] Keepers have expanded dialogue unique to their role — greetings that reference world events, quest offers scaled to player level, lore hints about the zone's history, and status reports on ongoing conflicts
+- [ ] Keeper health and status tracked; if a Keeper dies the role is vacant until a new NPC is promoted by the LoreEngine or recruited by the player
 
 **Evergael (Keeper Variant)**
-- [ ] Special Keeper variant: an ancient or cursed entity trapped in a zone, blocking the exit until defeated
-- [ ] Evergael acts as a zone-exit boss — player cannot leave the zone until the Evergael is cleared
-- [ ] Unique visual and dialogue indicating the block ("You shall not pass…")
-- [ ] Drops a rare key or artifact that permanently unlocks the zone exit and may open a new route
+- [ ] Special Keeper variant: an ancient or cursed entity trapped in a zone, blocking every exit until it is defeated — the zone's gatekeeper, warden, and final boss simultaneously
+- [ ] Evergael acts as a zone-exit boss — player cannot leave until the Evergael is cleared; dialogue hints at how it came to be here and what it wants
+- [ ] Unique visual and generated dialogue indicating the block (*"You shall not pass"*; *"I have stood at this door since before your grandfather's grandfather drew breath"*)
+- [ ] Drops a rare key or artifact that permanently unlocks the zone exit and may reveal a previously hidden route; defeating an Evergael is a milestone the LoreEngine records in world history
 
 ---
 
 ### Domain System
-> A **domain** is a contiguous 2×2 block of adjacent zones controlled by the same faction. Holding a domain grants that faction persistent bonuses until the domain is broken.
+> A **domain** is a contiguous 2×2 block of adjacent zones controlled by the same faction — a kingdom, a war-clan, a trading empire. Domains are the game's version of territorial control: hard to establish, valuable to hold, devastating to lose. Two factions racing toward the same Domain creates emergent wars without a single scripted event.
 
-- [ ] Domain detection — engine checks each 2×2 quad of adjacent zones; if all four share a faction label, that quad is flagged as a domain
-- [ ] Domain bonuses — owning faction gains: increased resource spawn rate, faster NPC healing, bonus XP for player while inside, and reduced hostile spawn rate
-- [ ] Domain contested state — if a single zone in a domain quad is captured by another faction, the domain breaks and bonuses are lost until recaptured
-- [ ] Domain markers visible on world map (coloring or icon overlay on the four zones)
-- [ ] Player can influence domains by aiding or attacking faction NPCs and structures in adjacent zones
+- [ ] Domain detection — engine checks each 2×2 quad of adjacent zones; if all four share a faction label, that quad is flagged as a domain and bonuses activate immediately
+- [ ] Domain bonuses — owning faction gains: increased resource spawn rate, faster NPC healing, bonus XP for player while inside, and reduced hostile spawn rate; a fully mature domain feels like a thriving nation-state
+- [ ] Domain contested state — if a single zone in the quad is captured by another faction, the domain breaks and all bonuses vanish; this creates high-stakes defense scenarios where losing one zone undoes everything
+- [ ] Domain markers visible on world map — color overlays and faction symbols show which powers hold territory and which zones are being fought over
+- [ ] Player can influence domains by aiding or attacking faction NPCs and structures in adjacent zones; tipping the balance between two evenly matched factions can decide the political landscape of the entire world
+- [ ] Domain capital designation — the central zone of an established domain becomes the faction's capital; it spawns a King or Warlord Keeper and is the last zone to fall in a conquest
 
 ---
 
@@ -346,13 +427,19 @@
 ---
 
 ### LoreEngine Expansions
-- [ ] Migration events
-- [ ] Natural disaster events
-- [ ] Invasion / raid events
-- [ ] Obstructions — block zone exits until cleared; may be NPCs or hard-to-destroy structures (e.g. Golem)
-- [ ] Zone and NPC name generation — unique, flavored names (e.g. "Redoak Grove"); zone generation influenced by its assigned name
+> The LoreEngine is the game's world-historian and event-director. It watches the simulation, notices when conditions align, and fires events that feel consequential. A world that has run for 200 years before the player arrives should feel like it has 200 years of history — ruined kingdoms, old grudges between factions, legendary creatures that have been accumulating power in the dark.
+
+- [ ] Migration events — populations shift between zones based on conditions (overcrowding, hostile pressure, famine); NPCs carry their inventory and faction affiliation to new zones, seeding the destination with their culture
+- [ ] Natural disaster events — flood (water spreading rapidly across several zone updates), wildfire (FIRE cell spreading across GRASS/TREE zones with the wind), earthquake (random cell destruction and new cave openings); each disaster creates emergent recovery quests
+- [ ] Invasion / raid events — an organized hostile force from a distant zone marches on a peaceful settlement; defenders rally based on faction strength; player can intervene on either side or watch the outcome shape the world
+- [ ] Obstructions — entities or structures blocking zone exits until cleared; may be a Golem sentinel, a collapsed wall, an Evergael, or a Goblin Warchief holding a chokepoint
+- [ ] Zone and NPC name generation — unique fantasy-language names drawn from generated tables ("Ashenmoor," "Thornkeep," "The Shattered Vale," "Coldrun Crossing," "The Lich's Folly"); zone generation is influenced by its assigned name (a zone named "The Dwarven Halls" generates carved stone structures and ore veins)
 - [ ] Secret lairs / additional secret entrance types *(foundation already in place)*
-- [ ] Prophecy system — LoreEngine occasionally generates a "prophecy" hint pointing the player toward a rare event or item
+- [ ] Prophecy system — LoreEngine generates a Prophecy fragment found in dungeon chests or spoken by aged NPCs, pointing the player toward a legendary item, rare event, or boss encounter; each world has a unique Prophecy; fulfilling it triggers a world acknowledgment event
+- [ ] Ancient civilization records — lore-note items found in ruins and archive structures describe the history of the zone in generated text; piecing together fragments from multiple dungeons reveals buried treasure locations, boss weaknesses, or the location of an artifact
+- [ ] Rise and fall tracking — LoreEngine logs major world events (a King's death, a dragon's awakening, a city's founding, an artifact's discovery) as world history; NPCs may reference these events in dialogue; accumulated history influences generation of new zones
+- [ ] Named villains — LoreEngine occasionally designates a specific high-level hostile NPC as a named villain (e.g. "Grothak the Warchief," "Seravin the Undying," "Ashclaw the Burning"); named villains have unique dialogue, enhanced stats, and a guaranteed artifact drop on first permanent death; they are referenced in tavern rumors and Prophecy text
+- [ ] World age narrative — at game start, a short generated prologue describes what happened during the simulated years before play: which kingdoms rose, which fell, what sleeps in the mountains; sets the tone without scripting anything
 
 ---
 

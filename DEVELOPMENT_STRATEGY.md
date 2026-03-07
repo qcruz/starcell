@@ -5,6 +5,23 @@
 
 ---
 
+## Vision: Emergent Fantasy
+
+StarCell aims to produce the feeling of a living Tolkien or D&D world — not through scripted cutscenes or authored quests, but through simulation. Every system is a rule that interacts with every other rule. The stories emerge from those interactions over simulated time.
+
+A complete game should be able to produce stories like these naturally, without anyone writing them:
+
+- A Wizard NPC who leveled up over centuries until the Lifetime System converted them into a Lich — unkillable until the player finds and destroys their Phylactery hidden in a puzzle vault beneath their tower
+- A war between a human kingdom and a goblin warlord clan over the one zone that would give either side a Domain — raids, counter-raids, NPC deaths, structure burning, the player as kingmaker
+- A Prophecy pointing to a legendary sword buried in a multi-level dungeon, with rival factions following the same rumor
+- A goblin underground city spanning five cave zones with its own Keeper hierarchy, economy, and surface raid schedules — a multi-session dungeon arc to clear, then a blank canvas to rebuild
+- A Dragon that has been accumulating a hoard for 200 in-game years, the subject of tavern rumors across every adjacent zone, requiring allies, artifacts, and a plan before descending
+- An ancient ruined kingdom the player discovers mid-game, its history recoverable only by piecing together lore-note fragments from dungeon chests across multiple sessions
+
+The branch roadmap below is the path to building a world capable of generating all of these on its own.
+
+---
+
 ## 1. Commit Discipline
 
 ### Core Rule
@@ -420,15 +437,17 @@ Foundation must land before any sub-branches.
 ---
 
 ### CONTENT PASSES (Cyclic/Repeating)
-These branches recur regularly as content is added in small batches.
+These branches recur regularly as content is added in small batches. Each one is a small investment with immediate visible payoff. Over many cycles they accumulate into a world that feels dense and surprising.
 
-| Branch Pattern | Delivers | Size |
-|---|---|---|
-| `content/npc-<name>` | One or two new NPC types (data + AI behaviors) | Micro–Standard |
-| `content/biome-<name>` | New biome type (generation rules, cell types, entity spawns) | Standard |
-| `content/cell-<name>` | New cell types (both `constants.py` and `data/cells.py`) | Micro |
-| `content/item-<name>` | New items, recipes, loot table entries | Micro |
-| `content/sprite-pass` | New sprite PNGs wired into SpriteManager | Micro |
+| Branch Pattern | Example Names | Delivers | Size |
+|---|---|---|---|
+| `content/npc-<name>` | `npc-lich`, `npc-vampire`, `npc-elvish-archer`, `npc-dwarven-miner`, `npc-goblin-shaman`, `npc-banshee`, `npc-treant` | One or two new NPC types — data entry, AI behaviors, spawn rules | Micro–Standard |
+| `content/biome-<name>` | `biome-swamp`, `biome-tundra`, `biome-ashlands`, `biome-enchanted-forest`, `biome-sunken-ruins`, `biome-shadow-moor` | New biome — generation rules, cell types, entity spawns, ambient audio | Standard |
+| `content/cell-<name>` | `cell-lava`, `cell-coffin`, `cell-bookshelf`, `cell-altar`, `cell-crumbling-wall`, `cell-sacred-grove`, `cell-frozen-lake` | New cell types in `constants.py` and `data/cells.py` | Micro |
+| `content/item-<name>` | `item-silver-arrow`, `item-dragonscale`, `item-moonstone`, `item-war-banner`, `item-rune-tome`, `item-ancient-coin` | New items, recipes, loot table entries | Micro |
+| `content/artifact-<name>` | `artifact-phylactery`, `artifact-cursed-crown`, `artifact-holy-grail`, `artifact-elder-scroll`, `artifact-ring-of-power` | One named artifact — lore text, unique properties, drop source, any associated quest hook | Micro |
+| `content/dungeon-<name>` | `dungeon-cursed-library`, `dungeon-dwarven-hall`, `dungeon-flooded-ruins`, `dungeon-shadow-crypt`, `dungeon-volcanic-lair` | New dungeon theme variant — cell layout, entity spawns, boss assignment, loot table | Standard |
+| `content/sprite-pass` | lich.png, vampire.png, kraken.png, treant.png, ruin wall tiles, coffin cell, bookshelf cell, altar | New sprite PNGs wired into SpriteManager | Micro |
 
 ---
 
@@ -463,45 +482,51 @@ Cycle slot 6 — Bug Fix / Debt
 
 ### Suggested First 3 Cycles
 
-**Cycle 1**
+**Cycle 1** — *"The World Starts Breathing"*
+> After this cycle: the game has ambient sound, a villager who becomes a werewolf at night, status effects that make combat feel dangerous, a campfire to rest at before a dungeon run, and a help screen. The world feels alive in a way it didn't before.
 1. `audio/foundation` — Extended
-2. `content/npc-werewolf` + `entities/werewolf` — Standard
-3. `combat/status-effects` — Extended
-4. `structures/campfire` — Standard
+2. `entities/werewolf` + `content/npc-werewolf` — Standard *(a normal farmer by day, a beast at nightfall — weak to silver, a bitten NPC may turn)*
+3. `combat/status-effects` — Extended *(poisoned by goblin arrows, burned by dragon breath, cursed by a witch's hex)*
+4. `structures/campfire` — Standard *(NPCs gather around it; player takes a short rest here before descending)*
 5. `ui/help-overlay` — Standard
 6. Bug fix pass on dev
 
-**Cycle 2**
-1. `seasons/foundation` — Extended
-2. `content/item-potions` — Standard
-3. `combat/ranged-weapons` — Extended
-4. `social/gift-giving` — Standard
+**Cycle 2** — *"The World Has Seasons and Danger"*
+> After this cycle: seasons change the landscape and what grows in it; potions make the player feel like a real adventurer; bows open up ranged combat and silver arrows solve the werewolf problem; gift-giving starts building faction relationships that will eventually produce wars, followers, and betrayals.
+1. `seasons/foundation` — Extended *(winter silences the land and freezes the water; summer brings abundance; autumn strips the forest bare)*
+2. `content/item-potions` — Standard *(healing draughts, strength elixirs, antidotes, smoke bombs — the standard D&D adventuring kit)*
+3. `combat/ranged-weapons` — Extended *(bow and arrow; silver arrows for werewolves and vampires; thrown bombs to blow open hidden passages)*
+4. `social/gift-giving` — Standard *(bring a Warrior a sword, a Farmer seeds, a Wizard a runestone — build toward followers, faction trust, and eventually the loyalty that tips a domain war)*
 5. `ui/minimap` — Extended
 6. Bug fix pass on dev
 
-**Cycle 3**
-1. `audio/ambient-music` — Standard
-2. `content/biome-volcanic-cave` — Standard
-3. `dungeon/keys-and-locks` — Standard
-4. `structures/tavern` — Extended
-5. `meta/achievements` — Extended
+**Cycle 3** — *"The Dungeon Awakens"*
+> After this cycle: dungeons have keys, locks, puzzles, and distinct atmospheric themes. Taverns are the social hub where rumors about the dragon circulate. The achievement system marks the first time a player descends into a crypt and does not come back empty-handed.
+1. `audio/ambient-music` — Standard *(dripping water in caves, howling wind on mountain biomes, crackling fire in forest zones, eerie silence in the Shadow Realm)*
+2. `dungeon/keys-and-locks` — Standard *(small keys carried from fallen enemies; locked doors between dungeon wings; the boss room sealed behind a key found in the hardest miniboss room)*
+3. `dungeon/biome-themes` — Extended *(crypt with undead, dwarven hall with golems, flooded ruins with a kraken, volcanic lair with a dragonknight)*
+4. `structures/tavern` — Extended *(the place where the rumors about the lich's tower spread; where adventurers rent a room before their next descent; where the Tavernkeeper knows more than they let on)*
+5. `meta/achievements` — Extended *(first dungeon cleared, first dragon slain, first prophecy fulfilled, first domain established)*
 6. Bug fix pass on dev
 
 ---
 
 ## 6. Milestone Tags
 
-Tag `main` at major stable points:
+Tag `main` at major stable points. Each milestone should feel like a meaningfully different game from the one before it.
 
-| Tag | Milestone |
-|---|---|
-| `v0.2` | Audio foundation + status effects + seasonal foundation complete |
-| `v0.3` | Dungeon mechanics + boss rooms + equipment slots |
-| `v0.4` | Social systems + tavern + reputation/favor |
-| `v0.5` | World map + travel + domain system |
-| `v0.6` | Character progression + perk trees |
-| `v1.0` | All roadmap systems implemented at foundation level |
+| Tag | Systems Complete | Emergent Stories Now Possible |
+|---|---|---|
+| `v0.2` | Audio + status effects + seasons | Combat is dangerous; fire spreads; the world changes with the seasons; a werewolf can ruin your night |
+| `v0.3` | Dungeons (keys/locks/themes) + boss rooms + equipment slots | A full dungeon run with a locked boss door, a themed atmosphere, and a legendary drop; gear builds matter |
+| `v0.4` | Taverns + social/gift-giving + reputation/favor + rumor system | Factions remember you; the tavern is the information hub; rumors point toward dragons and prophecies |
+| `v0.5` | World map + domain system + named villains + LoreEngine events | Territory wars visible on the map; named villains generate their own arcs; disasters reshape zones |
+| `v0.6` | Character classes + perk trees + artifacts + Prophecy system | Builds feel distinct; legendary weapons change playstyle; a full Prophecy arc works end-to-end |
+| `v0.7` | Liches + vampires + underground cities + ancient ruins | The Lich storyline is complete; a Goblin underground city is a full multi-session arc; ruins tell history |
+| `v0.8` | Fishing + animal husbandry + cooking + foraging | The peaceful side of the game is as deep as the combat side; a player can thrive without ever fighting |
+| `v0.9` | Genetics + RainbowMaker + Contagion + world age narrative | The world has a generated history shown at game start; NPCs evolve and vary; rare variants create collecting |
+| `v1.0` | All roadmap systems at foundation level | Any of the six story examples in the Vision section can emerge naturally from a fresh world |
 
 ---
 
-*Last updated: 2026-03-06*
+*Last updated: 2026-03-07*
