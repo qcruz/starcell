@@ -752,7 +752,7 @@ class GameCoreMixin:
         stale_ids = []
         for entity_id in list(self.followers):
             entity = self.entities.get(entity_id)
-            if entity is None or not getattr(entity, 'alive', True):
+            if entity is None or not entity.is_alive():
                 stale_ids.append(entity_id)
         for entity_id in stale_ids:
             self.followers.remove(entity_id)

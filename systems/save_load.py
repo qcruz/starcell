@@ -131,6 +131,7 @@ class SaveLoadMixin:
             'enchanted_cells': enchanted_cells_serializable,
             'enchanted_entities': self.enchanted_entities,
             'followers': self.followers,
+            'follower_items': {str(k): v for k, v in self.follower_items.items()},
             'structures': structures_serializable,
             'opened_chests': list(self.opened_chests),  # Convert set to list for JSON
             'next_structure_id': self.next_structure_id,
@@ -244,6 +245,10 @@ class SaveLoadMixin:
             # Load followers list
             self.followers = save_data.get('followers', [])
 
+            # Load follower_items (JSON stores int keys as strings — convert back)
+            raw_fi = save_data.get('follower_items', {})
+            self.follower_items = {int(k): v for k, v in raw_fi.items()}
+
             # Reconstruct entities
             self.entities = {}
             entities_data = save_data.get('entities', {})
@@ -296,6 +301,9 @@ class SaveLoadMixin:
                             'is_follower': True,
                             'entity_id': entity_id
                         }
+                    # Reconstruct follower_items entry if missing (old saves without this field)
+                    if entity_id not in self.follower_items:
+                        self.follower_items[entity_id] = follower_name
 
             # Load structure data and convert string keys back to tuples
             structures_loaded = save_data.get('structures', save_data.get('subscreens', {}))
