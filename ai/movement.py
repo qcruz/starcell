@@ -1163,6 +1163,10 @@ class NpcAiMovementMixin:
 
         screen = self.screens[screen_key]
 
+        # Structure zones have no overworld exits — skip travel behavior
+        if 'exits' not in screen:
+            return
+
         # Pick a random exit to travel toward
         if not hasattr(entity, 'travel_target') or entity.travel_target is None:
             exits = []
