@@ -186,7 +186,7 @@ class CellsMixin:
                         new_grid[y][x] = 'TREE1'
 
                 # Sand reclamation (water converts sand back to dirt)
-                elif cell == 'SAND' and total_water >= 2:
+                elif cell == 'SAND' and total_water >= 1:
                     if random.random() < min(1.0, SAND_RECLAIM_RATE * _tp):
                         new_grid[y][x] = 'DIRT'
 
