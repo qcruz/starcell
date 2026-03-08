@@ -112,8 +112,8 @@ class ZonesMixin:
 
             zones_updated += 1
             ent_count = len(self.screen_entities.get(zone_key, []))
-            total_entities_updated += int(ent_count * coverage)
-            total_cells_updated += int(GRID_WIDTH * GRID_HEIGHT * coverage)
+            total_entities_updated += int(ent_count * entity_coverage)
+            total_cells_updated += int(GRID_WIDTH * GRID_HEIGHT * cell_coverage)
 
         if self.tick % 1800 == 0:
             total_entities = len(self.entities)
