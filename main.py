@@ -81,19 +81,45 @@ class Game(
 
 
 if __name__ == '__main__':
-    import random, time
+    import random, time, json, os
 
     # ── AUTO_DEBUG: set True to run headless autopilot debug sessions ──────────
     AUTO_DEBUG = True
-    AUTO_DEBUG_DURATION_SECS = random.randint(120, 210)  # 2–3.5 min per run
+    _STATE_FILE = 'debug/auto_debug_state.json'
+    _MIN_SECS   = 60    # floor: 1 min
+    _MAX_CAP    = 420   # ceiling: 7 min
+    # Cap doubles each run: run 0→60s, 1→120s, 2→240s, 3+→420s
     # ──────────────────────────────────────────────────────────────────────────
 
     game = Game()
 
     if AUTO_DEBUG:
-        game.new_game()
-        game.toggle_autopilot()
-        game._auto_debug_end_time = time.time() + AUTO_DEBUG_DURATION_SECS
-        print(f"[AutoDebug] Session started — will end in {AUTO_DEBUG_DURATION_SECS}s")
+        # Load run counter
+        try:
+            with open(_STATE_FILE) as _f:
+                _state = json.load(_f)
+        except Exception:
+            _state = {'run': 0}
+        _run = _state.get('run', 0)
+
+        # Time cap doubles each run, floor 60s, ceiling 420s
+        _cap = min(_MIN_SECS * (2 ** _run), _MAX_CAP)
+        _dur = random.randint(_MIN_SECS, _cap)
+
+        # New game or continue (50/50 if save exists)
+        _save_exists = os.path.exists('savegame.json')
+        if _save_exists and random.random() < 0.5:
+            game.load_game()
+            game.toggle_autopilot()
+            _mode = 'CONTINUE'
+        else:
+            game.new_game()
+            game.toggle_autopilot()
+            _mode = 'NEW GAME'
+
+        game._auto_debug_end_time = time.time() + _dur
+        game._auto_debug_run_num  = _run
+        game._auto_debug_state_file = _STATE_FILE
+        print(f"[AutoDebug] Run {_run + 1} — {_mode} | duration={_dur}s (cap={_cap}s)")
 
     game.run()

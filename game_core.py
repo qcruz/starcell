@@ -2409,6 +2409,14 @@ class GameCoreMixin:
             print("[AutoDebug] Save written to debug/auto_debug_save.json")
         except Exception as exc:
             print(f"[AutoDebug] Save failed: {exc}")
+        try:
+            import json as _json
+            _run = getattr(self, '_auto_debug_run_num', 0)
+            _sf  = getattr(self, '_auto_debug_state_file', 'debug/auto_debug_state.json')
+            with open(_sf, 'w') as _f:
+                _json.dump({'run': _run + 1}, _f)
+        except Exception as exc:
+            print(f"[AutoDebug] State file write failed: {exc}")
         import pygame
         pygame.quit()
         self.running = False

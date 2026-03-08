@@ -361,11 +361,14 @@ class Watchdog:
 
     def _check_integrity(self, tick: int, game) -> None:
         screen_entities = getattr(game, 'screen_entities', {})
-        structure_entities = getattr(game, 'screen_entities', {})
 
-        # Build reverse map: entity_id -> [structure_keys it appears in]
+        # Build reverse map from STRUCTURE keys only (not overworld zones).
+        # screen_entities contains both — filter to keys present in game.structures.
+        structure_keys = set(getattr(game, 'structures', {}).keys())
         entity_in_structures: dict = {}
-        for sub_key, sub_list in structure_entities.items():
+        for sub_key, sub_list in screen_entities.items():
+            if sub_key not in structure_keys:
+                continue
             for eid in sub_list:
                 entity_in_structures.setdefault(eid, []).append(sub_key)
 
@@ -374,8 +377,6 @@ class Watchdog:
             zone_key = f"{entity.screen_x},{entity.screen_y}"
 
             # Check 1: in_structure=True but still in screen_entities
-            # apply=True: root cause is patched (try_entity_screen_crossing guard);
-            # the safety net clears the flag for any entities already in bad state.
             if entity_in_structure_flag:
                 if zone_key in screen_entities and eid in screen_entities[zone_key]:
                     fix_entity_subscreen_flag(
@@ -385,7 +386,7 @@ class Watchdog:
                         apply=True,
                     )
 
-            # Check 2: in_structure=False but present in screen_entities
+            # Check 2: in_structure=False but found in a true structure zone
             if not entity_in_structure_flag and eid in entity_in_structures:
                 self.bug_catcher.log({
                     'tick': tick,
