@@ -1146,41 +1146,47 @@ class GameCoreMixin:
             for i, (item_name, count) in enumerate(items):
                 slot_x = start_x + i * (slot_size + 2)
                 slot_y = start_y - y_offset
-                
+
                 # Check if click is in this slot
                 if (slot_x <= pos[0] <= slot_x + slot_size and
                         slot_y <= pos[1] <= slot_y + slot_size):
-                    # Cross-inventory transfer: clicking an item in 'items' while
-                    # a second panel is open moves the item to that panel instead.
-                    other = None
-                    if category == 'items':
-                        for candidate in ('tools', 'magic'):
-                            if candidate in self.inventory.open_menus:
-                                other = candidate
-                                break
-                    if other:
-                        # Move one unit from items → other category
-                        inv_src = self.inventory.items
-                        if inv_src.get(item_name, 0) > 0:
-                            inv_src[item_name] -= 1
-                            if inv_src[item_name] <= 0:
-                                del inv_src[item_name]
-                                if self.inventory.selected['items'] == item_name:
-                                    remaining = list(inv_src.keys())
-                                    self.inventory.selected['items'] = remaining[0] if remaining else None
-                            inv_dst = getattr(self.inventory, other)
-                            inv_dst[item_name] = inv_dst.get(item_name, 0) + 1
-                            self.inventory.selected[other] = item_name
-                            print(f"Moved {item_name} → {other} inventory")
+
+                    if category == 'tools':
+                        # --- Tool bar slot clicked ---
+                        self.inventory.selected_tool_slot_idx = i
+                        self.inventory.selected['tools'] = item_name
+                        self.inventory.pending_equip_slot = i
+                        # If only tools tab is open and slot has an item → unequip
+                        other_tabs_open = any(
+                            c in self.inventory.open_menus
+                            for c in ['items', 'magic', 'actions', 'followers', 'crafting']
+                        )
+                        if not other_tabs_open and item_name is not None:
+                            self.inventory.unequip_slot(i)
+                        self.sound.on_inventory_select()
+                        return
+
+                    elif ('tools' in self.inventory.open_menus and
+                          self.inventory.pending_equip_slot is not None and
+                          item_name is not None):
+                        # --- Item in another tab clicked while a tool slot is pending ---
+                        slot_idx = self.inventory.pending_equip_slot
+                        self.inventory.equip_to_slot(slot_idx, item_name, category)
+                        if ITEMS.get(item_name, {}).get('damage'):
+                            self.sound.on_equip_sword()
+                        else:
                             self.sound.on_inventory_select()
+                        return
+
                     else:
+                        # --- Normal selection ---
                         self.inventory.selected[category] = item_name
                         if ITEMS.get(item_name, {}).get('damage'):
                             self.sound.on_equip_sword()
                         else:
                             self.sound.on_inventory_select()
-                    return
-            
+                        return
+
             y_offset += slot_size + 15  # Stack next category above
     
     def handle_quest_ui_click(self, pos):
@@ -1231,13 +1237,25 @@ class GameCoreMixin:
                 return
 
     def cast_rain_spell(self):
-        self.is_raining = not self.is_raining
+        if self.player['energy'] < 90:
+            print("[Spell] Not enough energy!")
+            return
+        self.player['energy'] -= 90
         if self.is_raining:
+            self.is_raining = False
             self.rain_timer = 0
-            self.rain_duration = getattr(self, 'rain_duration', 600)
-        print(f"[Spell] Rain {'started' if self.is_raining else 'stopped'}.")
+            print("[Spell] Rain stopped.")
+        else:
+            self.is_raining = True
+            self.rain_timer = 0
+            self.rain_duration = random.randint(RAIN_DURATION_MIN, RAIN_DURATION_MAX)
+            print("[Spell] Rain started.")
 
     def cast_day_spell(self):
+        if self.player['energy'] < 90:
+            print("[Spell] Not enough energy!")
+            return
+        self.player['energy'] -= 90
         self.is_night = not self.is_night
         if self.is_night:
             self.day_night_timer = DAY_LENGTH + 1

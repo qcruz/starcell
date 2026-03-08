@@ -118,9 +118,11 @@ class SaveLoadMixin:
             'screens': screens_serializable,
             'tick': self.tick,
             'inventory_items': self.inventory.items,
-            'inventory_tools': self.inventory.tools,
+            'inventory_tool_slots': self.inventory.tool_slots,
+            'inventory_selected_tool_slot': self.inventory.selected_tool_slot_idx,
             'inventory_magic': self.inventory.magic,
             'inventory_followers': self.inventory.followers,
+            'inventory_actions': self.inventory.actions,
             'inventory_selected': self.inventory.selected,
             'dropped_items': dropped_items_serializable,
             'screen_last_update': self.screen_last_update,
@@ -208,12 +210,34 @@ class SaveLoadMixin:
             self.screens = save_data['screens']
             self.tick = save_data['tick']
             self.inventory.items = save_data.get('inventory_items', {})
-            self.inventory.tools = save_data.get('inventory_tools', {})
             self.inventory.magic = save_data.get('inventory_magic', {})
             self.inventory.followers = save_data.get('inventory_followers', {})
+            self.inventory.actions = save_data.get('inventory_actions', {})
+            # Restore tool slots — with backward compat for old saves using tools dict
+            if 'inventory_tool_slots' in save_data:
+                self.inventory.tool_slots = save_data['inventory_tool_slots']
+            elif 'inventory_tools' in save_data:
+                # Migrate old tools dict → slots
+                old_tools = save_data['inventory_tools']
+                self.inventory.tool_slots = [None] * 8
+                slot_idx = 0
+                for iname, cnt in old_tools.items():
+                    for _ in range(cnt):
+                        if slot_idx < 8:
+                            self.inventory.tool_slots[slot_idx] = iname
+                            slot_idx += 1
+            self.inventory.selected_tool_slot_idx = save_data.get('inventory_selected_tool_slot')
+            # Sync selected['tools'] from active slot
+            idx = self.inventory.selected_tool_slot_idx
+            slot_item = self.inventory.tool_slots[idx] if idx is not None and 0 <= idx < 8 else None
             self.inventory.selected = save_data.get('inventory_selected', {
-                'items': None, 'tools': None, 'magic': None, 'followers': None
+                'items': None, 'tools': None, 'magic': None, 'followers': None,
+                'actions': None, 'crafting': None,
             })
+            # Ensure new keys exist in loaded selected dict
+            self.inventory.selected.setdefault('actions', None)
+            self.inventory.selected.setdefault('crafting', None)
+            self.inventory.selected['tools'] = slot_item
 
             # Convert dropped_items string keys back to tuples
             dropped_items_loaded = save_data.get('dropped_items', {})

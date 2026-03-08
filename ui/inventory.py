@@ -65,13 +65,33 @@ class InventoryUIMixin:
                 pygame.draw.rect(self.screen, COLORS['BLACK'],
                                (slot_x, slot_y, slot_size, slot_size))
 
-                # Selected highlight
-                if self.inventory.selected[category] == item_name:
+                # Selected highlight — tools use index-based selection
+                if category == 'tools':
+                    is_selected = (i == self.inventory.selected_tool_slot_idx)
+                    is_pending = (i == self.inventory.pending_equip_slot and
+                                  self.inventory.pending_equip_slot is not None)
+                else:
+                    is_selected = (self.inventory.selected[category] == item_name
+                                   and item_name is not None)
+                    is_pending = False
+
+                if is_pending:
+                    pygame.draw.rect(self.screen, (255, 200, 50),
+                                   (slot_x, slot_y, slot_size, slot_size), 3)
+                elif is_selected:
                     pygame.draw.rect(self.screen, COLORS['INV_SELECT'],
                                    (slot_x, slot_y, slot_size, slot_size), 3)
                 else:
                     pygame.draw.rect(self.screen, COLORS['INV_BORDER'],
                                    (slot_x, slot_y, slot_size, slot_size), 1)
+
+                # Slot number (always shown, even for empty slots)
+                num_text = self.tiny_font.render(str((i + 1) % 10), True, COLORS['GRAY'])
+                self.screen.blit(num_text, (slot_x + 2, slot_y + 2))
+
+                # Skip content rendering for empty tool slots
+                if item_name is None:
+                    continue
 
                 # Item sprite or color
                 has_sprite = (self.use_sprites and
@@ -89,21 +109,17 @@ class InventoryUIMixin:
                     item_name_for_sprite = item_name
 
                 if has_sprite:
-                    # Use sprite for item
                     sprite = self.sprite_manager.get_sprite(item_name_for_sprite)
                     self.screen.blit(sprite, (slot_x, slot_y))
                 elif item_name in ITEMS:
-                    # Fallback to colored rectangle for items
                     item_color = ITEMS[item_name]['color']
                     pygame.draw.rect(self.screen, item_color,
                                    (slot_x + 4, slot_y + 4, slot_size - 8, slot_size - 8))
                 elif item_name.upper() in CELL_TYPES:
-                    # Fallback for structures (tree1 -> TREE1, house -> HOUSE, etc.)
                     item_color = CELL_TYPES[item_name.upper()]['color']
                     pygame.draw.rect(self.screen, item_color,
                                    (slot_x + 4, slot_y + 4, slot_size - 8, slot_size - 8))
                 elif item_name.lower() in CELL_TYPES:
-                    # Try lowercase too
                     item_color = CELL_TYPES[item_name.lower()]['color']
                     pygame.draw.rect(self.screen, item_color,
                                    (slot_x + 4, slot_y + 4, slot_size - 8, slot_size - 8))
@@ -119,14 +135,9 @@ class InventoryUIMixin:
                     self.screen.blit(count_text, (slot_x + slot_size - count_text.get_width() - 1,
                                                    slot_y + 2))
 
-                # Slot number (top-left)
-                num_text = self.tiny_font.render(str((i + 1) % 10), True, COLORS['GRAY'])
-                self.screen.blit(num_text, (slot_x + 2, slot_y + 2))
-
                 # Item name label at bottom of slot
                 display_name = ITEMS.get(item_name, {}).get('name', item_name)
                 name_surf = self.tiny_font.render(display_name, True, COLORS['WHITE'])
-                # Clip to slot width
                 name_w = min(name_surf.get_width(), slot_size - 2)
                 name_h = name_surf.get_height()
                 name_bg = pygame.Surface((slot_size, name_h))
