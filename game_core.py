@@ -1168,9 +1168,9 @@ class GameCoreMixin:
             if category not in self.inventory.open_menus:
                 continue
 
-            # Special handling for crafting screen
+            # Special handling for crafting screen — use same list as the renderer
             if category == 'crafting':
-                items = self.inventory.get_all_craftable_items()
+                items = self.inventory.get_craftable_recipes()
             else:
                 items = self.inventory.get_item_list(category)
             
@@ -1234,7 +1234,7 @@ class GameCoreMixin:
             categories = ['tools', 'items', 'magic', 'actions', 'followers', 'crafting']
             for category in categories:
                 if category in self.inventory.open_menus:
-                    items = self.inventory.get_all_craftable_items() if category == 'crafting' else self.inventory.get_item_list(category)
+                    items = self.inventory.get_craftable_recipes() if category == 'crafting' else self.inventory.get_item_list(category)
                     y_offset += slot_size + 15
 
         start_y = base_y - y_offset
