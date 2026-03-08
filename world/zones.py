@@ -228,7 +228,8 @@ class ZonesMixin:
         protected_cells = {'HOUSE', 'CAVE', 'MINESHAFT', 'CAMP', 'CHEST', 'WALL',
                            'COBBLESTONE', 'WATER', 'DEEP_WATER', 'WOOD', 'PLANKS',
                            'FLOOR_WOOD', 'CAVE_FLOOR', 'CAVE_WALL', 'STAIRS_UP',
-                           'STAIRS_DOWN', 'HIDDEN_CAVE', 'SOIL', 'CARROT1', 'CARROT2', 'CARROT3'}
+                           'STAIRS_DOWN', 'HIDDEN_CAVE', 'SOIL', 'CARROT1', 'CARROT2', 'CARROT3',
+                           'CLIFF', 'STONE_HOUSE'}
 
         foreign_revert = {
             'DESERT': {'GRASS', 'TREE1', 'TREE2', 'FLOWER', 'DIRT'},

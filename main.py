@@ -86,9 +86,8 @@ if __name__ == '__main__':
     # ── AUTO_DEBUG: set True to run headless autopilot debug sessions ──────────
     AUTO_DEBUG = True
     _STATE_FILE = 'debug/auto_debug_state.json'
-    _MIN_SECS   = 60    # floor: 1 min
-    _MAX_CAP    = 420   # ceiling: 7 min
-    # Cap doubles each run: run 0→60s, 1→120s, 2→240s, 3+→420s
+    _MIN_SECS   = 120   # floor: 2 min
+    _MAX_CAP    = 180   # ceiling: 3 min
     # ──────────────────────────────────────────────────────────────────────────
 
     game = Game()
@@ -102,7 +101,7 @@ if __name__ == '__main__':
             _state = {'run': 0}
         _run = _state.get('run', 0)
 
-        # Time cap doubles each run, floor 60s, ceiling 420s
+        # Session length: random between 2–3 minutes
         _cap = min(_MIN_SECS * (2 ** _run), _MAX_CAP)
         _dur = random.randint(_MIN_SECS, _cap)
 

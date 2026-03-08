@@ -5,6 +5,57 @@ Reviewed from `debug/bugcatcher.log` after each session.
 
 ---
 
+## Session 10 — 2026-03-08 (~8,065 ticks, ~122s, CONTINUE)
+
+### CONFIRMED — Resource collection dramatically improved
+Inventory grew steadily across all four watchdog samples:
+- t=1641: `stone: 3, iron_ore: 1`
+- t=3741: `stone: 10, iron_ore: 1`
+- t=5841: `stone: 14, iron_ore: 3, bones: 1`
+- t=7941: `stone: 17, iron_ore: 4, bones: 1`
+
+Stone +14 and iron_ore +3 across ~6300 ticks. Cardinal-only scan in both `_autopilot_opportunistic_harvest` and `try_mine_rock` eliminated position jumps; proxy now collects steadily while traversing.
+
+### CONFIRMED — Zero integrity anomalies, zero fix events
+All prior watchdog fixes continue to hold.
+
+### CONFIRMED — Quest rotation: FARM → GATHER → MINE → SLAY across 4 watchdog cycles
+Quest switching working normally.
+
+### CONFIRMED — Zone travel: proxy crossed from 0,0 → 0,-1 (sample at t=7941)
+Cross-zone travel confirmed for second consecutive session.
+
+### CONFIRMED — Obstacle-clear in wandering state fired: `mining rock at (11,16) stuck=120t`
+At ~t=8040 the proxy had been stuck at (11,16) in `wandering` state for 120 ticks; obstacle-clear extended to wandering state triggered `try_mine_rock`. OBSERVATION-21 fix confirmed working.
+
+### CONFIRMED — 3 followers at shutdown (up from 1)
+`follower_count: 3` at shutdown. NPC follow interaction (`_autopilot_try_npc_interact`) is recruiting followers.
+
+### OBSERVATION-22 — Proxy remained at (11,16) for remaining 25 ticks after obstacle-clear
+After obstacle-clear fired at ~t=8040, proxy stayed at (11,16) until shutdown at t=8065. Two possible causes: (1) mine roll failed (20% success rate) — first clear at 60t may have also failed; (2) mine succeeded but wandering picked another blocked direction. Not a bug — 25 ticks is insufficient recovery time. Will monitor in future sessions.
+
+### OBSERVATION-23 — 872 `entity` log entries (up from 12 in Session 9)
+`bug_catcher.log_bat_state` transitioned 872 times. Session 9 had 12. Likely due to more entities in zone 0,-1 and more state changes during combat/flee encounters with hostiles in new zone. Not a bug but worth monitoring for log size growth as world entity count rises (547 entities at shutdown).
+
+---
+
+## Design Philosophy
+
+**Goal of bug fixes:** Ensure game systems work correctly with minimal special-case handling code.
+
+- We do **not** want to patch around broken behavior with autopilot heuristics — we want **quest targeting, pathfinding, and tool use** to naturally get the character to its goal.
+- The autopilot is a test harness: stress-test code paths, surface bugs, and gather gameplay data. Long-term it will be ported as the baseline AI for all NPCs, giving every NPC rich, complex behavior.
+- Bug fixes should remove the need for special handling, not add more of it.
+
+**Macro picture to watch:**
+- Are structures and factions forming across the world?
+- Are followers staying near the player and helping in combat?
+- Are NPC economies (trading, farming, mining) self-sustaining?
+- Are hostile factions raiding / escalating?
+- Quest variety: does the autopilot/player cycle through diverse activities?
+
+---
+
 ## Session 1 — 2026-03-07 (~7431 ticks, ~2 min, NEW GAME)
 
 ### BUG-01 — Watchdog integrity check was 100% false positives [FIXED ✓]
@@ -31,10 +82,11 @@ Sampling coincidence — see Session 2 confirmation.
 ### CONFIRMED — BUG-01 fix working
 Zero integrity anomalies. False-positive flood eliminated.
 
-### BUG-03 — `in_structure=True` leaking onto humanoid overworld NPCs [ENTITY STATE]
-**Category:** `fix_entity_subscreen_flag` — 4 occurrences
-**Affected:** MINER (id=392), TRADER (id=481), LUMBERJACK (id=480), FARMER (id=609)
-Entities had `in_structure=True` but were present in their overworld zone's `screen_entities`. Previously thought to be a bat-specific issue — it's broader. Root cause in `try_entity_screen_crossing` or structure entry/exit logic is incorrectly setting the flag on NPCs that walk near a structure entrance. The watchdog reactively clears it (applied=True) but the root cause is unresolved.
+### BUG-03 — Watchdog Check 1 was a false positive [FIXED ✓]
+**Category:** `fix_entity_subscreen_flag` — 4 occurrences (Session 2), 8 (Session 3)
+**Affected:** MINER, TRADER, LUMBERJACK, FARMER, GUARD — all shelter-seeking NPC types
+**Root cause:** Watchdog Check 1 condition: `entity.in_structure=True AND entity in screen_entities[entity.screen_x/y]`. For a properly-entered entity, `entity.screen_x/y` is the *virtual structure key* (e.g., `-1000,0`). That key IS in screen_entities and entity IS in that list — so Check 1 fired on every properly-entered entity, incorrectly kicking them out of their structure each watchdog cycle (every 300 ticks).
+**Fix:** Added `zone_key not in structure_keys` guard to Check 1 in `debug/watchdog.py`. Structure virtual keys are in `game.structures`; overworld keys are not. Now Check 1 only fires when `entity.screen_x/y` points to an *overworld* zone with `in_structure=True`, which is the true anomaly case. Applied in Session 4 — expect zero `fix_entity_subscreen_flag` events.
 
 ### OBSERVATION-04 — FARM quest never completes across both sessions
 Active quest stays FARM from tick 1 to end in both runs. Autopilot earns carrots (seen in inventory: `{'carrot': 5}`) but the quest never triggers completion. Either the completion check isn't firing for the proxy, or the quest target count is higher than what autopilot can farm in the session window.
@@ -44,5 +96,153 @@ Active quest stays FARM from tick 1 to end in both runs. Autopilot earns carrots
 
 ### OBSERVATION-06 — CONFIRMED: Player does travel extensively (115 zones visited)
 Including structure interiors (virtual keys like `-1000,0`, `-1010,0`). Player samples landing at 0,0 is sampling coincidence. Not a bug.
+
+---
+
+## Session 3 — 2026-03-07 (NEW GAME)
+
+### CONFIRMED — OBSERVATION-04 fix (FARM quest) working
+Quest changed from FARM to EXPLORE by tick 3579. Fix confirmed: local FARM targets now store `_original_cell` from a real farm cell in the zone grid.
+
+### CONFIRMED — OBSERVATION-05 fix (logger noise) working
+Zero entity transition log entries. State-transition gating in `log_bat_state` is effective.
+
+### BUG-03 — 8 occurrences (up from 4), root cause diagnosed and fixed
+All 8 events were peaceful NPCs that had *correctly* entered structures at night. The watchdog was incorrectly identifying them as anomalies and kicking them out. Fix applied to `debug/watchdog.py` Check 1.
+
+### OBSERVATION-07 — Goblin follower (id=314) persisted entire session
+No integrity issues on follower. Expected behavior.
+
+---
+
+## Session 4 — 2026-03-08 (~14,106 ticks logged, NEW GAME)
+
+### CONFIRMED — BUG-03 fix working
+Zero `fix_entity_subscreen_flag` events. Zero integrity anomalies. Watchdog Check 1 is no longer a false positive.
+
+### OBSERVATION-08 — Auto-debug timer reliability issue
+The session was cut off by the bash process timeout (~500s) before `_auto_debug_shutdown()` fired. Root cause: the game runs at ~28fps (NPC AI load) rather than the expected 60fps. At 28fps, a 420s session = ~14,000 ticks — just past the 500s bash window. **Fix needed:** increase bash timeout to 700s, or better, run the game in background and poll for completion.
+
+### OBSERVATION-09 — Autopilot proxy never left zone 0,0 (14,000 ticks)
+The proxy (FARMER type, FARM quest) wandered in-zone the entire session. Only SEARCH/RESCUE/EXPLORE force zone travel via `_nudge_toward_zone`. FARM/GATHER quests with local targets leave the proxy at the starting zone. Quests still completed (FARM → RESCUE → GATHER) — the local farming behavior works. Not a bug but limits autopilot coverage of the world map.
+
+### OBSERVATION-10 — Termite follower recruited (id=293, item=termite_293)
+Player acquired a TERMITE follower. Follower system functioning normally for non-humanoid types.
+
+### OBSERVATION-11 — Quest completions working normally
+Multiple quest types completed: FARM → RESCUE → GATHER across ~230 seconds of play.
+
+---
+
+## Session 5 — 2026-03-08 (~15,095 ticks, NEW GAME)
+
+### CONFIRMED — OBSERVATION-08 fix: timer now fires correctly
+`[AutoDebug] Timer expired at tick 15095` printed cleanly; `auto_debug_shutdown` entry in log. Increasing bash timeout to 720s resolved the cutoff.
+
+### CONFIRMED — Zero integrity anomalies, zero fix events
+BUG-03 fix continues to hold across sessions.
+
+### CONFIRMED — OBSERVATION-09 fix: proxy now crosses zones
+Proxy traveled from zone `0,0` → `0,-1` (crossed at some point between tick 5652 and tick 7752). Zone travel working with 35% nudge rate (up from 10%).
+
+### CONFIRMED — Quest variety improved dramatically
+7 different quest types sampled across session (one per ~2100-tick watchdog cycle): FARM → SLAY → RESCUE → GATHER → MINE → COMBAT_HOSTILE → EXPLORE. Forced 30-second rotation and 80% switch-on-completion working.
+
+### OBSERVATION-12 — Proxy stuck targeting exit corridor for extended periods
+After crossing into zone `0,-1`, the proxy spent the remainder of the session (~7,000+ ticks) targeting the east exit cell `(23,9)` to travel to zone `1,-1`. It made slow progress (x: 13 → 14) but never crossed. Root cause: the 2% bail-on-stuck check fires but every 120-tick nudge immediately reassigns the same exit target if the quest zone is still east. The proxy oscillates between bail and re-nudge without ever escaping the loop. **Fix needed:** track consecutive same-exit-target nudge cycles; after N stuck cycles, suspend travel nudges for several cycles to let natural wandering reach the exit.
+
+### OBSERVATION-13 — watchdog_player_sample `pos` fields are None
+Player samples log `pos=(None,None)` for x/y. The watchdog is reading `player['x']` / `player['y']` which are not set on the `player` dict at sample time (the proxy coordinates are in `proxy.x` / `proxy.y`). Minor logging gap — zone field is correct. Not a gameplay bug.
+
+---
+
+## Session 6 — 2026-03-08 (~18,617 ticks, NEW GAME)
+
+### CONFIRMED — Zero integrity anomalies (BUG-03 fix still holding)
+
+### CONFIRMED — Quest rotation: 9 different quest types across 9 watchdog samples
+FARM → EXPLORE → RESCUE → SLAY → MINE → COMBAT_HOSTILE → FARM → SLAY → RESCUE. All quest types cycling correctly; forced-rotation every 1800 ticks working.
+
+### CONFIRMED — NPC inspection action firing
+`[Autopilot] Inspecting BANDIT (id=882) dist=3` — action system exercised NPC inspection code path.
+
+### CONFIRMED — Timer reliable: fired at tick 18617
+
+### OBSERVATION-14 — Stuck-at-exit fix not yet exercised
+Proxy stayed in zone 0,0 all session. Flee state blocked nudge calls (flee is correctly not overridden). Stuck-exit logic requires nudge to fire, so it never triggered. Will be exercised in future sessions when proxy avoids hostile zones.
+
+### OBSERVATION-15 — Proxy can be pinned against zone edge during prolonged flee
+Proxy entered flee state at ~t=18540 (BANDIT within dist=3) and stayed at grid cell (1,11) for 75+ ticks until session end. The proxy is invulnerable but flee logic persists while threat is nearby; x=1 means it's against the left wall. Normal NPC behavior, not a bug. The proxy's `flee_chance=0.95` means it almost always tries to flee; the MINER/MINE-quest proxy type doesn't fight back.
+
+---
+
+## Session 7 — 2026-03-08 (~7,681 ticks, NEW GAME)
+
+Session ran ~274s (near the 270s random draw from 60–420s range). Proxy stuck in `wandering` state at grid (5,12) for many ticks at session end — possibly surrounded by solid cells in wandering mode.
+
+### NOTE — Log overwritten by next session
+Session 8 was run immediately after Session 7. Session 8's `bug_catcher.clear()` call overwrote the Session 7 log. `auto_debug_state.json` incremented (run=6→7) confirming shutdown fired correctly. Not a bug; the log retains only the most recent session by design.
+
+### OBSERVATION-17 — Obstacle clearing not yet exercised (wandering state)
+The new `_autopilot_try_clear_obstacle()` only fires in `targeting` state. When proxy gets stuck in `wandering` state surrounded by solid cells, obstacle clearing never triggers. **Fix needed (future):** extend stuck detection to also fire in wandering state.
+
+---
+
+## Session 8 — 2026-03-08 (~8,646 ticks, ~129s, NEW GAME)
+
+First session with 3-minute cap + real proxy HP (100/100).
+
+### CONFIRMED — 3-minute cap working
+Session duration 129s (random within 120–180s range). Timer fired at tick 8646. Shutdown entry logged cleanly.
+
+### CONFIRMED — All action types exercised in one session
+- `[Autopilot] Spell → rain_spell` — spell casting code path hit
+- `[Autopilot] Dropped carrot/tree_sapling/wood` — drop_item code path hit
+- `[Autopilot] Tool → hoe` — tool selection code path hit
+- `[Autopilot] Inspecting TERMITE (id=433)` — NPC inspection code path hit
+
+### CONFIRMED — Obstacle-clear fired: `chopping tree adjacent to proxy (10,13) stuck=60t`
+After 60 ticks stuck in `targeting` state at (10,13), the autopilot called `try_chop_tree()` on the adjacent tree. This cleared the path. Shortly after, proxy crossed into zone `0,1`. Fix is working as designed.
+
+### CONFIRMED — Stuck-exit wander cooldown fired: `Stuck at exit (12, 0)`
+After 5 consecutive nudges to the same north exit cell, proxy entered 10-cycle wander cooldown.
+
+### CONFIRMED — Zone travel: proxy reached zone 0,1
+Player samples at tick 5799 and 7899 both show zone=0,1 — confirming cross-zone travel working reliably now (obstacle-clear + stuck-exit wander both contributing).
+
+### OBSERVATION-18 — Proxy HP not visibly reduced (player_health=100 at shutdown)
+Proxy had real HP (100/100) this session but no combat damage was observed. Either no hostile NPCs attacked, or proxy fled before contact. The real-HP change enables future damage tracking — will monitor in subsequent sessions.
+
+---
+
+## Session 9 — 2026-03-08 (~7,678 ticks, ~115s, CONTINUE)
+
+First session with all three new fixes applied: CLIFF protection, sword_swing combat sound, opportunistic harvest.
+
+### CONFIRMED — Zero integrity anomalies, zero fix events
+All prior watchdog fixes continue to hold.
+
+### CONFIRMED — Opportunistic harvest working
+Inventory grew between watchdog samples:
+- t=1623: `stone: 10, tree_sapling: 3`
+- t=3723: `stone: 12, tree_sapling: 4`
+- t=5823: `stone: 12, tree_sapling: 4` (capped — no new harvestable cells adjacent)
+
+Stone and saplings accumulated passively while proxy wandered. Confirms `_autopilot_opportunistic_harvest()` fires correctly in wandering/targeting states every 30 ticks.
+
+### CONFIRMED — World activity robust
+131 unique zones sampled, 7 structures, 479 entities at shutdown. 2 NPC settlements mid-session (Bram Wildrose/Greta Clearwater settled as miners at zones [2,2] and [-2,1]). TRADER (142), FARMER (124), MINER (94), GUARD (81), LUMBERJACK (56), BANDIT (47), WOLF (37), GOBLIN (33) all active across world zones.
+
+### CONFIRMED — Sheep follower (id=368) persisted from CONTINUE save
+Follower system and save/load path working. Inventory included `sheep_368` follower entry.
+
+### OBSERVATION-19 — Active quest stuck at FARM all session
+This was a CONTINUE session (saved game had FARM quest active). Quest did not rotate during the ~115s session. Log field is `active_quest` (not `quest`) — analysis script had a label mismatch, not a game bug. Quest rotation requires the 1800-tick forced switch; session ended at tick 7678 so only ~4 forced-switch windows occurred. The FARM quest kept the proxy in zone 0,0 the entire session (same as OBSERVATION-09 — FARM targets are local).
+
+### ~~OBSERVATION-20~~ — RETRACTED: watchdog entries are correct, analysis script bug
+Post-session analysis script queried `e.get('zone')`, `e.get('npc_action_counts')`, etc. — fields that don't exist on per-entity `watchdog_npc_actions` entries. Similarly, `count`/`types` don't exist on `watchdog_structure_sample` entries. All three watchdog samplers are correctly emitting per-item entries with the right fields. No game bug.
+
+### OBSERVATION-21 — Proxy stuck in wandering at (6,4) for final 73 ticks [FIXED ✓]
+From t=7605 to shutdown t=7678, proxy position was frozen at (6,4) in `wandering` state. Obstacle clearing only fired in `targeting` state. **Fix:** extended stuck detection in `update_autopilot()` from `proxy.ai_state == 'targeting'` to `proxy.ai_state in ('targeting', 'wandering')`. Obstacle-clear (chop/mine) now fires after 60 stuck ticks in either state.
 
 ---

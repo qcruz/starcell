@@ -1809,8 +1809,7 @@ class NpcAiMixin:
                         if entity.props.get('is_autopilot_proxy', False):
                             self.sound.on_attack()
                         elif hasattr(self, '_npc_action_sound'):
-                            _snd_key = getattr(self, '_ENTITY_SOUND', {}).get(entity.type, 'sword_swing')
-                            self._npc_action_sound(entity, _snd_key)
+                            self._npc_action_sound(entity, 'sword_swing')
 
                     if closest_enemy == 'player':
                         damage = max(1, entity.strength // 5)
