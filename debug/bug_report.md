@@ -5,6 +5,32 @@ Reviewed from `debug/bugcatcher.log` after each session.
 
 ---
 
+## Session 11 — 2026-03-08 (~6,558 ticks, ~120s)
+
+### CONFIRMED — Smooth movement snap eliminated
+Max grid-world delta across all entity log entries: **1.00 cells** (zero snap events; snap threshold = 2.5).
+Speed-calibrated rate limiter on `wander_entity` and `move_toward_position` works correctly:
+- Entities move once per ~29 ticks (speed=1.0), giving smooth interpolation (0.034 cells/tick) exactly enough time to traverse one cell before the next grid step.
+- BAT 518 example: moved grid=[2,2] at t=6271 with world=[2.0,1.0]; world reached [2.0,2.0] by t=6291 (20 ticks). Clean.
+- Zone-crossing artifact: BAT 300 at t=6511 had grid=[20,9] world=[21.0,9.0] (1.0 cell difference from zone transition). World interpolated smoothly to [20.0,9.0] by t=6538. Normal.
+
+### CONFIRMED — iron_ingot in inventory at t=5658
+Proxy inventory at t=5658 showed `iron_ingot: 1`. Crafting system active (or IRON_ORE loot table). rain_spell and day_spell present in magic inventory confirming new_game spell seeding works.
+
+### CONFIRMED — BAT follower persisted entire session
+BAT id=300 remained in followers list across all three watchdog samples (t=1458, t=3558, t=5658). Follower death fix holds.
+
+### CONFIRMED — Bat animation cycling while stationary (not the subscreen bug)
+BAT entities (300, 518) in zone 0,0 spent extended time in `targeting` state aimed at cell [1,1,"structure"] while `moving=false`. Animation cycled still→1→still→2→still normally. Entities are NOT in_subscreen. This is a separate issue: bats are targeting a structure cell they can't enter or reach, oscillating in idle/targeting. Non-critical — no snap, no freeze.
+
+### OBSERVATION-24 — Proxy didn't craft iron_sword despite having iron_ingot + bone_sword
+At t=5658: `iron_ingot: 1` in items, `bone_sword: 1` in tools. Recipe `hilt + hilt → iron_sword`? Check recipe requirements. Autopilot `_autopilot_try_craft` would have attempted if recipe was satisfied. Either recipe needs `iron_ingot + hilt` and hilt is missing, or crafting UI menu open check is blocking the craft call. Investigate `attempt_craft_selected()` — may require 'crafting' to be in `open_menus`.
+
+### OBSERVATION-25 — Bats stuck targeting structure cell they cannot enter
+BAT 300 and BAT 518 cycled between `targeting` (target=["cell",1,1,"structure"]) and `idle` for hundreds of ticks without making progress. Bats can't enter structure zones from the overworld without using an EXIT cell. The targeting AI should check whether the entity can actually reach the target type, or add a timeout to abandon unreachable structure targets. Low priority.
+
+---
+
 ## Session 10 — 2026-03-08 (~8,065 ticks, ~122s, CONTINUE)
 
 ### CONFIRMED — Resource collection dramatically improved
