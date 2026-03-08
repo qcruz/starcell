@@ -29,6 +29,7 @@ class SoundManager:
             self._ok = False
             return
         self._ok = True
+        self.music_enabled  = True   # toggled by menu checkbox
         pygame.mixer.set_num_channels(8)
         self.music_volume   = 0.35
         self.sfx_volume     = 0.65
@@ -117,6 +118,9 @@ class SoundManager:
     def play_music(self, track_key, fade_ms=1000):
         if not self._ok or track_key == self.current_music:
             return
+        if not self.music_enabled:
+            self.current_music = track_key  # track what would be playing
+            return
         entry = self._music_bufs.get(track_key)
         if not entry:
             return
@@ -131,6 +135,22 @@ class SoundManager:
         if self._ok:
             pygame.mixer.music.fadeout(fade_ms)
         self.current_music = None
+
+    def set_music_enabled(self, enabled):
+        """Enable or disable ambient/background music at runtime."""
+        if not self._ok:
+            return
+        self.music_enabled = enabled
+        if not enabled:
+            pygame.mixer.music.fadeout(500)
+        elif self.current_music:
+            # Resume the track that should be playing
+            entry = self._music_bufs.get(self.current_music)
+            if entry:
+                data, namehint = entry
+                pygame.mixer.music.load(io.BytesIO(data), namehint)
+                pygame.mixer.music.set_volume(self.music_volume)
+                pygame.mixer.music.play(-1, fade_ms=500)
 
     # ------------------------------------------------------------------
     # Convenience hooks

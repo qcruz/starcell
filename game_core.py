@@ -2,11 +2,17 @@
 StarCell Game Core
 Rendering, player systems, world gen, quests, save/load, zone updates.
 """
+import sys
+import os as _os
+
 from constants import *
 from entity import *
 from debug.bug_catcher import BugCatcher
 from debug.watchdog import Watchdog
 from systems.sound_manager import SoundManager
+
+_SETTINGS_PATH = 'settings.json'
+_REAL_STDOUT = sys.stdout  # saved before any redirect
 
 class GameCoreMixin:
     """Core game systems. Mixed into Game via multiple inheritance."""
@@ -114,7 +120,12 @@ class GameCoreMixin:
         # Debug visualization
         self.debug_memory_lanes = False  # Shows trader memory lanes and targets
         self.debug_entity_ai = True  # Shows entity AI state and target info
-        
+
+        # Persistent settings (loaded from settings.json)
+        self.ambient_music_enabled = True
+        self.debug_prints_enabled = True
+        self._load_settings()
+
         # Load sprites
         self.load_sprites()
 
@@ -179,6 +190,7 @@ class GameCoreMixin:
 
         # Audio
         self.sound = SoundManager()
+        self._apply_settings()  # apply after SoundManager exists
 
         # Last git push timestamp (shown on pause screen)
         try:
@@ -962,8 +974,10 @@ class GameCoreMixin:
             if event.type in [pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN]:
                 self.mark_input()
             
-            if event.type == pygame.MOUSEBUTTONDOWN and self.state == 'playing':
-                if event.button == 1:  # Left click
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if event.button == 1 and self.state == 'menu':
+                    self._handle_menu_click(event.pos)
+                elif event.button == 1 and self.state == 'playing':
                     self.handle_inventory_click(event.pos)
                     self.handle_quest_ui_click(event.pos)
             
@@ -1235,6 +1249,67 @@ class GameCoreMixin:
                 q_name = QUEST_TYPES.get(nq.quest.quest_type, {}).get('name', nq.quest.quest_type)
                 print(f"Tracking NPC quest [{q_name}] from {npc_name}")
                 return
+
+    # -------------------------------------------------------------------------
+    # Settings helpers
+    # -------------------------------------------------------------------------
+
+    def _load_settings(self):
+        try:
+            import json as _json
+            with open(_SETTINGS_PATH, 'r') as f:
+                data = _json.load(f)
+            self.ambient_music_enabled = bool(data.get('ambient_music', True))
+            self.debug_prints_enabled  = bool(data.get('debug_prints',  True))
+        except Exception:
+            pass  # use defaults
+
+    def _save_settings(self):
+        try:
+            import json as _json
+            with open(_SETTINGS_PATH, 'w') as f:
+                _json.dump({
+                    'ambient_music': self.ambient_music_enabled,
+                    'debug_prints':  self.debug_prints_enabled,
+                }, f)
+        except Exception:
+            pass
+
+    def _apply_settings(self):
+        # Music
+        if hasattr(self, 'sound'):
+            self.sound.set_music_enabled(self.ambient_music_enabled)
+        # Debug prints: redirect stdout to devnull when disabled
+        if self.debug_prints_enabled:
+            sys.stdout = _REAL_STDOUT
+        else:
+            if sys.stdout is not _REAL_STDOUT:
+                return  # already redirected
+            try:
+                sys.stdout = open(_os.devnull, 'w')
+            except Exception:
+                pass
+
+    # checkbox rects used by both draw_menu and _handle_menu_click
+    MENU_CB_MUSIC_RECT  = pygame.Rect(0, 0, 140, 18)  # positioned in draw_menu
+    MENU_CB_DEBUG_RECT  = pygame.Rect(0, 0, 140, 18)
+
+    def _handle_menu_click(self, pos):
+        """Handle left-click on main menu (checkbox toggles)."""
+        mr = getattr(self, '_menu_cb_music_rect', None)
+        dr = getattr(self, '_menu_cb_debug_rect', None)
+        if mr and mr.collidepoint(pos):
+            self.ambient_music_enabled = not self.ambient_music_enabled
+            self._save_settings()
+            self._apply_settings()
+        elif dr and dr.collidepoint(pos):
+            self.debug_prints_enabled = not self.debug_prints_enabled
+            self._save_settings()
+            self._apply_settings()
+
+    # -------------------------------------------------------------------------
+    # Spells
+    # -------------------------------------------------------------------------
 
     def cast_rain_spell(self):
         if self.player['energy'] < 90:

@@ -34,9 +34,9 @@ class MenusMixin:
             "N - Trade   B - Block   V - Friendly fire",
             "L - Cast spell   K - Reverse spell",
             "Shift+A - Toggle autopilot",
-            "I - Items   T - Tools   M - Magic",
+            "I - Items   T - Tools   M - Magic   R - Actions",
             "F - Followers   C - Crafting   X - Craft",
-            "Q - Quests   1-9 - Select slot",
+            "Shift+F - Recruit NPC   Q - Quests   1-9 - Select slot",
             "ESC - Pause",
         ]
 
@@ -45,6 +45,30 @@ class MenusMixin:
             text = self.small_font.render(option, True, COLORS['WHITE'])
             self.screen.blit(text, (SCREEN_WIDTH // 2 - text.get_width() // 2, y))
             y += 25
+
+        # ── Settings checkboxes ──
+        cb_x = SCREEN_WIDTH // 2 - 70
+        y += 10
+
+        def draw_checkbox(label, checked, cy):
+            box_rect = pygame.Rect(cb_x, cy, 14, 14)
+            pygame.draw.rect(self.screen, COLORS['WHITE'], box_rect, 2)
+            if checked:
+                pygame.draw.line(self.screen, COLORS['WHITE'],
+                                 (cb_x + 2, cy + 7), (cb_x + 6, cy + 11), 2)
+                pygame.draw.line(self.screen, COLORS['WHITE'],
+                                 (cb_x + 6, cy + 11), (cb_x + 12, cy + 3), 2)
+            lbl = self.small_font.render(label, True, COLORS['WHITE'])
+            self.screen.blit(lbl, (cb_x + 20, cy))
+            # Return clickable rect (box + label)
+            return pygame.Rect(cb_x, cy, 20 + lbl.get_width(), 16)
+
+        music_rect  = draw_checkbox("Ambient Music", getattr(self, 'ambient_music_enabled', True), y)
+        debug_rect  = draw_checkbox("Debug Prints",  getattr(self, 'debug_prints_enabled',  True), y + 22)
+
+        # Store rects for click detection in handle_input
+        self._menu_cb_music_rect = music_rect
+        self._menu_cb_debug_rect = debug_rect
 
     # -------------------------------------------------------------------------
     # Pause screen
