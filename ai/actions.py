@@ -10,6 +10,41 @@ from engine import *
 
 class NpcAiActionsMixin:
 
+    # ------------------------------------------------------------------
+    # Spatial sound helper
+    # ------------------------------------------------------------------
+
+    # Maps cell types being harvested → preferred sound key
+    _CELL_SOUND = {
+        'TREE': 'wood_chop', 'PINE': 'wood_chop', 'PALM': 'wood_chop',
+        'OAK': 'wood_chop',  'BIRCH': 'wood_chop',
+    }
+
+    # Maps entity types → ambient combat grunt sound
+    _ENTITY_SOUND = {
+        'GOBLIN': 'goblin_sound', 'GOBLIN_SHAMAN': 'goblin_sound',
+        'WOLF': 'wolf_sound',
+        'SKELETON': 'skeleton_sound',
+        'TERMITE': 'termite_sound',
+        'BAT': 'bat_sound',
+        'BLACKSMITH': 'smithing_sound',
+    }
+
+    def _npc_action_sound(self, actor, sound_key):
+        """Play a spatially attenuated sound for an NPC actor.
+        Checks same-screen and computes Manhattan distance to player."""
+        if not hasattr(self, 'sound') or not hasattr(self.sound, 'play_sfx_spatial'):
+            return
+        if actor is None or actor == 'player':
+            return
+        # Only play if on same screen as player
+        px_screen = f"{self.player.get('screen_x', 0)},{self.player.get('screen_y', 0)}"
+        npc_screen = f"{getattr(actor, 'screen_x', -1)},{getattr(actor, 'screen_y', -1)}"
+        if px_screen != npc_screen:
+            return
+        dist = abs(actor.x - self.player['x']) + abs(actor.y - self.player['y'])
+        self.sound.play_sfx_spatial(sound_key, dist)
+
     def action_harvest_cell(self, actor, screen_key, cell_types, success_rate=0.5,
                             result_cell=None, activity=None):
         """Universal harvest: chop tree, mine rock, harvest crop.
@@ -37,10 +72,10 @@ class NpcAiActionsMixin:
                 actor.trigger_action_animation()
             self.show_attack_animation(cx, cy, entity=None if is_player else actor)
 
-            # Sound: swing/chop/mine sound for autopilot proxy
-            _is_proxy = not is_player and hasattr(actor, 'props') and actor.props.get('is_autopilot_proxy', False)
-            if _is_proxy and hasattr(self, 'sound'):
-                self.sound.on_attack()
+            # Sound: spatially attenuated action sound for all actors
+            if not is_player:
+                _sound_key = self._CELL_SOUND.get(cell, 'sword_swing')
+                self._npc_action_sound(actor, _sound_key)
 
             # XP for entity
             if not is_player:
@@ -74,9 +109,12 @@ class NpcAiActionsMixin:
                     else:
                         actor.inventory[item] = actor.inventory.get(item, 0) + amount
 
-                # Sound: pickup on successful harvest for proxy
-                if _is_proxy and hasattr(self, 'sound'):
-                    self.sound.on_pickup()
+                # Pickup sound: full volume for proxy (it IS the player), spatial for others
+                if not is_player and hasattr(self, 'sound'):
+                    if hasattr(actor, 'props') and actor.props.get('is_autopilot_proxy', False):
+                        self.sound.on_pickup()
+                    else:
+                        self._npc_action_sound(actor, _sound_key)
 
                 # Transform cell if specified
                 if result_cell:
@@ -116,9 +154,9 @@ class NpcAiActionsMixin:
                 actor.trigger_action_animation()
             self.show_attack_animation(cx, cy, entity=None if is_player else actor)
 
-            # Sound: tool-use sound for autopilot proxy
-            if not is_player and hasattr(actor, 'props') and actor.props.get('is_autopilot_proxy', False) and hasattr(self, 'sound'):
-                self.sound.on_attack()
+            # Sound: spatially attenuated for all actors
+            if not is_player:
+                self._npc_action_sound(actor, 'sword_swing')
 
             if not is_player:
                 actor.xp += 1

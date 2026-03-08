@@ -26,6 +26,9 @@ class SoundManager:
 
     DAWN_TRACKS = ['ambient_travel_1', 'ambient_travel_2', 'ambient_travel_3']
 
+    # Max NPC spatial sounds per tick (budget to prevent audio spam)
+    NPC_SOUND_BUDGET = 2
+
     def __init__(self):
         try:
             pygame.mixer.init()
@@ -43,6 +46,7 @@ class SoundManager:
         self._ambient_ch    = pygame.mixer.Channel(7)
         self._next_bird_tick    = random.randint(400, 900)
         self._next_cricket_tick = random.randint(800, 1800)
+        self._npc_sounds_this_tick = 0   # reset each tick in update()
         self.sounds = {}
         self._music_bufs = {}   # {track_key: (BytesIO, ext)} — pre-read at startup
         self._load_all()
@@ -50,6 +54,17 @@ class SoundManager:
     # ------------------------------------------------------------------
     # Loading helpers
     # ------------------------------------------------------------------
+
+    def _load_sfx_list(self, paths):
+        """Load an explicit list of file paths as a sound pool."""
+        pool = []
+        for path in paths:
+            if os.path.exists(path):
+                try:
+                    pool.append(pygame.mixer.Sound(path))
+                except Exception:
+                    pass
+        return pool
 
     def _load_pool(self, prefix, sfx_dir='sounds/sfx'):
         """Load prefix_0, prefix_1, … until a file is missing."""
@@ -90,6 +105,23 @@ class SoundManager:
                 except Exception:
                     pass
 
+        # NPC / creature spatial sounds (from 'sound files/game_files/')
+        _gf = 'sound files/game_files'
+        self.sounds['wood_chop']      = self._load_sfx_list([
+            f'{_gf}/chop_wood_sound_1.wav', f'{_gf}/chop_wood_sound_2.wav'])
+        self.sounds['goblin_sound']   = self._load_sfx_list([
+            f'{_gf}/goblin_sound_1.wav', f'{_gf}/goblin_sound_2.wav'])
+        self.sounds['wolf_sound']     = self._load_sfx_list([
+            f'{_gf}/wolf_sound_1.wav'])
+        self.sounds['skeleton_sound'] = self._load_sfx_list([
+            f'{_gf}/skeleton_sound_1.wav', f'{_gf}/skeleton_sound_2.wav'])
+        self.sounds['termite_sound']  = self._load_sfx_list([
+            f'{_gf}/termite_sound_1.wav', f'{_gf}/termite_sound_2.wav'])
+        self.sounds['bat_sound']      = self._load_sfx_list([
+            f'{_gf}/bat_wing_flap_sound_1.wav'])
+        self.sounds['smithing_sound'] = self._load_sfx_list([
+            f'{_gf}/backgroun_smithing_sound_1.wav'])
+
         # Pre-read all music files into memory so transitions hit RAM, not disk
         for key, path in self.MUSIC.items():
             if not os.path.exists(path):
@@ -119,6 +151,23 @@ class SoundManager:
         snd = random.choice(pool) if isinstance(pool, list) else pool
         snd.set_volume(self.sfx_volume)
         snd.play()
+
+    def play_sfx_spatial(self, key, dist, max_dist=8):
+        """Play a sound with volume scaled by distance (cells). Budget-limited per tick."""
+        if not self._ok:
+            return
+        if self._npc_sounds_this_tick >= self.NPC_SOUND_BUDGET:
+            return
+        pool = self.sounds.get(key)
+        if not pool:
+            return
+        vol = self.sfx_volume * max(0.0, 1.0 - dist / max_dist)
+        if vol <= 0.01:
+            return
+        snd = random.choice(pool) if isinstance(pool, list) else pool
+        snd.set_volume(vol)
+        snd.play()
+        self._npc_sounds_this_tick += 1
 
     def play_music(self, track_key, fade_ms=1000):
         if not self._ok or track_key == self.current_music:
@@ -211,6 +260,9 @@ class SoundManager:
     def update(self, tick, state, is_night, in_structure, cell_at_player):
         if not self._ok:
             return
+
+        # Reset NPC sound budget each tick
+        self._npc_sounds_this_tick = 0
 
         # Music context switching
         if state == 'menu':

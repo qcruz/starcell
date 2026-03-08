@@ -35,7 +35,18 @@ class NpcAiMixin:
 
         # Reset per-update movement flag so behavior guard is accurate this cycle
         entity.moved_this_update = False
-        
+
+        # Periodic ambient creature sounds (wolves growl, bats flap, etc.)
+        if hasattr(self, '_npc_action_sound') and hasattr(self, 'sound'):
+            _ambient_snd = getattr(self, '_ENTITY_SOUND', {}).get(entity.type)
+            if _ambient_snd:
+                if not hasattr(entity, '_ambient_sound_timer'):
+                    entity._ambient_sound_timer = random.randint(120, 400)
+                entity._ambient_sound_timer -= 1
+                if entity._ambient_sound_timer <= 0:
+                    entity._ambient_sound_timer = random.randint(200, 600)
+                    self._npc_action_sound(entity, _ambient_snd)
+
         # ── AUTOPILOT SAFETY: force-clear ANY freeze flags on ALL entities ──
         if getattr(self, 'autopilot', False):
             if entity.idle_timer > 0:
@@ -1793,9 +1804,13 @@ class NpcAiMixin:
                 if random.random() < attack_chance:
                     _tp = getattr(self, 'time_pass_speed', 1.0)
 
-                    # Sound: proxy attacking an enemy
-                    if entity.props.get('is_autopilot_proxy', False) and hasattr(self, 'sound'):
-                        self.sound.on_attack()
+                    # Sound: proxy gets full-volume attack; all others get spatial
+                    if hasattr(self, 'sound'):
+                        if entity.props.get('is_autopilot_proxy', False):
+                            self.sound.on_attack()
+                        elif hasattr(self, '_npc_action_sound'):
+                            _snd_key = getattr(self, '_ENTITY_SOUND', {}).get(entity.type, 'sword_swing')
+                            self._npc_action_sound(entity, _snd_key)
 
                     if closest_enemy == 'player':
                         damage = max(1, entity.strength // 5)
