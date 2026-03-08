@@ -81,5 +81,19 @@ class Game(
 
 
 if __name__ == '__main__':
+    import random, time
+
+    # ── AUTO_DEBUG: set True to run headless autopilot debug sessions ──────────
+    AUTO_DEBUG = True
+    AUTO_DEBUG_DURATION_SECS = random.randint(120, 210)  # 2–3.5 min per run
+    # ──────────────────────────────────────────────────────────────────────────
+
     game = Game()
+
+    if AUTO_DEBUG:
+        game.new_game()
+        game.toggle_autopilot()
+        game._auto_debug_end_time = time.time() + AUTO_DEBUG_DURATION_SECS
+        print(f"[AutoDebug] Session started — will end in {AUTO_DEBUG_DURATION_SECS}s")
+
     game.run()

@@ -4,6 +4,8 @@ Rendering, player systems, world gen, quests, save/load, zone updates.
 """
 import sys
 import os as _os
+import time as _time
+import datetime as _datetime
 
 from constants import *
 from entity import *
@@ -2383,6 +2385,34 @@ class GameCoreMixin:
         for cell_key in cells_to_remove:
             del self.enchanted_cells[cell_key]
     
+    def _auto_debug_shutdown(self):
+        """Save, flush logs, and quit cleanly at end of AUTO_DEBUG session."""
+        ts = _datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        print(f"[AutoDebug] Timer expired at tick {self.tick} ({ts}) — saving and quitting")
+        self.bug_catcher.log({
+            'tick': self.tick,
+            'category': 'auto_debug_shutdown',
+            'ts': ts,
+            'total_ticks': self.tick,
+            'is_night': getattr(self, 'is_night', False),
+            'entity_count': len(getattr(self, 'entities', {})),
+            'zone_count': len(getattr(self, 'screens', {})),
+            'structure_count': len(getattr(self, 'structures', {})),
+            'follower_count': len(getattr(self, 'followers', [])),
+            'player_zone': f"{self.player.get('screen_x',0)},{self.player.get('screen_y',0)}",
+            'player_health': self.player.get('health'),
+            'player_level': self.player.get('level'),
+        })
+        self.bug_catcher.flush()
+        try:
+            self.save_game(path='debug/auto_debug_save.json')
+            print("[AutoDebug] Save written to debug/auto_debug_save.json")
+        except Exception as exc:
+            print(f"[AutoDebug] Save failed: {exc}")
+        import pygame
+        pygame.quit()
+        self.running = False
+
     def run(self):
         """Main game loop"""
         while self.running:
@@ -2440,6 +2470,11 @@ class GameCoreMixin:
 
                 # Watchdog: periodic sample + integrity checks + flush
                 self.watchdog.update(self.tick, self)
+
+                # AUTO_DEBUG: hard-stop when wall-clock timer expires
+                if hasattr(self, '_auto_debug_end_time') and _time.time() >= self._auto_debug_end_time:
+                    self._auto_debug_shutdown()
+                    break
 
                 self.tick += 1
                 self.draw_game()

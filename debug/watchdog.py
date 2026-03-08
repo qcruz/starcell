@@ -31,7 +31,7 @@ from debug.fixes import fix_entity_subscreen_flag
 
 
 class Watchdog:
-    CATEGORIES = ['entities', 'cells', 'zones', 'player', 'structures']
+    CATEGORIES = ['entities', 'cells', 'zones', 'player', 'structures', 'followers', 'npc_actions']
     SAMPLE_INTERVAL   = 300    # ticks between cycles (~5 s at 60 fps)
     MAX_ENTRIES_PER_SAMPLE = 200  # max JSON entries per category per cycle
     BACKUP1_INTERVAL  = 3600   # ~60 s at 60 fps
@@ -62,6 +62,8 @@ class Watchdog:
             'zones':      self._sample_zones,
             'player':     self._sample_player,
             'structures': self._sample_structures,
+            'followers':  self._sample_followers,
+            'npc_actions': self._sample_npc_actions,
         }
         _SAMPLERS[category](tick, game)
 
@@ -279,6 +281,80 @@ class Watchdog:
                 'cell_counts': cell_counts,
             })
 
+    def _sample_followers(self, tick: int, game) -> None:
+        """Log full state for every active follower."""
+        followers = getattr(game, 'followers', [])
+        follower_items = getattr(game, 'follower_items', {})
+        player_zone = f"{game.player.get('screen_x', 0)},{game.player.get('screen_y', 0)}"
+        if not followers:
+            self.bug_catcher.log({
+                'tick': tick,
+                'category': 'watchdog_follower_sample',
+                'note': 'no followers',
+            })
+            return
+        for fid in followers:
+            entity = game.entities.get(fid)
+            if not entity:
+                self.bug_catcher.log({
+                    'tick': tick,
+                    'category': 'watchdog_follower_sample',
+                    'id': fid,
+                    'error': 'missing_from_entities',
+                    'item_name': follower_items.get(fid),
+                })
+                continue
+            follower_zone = f"{entity.screen_x},{entity.screen_y}"
+            self.bug_catcher.log({
+                'tick': tick,
+                'category': 'watchdog_follower_sample',
+                'id': fid,
+                'type': entity.type,
+                'zone': follower_zone,
+                'player_zone': player_zone,
+                'zone_match': follower_zone == player_zone,
+                'grid': [entity.x, entity.y],
+                'health': entity.health,
+                'ai_state': getattr(entity, 'ai_state', None),
+                'in_combat': getattr(entity, 'in_combat', False),
+                'current_target': getattr(entity, 'current_target', None),
+                'hostile': entity.props.get('hostile', False),
+                'item_name': follower_items.get(fid),
+            })
+
+    def _sample_npc_actions(self, tick: int, game) -> None:
+        """Log AI state for all entities on the player's current screen."""
+        player_zone = f"{game.player.get('screen_x', 0)},{game.player.get('screen_y', 0)}"
+        eids = game.screen_entities.get(player_zone, [])
+        if not eids:
+            self.bug_catcher.log({
+                'tick': tick,
+                'category': 'watchdog_npc_actions',
+                'note': 'no entities on player screen',
+            })
+            return
+        followers = getattr(game, 'followers', [])
+        all_items = [(eid, game.entities[eid]) for eid in eids if eid in game.entities]
+        selected = self._trim(tick, 'npc_actions', all_items)
+        for eid, entity in selected:
+            self.bug_catcher.log({
+                'tick': tick,
+                'category': 'watchdog_npc_actions',
+                'id': eid,
+                'type': entity.type,
+                'grid': [entity.x, entity.y],
+                'ai_state': getattr(entity, 'ai_state', None),
+                'ai_state_timer': getattr(entity, 'ai_state_timer', None),
+                'target_priority': getattr(entity, 'target_priority', None),
+                'in_combat': getattr(entity, 'in_combat', False),
+                'current_target': getattr(entity, 'current_target', None),
+                'hostile': entity.props.get('hostile', False),
+                'health': entity.health,
+                'is_follower': eid in followers,
+                'last_ai_tick': getattr(entity, 'last_ai_tick', None),
+                'stuck_counter': getattr(entity, 'stuck_counter', 0),
+            })
+
     # ------------------------------------------------------------------
     # Integrity checks
     # ------------------------------------------------------------------
@@ -319,6 +395,36 @@ class Watchdog:
                     'entity_type': entity.type,
                     'zone': zone_key,
                     'found_in_structures': entity_in_structures[eid],
+                })
+
+        # Check 3: follower integrity
+        followers = getattr(game, 'followers', [])
+        for fid in followers:
+            if fid not in game.entities:
+                self.bug_catcher.log({
+                    'tick': tick,
+                    'category': 'integrity_anomaly',
+                    'check': 'follower_missing_from_entities',
+                    'entity_id': fid,
+                })
+                continue
+            fe = game.entities[fid]
+            if fe.props.get('hostile', False):
+                self.bug_catcher.log({
+                    'tick': tick,
+                    'category': 'integrity_anomaly',
+                    'check': 'follower_is_hostile',
+                    'entity_id': fid,
+                    'entity_type': fe.type,
+                })
+            if getattr(fe, 'current_target', None) == 'player':
+                self.bug_catcher.log({
+                    'tick': tick,
+                    'category': 'integrity_anomaly',
+                    'check': 'follower_targeting_player',
+                    'entity_id': fid,
+                    'entity_type': fe.type,
+                    'ai_state': getattr(fe, 'ai_state', None),
                 })
 
     # ------------------------------------------------------------------
