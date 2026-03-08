@@ -1385,6 +1385,11 @@ class GameCoreMixin:
             self.inventory.add_item(follower_name, 1)
             if hasattr(self, 'follower_items'):
                 self.follower_items[npc_id] = follower_name
+            # Clear pathfinding state so follower moves cleanly from the start
+            entity.memory_lane = []
+            entity.last_move_tick = 0
+            entity.target_stuck_counter = 0
+            entity.last_target_position = None
             print(f"{npc_name} has decided to follow you!")
         else:
             print(f"{npc_name} declined to follow.")

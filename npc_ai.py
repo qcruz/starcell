@@ -44,14 +44,18 @@ class NpcAiMixin:
             if hasattr(self, 'inspected_npc') and self.inspected_npc is not None:
                 self.inspected_npc = None
         
+        # Check follower status early — followers must never be frozen by inspection
+        _is_follower_early = entity_id in getattr(self, 'followers', [])
+
         # FRIENDLY NPCs targeted by player should stop moving (unless under attack)
-        if (not getattr(self, 'autopilot', False) and
+        if (not _is_follower_early and
+                not getattr(self, 'autopilot', False) and
                 not entity.props.get('is_autopilot_proxy', False) and
-                hasattr(self, 'inspected_npc') and self.inspected_npc == entity_id and 
+                hasattr(self, 'inspected_npc') and self.inspected_npc == entity_id and
                 not entity.props.get('hostile', False)):
             if not entity.in_combat:
                 return  # Skip AI update - NPC stays still
-        
+
         # UNIFIED AI STATE SYSTEM - Update entity AI state based on parameters
         self.update_entity_ai_state(entity_id, entity)
         

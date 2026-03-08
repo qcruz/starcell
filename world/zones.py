@@ -243,6 +243,12 @@ class ZonesMixin:
             for x in range(1, GRID_WIDTH - 1):
                 cell = screen['grid'][y][x]
 
+                # Trees decay especially fast in desert
+                if biome == 'DESERT' and cell in ('TREE1', 'TREE2'):
+                    if random.random() < 0.08:
+                        screen['grid'][y][x] = base_cell
+                    continue
+
                 if cell in revert_targets and random.random() < 0.003:
                     screen['grid'][y][x] = base_cell
                     continue

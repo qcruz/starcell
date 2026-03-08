@@ -97,6 +97,7 @@ class CellsMixin:
 
         screen = self.screens[key]
         new_grid = [row[:] for row in screen['grid']]  # shallow copy per row
+        biome = screen.get('biome', 'FOREST')
 
         _tp = getattr(self, 'time_pass_speed', 1.0)
 
@@ -109,6 +110,10 @@ class CellsMixin:
 
         for y in range(GRID_HEIGHT):
             for x in range(GRID_WIDTH):
+                # 50% chance to skip this cell's update — reduces simultaneous churn
+                if random.random() < 0.5:
+                    continue
+
                 cell = screen['grid'][y][x]
 
                 if cell in ['WALL', 'HOUSE', 'CAVE', 'CLIFF']:
@@ -187,8 +192,8 @@ class CellsMixin:
                     if random.random() < min(1.0, GRASS_TO_DIRT_RATE * _decay):
                         new_grid[y][x] = 'DIRT'
 
-                # Tree spread (needs grass, water, and no cobblestone adjacency)
-                elif cell == 'GRASS' and cobblestone_count == 0 and 1 <= tree_count <= 2 and total_water >= 1:
+                # Tree spread (needs grass, water, no cobblestone, and not desert)
+                elif cell == 'GRASS' and biome != 'DESERT' and cobblestone_count == 0 and 1 <= tree_count <= 2 and total_water >= 1:
                     if random.random() < min(1.0, TREE_GROWTH_RATE * _growth):
                         new_grid[y][x] = 'TREE1'
 
@@ -239,6 +244,11 @@ class CellsMixin:
                 elif cell.startswith('TREE') and cobblestone_count > 0:
                     if random.random() < min(1.0, TREE_CROWD_DECAY_RATE * _decay):
                         new_grid[y][x] = 'GRASS'
+
+                # Trees on/near sand decay fast to SAND (desert kills trees)
+                elif cell.startswith('TREE') and sand_count >= 1:
+                    if random.random() < min(1.0, 0.15 * _decay):
+                        new_grid[y][x] = 'SAND'
 
                 # Tree crowding decay — any adjacent tree triggers decay chance
                 # Naturally produces checkerboard spacing as isolated trees survive
