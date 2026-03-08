@@ -315,6 +315,11 @@ class AutopilotMixin:
           not a stale phantom.
         • current_screen stays correct if the proxy crosses a zone boundary.
         """
+        # If the proxy somehow ended up inside a structure, do not sync position —
+        # syncing virtual coords would break current_screen and in_structure state.
+        if getattr(proxy, 'in_structure', False):
+            return
+
         self.player['facing']   = proxy.facing
         self.player['world_x']  = proxy.world_x
         self.player['world_y']  = proxy.world_y

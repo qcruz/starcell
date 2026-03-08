@@ -1574,22 +1574,23 @@ class GameCoreMixin:
         # Exits are only open at the center corridor (±1 of center edge).
         # Require player to be inside that corridor before allowing transition,
         # matching the NPC zone transition requirement in try_entity_zone_transition.
-        if not self.player.get('in_structure'):
+        _exits = self.current_screen.get('exits') if self.current_screen else None
+        if not self.player.get('in_structure') and _exits:
             center_x = GRID_WIDTH // 2
             center_y = GRID_HEIGHT // 2
-            if new_y < 0 and self.current_screen['exits']['top'] and abs(new_x - center_x) <= 1:
+            if new_y < 0 and _exits.get('top') and abs(new_x - center_x) <= 1:
                 new_screen_y -= 1
                 new_y = GRID_HEIGHT - 2
                 screen_changed = True
-            elif new_y >= GRID_HEIGHT and self.current_screen['exits']['bottom'] and abs(new_x - center_x) <= 1:
+            elif new_y >= GRID_HEIGHT and _exits.get('bottom') and abs(new_x - center_x) <= 1:
                 new_screen_y += 1
                 new_y = 1
                 screen_changed = True
-            elif new_x < 0 and self.current_screen['exits']['left'] and abs(new_y - center_y) <= 1:
+            elif new_x < 0 and _exits.get('left') and abs(new_y - center_y) <= 1:
                 new_screen_x -= 1
                 new_x = GRID_WIDTH - 2
                 screen_changed = True
-            elif new_x >= GRID_WIDTH and self.current_screen['exits']['right'] and abs(new_y - center_y) <= 1:
+            elif new_x >= GRID_WIDTH and _exits.get('right') and abs(new_y - center_y) <= 1:
                 new_screen_x += 1
                 new_x = 1
                 screen_changed = True

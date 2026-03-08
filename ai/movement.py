@@ -1082,6 +1082,10 @@ class NpcAiMovementMixin:
         if entity.in_structure:
             return
 
+        # Autopilot proxy must never enter structures — it would desync current_screen
+        if entity.props.get('is_autopilot_proxy', False):
+            return
+
         if screen_key not in self.screens:
             return
 
