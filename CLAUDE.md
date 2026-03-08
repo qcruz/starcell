@@ -57,6 +57,7 @@ python3 main.py   # runs on dev-observation branch
 Session ends automatically (2–3 min timer). Review `debug/bug_catcher.log` and update `debug/bug_report.md` with findings. Document as `Session N` with CONFIRMED / OBSERVATION / BUG entries.
 
 **What to watch for:**
+- Primary purpose is to monitor all game mechanics working correctly, in as much detail as possible. This includes zones, cells, entities, items, and all features and systems. The watchdog method is intended to take reasonable snapshots of different systems on rotation.
 - Inventory growth (stone, iron_ore, wood accumulating → harvest working)
 - Quest rotation (should cycle 4–6 quest types per session)
 - Zone travel (proxy should cross at least one zone boundary)
