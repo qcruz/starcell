@@ -79,6 +79,9 @@ class AutopilotMixin:
         self._autopilot_proxy_last_pos = None     # (x, y) at last tick for stuck detection
         self._autopilot_pos_stuck_ticks = 0       # ticks at same position while targeting
         self._autopilot_harvest_timer = 0         # opportunistic harvest every ~30 ticks
+        # Simulated input queue — autopilot posts real pygame events with human delays
+        self._ap_input_queue = []      # [(fire_at_tick, event_or_callable, log_label)]
+        self._ap_pending_suppress = 0  # mark_input() skips this many times for AP events
         # Grace period: autopilot cannot engage until this tick
         start_tick = getattr(self, 'tick', 0)
         self.last_input_tick = start_tick + AUTOPILOT_GRACE_TICKS
@@ -88,7 +91,12 @@ class AutopilotMixin:
         return self.tick - self.last_input_tick > AUTOPILOT_IDLE_TICKS
 
     def mark_input(self):
-        """Called on any player input — always disables autopilot."""
+        """Called on any player input — always disables autopilot.
+        Synthetic autopilot events increment _ap_pending_suppress so this
+        method silently passes for each queued event without disengaging."""
+        if getattr(self, '_ap_pending_suppress', 0) > 0:
+            self._ap_pending_suppress -= 1
+            return
         self.last_input_tick = self.tick
         if self.autopilot:
             self.autopilot_locked = False
@@ -111,6 +119,9 @@ class AutopilotMixin:
         """Top-level autopilot tick.  Spawns proxy on first call, then maintains it."""
         if not self.autopilot or self.state != 'playing':
             return
+
+        # Drain any queued synthetic button presses first
+        self._ap_flush_input_queue()
 
         # Spawn proxy if not yet created
         if self.autopilot_proxy_id is None:
@@ -593,11 +604,92 @@ class AutopilotMixin:
 
         print(f"[Autopilot] Quest switch: {old} → {self.active_quest}")
 
+    # ── Simulated input helpers ───────────────────────────────────────────────
+
+    def _ap_key(self, key, mod=0):
+        """Return a KEYDOWN pygame event for the given key."""
+        return pygame.event.Event(pygame.KEYDOWN, key=key, mod=mod,
+                                  unicode='', scancode=0)
+
+    def _ap_click(self, x, y):
+        """Return a MOUSEBUTTONDOWN (left-click) pygame event at (x, y)."""
+        return pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,
+                                  pos=(int(x), int(y)))
+
+    def _ap_queue(self, action, delay, label=''):
+        """Schedule an event or callable with a tick delay.
+
+        action  — a pygame.event.Event (posted via pygame.event.post) or
+                  a zero-argument callable (called directly at fire_at).
+        delay   — ticks from now to fire.  Use random.randint(5,15) for
+                  human-like reaction time.
+        label   — printed to stdout when the action fires.
+        """
+        self._ap_input_queue.append((self.tick + delay, action, label))
+
+    def _ap_flush_input_queue(self):
+        """Drain ready actions.  Called once per tick at the top of update_autopilot."""
+        remaining = []
+        for fire_at, action, label in self._ap_input_queue:
+            if self.tick >= fire_at:
+                if label:
+                    print(f"[AP] {label}")
+                if callable(action):
+                    action()
+                else:
+                    # Suppress mark_input for this synthetic event
+                    self._ap_pending_suppress += 1
+                    pygame.event.post(action)
+            else:
+                remaining.append((fire_at, action, label))
+        self._ap_input_queue = remaining
+
+    def _ap_crafting_slot_pixel(self, item_name):
+        """Return the screen pixel centre (x, y) of the named crafting recipe slot.
+
+        Mirrors the layout calculation in game_core.handle_inventory_click()
+        so the synthetic mouse click lands exactly on the correct slot.
+        Returns None if the slot is not currently visible.
+        """
+        slot_size = CELL_SIZE
+        start_x = 10
+        start_y = SCREEN_HEIGHT - 90
+        categories = ['tools', 'items', 'magic', 'actions', 'followers', 'crafting']
+        y_offset = 0
+        for cat in categories:
+            if cat not in self.inventory.open_menus:
+                continue
+            if cat == 'crafting':
+                items = self.inventory.get_craftable_recipes()
+            else:
+                items = self.inventory.get_item_list(cat)
+            if not items:
+                continue
+            if cat == 'crafting':
+                for i, (name, _) in enumerate(items):
+                    if name == item_name:
+                        return (start_x + i * (slot_size + 2) + slot_size // 2,
+                                start_y - y_offset + slot_size // 2)
+            y_offset += slot_size + 15
+        return None
+
+    def _ap_click_crafting_slot(self, item_name):
+        """Callable: compute pixel pos for item_name and post a click event."""
+        pos = self._ap_crafting_slot_pixel(item_name)
+        if pos:
+            self._ap_pending_suppress += 1
+            pygame.event.post(self._ap_click(pos[0], pos[1]))
+        else:
+            print(f"[AP] crafting slot '{item_name}' not visible — skipping click")
+
     # ── Periodic random actions ────────────────────────────────────────────────
 
     def _autopilot_do_action(self, proxy):
         """Randomly perform one of: craft available recipe, change selected tool,
         use a spell, drop an item, or inspect a nearby NPC."""
+        # Don't start a new action while a queued input sequence is in flight
+        if self._ap_input_queue:
+            return
         # Prioritize crafting whenever a recipe is available
         if self._autopilot_try_craft():
             return
@@ -612,11 +704,14 @@ class AutopilotMixin:
             self._autopilot_try_npc_interact(proxy)
 
     def _autopilot_try_craft(self):
-        """Craft the highest-priority available recipe. Returns True if a craft occurred."""
+        """Queue a crafting sequence: C → click slot → Space (with human delays).
+
+        Returns True if a craft sequence was queued (not yet completed).
+        The actual craft happens asynchronously when the queued Space key fires.
+        """
         craftable = self.inventory.get_craftable_recipes()
         if not craftable:
             return False
-        # Priority: prefer advanced items over raw materials
         _priority = ['iron_sword', 'iron_ingot', 'stone_pickaxe', 'hoe', 'shovel',
                      'hilt', 'bone_sword', 'stone_axe', 'leather_armor', 'leather',
                      'planks', 'chest', 'cooked_meat', 'stew']
@@ -628,11 +723,16 @@ class AutopilotMixin:
                 break
         if chosen is None:
             chosen = craftable_names[0]
-        self.inventory.selected['crafting'] = chosen
-        result = self.attempt_craft_selected()
-        if result:
-            print(f"[Autopilot] Crafted {chosen}")
-        return result
+
+        # Simulate: open crafting menu → click recipe slot → press Space to craft
+        d1 = random.randint(5, 12)   # reaction: decide to open crafting
+        d2 = random.randint(8, 15)   # look at menu, find and click the slot
+        d3 = random.randint(5, 10)   # confirm with Space
+        self._ap_queue(self._ap_key(pygame.K_c),  d1,          f"press C  (open crafting → {chosen})")
+        self._ap_queue(lambda c=chosen: self._ap_click_crafting_slot(c),
+                                                  d1 + d2,     f"click slot '{chosen}'")
+        self._ap_queue(self._ap_key(pygame.K_SPACE), d1+d2+d3, "press SPACE (craft)")
+        return True
 
 
     def _autopilot_change_tool(self):
@@ -645,19 +745,16 @@ class AutopilotMixin:
         print(f"[Autopilot] Tool → {chosen}")
 
     def _autopilot_use_spell(self):
-        """Cast a random available spell from the player's magic inventory."""
+        """Select a spell and queue an L key press to cast it."""
         magic = getattr(self.inventory, 'magic', {})
         spells = list(magic.keys())
         if not spells:
             return
         chosen = random.choice(spells)
-        if chosen == 'rain_spell' and hasattr(self, 'cast_rain_spell'):
-            self.cast_rain_spell()
-        elif chosen == 'day_spell' and hasattr(self, 'cast_day_spell'):
-            self.cast_day_spell()
-        elif hasattr(self, 'cast_star_spell'):
-            self.cast_star_spell()
-        print(f"[Autopilot] Spell → {chosen}")
+        # Direct selection is fine — no UI side-effect, just sets the active slot
+        self.inventory.selected['magic'] = chosen
+        d1 = random.randint(5, 12)
+        self._ap_queue(self._ap_key(pygame.K_l), d1, f"press L  (cast {chosen})")
 
     def _autopilot_drop_item(self, proxy):
         """Drop one unit of a random surplus resource item at the proxy's position.
