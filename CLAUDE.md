@@ -58,12 +58,13 @@ Session ends automatically (2–3 min timer). Review `debug/bug_catcher.log` and
 
 **What to watch for:**
 - Primary purpose is to monitor all game mechanics working correctly, in as much detail as possible. This includes zones, cells, entities, items, and all features and systems. The watchdog method is intended to take reasonable snapshots of different systems on rotation.
-- Inventory growth (stone, iron_ore, wood accumulating → harvest working)
-- Quest rotation (should cycle 4–6 quest types per session)
-- Zone travel (proxy should cross at least one zone boundary)
-- Crafting (new: proxy should attempt craft when ingredients available)
-- Entity count at shutdown (watch for bloat >600 entities)
-- Log size (watch for >1000 entries/category)
+- In order to get better long term data, we will need autopilot to develop more capabilites equal to the player abilities. For now, lets be sure ot observe: 
+  - Inventory growth (stone, iron_ore, wood accumulating → harvest working)
+  - Quest rotation (should cycle 4–6 quest types per session)
+  - Zone travel (proxy should cross at least one zone boundary)
+  - Crafting (new: proxy should attempt craft when ingredients available)
+  - Entity count at shutdown (watch for bloat >600 entities)
+  - Log size (watch for >1000 entries/category)
 
 ---
 
