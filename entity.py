@@ -1109,6 +1109,42 @@ class Inventory:
                 all_items[name] = all_items.get(name, 0) + 1
         return list(all_items.items())
 
+    def get_craftable_recipes(self):
+        """Return list of (result_item, times_craftable) for all recipes the player
+        can currently execute at least once given their current inventory."""
+        craftable = []
+        seen_results = set()
+        for ingredients, result in RECIPES.items():
+            if result in seen_results:
+                continue
+            # Count how many of each ingredient are needed
+            needed = {}
+            for ing in ingredients:
+                needed[ing] = needed.get(ing, 0) + 1
+            # Compute how many times this recipe can be crafted
+            times = None
+            for ing, count in needed.items():
+                # Total player has across all categories
+                total = sum(1 for s in self.tool_slots if s == ing)
+                for cat in ['items', 'magic', 'actions', 'followers']:
+                    total += getattr(self, cat).get(ing, 0)
+                can = total // count
+                times = can if times is None else min(times, can)
+            if times and times > 0:
+                seen_results.add(result)
+                craftable.append((result, times))
+        return craftable
+
+    def get_recipe_ingredients(self, result_item):
+        """Return {ingredient: count_needed} for the recipe producing result_item, or None."""
+        for ingredients, result in RECIPES.items():
+            if result == result_item:
+                needed = {}
+                for ing in ingredients:
+                    needed[ing] = needed.get(ing, 0) + 1
+                return needed
+        return None
+
 
 class Quest:
     """Quest tracking system"""

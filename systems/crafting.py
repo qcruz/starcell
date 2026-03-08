@@ -33,6 +33,65 @@ class CraftingMixin:
                 # Produce result
                 self.inventory.add_item(recipe['result'], recipe['produces'])
 
+    def attempt_craft_selected(self):
+        """Craft the recipe currently selected in the crafting tab (Spacebar).
+        Consumes ingredients from the player's inventory and places the result
+        into the appropriate inventory category."""
+        result_item = self.inventory.selected.get('crafting')
+        if not result_item:
+            return False
+
+        ingredients = self.inventory.get_recipe_ingredients(result_item)
+        if not ingredients:
+            return False
+
+        # Verify all ingredients are available
+        for ing, count in ingredients.items():
+            if not self.inventory.has_item(ing, count):
+                print(f"[Craft] Missing: {ing} x{count}")
+                return False
+
+        # Consume ingredients
+        for ing, count in ingredients.items():
+            for _ in range(count):
+                self.inventory.remove_item(ing, 1)
+
+        # Special case: skeleton_bones spawns a skeleton follower immediately
+        if result_item == 'skeleton_bones':
+            skeleton_id = self.spawn_skeleton(self.player['x'], self.player['y'])
+            if skeleton_id:
+                self.followers.append(skeleton_id)
+                self.enchanted_entities[skeleton_id] = 1
+                follower_name = f"skeleton_{skeleton_id}"
+                skeleton = self.entities[skeleton_id]
+                if follower_name not in ITEMS:
+                    ITEMS[follower_name] = {
+                        'color': skeleton.props['color'],
+                        'name': 'Skeleton Follower',
+                        'is_follower': True,
+                        'entity_id': skeleton_id,
+                    }
+                self.inventory.add_follower(follower_name, 1)
+                if hasattr(self, 'follower_items'):
+                    self.follower_items[skeleton_id] = follower_name
+                print("Skeleton summoned and bound to your will!")
+        else:
+            self.inventory.add_item(result_item, 1)
+            name = ITEMS.get(result_item, {}).get('name', result_item)
+            print(f"[Craft] Crafted {name}!")
+
+        # Update crafting selection to next available recipe
+        craftable = self.inventory.get_craftable_recipes()
+        craftable_names = [r for r, _ in craftable]
+        if result_item in craftable_names:
+            pass  # Still craftable — keep selection
+        elif craftable_names:
+            self.inventory.selected['crafting'] = craftable_names[0]
+        else:
+            self.inventory.selected['crafting'] = None
+
+        return True
+
     def attempt_craft(self):
         """Attempt to craft items using selections from any menu + crafting screen (X key)"""
         # Need something selected in crafting screen

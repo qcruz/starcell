@@ -409,10 +409,28 @@ simulation work identically inside and outside structures.
 
 ### Autopilot System (`autopilot.py`)
 
+The autopilot is a **possession model**: when active, it spawns a real NPC entity
+(the "proxy") at the player's position and drives it using the existing NPC AI state
+machine. The player's visual character follows the proxy seamlessly.
+
+**Design intent:** The autopilot's behavior is the baseline for all future NPC AI.
+Logic proven here — quest targeting, tool use, resource collection, obstacle clearing,
+zone travel, NPC interaction — will be ported as the standard NPC behavior layer,
+giving every NPC in the world rich, autonomous behavior without special-case code.
+
 - **Off by default** — toggled on/off with **Shift+A**
 - Spawns a proxy Entity at player position using quest-appropriate NPC role
-- Nudges proxy toward quest target every 120 ticks
+- Quest rotation: 80% chance to switch on completion + forced rotation every 30 s
 - Mirrors proxy inventory to player every 60 ticks
+- Zone travel: 35% chance each nudge cycle to steer toward adjacent zone
+- Stuck-exit detection: after 5 consecutive nudges to the same exit, enters 10-cycle
+  wander cooldown so natural movement finds the path
+- Obstacle clearing: when stuck 60+ ticks in targeting or wandering state, attempts
+  `try_chop_tree` / `try_mine_rock` on adjacent blocking cells
+- Opportunistic harvest: every 30 ticks in targeting/wandering state, scans cardinal
+  adjacent cells and harvests trees or stone/ore — proxy passively accumulates resources
+- Periodic actions: every 300 ticks randomly selects tool / casts spell / drops surplus
+  item / inspects nearest NPC — exercises diverse game code paths
 - Disengages immediately on any player input; player snaps to proxy's position
 
 **Quest → Proxy Role**
@@ -426,6 +444,21 @@ simulation work identically inside and outside structures.
 | EXPLORE | TRADER |
 | SEARCH / RESCUE | WIZARD |
 | Default | FARMER |
+
+---
+
+### Debug & QA System (`debug/`)
+
+- **BugCatcher** (`debug/bug_catcher.py`) — JSON-lines structured logger; in-memory
+  buffer flushed every 300 ticks; 2 MB rolling trim; clears on game start
+- **Watchdog** (`debug/watchdog.py`) — rotating sampler across 7 categories (entities,
+  cells, zones, player, structures, followers, npc_actions); runs every 300 ticks;
+  random trim when a category exceeds 200 entries per cycle; rolling 60 s and 120 s
+  backup saves; integrity checks for entity/structure state anomalies
+- **AUTO_DEBUG mode** (`main.py`) — headless autopilot loop: randomly starts a new game
+  or continues a save, runs for a randomised session duration (2–3 min), then saves and
+  quits; run counter persists in `debug/auto_debug_state.json`; live on the
+  `dev-observation` branch for ongoing automated QA
 
 ---
 

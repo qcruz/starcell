@@ -139,33 +139,11 @@ class AutopilotMixin:
             self._autopilot_pos_stuck_ticks = 0
 
         # ── Opportunistic harvesting: attempt chop/mine every ~30 ticks while moving ─
-        # Fires regardless of ai_state so the proxy collects resources while traversing.
         if proxy.ai_state in ('targeting', 'wandering'):
             self._autopilot_harvest_timer += 1
             if self._autopilot_harvest_timer >= 30:
                 self._autopilot_harvest_timer = 0
                 self._autopilot_opportunistic_harvest(proxy)
-
-        # Diagnostic: print positions every tick to track teleport glitches
-        pz = f"{self.player['screen_x']},{self.player['screen_y']}"
-        pp = f"({self.player['x']},{self.player['y']})"
-        prz = f"{proxy.screen_x},{proxy.screen_y}"
-        prp = f"({proxy.x},{proxy.y})"
-        state = proxy.ai_state
-        tgt = proxy.current_target
-        cs_key = None
-        if self.current_screen:
-            for k, v in self.screens.items():
-                if v is self.current_screen:
-                    cs_key = k
-                    break
-        hp = f"{proxy.health:.0f}/{proxy.max_health}"
-        print(f"[AP] t={self.tick} "
-              f"pZ={pz} pP={pp} "
-              f"xZ={prz} xP={prp} "
-              f"st={state} tgt={tgt} "
-              f"hp={hp} cs={cs_key}")
-
         # Periodically sync proxy inventory → player inventory
         self._autopilot_sync_timer += 1
         if self._autopilot_sync_timer >= INVENTORY_SYNC_INTERVAL:
@@ -351,21 +329,6 @@ class AutopilotMixin:
         self._autopilot_pos_stuck_ticks = 0
         self._autopilot_harvest_timer = 0
 
-        # DEBUG: Dump entity states after disengage to see if anything is still frozen
-        sk = f"{self.player['screen_x']},{self.player['screen_y']}"
-        print(f"[Autopilot] Disengaged — player control restored, zone={sk}")
-        if sk in self.screen_entities:
-            for eid in self.screen_entities[sk]:
-                if eid in self.entities:
-                    e = self.entities[eid]
-                    print(f"  [Disengage] {e.type:12s} id={eid:4d} pos=({e.x},{e.y}) "
-                          f"ai_state={getattr(e, 'ai_state', '?')} "
-                          f"idle_timer={getattr(e, 'idle_timer', 0)} "
-                          f"is_idle={getattr(e, 'is_idle', False)} "
-                          f"in_combat={getattr(e, 'in_combat', False)} "
-                          f"current_target={getattr(e, 'current_target', None)} "
-                          f"last_ai_tick={getattr(e, 'last_ai_tick', -1)} "
-                          f"alive={e.is_alive()}")
 
     # ── Position sync ─────────────────────────────────────────────────────────
 
@@ -633,8 +596,11 @@ class AutopilotMixin:
     # ── Periodic random actions ────────────────────────────────────────────────
 
     def _autopilot_do_action(self, proxy):
-        """Randomly perform one of: change selected tool, use a spell, drop an item,
-        or inspect a nearby NPC.  Keeps the autopilot exercising diverse code paths."""
+        """Randomly perform one of: craft available recipe, change selected tool,
+        use a spell, drop an item, or inspect a nearby NPC."""
+        # Prioritize crafting whenever a recipe is available
+        if self._autopilot_try_craft():
+            return
         action = random.choice(['change_tool', 'use_spell', 'drop_item', 'npc_interact'])
         if action == 'change_tool':
             self._autopilot_change_tool()
@@ -644,6 +610,30 @@ class AutopilotMixin:
             self._autopilot_drop_item(proxy)
         else:
             self._autopilot_try_npc_interact(proxy)
+
+    def _autopilot_try_craft(self):
+        """Craft the highest-priority available recipe. Returns True if a craft occurred."""
+        craftable = self.inventory.get_craftable_recipes()
+        if not craftable:
+            return False
+        # Priority: prefer advanced items over raw materials
+        _priority = ['iron_sword', 'iron_ingot', 'stone_pickaxe', 'hoe', 'shovel',
+                     'hilt', 'bone_sword', 'stone_axe', 'leather_armor', 'leather',
+                     'planks', 'chest', 'cooked_meat', 'stew']
+        craftable_names = [r for r, _ in craftable]
+        chosen = None
+        for preferred in _priority:
+            if preferred in craftable_names:
+                chosen = preferred
+                break
+        if chosen is None:
+            chosen = craftable_names[0]
+        self.inventory.selected['crafting'] = chosen
+        result = self.attempt_craft_selected()
+        if result:
+            print(f"[Autopilot] Crafted {chosen}")
+        return result
+
 
     def _autopilot_change_tool(self):
         """Select a random available tool from the player's tool inventory."""
