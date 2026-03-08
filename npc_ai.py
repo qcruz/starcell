@@ -1793,6 +1793,10 @@ class NpcAiMixin:
                 if random.random() < attack_chance:
                     _tp = getattr(self, 'time_pass_speed', 1.0)
 
+                    # Sound: proxy attacking an enemy
+                    if entity.props.get('is_autopilot_proxy', False) and hasattr(self, 'sound'):
+                        self.sound.on_attack()
+
                     if closest_enemy == 'player':
                         damage = max(1, entity.strength // 5)
 

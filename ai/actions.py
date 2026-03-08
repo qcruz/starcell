@@ -37,6 +37,11 @@ class NpcAiActionsMixin:
                 actor.trigger_action_animation()
             self.show_attack_animation(cx, cy, entity=None if is_player else actor)
 
+            # Sound: swing/chop/mine sound for autopilot proxy
+            _is_proxy = not is_player and hasattr(actor, 'props') and actor.props.get('is_autopilot_proxy', False)
+            if _is_proxy and hasattr(self, 'sound'):
+                self.sound.on_attack()
+
             # XP for entity
             if not is_player:
                 actor.xp += 1
@@ -68,6 +73,10 @@ class NpcAiActionsMixin:
                         self.inventory.add_item(item, amount)
                     else:
                         actor.inventory[item] = actor.inventory.get(item, 0) + amount
+
+                # Sound: pickup on successful harvest for proxy
+                if _is_proxy and hasattr(self, 'sound'):
+                    self.sound.on_pickup()
 
                 # Transform cell if specified
                 if result_cell:
@@ -106,6 +115,10 @@ class NpcAiActionsMixin:
                 actor.update_facing_toward(cx, cy)
                 actor.trigger_action_animation()
             self.show_attack_animation(cx, cy, entity=None if is_player else actor)
+
+            # Sound: tool-use sound for autopilot proxy
+            if not is_player and hasattr(actor, 'props') and actor.props.get('is_autopilot_proxy', False) and hasattr(self, 'sound'):
+                self.sound.on_attack()
 
             if not is_player:
                 actor.xp += 1

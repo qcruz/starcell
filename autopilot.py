@@ -320,6 +320,15 @@ class AutopilotMixin:
         if getattr(proxy, 'in_structure', False):
             return
 
+        # Footstep sound when proxy moves to a new grid cell
+        old_px, old_py = self.player.get('x', proxy.x), self.player.get('y', proxy.y)
+        if (proxy.x != old_px or proxy.y != old_py) and self.current_screen:
+            try:
+                stepped_cell = self.current_screen['grid'][proxy.y][proxy.x]
+                self.sound.on_footstep(stepped_cell)
+            except (IndexError, KeyError):
+                pass
+
         self.player['facing']   = proxy.facing
         self.player['world_x']  = proxy.world_x
         self.player['world_y']  = proxy.world_y
