@@ -35,9 +35,10 @@ class NpcAiMovementMixin:
         if entity._footstep_counter < self.NPC_FOOTSTEP_RATE:
             return
         entity._footstep_counter = 0
-        # Pick footstep type from cell under entity
+        # Pick footstep type from cell under entity (use entity's screen, not player's)
         try:
-            cell = self.current_screen['grid'][new_y][new_x]
+            npc_grid = self.screens[npc_screen]['grid']
+            cell = npc_grid[new_y][new_x]
         except (TypeError, IndexError, KeyError):
             cell = 'GRASS'
         sfx_key = 'footstep_water' if cell in ('WATER', 'DEEP_WATER') else 'footstep_dirt'

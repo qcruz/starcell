@@ -389,6 +389,7 @@ class NpcAiActionsMixin:
                     entity.update_facing_toward(check_x, check_y)
                     entity.trigger_action_animation()
                     self.show_attack_animation(check_x, check_y, entity=entity)
+                    self._npc_action_sound(entity, 'wood_chop')
 
                     # Grant 1 XP for action
                     entity.xp += 1
@@ -442,6 +443,7 @@ class NpcAiActionsMixin:
                         entity.update_facing_toward(check_x, check_y)
                         entity.trigger_action_animation()
                         self.show_attack_animation(check_x, check_y, entity=entity)
+                        self._npc_action_sound(entity, 'sword_swing')
 
                         # Grant XP: iron ore gives more than regular stone
                         xp_gain = 2 if cell == 'IRON_ORE' else 1
