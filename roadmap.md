@@ -7,6 +7,17 @@
 
 ---
 
+## Next Up
+> Claude: start here. Implement these in order, one per session, then run an observation session.
+
+1. **Autopilot crafting observation** — Run dev-observation session with the new crafting behavior. Confirm proxy crafts iron_ingot from iron_ore pairs. Update bug_report.md.
+2. **Spatial NPC audio** — `SoundManager.play_sfx_spatial(key, dist)` + harvest/combat hooks in `ai/actions.py` and `npc_ai.py`. Design is in `MEMORY.md`.
+3. **Spells + Actions tab** — rain_spell, day_spell (toggle), shove action, R key, Shift+F NPC recruit. Full plan in `.claude/plans/rustling-crunching-sifakis.md`.
+4. **NPC crafting behavior** — Port autopilot's `_autopilot_try_craft()` to `ai/actions.py` as `try_craft_recipe()`. MINER and BLACKSMITH archetypes use it. Requires confirmed stable autopilot crafting first.
+5. **Code cleanup session** — Remove dead prints, audit legacy monolith methods that have been fully extracted, consolidate duplicate crafting/inventory logic.
+
+---
+
 ## Meta Goals
 > Keep these in mind when making any development decision.
 
