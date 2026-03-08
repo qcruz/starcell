@@ -377,11 +377,16 @@ class LoreEngineMixin:
                             quest.target_zone = screen_key
                             return True
             if has_local:
-                quest.target_info = "Mining stone nearby"
-                quest.target_zone = pz_key
-                quest.target_cell = (player_sx, player_sy, GRID_WIDTH // 2, GRID_HEIGHT // 2)
-                quest.status = 'active'
-                return True
+                mine_screen = self.screens.get(pz_key, {})
+                for my, mrow in enumerate(mine_screen.get('grid', [])):
+                    for mx, mcell in enumerate(mrow):
+                        if mcell == 'STONE':
+                            quest.target_info = "Mining stone nearby"
+                            quest.target_zone = pz_key
+                            quest.target_cell = (player_sx, player_sy, mx, my)
+                            quest._original_cell = 'STONE'
+                            quest.status = 'active'
+                            return True
             quest.target_info = "Looking for stone..."
             return False
 
@@ -403,11 +408,16 @@ class LoreEngineMixin:
                     break
 
             if has_local and random.random() < 0.90:
-                quest.target_info = "Farming nearby"
-                quest.target_zone = player_zone
-                quest.target_cell = (player_sx, player_sy, GRID_WIDTH // 2, GRID_HEIGHT // 2)
-                quest.status = 'active'
-                return True
+                # Find an actual farm cell so completion check has a real target + original
+                for fy, frow in enumerate(screen['grid']):
+                    for fx, fcell in enumerate(frow):
+                        if fcell in farm_cells:
+                            quest.target_info = "Farming nearby"
+                            quest.target_zone = player_zone
+                            quest.target_cell = (player_sx, player_sy, fx, fy)
+                            quest._original_cell = fcell
+                            quest.status = 'active'
+                            return True
 
             for screen_key, screen_data in self.screens.items():
                 if not self.is_overworld_zone(screen_key):
@@ -426,11 +436,15 @@ class LoreEngineMixin:
                             quest.target_zone = screen_key
                             return True
             if has_local:
-                quest.target_info = "Farming nearby"
-                quest.target_zone = player_zone
-                quest.target_cell = (player_sx, player_sy, GRID_WIDTH // 2, GRID_HEIGHT // 2)
-                quest.status = 'active'
-                return True
+                for fy, frow in enumerate(screen['grid']):
+                    for fx, fcell in enumerate(frow):
+                        if fcell in farm_cells:
+                            quest.target_info = "Farming nearby"
+                            quest.target_zone = player_zone
+                            quest.target_cell = (player_sx, player_sy, fx, fy)
+                            quest._original_cell = fcell
+                            quest.status = 'active'
+                            return True
             quest.target_info = "Looking for farm targets..."
             return False
 

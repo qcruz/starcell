@@ -144,6 +144,10 @@ class BugCatcher:
             'in_subscreen': in_subscreen,
         }
 
+        # Only log on actual state transitions — steady-state is noise
+        if not transitions:
+            return
+
         self._record({
             'tick': tick,
             'category': 'entity',
