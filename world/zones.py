@@ -70,13 +70,13 @@ class ZonesMixin:
                 if connected_key in self.screens:
                     mandatory_zones.add(connected_key)
 
-        # Update all mandatory zones at 100% coverage
+        # Update all mandatory zones: entities 100%, cells 50%
         for mz_key in mandatory_zones:
             if mz_key in self.structure_zones:
-                self.update_structure_zone(mz_key, 1.0, 1.0)
+                self.update_structure_zone(mz_key, 0.5, 1.0)
             elif self.is_overworld_zone(mz_key):
                 parts = mz_key.split(',')
-                self.update_zone_with_coverage(int(parts[0]), int(parts[1]), 1.0, 1.0)
+                self.update_zone_with_coverage(int(parts[0]), int(parts[1]), 0.5, 1.0)
             else:
                 continue
             zones_updated += 1
@@ -99,13 +99,14 @@ class ZonesMixin:
             if random.random() > update_chance:
                 continue
 
-            coverage = update_chance
+            entity_coverage = update_chance
+            cell_coverage = update_chance * 0.5   # cells always get half entity rate
 
             if zone_key in self.structure_zones:
-                self.update_structure_zone(zone_key, coverage, coverage)
+                self.update_structure_zone(zone_key, cell_coverage, entity_coverage)
             elif self.is_overworld_zone(zone_key):
                 parts = zone_key.split(',')
-                self.update_zone_with_coverage(int(parts[0]), int(parts[1]), coverage, coverage)
+                self.update_zone_with_coverage(int(parts[0]), int(parts[1]), cell_coverage, entity_coverage)
             else:
                 continue
 
@@ -156,7 +157,7 @@ class ZonesMixin:
             if distance <= 2:
                 self.apply_rain(zone_x, zone_y)
 
-        self.apply_cellular_automata(zone_x, zone_y)
+        self.apply_cellular_automata(zone_x, zone_y, cell_coverage)
 
         _tp = getattr(self, 'time_pass_speed', 1.0)
 

@@ -89,8 +89,12 @@ class CellsMixin:
     # Cellular automata
     # -------------------------------------------------------------------------
 
-    def apply_cellular_automata(self, screen_x, screen_y):
-        """Apply cellular automata rules to a screen"""
+    def apply_cellular_automata(self, screen_x, screen_y, cell_coverage=1.0):
+        """Apply cellular automata rules to a screen.
+
+        cell_coverage: fraction of cells to process this cycle (0.0–1.0).
+        1.0 = all cells, 0.5 = half skipped at random (player zone default), etc.
+        """
         key = f"{screen_x},{screen_y}"
         if key not in self.screens:
             return
@@ -110,8 +114,8 @@ class CellsMixin:
 
         for y in range(GRID_HEIGHT):
             for x in range(GRID_WIDTH):
-                # 50% chance to skip this cell's update — reduces simultaneous churn
-                if random.random() < 0.5:
+                # Per-cell coverage skip: probability decreases down the priority queue
+                if random.random() > cell_coverage:
                     continue
 
                 cell = screen['grid'][y][x]

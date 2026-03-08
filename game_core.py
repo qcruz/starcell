@@ -1166,17 +1166,12 @@ class GameCoreMixin:
                         slot_y <= pos[1] <= slot_y + slot_size):
 
                     if category == 'tools':
-                        # --- Tool bar slot clicked ---
+                        # --- Tool bar slot clicked: select and mark as pending ---
+                        # Never unequip on click — unequip only happens when a
+                        # different inventory item is then clicked (equip_to_slot)
                         self.inventory.selected_tool_slot_idx = i
                         self.inventory.selected['tools'] = item_name
                         self.inventory.pending_equip_slot = i
-                        # If only tools tab is open and slot has an item → unequip
-                        other_tabs_open = any(
-                            c in self.inventory.open_menus
-                            for c in ['items', 'magic', 'actions', 'followers', 'crafting']
-                        )
-                        if not other_tabs_open and item_name is not None:
-                            self.inventory.unequip_slot(i)
                         self.sound.on_inventory_select()
                         return
 
