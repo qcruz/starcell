@@ -40,6 +40,18 @@ class NpcAiMovementMixin:
 
     def wander_entity(self, entity):
         """Move entity randomly"""
+        # Rate limit: entity moves only once per speed-calibrated interval so the
+        # smooth movement system (BASE_MOVEMENT_SPEED=0.034 cells/tick) has time to
+        # visually catch up before the next grid step.
+        # Formula: interval ≈ 1 / (0.034 * speed) ticks per cell.
+        # speed=1.0 → ~29 ticks; speed=2.0 → ~15 ticks; speed=0.8 → ~37 ticks.
+        _spd = entity.props.get('speed', 1.0)
+        _interval = max(5, round(1.0 / (0.034 * max(_spd, 0.1))))
+        if not hasattr(entity, 'last_move_tick'):
+            entity.last_move_tick = 0
+        if self.tick - entity.last_move_tick < _interval:
+            return
+
         # All entities (overworld and structure) now use the same registry.
         # Entity screen_x/y is always the actual current zone key — virtual coords
         # for structure zones, real coords for overworld zones.
@@ -127,6 +139,7 @@ class NpcAiMovementMixin:
             entity.is_moving = True
             entity.stuck_counter = 0
             entity.moved_this_update = True  # Tell behavior system entity is in motion
+            entity.last_move_tick = self.tick  # Rate limiter: record when this move happened
             # Update facing
             if dx > 0:
                 entity.facing = 'right'
@@ -181,6 +194,14 @@ class NpcAiMovementMixin:
 
         # Already at target
         if entity.x == target_x and entity.y == target_y:
+            return
+
+        # Rate limit: same formula as wander_entity so smooth movement catches up
+        _spd = entity.props.get('speed', 1.0)
+        _interval = max(5, round(1.0 / (0.034 * max(_spd, 0.1))))
+        if not hasattr(entity, 'last_move_tick'):
+            entity.last_move_tick = 0
+        if self.tick - entity.last_move_tick < _interval:
             return
 
         # Calculate direction to target
@@ -273,6 +294,7 @@ class NpcAiMovementMixin:
 
             entity.stuck_counter = 0  # Reset stuck counter on successful move
             entity.moved_this_update = True  # Tell behavior system entity is in motion
+            entity.last_move_tick = self.tick  # Rate limiter: record when this move happened
             self._npc_footstep_sound(entity, new_x, new_y)
             entity.x = new_x
             entity.y = new_y
