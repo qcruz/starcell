@@ -27,16 +27,19 @@ For planned and desired future features, see [`roadmap.md`](roadmap.md).
 **Actions**
 - 4-directional grid movement with viewport follow
 - Melee attack with animation
-- Harvesting: chop trees, mine rocks, harvest crops
+- Harvesting: chop trees, mine rocks/iron ore (pickaxe), harvest crops
 - Farming: till soil, plant seeds, harvest
 - 2-item crafting
 - Star Spell casting with enchantment targeting
+- Rain Spell (toggle rain), Day Spell (toggle day/night) — cast with L key
+- Shove action — push adjacent NPC one cell in facing direction
+- NPC follow — Shift+F while inspecting an NPC for 50% recruit chance
 - Interact: talk to NPCs, enter buildings, open chests, pick up items
 - Friendly Fire toggle (V key)
 - Blocking state (defensive stance)
 
 **Inventory**
-- 20-slot inventory with 5 category tabs: Items, Tools, Magic, Followers, Crafting
+- 20-slot inventory with 6 category tabs: Items, Tools, Magic, Actions, Followers, Crafting
 - Item pickup/drop mechanics
 
 ---
@@ -68,7 +71,7 @@ For planned and desired future features, see [`roadmap.md`](roadmap.md).
 
 | Key | Action |
 |---|---|
-| L | Cast star spell — enchants targeted cell or entity |
+| L | Cast selected magic item — rain_spell toggles rain; day_spell toggles day/night; star_spell enchants target |
 | K | Release / reverse spell — removes all active enchantments |
 
 > `K` is the reverse-spell key. Reserved for future spell mechanic expansion (e.g. reversing specific spell effects, countering enemy magic, inverting enchantment properties).
@@ -80,17 +83,20 @@ For planned and desired future features, see [`roadmap.md`](roadmap.md).
 | I | Items tab |
 | T | Tools tab |
 | M | Magic tab |
+| R | Actions tab |
 | F | Followers tab |
 | C | Crafting tab |
 | X | Attempt craft with selected items |
 | Q | Toggle quest panel |
 | Shift+Q | Get / turn in quest from inspected NPC (NPC Quest Source) |
+| Shift+F | Attempt to recruit inspected NPC as follower (50% chance) |
 | 1–9, 0 | Select inventory slot |
 
 **Combat**
 
 | Key | Action |
 |---|---|
+| Space *(action selected)* | Execute selected action (e.g. Shove — push adjacent NPC) |
 | J | Release selected follower |
 
 **Autopilot**
@@ -265,6 +271,8 @@ For planned and desired future features, see [`roadmap.md`](roadmap.md).
 - Attack animation shown on hit; `entity.in_combat` flag set immediately on adjacency (combat stance visible between attacks)
 - Flee when health low; flee_chance scaled by threat level ratio
 - Followers never target the player (guarded in both state machine proximity check and find_and_attack_enemy)
+- Follower integrity enforced every tick: dead followers removed, combat target cleared, hostile flag forced off
+- Followers cannot become `_double` merged entities
 - Non-combat NPCs have 10% chance to counterattack when adjacent; otherwise flee
 
 ---
@@ -305,10 +313,11 @@ For planned and desired future features, see [`roadmap.md`](roadmap.md).
 
 | Category | Items |
 |---|---|
-| Resources | wood, planks, carrot, gold, bones, stone, fur, meat |
+| Resources | wood, planks, carrot, gold, bones, stone, fur, meat, iron_ore, iron_ingot |
 | Tools | axe, hoe, shovel, pickaxe, bucket, watering_can |
-| Weapons | bone_sword, stone_axe, club, enchanted_sword, enchanted_axe |
-| Magic | star_spell, magic_stone, magic_wand |
+| Weapons | bone_sword, stone_axe, club, enchanted_sword, enchanted_axe, iron_sword |
+| Magic | star_spell, magic_stone, magic_wand, rain_spell (toggle rain), day_spell (toggle day/night) |
+| Actions | shove (push adjacent NPC one cell) |
 | Materials | rope, leather, leather_armor, seeds, floor, sandstone, wall, chest |
 | Food | cooked_meat, stew |
 | Special | skeleton_bones (summons follower) |
@@ -337,7 +346,7 @@ For planned and desired future features, see [`roadmap.md`](roadmap.md).
 ### Save / Load System
 - JSON save files
 - Saves: player state, world cells, all entities, quests, factions, enchantments, dropped items, weather, day/night cycle, follower_items mapping
-- Starting inventory: axe, hoe, shovel, pickaxe, bucket, bone_sword, star_spell
+- Starting inventory: axe, hoe, shovel, pickaxe, bucket, bone_sword, star_spell, rain_spell, day_spell, shove
 - Starting quest: FARM, starting position: (12, 9)
 
 ---
@@ -424,7 +433,8 @@ simulation work identically inside and outside structures.
 
 - Priority queue of zones to update (distance from player, entity density, last update time)
 - Max 20 zones updated per tick cycle (every 30 ticks)
-- Current zone: 100% / Distance 1: 90% / Distance 2: 80% / Distance 3+: 60%
+- Entity coverage: 100% for all zones; cell coverage starts at 50% for player zone and decreases as priority drops
+- Current zone: entities 100% / cells 50%; Distance 1: entities 90% / cells 45%; further zones scale down proportionally
 - Catch-up simulation caps at 100 cycles per zone to prevent runaway computation
 - Applies all normal AI/cell updates during catch-up
 
@@ -534,5 +544,9 @@ simulation work identically inside and outside structures.
 | `launcher/` | macOS .app bundle + launch.py for one-click GitHub install |
 
 ---
+
+**Dawn Ambient Music**
+- At each night-to-day transition, one of three `ambient_travel` tracks plays (random pick, 2 s fade)
+- SoundManager pre-buffers all music tracks in RAM at startup to avoid disk latency on transitions
 
 *Last updated: 2026-03-07*

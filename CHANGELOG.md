@@ -5,6 +5,57 @@ order.  Entries are grouped into Features, Fixes, and Systems.
 
 ---
 
+## 2026-03-07 — Spells, Actions Tab, NPC Follow, Follower Polish, Biome Fixes
+
+### Features
+- **Rain Spell & Day Spell** — two new magic items (`rain_spell`, `day_spell`); equip in the
+  Magic tab (M) and cast with L to toggle rain on/off or flip day/night.  Both given to player
+  at new-game start alongside the shove action.
+- **Actions inventory tab** (R key) — new `actions` category alongside Items/Tools/Magic/Followers/
+  Crafting; `shove` is the first action: face an NPC and press Space to push them one cell in your
+  facing direction (blocked by solid cells).
+- **NPC follow mechanic** (Shift+F while inspecting) — 50% chance to recruit any NPC as a follower;
+  success adds them to the Followers tab; declined recruits print a refusal message.
+- **Player IRON_ORE mining** — player can mine `IRON_ORE` cells with a pickaxe; drops `iron_ore`
+  item, reverts cell to biome base type (SAND in desert, DIRT in mountains/tundra, GRASS elsewhere).
+- **XP for all player actions** — chopping, mining, farming, combat hits, and spell casts each award
+  1 XP.
+- **Dawn ambient music** — at each night-to-day transition one of three `ambient_travel` tracks is
+  chosen at random and fades in over 2 seconds (replaces the day music until next transition).
+- **Follower integrity check every tick** — `check_follower_integrity()` runs each game tick:
+  removes dead followers from party + inventory, clears `current_target` if a follower somehow
+  re-targets the player, forces `hostile=False` on all followers.
+- **Followers exempt from doubles** — `try_merge_entity()` now checks the followers list before
+  merging; follower entities can never become `_double` variants.
+- **NPC double spacing** — double-entity sprites drawn at `(-4,-2)` and `(+8,+4)` offsets instead
+  of `(0,0)` and `(+4,+2)`, making the two halves visually distinct.
+
+### Fixes
+- **Mined IRON_ORE left CAVE_FLOOR in desert** — NPC miner was setting the cell to `'CAVE_FLOOR'`
+  after mining (copy-paste from cave code).  Now reverts to the screen's biome base cell.
+- **Follower not moving to player** — two root causes: `inspected_npc` guard skipped the entire
+  AI update for any NPC the player was looking at, including followers; and `memory_lane` retained
+  old wandering positions after recruitment.  Fixed with an early follower flag that bypasses the
+  inspection guard, plus a full pathfinding state reset on recruit.
+- **Hostile follower after recruitment** — skeleton doubles and other hostile NPCs could continue
+  attacking the player after being added to the party.  Recruitment now clears `in_combat`,
+  `current_target`, `ai_state='idle'`, `idle_timer=0`, and sets `hostile=False`.
+- **Trees growing on sand / slow decay** — tree growth rule blocked in DESERT biome; trees adjacent
+  to sand now have a 15% chance per update to revert to SAND (fast desert attrition).
+- **Cell update rate too aggressive** — player-zone cell coverage set to 50% (was effectively 100%);
+  priority-queue zones scale from that 50% base downward as priority decreases.  Entity coverage
+  stays at 100% for all zones.
+- **Follower release on player death** — followers are now released from the party and removed from
+  the follower inventory before the death time-pass simulation runs, so they survive the years-long
+  simulation rather than being killed by hostiles.
+- **Tool slot click unequipped item** — clicking a tool slot always selected it without unequipping;
+  slot-swapping now requires explicitly clicking an item in the items inventory while a tool slot is
+  selected.
+- **NameError `coverage`** — splitting `coverage` into `entity_coverage` + `cell_coverage` in
+  `world/zones.py` missed two stats-tracking lines that still referenced the old name.
+
+---
+
 ## 2026-03-07 — Cellular Automata Overhaul, Drought System, Biome Balance
 
 > Also includes: rename of "subscreen" → "structure" throughout the active codebase
