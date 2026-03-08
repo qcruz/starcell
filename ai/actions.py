@@ -406,10 +406,13 @@ class NpcAiActionsMixin:
                                          (self.inventory.has_item('pickaxe') or self.inventory.has_item('stone_pickaxe'))))
 
                             if cell == 'IRON_ORE':
-                                # Mine iron ore → CAVE_FLOOR, drop iron_ore item
+                                # Mine iron ore → biome base cell
                                 if has_tool:
                                     entity.inventory['iron_ore'] = entity.inventory.get('iron_ore', 0) + 1
-                                screen['grid'][check_y][check_x] = 'CAVE_FLOOR'
+                                _biome = screen.get('biome', 'FOREST')
+                                _base = {'DESERT': 'SAND', 'MOUNTAINS': 'DIRT', 'TUNDRA': 'DIRT',
+                                         'SWAMP': 'DIRT', 'PLAINS': 'GRASS'}.get(_biome, 'GRASS')
+                                screen['grid'][check_y][check_x] = _base
                                 entity.level_up_from_activity('mine', self)
                             else:
                                 # NPC miners can create mineshafts (limited per zone)

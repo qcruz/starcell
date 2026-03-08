@@ -541,17 +541,20 @@ class NpcAiMixin:
                 else:
                     return  # NPC paused because player is inspecting it
         
-        # Followers: check distance to player and follow if too far
+        # Followers: maintain party formation around player
         if is_follower:
-            # Calculate distance to player
-            # Check if on same screen
             if entity.screen_x == self.player['screen_x'] and entity.screen_y == self.player['screen_y']:
                 dist_to_player = abs(entity.x - self.player['x']) + abs(entity.y - self.player['y'])
-                
-                # If more than 5 cells away, move towards player
-                if dist_to_player > 5:
+                if dist_to_player > 2:
+                    # Too far — close the gap immediately
                     self.move_entity_towards(entity, self.player['x'], self.player['y'])
                     return
+                elif dist_to_player > 0 and self.tick % 30 == 0:
+                    # Periodically shuffle one step closer to stay in tight formation
+                    self.move_entity_towards(entity, self.player['x'], self.player['y'])
+                    return
+                # Within 1 cell — idle (stay put this tick)
+                return
             else:
                 # Follower is on different screen - teleport to player's screen
                 self.teleport_follower_to_player(entity_id, entity)

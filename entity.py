@@ -948,7 +948,7 @@ class Inventory:
                 inv[item_name] -= amount
                 if inv[item_name] <= 0:
                     if self.selected[category] == item_name:
-                        remaining = list(inv.keys())
+                        remaining = [k for k in inv.keys() if k != item_name]
                         self.selected[category] = remaining[0] if remaining else None
                     if self.selected.get('crafting') == item_name:
                         found_replacement = False

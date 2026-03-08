@@ -1747,6 +1747,15 @@ class GameCoreMixin:
             self.gain_xp(1)
             return
 
+        # Mine iron ore — pickaxe must be selected tool
+        if cell == 'IRON_ORE' and self.inventory.selected_tool == 'pickaxe':
+            self.player['energy'] = max(0, self.player.get('energy', 0) - 1)
+            self.inventory.add_item('iron_ore', 1)
+            self.current_screen['grid'][check_y][check_x] = self.get_biome_base_cell()
+            self.show_attack_animation(check_x, check_y)
+            self.gain_xp(1)
+            return
+
         # Mine stone — pickaxe must be selected tool
         if cell == 'STONE' and self.inventory.selected_tool == 'pickaxe':
             self.player['energy'] = max(0, self.player.get('energy', 0) - 1)
