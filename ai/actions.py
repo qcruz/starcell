@@ -32,7 +32,7 @@ class NpcAiActionsMixin:
 
     def _npc_action_sound(self, actor, sound_key):
         """Play a spatially attenuated sound for an NPC actor.
-        Checks same-screen and computes Manhattan distance to player."""
+        Volume halves each cell: 50% at dist=0, 25% at dist=1, etc."""
         if not hasattr(self, 'sound') or not hasattr(self.sound, 'play_sfx_spatial'):
             return
         if actor is None or actor == 'player':
@@ -43,7 +43,9 @@ class NpcAiActionsMixin:
         if px_screen != npc_screen:
             return
         dist = abs(actor.x - self.player['x']) + abs(actor.y - self.player['y'])
-        self.sound.play_sfx_spatial(sound_key, dist)
+        if dist > 4:
+            return
+        self.sound.play_sfx_spatial(sound_key, dist, vol_scale=0.5, use_budget=False)
 
     def action_harvest_cell(self, actor, screen_key, cell_types, success_rate=0.5,
                             result_cell=None, activity=None):

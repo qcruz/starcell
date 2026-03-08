@@ -26,8 +26,8 @@ class SoundManager:
 
     DAWN_TRACKS = ['ambient_travel_1', 'ambient_travel_2', 'ambient_travel_3']
 
-    # Max NPC spatial sounds per tick (budget to prevent audio spam)
-    NPC_SOUND_BUDGET = 2
+    # Max NPC spatial sounds per tick (distance is the real limiter; keep high)
+    NPC_SOUND_BUDGET = 16
 
     def __init__(self):
         try:
@@ -162,7 +162,7 @@ class SoundManager:
         pool = self.sounds.get(key)
         if not pool:
             return
-        vol = self.sfx_volume * vol_scale * max(0.0, 1.0 - dist / max_dist)
+        vol = self.sfx_volume * vol_scale * (0.5 ** dist)
         if vol <= 0.01:
             return
         snd = random.choice(pool) if isinstance(pool, list) else pool

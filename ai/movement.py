@@ -10,16 +10,13 @@ from engine import *
 
 class NpcAiMovementMixin:
 
-    # NPC footstep volume relative to normal sfx_volume
-    NPC_FOOTSTEP_VOL = 0.30
+    # NPC footstep volume at dist=0 relative to sfx_volume (halves each cell)
+    NPC_FOOTSTEP_VOL = 0.35
     # Max distance (cells) at which NPC footsteps are audible
     NPC_FOOTSTEP_MAX_DIST = 4
-    # Play footstep every N steps per entity (reduces spam)
-    NPC_FOOTSTEP_RATE = 3
 
     def _npc_footstep_sound(self, entity, new_x, new_y):
-        """Play a quiet spatially-attenuated footstep for a moving NPC.
-        Rate-limited per entity; doesn't consume the combat sound budget."""
+        """Play a quiet spatially-attenuated footstep for a moving NPC."""
         if not hasattr(self, 'sound'):
             return
         # Same screen check
@@ -30,12 +27,7 @@ class NpcAiMovementMixin:
         dist = abs(new_x - self.player['x']) + abs(new_y - self.player['y'])
         if dist > self.NPC_FOOTSTEP_MAX_DIST:
             return
-        # Rate limit: every Nth step
-        entity._footstep_counter = getattr(entity, '_footstep_counter', 0) + 1
-        if entity._footstep_counter < self.NPC_FOOTSTEP_RATE:
-            return
-        entity._footstep_counter = 0
-        # Pick footstep type from cell under entity (use entity's screen, not player's)
+        # Pick footstep type from cell under entity
         try:
             npc_grid = self.screens[npc_screen]['grid']
             cell = npc_grid[new_y][new_x]
@@ -43,7 +35,6 @@ class NpcAiMovementMixin:
             cell = 'GRASS'
         sfx_key = 'footstep_water' if cell in ('WATER', 'DEEP_WATER') else 'footstep_dirt'
         self.sound.play_sfx_spatial(sfx_key, dist,
-                                    max_dist=self.NPC_FOOTSTEP_MAX_DIST,
                                     vol_scale=self.NPC_FOOTSTEP_VOL,
                                     use_budget=False)
 
