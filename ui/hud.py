@@ -362,8 +362,8 @@ class HudMixin:
                         # Use animated sprite
                         if is_double:
                             # Draw two overlapping sprites for _double entities
-                            self.screen.blit(entity_sprite, (pixel_x, pixel_y))
-                            self.screen.blit(entity_sprite, (pixel_x + 4, pixel_y + 2))
+                            self.screen.blit(entity_sprite, (pixel_x - 4, pixel_y - 2))
+                            self.screen.blit(entity_sprite, (pixel_x + 8, pixel_y + 4))
                         else:
                             self.screen.blit(entity_sprite, (pixel_x, pixel_y))
                     else:
@@ -374,15 +374,15 @@ class HudMixin:
                             pygame.draw.circle(
                                 self.screen,
                                 entity_color,
-                                (int(pixel_x + CELL_SIZE // 2),
-                                 int(pixel_y + CELL_SIZE // 2)),
+                                (int(pixel_x + CELL_SIZE // 2 - 4),
+                                 int(pixel_y + CELL_SIZE // 2 - 2)),
                                 CELL_SIZE // 3
                             )
                             pygame.draw.circle(
                                 self.screen,
                                 entity_color,
-                                (int(pixel_x + CELL_SIZE // 2 + 4),
-                                 int(pixel_y + CELL_SIZE // 2 + 2)),
+                                (int(pixel_x + CELL_SIZE // 2 + 8),
+                                 int(pixel_y + CELL_SIZE // 2 + 4)),
                                 CELL_SIZE // 3
                             )
                         else:

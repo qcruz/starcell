@@ -559,8 +559,7 @@ class GameCoreMixin:
                     if screen_key in self.screens:
                         self.apply_cellular_automata(screen_x, screen_y)
                         self.decay_dropped_items(screen_x, screen_y)
-            # Periodic follower integrity check
-            self.check_follower_integrity()
+            pass  # distance-2 update complete
 
     def update_entities(self):
         """Update all entities - AI, movement, stats.
@@ -750,12 +749,22 @@ class GameCoreMixin:
         del self.entities[entity_id]
 
     def check_follower_integrity(self):
-        """Periodic cleanup: ensure follower_items and followers list match live entity state."""
+        """Every-tick check: ensure followers are alive, non-hostile, not targeting player."""
         stale_ids = []
         for entity_id in list(self.followers):
             entity = self.entities.get(entity_id)
             if entity is None or not entity.is_alive():
                 stale_ids.append(entity_id)
+                continue
+            # If follower is somehow targeting the player, clear it
+            if getattr(entity, 'current_target', None) == 'player':
+                entity.in_combat = False
+                entity.current_target = None
+                entity.ai_state = 'idle'
+            # Ensure hostile flag stays off
+            if entity.props.get('hostile', False):
+                entity.props['hostile'] = False
+
         for entity_id in stale_ids:
             self.followers.remove(entity_id)
             item_name = self.follower_items.pop(entity_id, None)
@@ -1385,6 +1394,12 @@ class GameCoreMixin:
             entity.last_move_tick = 0
             entity.target_stuck_counter = 0
             entity.last_target_position = None
+            # Clear combat state — stop attacking player immediately
+            entity.in_combat = False
+            entity.current_target = None
+            entity.ai_state = 'idle'
+            entity.idle_timer = 0
+            entity.props['hostile'] = False
             print(f"{npc_name} has decided to follow you!")
         else:
             print(f"{npc_name} declined to follow.")
@@ -2374,6 +2389,7 @@ class GameCoreMixin:
             
             if self.state == 'playing':
                 self.move_player()
+                self.check_follower_integrity()
 
                 # Sound: update music context + ambient each tick
                 _in_struct = bool(self.player.get('in_structure', False))

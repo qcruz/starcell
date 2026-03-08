@@ -393,6 +393,8 @@ class CellsMixin:
             print("Night falls...")
         elif not self.is_night and old_is_night:
             print("Dawn breaks...")
+            if hasattr(self, 'sound'):
+                self.sound.play_dawn_music()
 
     # -------------------------------------------------------------------------
     # Item logistics

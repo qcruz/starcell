@@ -1220,6 +1220,11 @@ class NpcAiMovementMixin:
         Merge only triggers when there are more than 3 entities of the same
         base type in the zone (overcrowding condition).
         """
+        # Followers must never become doubles
+        entity_id = next((eid for eid, e in self.entities.items() if e is entity), None)
+        if entity_id is not None and entity_id in getattr(self, 'followers', []):
+            return False
+
         base_type = entity.type.replace('_double', '')
         # Count same-type entities in zone
         same_type_count = sum(

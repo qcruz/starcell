@@ -15,11 +15,16 @@ class SoundManager:
     """Manages music, SFX, and ambient audio."""
 
     MUSIC = {
-        'menu':            'sounds/music/menu.ogg',
-        'overworld_day':   'sounds/music/overworld_day.ogg',
-        'overworld_night': 'sounds/music/overworld_night.ogg',
-        'cave':            'sounds/music/cave.ogg',
+        'menu':              'sounds/music/menu.ogg',
+        'overworld_day':     'sounds/music/overworld_day.ogg',
+        'overworld_night':   'sounds/music/overworld_night.ogg',
+        'cave':              'sounds/music/cave.ogg',
+        'ambient_travel_1':  'sound files/game_files/ambient_travel_music_1.mp3',
+        'ambient_travel_2':  'sound files/game_files/ambient_travel_music_2.mp3',
+        'ambient_travel_3':  'sound files/game_files/ambient_travel_music_3.wav',
     }
+
+    DAWN_TRACKS = ['ambient_travel_1', 'ambient_travel_2', 'ambient_travel_3']
 
     def __init__(self):
         try:
@@ -135,6 +140,16 @@ class SoundManager:
         if self._ok:
             pygame.mixer.music.fadeout(fade_ms)
         self.current_music = None
+
+    def play_dawn_music(self):
+        """Play a random ambient_travel track at the dawn transition."""
+        available = [k for k in self.DAWN_TRACKS if k in self._music_bufs]
+        if not available:
+            return
+        track = random.choice(available)
+        # Force play even if same track was last (dawn should always feel fresh)
+        self.current_music = None
+        self.play_music(track, fade_ms=2000)
 
     def set_music_enabled(self, enabled):
         """Enable or disable ambient/background music at runtime."""
