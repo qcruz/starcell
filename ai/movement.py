@@ -11,7 +11,7 @@ from engine import *
 class NpcAiMovementMixin:
 
     # NPC footstep volume at dist=0 relative to sfx_volume (halves each cell)
-    NPC_FOOTSTEP_VOL = 0.35
+    NPC_FOOTSTEP_VOL = 1.0
     # Max distance (cells) at which NPC footsteps are audible
     NPC_FOOTSTEP_MAX_DIST = 4
 

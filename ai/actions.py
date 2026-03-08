@@ -45,7 +45,7 @@ class NpcAiActionsMixin:
         dist = abs(actor.x - self.player['x']) + abs(actor.y - self.player['y'])
         if dist > 4:
             return
-        self.sound.play_sfx_spatial(sound_key, dist, vol_scale=0.5, use_budget=False)
+        self.sound.play_sfx_spatial(sound_key, dist, vol_scale=1.0, use_budget=False)
 
     def action_harvest_cell(self, actor, screen_key, cell_types, success_rate=0.5,
                             result_cell=None, activity=None):
