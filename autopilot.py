@@ -719,10 +719,12 @@ class AutopilotMixin:
         d1 = random.randint(5, 12)   # reaction: decide to open crafting
         d2 = random.randint(8, 15)   # look at menu, find and click the slot
         d3 = random.randint(5, 10)   # confirm with Space
+        d4 = random.randint(5, 10)   # close crafting menu after craft
         self._ap_queue(self._ap_key(pygame.K_c),  d1,          f"press C  (open crafting → {chosen})")
         self._ap_queue(lambda c=chosen: self._ap_click_crafting_slot(c),
                                                   d1 + d2,     f"click slot '{chosen}'")
         self._ap_queue(self._ap_key(pygame.K_SPACE), d1+d2+d3, "press SPACE (craft)")
+        self._ap_queue(self._ap_key(pygame.K_c), d1+d2+d3+d4, "press C  (close crafting)")
         return True
 
 

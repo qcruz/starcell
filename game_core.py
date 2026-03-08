@@ -1495,6 +1495,10 @@ class GameCoreMixin:
     
     def move_player(self):
         """Handle player movement"""
+        # Drain autopilot input queue before menu guard so synthetic events
+        # fire even while inventory/crafting menus are open.
+        if getattr(self, 'autopilot', False):
+            self._ap_flush_input_queue()
         if self.state != 'playing' or self.inventory.open_menus:
             return
         
