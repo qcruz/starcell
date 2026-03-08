@@ -32,6 +32,17 @@ class InventoryUIMixin:
             'followers': (120, 100, 80),
             'crafting': (180, 140, 60)  # Gold color for crafting
         }
+        # Highlight color for ingredient slots when a recipe is selected
+        INGREDIENT_COLOR = (80, 220, 200)  # Cyan
+
+        # Determine which items are ingredients for the selected crafting recipe
+        ingredient_items = {}  # {item_name: count_needed}
+        if 'crafting' in self.inventory.open_menus:
+            selected_craft = self.inventory.selected.get('crafting')
+            if selected_craft:
+                ings = self.inventory.get_recipe_ingredients(selected_craft)
+                if ings:
+                    ingredient_items = ings
 
         y_offset = 0
 
@@ -39,9 +50,15 @@ class InventoryUIMixin:
             if category not in self.inventory.open_menus:
                 continue
 
-            # Special handling for crafting screen - shows all items+tools+magic
+            # Crafting screen shows only recipes currently executable
             if category == 'crafting':
-                items = self.inventory.get_all_craftable_items()
+                craftable = self.inventory.get_craftable_recipes()
+                # Sync selection: if selected item is no longer craftable, pick first
+                current_sel = self.inventory.selected.get('crafting')
+                craftable_names = {r for r, _ in craftable}
+                if current_sel not in craftable_names:
+                    self.inventory.selected['crafting'] = craftable[0][0] if craftable else None
+                items = craftable  # list of (result_item, times_craftable)
             else:
                 items = self.inventory.get_item_list(category)
 
@@ -75,11 +92,17 @@ class InventoryUIMixin:
                                    and item_name is not None)
                     is_pending = False
 
+                # Ingredient highlight: slots consumed by the selected crafting recipe
+                is_ingredient = (category != 'crafting' and item_name in ingredient_items)
+
                 if is_pending:
                     pygame.draw.rect(self.screen, (255, 200, 50),
                                    (slot_x, slot_y, slot_size, slot_size), 3)
                 elif is_selected:
                     pygame.draw.rect(self.screen, COLORS['INV_SELECT'],
+                                   (slot_x, slot_y, slot_size, slot_size), 3)
+                elif is_ingredient:
+                    pygame.draw.rect(self.screen, INGREDIENT_COLOR,
                                    (slot_x, slot_y, slot_size, slot_size), 3)
                 else:
                     pygame.draw.rect(self.screen, COLORS['INV_BORDER'],

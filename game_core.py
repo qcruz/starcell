@@ -1007,6 +1007,9 @@ class GameCoreMixin:
                     if event.key == pygame.K_ESCAPE:
                         self.state = 'paused'
                     elif event.key == pygame.K_SPACE:
+                        if 'crafting' in self.inventory.open_menus and self.inventory.selected.get('crafting'):
+                            self.attempt_craft_selected()
+                            continue
                         if 'actions' in self.inventory.open_menus:
                             selected_action = self.inventory.selected.get('actions')
                             if selected_action:
@@ -1041,6 +1044,13 @@ class GameCoreMixin:
                         _was_open = 'crafting' in self.inventory.open_menus
                         self.inventory.toggle_menu('crafting')
                         if not _was_open:
+                            # Auto-open ingredient panels so items are visible
+                            for _panel in ('items', 'tools', 'magic'):
+                                self.inventory.open_menus.add(_panel)
+                            # Pre-select first craftable recipe
+                            _craftable = self.inventory.get_craftable_recipes()
+                            if _craftable and not self.inventory.selected.get('crafting'):
+                                self.inventory.selected['crafting'] = _craftable[0][0]
                             self.sound.on_inventory_open()
                     elif event.key == pygame.K_x:
                         # Attempt to craft with selected items

@@ -372,6 +372,29 @@ The LoreEngine generates a Prophecy fragment found in a dungeon chest: *"the swo
 
 ---
 
+### Autopilot → NPC AI Foundation
+> The autopilot is a **possession model**: when toggled, it spawns a real NPC entity (the "proxy") at the player's position and drives it using the existing NPC AI state machine. The player's visual character follows the proxy. The autopilot is not a player shortcut — it is the **development harness for all future NPC AI**. Logic proven here will be ported as the standard behavior layer for every NPC in the world, giving them rich autonomous behavior without per-type special-case code.
+>
+> **Design rule:** Fixes to autopilot behavior should remove special handling, not add more of it. The goal is a system where quest targeting, pathfinding, tool use, and obstacle clearing naturally get any entity to its goal.
+>
+> **Development process:** New NPC behaviors are prototyped on the autopilot proxy first. Once a behavior is stable and confirmed across observation sessions, it is ported to the NPC AI layer for all entities. The autopilot is the proving ground — never the destination.
+
+**Completed milestones (see `debug/bug_report.md` for session data)**
+- [x] ~~Possession model — proxy NPC at player position; player follows; AI state machine drives action~~ — completed!
+- [x] ~~Quest rotation — 9 quest types in one session; forced 30-second rotation + 80% switch-on-completion~~ — completed!
+- [x] ~~Zone travel — 35% nudge rate; obstacle-clear (chop/mine/rock) fires after 60 stuck ticks in targeting or wandering state; stuck-exit wander cooldown after 5 consecutive same-exit nudges~~ — completed!
+- [x] ~~Opportunistic harvesting — proxy collects adjacent stone/iron/wood every 30 ticks while walking in targeting or wandering state; confirmed stone+14 / iron_ore+3 in a single 2-min session~~ — completed!
+- [x] ~~AUTO_DEBUG headless sessions — session timer, run counter, new/continue 50/50; lives on dev-observation branch; Watchdog sampler confirms behavior across sessions~~ — completed!
+
+**Next milestones**
+- [ ] Crafting behavior — proxy identifies craftable recipes from its current inventory; pathfinds to crafting table if needed; executes craft sequence; starts with iron_ingot recipe (ore+ore) as first target
+- [ ] NPC follower behavior ported from autopilot — followers use the same quest-targeting + obstacle-clearing loop the autopilot proved; each follower gets a goal type matching their NPC archetype (MINER mines, FARMER farms, GUARD patrols)
+- [ ] All NPC pathfinding upgraded to use autopilot's cardinal obstacle-clear logic — NPCs swipe at blocking trees/rocks/fences rather than getting permanently stuck
+- [ ] Combat follow-through — proxy (and all NPCs) complete attack sequences before re-evaluating; fixes oscillation between attack and flee states at threshold range
+- [ ] Ambient AI chatter — NPCs emit spatially-attenuated audio cues during their actions (chop → wood_chop sound, mine → rock_hit, combat attack → sword_swing); max 2 NPC sounds per tick to prevent pile-up (design documented in `MEMORY.md`)
+
+---
+
 ### NPC Behavior Updates
 - [ ] All NPCs occasionally swipe at obstacles blocking their path — small chance to destroy the cell based on type; extends existing bandit-attacks-structures logic to trees, rocks, fences, etc.
 - [ ] Miner: seek iron ore in caves aggressively; exit cave when health is low; chance to dig a deeper cave level scaled by miner level
@@ -516,12 +539,17 @@ The LoreEngine generates a Prophecy fragment found in a dungeon chest: *"the swo
 
 ---
 
-### BugCatcher System
-- [ ] Tracks game performance and detects out-of-balance states (collision overlaps, overpopulated zones, stuck/teleporting NPCs, etc.)
-- [ ] Tiered auto-correction responses:
+### BugCatcher / Watchdog System
+> Core logging and anomaly detection infrastructure is complete (see Completed Features). The remaining work is graduating the Watchdog from passive observer to active auto-corrector.
+
+- [x] ~~JSON-lines structured logger, 2 MB rolling cap, in-memory buffer~~ — completed!
+- [x] ~~Watchdog rotating sampler — 7 categories (entities, cells, zones, player, structures, followers, npc_actions), 300-tick cycle~~ — completed!
+- [x] ~~Integrity checks — entity-in-subscreen anomaly detection, false-positive guard for structure virtual keys~~ — completed!
+- [ ] Tiered auto-correction responses (currently detect-only; apply=True gates in `debug/fixes.py`):
   - [ ] Zone too dense → re-roll or spawn termite invasion
   - [ ] NPC stuck / teleporting / too high level → force full update + trigger invasion event
   - [ ] Zone population too far out of balance → LoreEngine procs natural disaster or migration
+- [ ] Watchdog performance sampler — log frame time and entity count per tick; surface zones where entity density causes FPS drops; used to tune spawn caps before they become gameplay problems
 
 ---
 
@@ -565,3 +593,9 @@ The LoreEngine generates a Prophecy fragment found in a dungeon chest: *"the swo
 - [x] ~~Time pass overhaul — death screen and new game time skip now run full probabilistic zone simulation (real update queue, all automata, grows_to, entity aging) at 20× speed; year counter advances at matching rate; NPC XP gain, damage, and action success rates scale by time_pass_speed during simulation~~ — completed!
 - [x] ~~Structure overcrowding mechanic — NPCs in a structure where local population exceeds 3 have a 10% chance per extra entity to seek the exit each AI update; Keepers are exempt~~ — completed!
 - [x] ~~Keeper system — LoreEngine assigns Keeper NPCs to zones/structures; Keepers never leave their domain; TRADER eligible as Keeper type; Shift+inspect shows keeper info~~ — completed!
+- [x] ~~CLIFF and STONE_HOUSE protected from biome spread — biome update_zone_with_coverage skips protected cells so lake borders and stone walls cannot be overwritten by spreading biome types~~ — completed!
+- [x] ~~Combat sound fix — NPC attacks always use sword_swing; creature voice sounds (wolf_growl, goblin_growl, bat_screech) play only via ambient timer, not on every attack~~ — completed!
+- [x] ~~try_mine_rock cardinal-only scan — eliminates diagonal position jumps and self-mining; entity mines only the 4 adjacent NSEW cells; matches try_chop_tree pattern~~ — completed!
+- [x] ~~_try_build_structure fix — entity cannot build on its own cell; HOUSE/STONE_HOUSE call generate_structure_zone to initialize real interiors (not flat pre-fab sprites)~~ — completed!
+- [x] ~~Desert biome — sand/rock terrain, lower cactus decay, ore formation, aggressive MINER AI with desert behavior~~ — completed!
+- [x] ~~Audio system — OGG Vorbis encoding fix, BytesIO namehint, SFX hooks for inventory/combat/quests/structure entry, repeated track reload fix~~ — completed!
