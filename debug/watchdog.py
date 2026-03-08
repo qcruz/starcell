@@ -376,8 +376,11 @@ class Watchdog:
             entity_in_structure_flag = getattr(entity, 'in_structure', False)
             zone_key = f"{entity.screen_x},{entity.screen_y}"
 
-            # Check 1: in_structure=True but still in screen_entities
-            if entity_in_structure_flag:
+            # Check 1: in_structure=True but entity is in an OVERWORLD zone's screen_entities.
+            # Only fire when zone_key is NOT a structure key — if entity.screen_x/y already
+            # points to a structure virtual zone, the entity is properly inside that structure
+            # (correct state) and must not be disturbed.
+            if entity_in_structure_flag and zone_key not in structure_keys:
                 if zone_key in screen_entities and eid in screen_entities[zone_key]:
                     fix_entity_subscreen_flag(
                         eid, entity, game,

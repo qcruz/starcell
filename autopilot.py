@@ -36,6 +36,12 @@ QUEST_NUDGE_INTERVAL = 120   # every 2 seconds
 # How often (ticks) to sync proxy inventory → player inventory
 INVENTORY_SYNC_INTERVAL = 60  # every 1 second
 
+# How often (ticks) to perform a random inventory / spell / NPC action
+ACTION_INTERVAL = 300   # every 5 seconds
+
+# Force a quest type rotation even when the current quest is still active
+FORCE_QUEST_SWITCH_INTERVAL = 1800  # every 30 seconds
+
 # Quest type → NPC role mapping
 QUEST_NPC_TYPE = {
     'FARM':           'FARMER',
@@ -65,6 +71,14 @@ class AutopilotMixin:
         self.autopilot_proxy_id = None          # entity_id of the proxy NPC, or None
         self._autopilot_nudge_timer = 0
         self._autopilot_sync_timer = 0
+        self._autopilot_action_timer = 0
+        self._autopilot_force_switch_timer = 0
+        self._autopilot_last_exit_target = None   # (exit_x, exit_y) from last travel nudge
+        self._autopilot_stuck_exit_count = 0      # consecutive nudges toward same exit
+        self._autopilot_wander_cooldown = 0       # ticks of forced wandering after stuck
+        self._autopilot_proxy_last_pos = None     # (x, y) at last tick for stuck detection
+        self._autopilot_pos_stuck_ticks = 0       # ticks at same position while targeting
+        self._autopilot_harvest_timer = 0         # opportunistic harvest every ~30 ticks
         # Grace period: autopilot cannot engage until this tick
         start_tick = getattr(self, 'tick', 0)
         self.last_input_tick = start_tick + AUTOPILOT_GRACE_TICKS
@@ -113,6 +127,27 @@ class AutopilotMixin:
         # Keep proxy position in sync so the player's logical position tracks it
         self._sync_player_from_proxy(proxy)
 
+<<<<<<< HEAD
+=======
+        # ── Obstacle clearing: detect stuck position and chop/mine blocking cells ─
+        cur_pos = (proxy.x, proxy.y)
+        if proxy.ai_state in ('targeting', 'wandering') and cur_pos == self._autopilot_proxy_last_pos:
+            self._autopilot_pos_stuck_ticks += 1
+            # Try to clear obstacle every 60 ticks of being stuck (once per NPC AI cycle)
+            if self._autopilot_pos_stuck_ticks % 60 == 0:
+                self._autopilot_try_clear_obstacle(proxy)
+        else:
+            self._autopilot_proxy_last_pos = cur_pos
+            self._autopilot_pos_stuck_ticks = 0
+
+        # ── Opportunistic harvesting: attempt chop/mine every ~30 ticks while moving ─
+        # Fires regardless of ai_state so the proxy collects resources while traversing.
+        if proxy.ai_state in ('targeting', 'wandering'):
+            self._autopilot_harvest_timer += 1
+            if self._autopilot_harvest_timer >= 30:
+                self._autopilot_harvest_timer = 0
+                self._autopilot_opportunistic_harvest(proxy)
+
         # Diagnostic: print positions every tick to track teleport glitches
         pz = f"{self.player['screen_x']},{self.player['screen_y']}"
         pp = f"({self.player['x']},{self.player['y']})"
@@ -126,24 +161,40 @@ class AutopilotMixin:
                 if v is self.current_screen:
                     cs_key = k
                     break
+        hp = f"{proxy.health:.0f}/{proxy.max_health}"
         print(f"[AP] t={self.tick} "
               f"pZ={pz} pP={pp} "
               f"xZ={prz} xP={prp} "
               f"st={state} tgt={tgt} "
-              f"cs={cs_key}")
+              f"hp={hp} cs={cs_key}")
 
+>>>>>>> 4e973e8 (dev-observation: autopilot debug session + bug fixes (Sessions 1-10))
         # Periodically sync proxy inventory → player inventory
         self._autopilot_sync_timer += 1
         if self._autopilot_sync_timer >= INVENTORY_SYNC_INTERVAL:
             self._autopilot_sync_timer = 0
             self._sync_inventory_to_player(proxy)
 
-        # ── Quest completion check: 30% chance to switch quest type ────────
+        # ── Periodic HP restoration — let proxy take real combat damage
+        #    but prevent it from dying and ending the session.
+        #    Restores to full every 300 ticks if below 50% HP.
+        if proxy.health < proxy.max_health * 0.5:
+            if self.tick % 300 == 0:
+                proxy.health = proxy.max_health
+                print(f"[Autopilot] Proxy HP restored to {proxy.max_health:.0f}")
+
+        # ── Quest completion check: 80% chance to switch quest type ────────
         if self.active_quest and self.active_quest in self.quests:
             quest = self.quests[self.active_quest]
             if quest.status == 'completed' or quest.status == 'cooldown':
-                if random.random() < 0.30:
+                if random.random() < 0.80:
                     self._autopilot_switch_quest()
+
+        # ── Forced periodic quest rotation (even when quest is still active)
+        self._autopilot_force_switch_timer += 1
+        if self._autopilot_force_switch_timer >= FORCE_QUEST_SWITCH_INTERVAL:
+            self._autopilot_force_switch_timer = 0
+            self._autopilot_switch_quest()
 
         # Periodically nudge proxy toward quest target
         self._autopilot_nudge_timer += 1
@@ -157,6 +208,12 @@ class AutopilotMixin:
             # was consumed by another NPC, etc.)
             if random.random() < 0.02:
                 self._autopilot_switch_quest()
+
+        # ── Periodic inventory / spell / NPC action ──────────────────────
+        self._autopilot_action_timer += 1
+        if self._autopilot_action_timer >= ACTION_INTERVAL:
+            self._autopilot_action_timer = 0
+            self._autopilot_do_action(proxy)
 
     # ── Engage / disengage ────────────────────────────────────────────────────
 
@@ -187,12 +244,13 @@ class AutopilotMixin:
         proxy.props['ai_params']['combat_chance']  = 0.0
         proxy.props['ai_params']['flee_chance']    = 0.95  # Almost always flee from hostiles
 
-        # ── Invulnerability — proxy cannot die ────────────────────────────
-        # Set stats to effectively infinite so decay_stats / combat never kill it
-        BIG = 999999
-        proxy.max_health = BIG;  proxy.health  = BIG
-        proxy.max_hunger = BIG;  proxy.hunger  = BIG
-        proxy.max_thirst = BIG;  proxy.thirst  = BIG
+        # ── Real stats so damage is visible; hunger/thirst kept high to
+        #    avoid those systems limiting the session.  HP is restored
+        #    periodically in update_autopilot() so the proxy doesn't die.
+        proxy.max_health = self.player.get('max_health', 100)
+        proxy.health     = proxy.max_health
+        proxy.max_hunger = 9999;  proxy.hunger  = 9999   # no hunger concern
+        proxy.max_thirst = 9999;  proxy.thirst  = 9999   # no thirst concern
         proxy.strength   = self.player.get('base_damage', 10)
 
         # Copy player-facing direction
@@ -287,22 +345,15 @@ class AutopilotMixin:
         self.autopilot_proxy_id = None
         self._autopilot_nudge_timer = 0
         self._autopilot_sync_timer = 0
+        self._autopilot_action_timer = 0
+        self._autopilot_force_switch_timer = 0
+        self._autopilot_last_exit_target = None
+        self._autopilot_stuck_exit_count = 0
+        self._autopilot_wander_cooldown = 0
+        self._autopilot_proxy_last_pos = None
+        self._autopilot_pos_stuck_ticks = 0
+        self._autopilot_harvest_timer = 0
 
-        # DEBUG: Dump entity states after disengage to see if anything is still frozen
-        sk = f"{self.player['screen_x']},{self.player['screen_y']}"
-        print(f"[Autopilot] Disengaged — player control restored, zone={sk}")
-        if sk in self.screen_entities:
-            for eid in self.screen_entities[sk]:
-                if eid in self.entities:
-                    e = self.entities[eid]
-                    print(f"  [Disengage] {e.type:12s} id={eid:4d} pos=({e.x},{e.y}) "
-                          f"ai_state={getattr(e, 'ai_state', '?')} "
-                          f"idle_timer={getattr(e, 'idle_timer', 0)} "
-                          f"is_idle={getattr(e, 'is_idle', False)} "
-                          f"in_combat={getattr(e, 'in_combat', False)} "
-                          f"current_target={getattr(e, 'current_target', None)} "
-                          f"last_ai_tick={getattr(e, 'last_ai_tick', -1)} "
-                          f"alive={e.is_alive()}")
 
     # ── Position sync ─────────────────────────────────────────────────────────
 
@@ -401,6 +452,13 @@ class AutopilotMixin:
         if proxy.ai_state in ('flee', 'combat'):
             return
 
+        # ── Wander cooldown: after being stuck at an exit, wander freely ─
+        if self._autopilot_wander_cooldown > 0:
+            self._autopilot_wander_cooldown -= 1
+            proxy.ai_state = 'wandering'
+            proxy.current_target = None
+            return
+
         if not self.active_quest or self.active_quest not in self.quests:
             return
 
@@ -450,7 +508,7 @@ class AutopilotMixin:
         travel_quests = ('SEARCH', 'RESCUE', 'EXPLORE')
         force_travel = self.active_quest in travel_quests
         
-        if not force_travel and random.random() < 0.90:
+        if not force_travel and random.random() < 0.65:
             # Natural behavior mode — just make sure proxy is wandering
             # so its behavior_config fires on the next tick % 60 cycle.
             if proxy.ai_state == 'targeting':
@@ -505,6 +563,27 @@ class AutopilotMixin:
             exit_y = (GRID_HEIGHT - 1) if zone_dy > 0 else 0
             exit_x = center_x
 
+        exit_target = (exit_x, exit_y)
+
+        # Track consecutive nudges toward the same exit cell.
+        # If stuck for 5+ cycles (600 ticks), enter a wander cooldown so the
+        # proxy uses natural movement to find a path rather than repeatedly
+        # re-targeting the same unreachable cell.
+        if self._autopilot_last_exit_target == exit_target:
+            self._autopilot_stuck_exit_count += 1
+        else:
+            self._autopilot_last_exit_target = exit_target
+            self._autopilot_stuck_exit_count = 1
+
+        if self._autopilot_stuck_exit_count >= 5:
+            self._autopilot_stuck_exit_count = 0
+            self._autopilot_last_exit_target = None
+            self._autopilot_wander_cooldown = 10  # 10 nudge cycles of free wandering
+            proxy.ai_state = 'wandering'
+            proxy.current_target = None
+            print(f"[Autopilot] Stuck at exit {exit_target} — entering wander cooldown")
+            return
+
         proxy.current_target = ('cell', exit_x, exit_y)
         proxy.target_type = 'resource'   # 'resource' is handled by move_toward_position
         proxy.ai_state = 'targeting'
@@ -538,3 +617,155 @@ class AutopilotMixin:
             self.quests[old].clear_target()
 
         print(f"[Autopilot] Quest switch: {old} → {self.active_quest}")
+
+    # ── Periodic random actions ────────────────────────────────────────────────
+
+    def _autopilot_do_action(self, proxy):
+        """Randomly perform one of: change selected tool, use a spell, drop an item,
+        or inspect a nearby NPC.  Keeps the autopilot exercising diverse code paths."""
+        action = random.choice(['change_tool', 'use_spell', 'drop_item', 'npc_interact'])
+        if action == 'change_tool':
+            self._autopilot_change_tool()
+        elif action == 'use_spell':
+            self._autopilot_use_spell()
+        elif action == 'drop_item':
+            self._autopilot_drop_item(proxy)
+        else:
+            self._autopilot_try_npc_interact(proxy)
+
+    def _autopilot_change_tool(self):
+        """Select a random available tool from the player's tool inventory."""
+        tools = list(self.inventory.tools.keys())
+        if not tools:
+            return
+        chosen = random.choice(tools)
+        self.inventory.selected['tools'] = chosen
+        print(f"[Autopilot] Tool → {chosen}")
+
+    def _autopilot_use_spell(self):
+        """Cast a random available spell from the player's magic inventory."""
+        magic = getattr(self.inventory, 'magic', {})
+        spells = list(magic.keys())
+        if not spells:
+            return
+        chosen = random.choice(spells)
+        if chosen == 'rain_spell' and hasattr(self, 'cast_rain_spell'):
+            self.cast_rain_spell()
+        elif chosen == 'day_spell' and hasattr(self, 'cast_day_spell'):
+            self.cast_day_spell()
+        elif hasattr(self, 'cast_star_spell'):
+            self.cast_star_spell()
+        print(f"[Autopilot] Spell → {chosen}")
+
+    def _autopilot_drop_item(self, proxy):
+        """Drop one unit of a random surplus resource item at the proxy's position.
+
+        Only drops items where the player holds more than 1 copy; never drops
+        tools, spells, actions, or follower items.
+        """
+        droppable = [
+            k for k, v in self.inventory.items.items()
+            if v > 1
+            and not ITEMS.get(k, {}).get('is_tool')
+            and not ITEMS.get(k, {}).get('is_spell')
+            and not ITEMS.get(k, {}).get('is_action')
+            and not ITEMS.get(k, {}).get('is_follower')
+        ]
+        if not droppable:
+            return
+        item = random.choice(droppable)
+        if hasattr(self, 'drop_item'):
+            self.drop_item(item, int(proxy.x), int(proxy.y))
+            print(f"[Autopilot] Dropped {item} at ({int(proxy.x)},{int(proxy.y)})")
+
+    def _autopilot_try_npc_interact(self, proxy):
+        """Inspect the nearest non-proxy NPC in the proxy's zone.
+
+        Sets self.inspected_npc so the normal per-tick NPC inspection logic runs,
+        exercising trade menus, dialogue, and relationship checks.
+        """
+        screen_key = f"{proxy.screen_x},{proxy.screen_y}"
+        candidates = []
+        for eid in self.screen_entities.get(screen_key, []):
+            if eid == self.autopilot_proxy_id:
+                continue
+            e = self.entities.get(eid)
+            if e is None or getattr(e, 'in_subscreen', False):
+                continue
+            dist = abs(e.x - proxy.x) + abs(e.y - proxy.y)
+            candidates.append((dist, eid, e))
+        if not candidates:
+            return
+        candidates.sort()
+        dist, eid, e = candidates[0]
+        if dist <= 4:
+            self.inspected_npc = eid
+            print(f"[Autopilot] Inspecting {e.type} (id={eid}) dist={dist}")
+
+    def _autopilot_try_clear_obstacle(self, proxy):
+        """When the proxy is stuck in 'targeting' state, scan adjacent cells for
+        harvestable solid obstacles (trees, stone, iron ore) and clear them.
+
+        Calls try_chop_tree / try_mine_rock directly — these functions transform
+        the blocking cell regardless of whether the player has the right tool
+        (drops are tool-gated; path clearing is not).  This surfaces pathfinding
+        issues that would otherwise keep the proxy frozen indefinitely.
+        """
+        screen_key = f"{proxy.screen_x},{proxy.screen_y}"
+        if screen_key not in self.screens:
+            return
+
+        screen = self.screens[screen_key]
+        grid = screen['grid']
+
+        tree_adjacent = False
+        rock_adjacent = False
+        for dx, dy in [(0, -1), (0, 1), (-1, 0), (1, 0)]:
+            cx, cy = int(proxy.x) + dx, int(proxy.y) + dy
+            if not (0 <= cx < GRID_WIDTH and 0 <= cy < GRID_HEIGHT):
+                continue
+            cell = grid[cy][cx]
+            if cell in ('TREE1', 'TREE2'):
+                tree_adjacent = True
+            elif cell in ('STONE', 'IRON_ORE'):
+                rock_adjacent = True
+
+        if tree_adjacent:
+            self.try_chop_tree(proxy, screen_key)
+            print(f"[Autopilot] Obstacle-clear: chopping tree adjacent to proxy "
+                  f"({int(proxy.x)},{int(proxy.y)}) stuck={self._autopilot_pos_stuck_ticks}t")
+        elif rock_adjacent:
+            self.try_mine_rock(proxy, screen_key)
+            print(f"[Autopilot] Obstacle-clear: mining rock adjacent to proxy "
+                  f"({int(proxy.x)},{int(proxy.y)}) stuck={self._autopilot_pos_stuck_ticks}t")
+
+    def _autopilot_opportunistic_harvest(self, proxy):
+        """Scan the 3×3 area around the proxy for harvestable cells and collect them.
+
+        Fires every ~30 ticks regardless of movement/ai_state so the proxy
+        accumulates resources while traversing the world.  Trees take priority
+        over rocks (lumberjacking yields more varied drops).
+        """
+        screen_key = f"{proxy.screen_x},{proxy.screen_y}"
+        if screen_key not in self.screens:
+            return
+
+        screen = self.screens[screen_key]
+        grid = screen['grid']
+
+        tree_found = False
+        rock_found = False
+        for dx, dy in [(0, -1), (0, 1), (-1, 0), (1, 0)]:
+            cx, cy = int(proxy.x) + dx, int(proxy.y) + dy
+            if not (0 <= cx < GRID_WIDTH and 0 <= cy < GRID_HEIGHT):
+                continue
+            cell = grid[cy][cx]
+            if cell in ('TREE1', 'TREE2'):
+                tree_found = True
+            elif cell in ('STONE', 'IRON_ORE'):
+                rock_found = True
+
+        if tree_found:
+            self.try_chop_tree(proxy, screen_key)
+        elif rock_found:
+            self.try_mine_rock(proxy, screen_key)
