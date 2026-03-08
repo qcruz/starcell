@@ -152,22 +152,24 @@ class SoundManager:
         snd.set_volume(self.sfx_volume)
         snd.play()
 
-    def play_sfx_spatial(self, key, dist, max_dist=8):
-        """Play a sound with volume scaled by distance (cells). Budget-limited per tick."""
+    def play_sfx_spatial(self, key, dist, max_dist=8, vol_scale=1.0, use_budget=True):
+        """Play a sound with volume scaled by distance (cells).
+        Budget-limited per tick unless use_budget=False."""
         if not self._ok:
             return
-        if self._npc_sounds_this_tick >= self.NPC_SOUND_BUDGET:
+        if use_budget and self._npc_sounds_this_tick >= self.NPC_SOUND_BUDGET:
             return
         pool = self.sounds.get(key)
         if not pool:
             return
-        vol = self.sfx_volume * max(0.0, 1.0 - dist / max_dist)
+        vol = self.sfx_volume * vol_scale * max(0.0, 1.0 - dist / max_dist)
         if vol <= 0.01:
             return
         snd = random.choice(pool) if isinstance(pool, list) else pool
         snd.set_volume(vol)
         snd.play()
-        self._npc_sounds_this_tick += 1
+        if use_budget:
+            self._npc_sounds_this_tick += 1
 
     def play_music(self, track_key, fade_ms=1000):
         if not self._ok or track_key == self.current_music:

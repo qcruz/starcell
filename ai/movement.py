@@ -10,6 +10,42 @@ from engine import *
 
 class NpcAiMovementMixin:
 
+    # NPC footstep volume relative to normal sfx_volume
+    NPC_FOOTSTEP_VOL = 0.30
+    # Max distance (cells) at which NPC footsteps are audible
+    NPC_FOOTSTEP_MAX_DIST = 4
+    # Play footstep every N steps per entity (reduces spam)
+    NPC_FOOTSTEP_RATE = 3
+
+    def _npc_footstep_sound(self, entity, new_x, new_y):
+        """Play a quiet spatially-attenuated footstep for a moving NPC.
+        Rate-limited per entity; doesn't consume the combat sound budget."""
+        if not hasattr(self, 'sound'):
+            return
+        # Same screen check
+        px_screen = f"{self.player.get('screen_x', 0)},{self.player.get('screen_y', 0)}"
+        npc_screen = f"{getattr(entity, 'screen_x', -1)},{getattr(entity, 'screen_y', -1)}"
+        if px_screen != npc_screen:
+            return
+        dist = abs(new_x - self.player['x']) + abs(new_y - self.player['y'])
+        if dist > self.NPC_FOOTSTEP_MAX_DIST:
+            return
+        # Rate limit: every Nth step
+        entity._footstep_counter = getattr(entity, '_footstep_counter', 0) + 1
+        if entity._footstep_counter < self.NPC_FOOTSTEP_RATE:
+            return
+        entity._footstep_counter = 0
+        # Pick footstep type from cell under entity
+        try:
+            cell = self.current_screen['grid'][new_y][new_x]
+        except (TypeError, IndexError, KeyError):
+            cell = 'GRASS'
+        sfx_key = 'footstep_water' if cell in ('WATER', 'DEEP_WATER') else 'footstep_dirt'
+        self.sound.play_sfx_spatial(sfx_key, dist,
+                                    max_dist=self.NPC_FOOTSTEP_MAX_DIST,
+                                    vol_scale=self.NPC_FOOTSTEP_VOL,
+                                    use_budget=False)
+
     def wander_entity(self, entity):
         """Move entity randomly"""
         # All entities (overworld and structure) now use the same registry.
@@ -91,6 +127,7 @@ class NpcAiMovementMixin:
                 if len(entity.memory_lane) > entity.max_memory_length:
                     entity.memory_lane.pop(0)
 
+            self._npc_footstep_sound(entity, new_x, new_y)
             entity.x = new_x
             entity.y = new_y
             entity.target_x = new_x
@@ -244,6 +281,7 @@ class NpcAiMovementMixin:
 
             entity.stuck_counter = 0  # Reset stuck counter on successful move
             entity.moved_this_update = True  # Tell behavior system entity is in motion
+            self._npc_footstep_sound(entity, new_x, new_y)
             entity.x = new_x
             entity.y = new_y
             entity.target_x = new_x
