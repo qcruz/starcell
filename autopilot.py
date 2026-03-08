@@ -81,7 +81,6 @@ class AutopilotMixin:
         self._autopilot_harvest_timer = 0         # opportunistic harvest every ~30 ticks
         # Simulated input queue — autopilot posts real pygame events with human delays
         self._ap_input_queue = []      # [(fire_at_tick, event_or_callable, log_label)]
-        self._ap_pending_suppress = 0  # mark_input() skips this many times for AP events
         # Grace period: autopilot cannot engage until this tick
         start_tick = getattr(self, 'tick', 0)
         self.last_input_tick = start_tick + AUTOPILOT_GRACE_TICKS
@@ -91,12 +90,7 @@ class AutopilotMixin:
         return self.tick - self.last_input_tick > AUTOPILOT_IDLE_TICKS
 
     def mark_input(self):
-        """Called on any player input — always disables autopilot.
-        Synthetic autopilot events increment _ap_pending_suppress so this
-        method silently passes for each queued event without disengaging."""
-        if getattr(self, '_ap_pending_suppress', 0) > 0:
-            self._ap_pending_suppress -= 1
-            return
+        """Called on any real player input — disables autopilot."""
         self.last_input_tick = self.tick
         if self.autopilot:
             self.autopilot_locked = False
@@ -607,14 +601,14 @@ class AutopilotMixin:
     # ── Simulated input helpers ───────────────────────────────────────────────
 
     def _ap_key(self, key, mod=0):
-        """Return a KEYDOWN pygame event for the given key."""
+        """Return a KEYDOWN pygame event for the given key, tagged as synthetic."""
         return pygame.event.Event(pygame.KEYDOWN, key=key, mod=mod,
-                                  unicode='', scancode=0)
+                                  unicode='', scancode=0, _ap_synthetic=True)
 
     def _ap_click(self, x, y):
-        """Return a MOUSEBUTTONDOWN (left-click) pygame event at (x, y)."""
+        """Return a MOUSEBUTTONDOWN (left-click) pygame event at (x, y), tagged as synthetic."""
         return pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,
-                                  pos=(int(x), int(y)))
+                                  pos=(int(x), int(y)), _ap_synthetic=True)
 
     def _ap_queue(self, action, delay, label=''):
         """Schedule an event or callable with a tick delay.
@@ -637,8 +631,6 @@ class AutopilotMixin:
                 if callable(action):
                     action()
                 else:
-                    # Suppress mark_input for this synthetic event
-                    self._ap_pending_suppress += 1
                     pygame.event.post(action)
             else:
                 remaining.append((fire_at, action, label))
@@ -677,7 +669,6 @@ class AutopilotMixin:
         """Callable: compute pixel pos for item_name and post a click event."""
         pos = self._ap_crafting_slot_pixel(item_name)
         if pos:
-            self._ap_pending_suppress += 1
             pygame.event.post(self._ap_click(pos[0], pos[1]))
         else:
             print(f"[AP] crafting slot '{item_name}' not visible — skipping click")

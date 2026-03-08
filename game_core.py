@@ -981,9 +981,10 @@ class GameCoreMixin:
             if event.type == pygame.QUIT:
                 self.running = False
             
-            # Mark input for idle detection
+            # Mark input for idle detection — skip synthetic autopilot events
             if event.type in [pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN]:
-                self.mark_input()
+                if not getattr(event, '_ap_synthetic', False):
+                    self.mark_input()
             
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1 and self.state == 'menu':
