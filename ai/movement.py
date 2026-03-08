@@ -1164,14 +1164,19 @@ class NpcAiMovementMixin:
                 # Must be standing on it or immediately adjacent (like zone transitions)
                 if dist <= 1:
                     if cell in ('CAVE', 'MINESHAFT'):
-                        # Combat-driven entry only — entity must be targeting/attacking a
-                        # structure occupant, then walks to the door and enters.
-                        state = getattr(entity, 'ai_state', 'idle')
-                        if state in ('targeting', 'combat'):
-                            if self.has_target_in_structure(entity, screen_key, check_x, check_y):
-                                entity.target_door = None
+                        # Nocturnal entities (bats) seek shelter in caves during daytime
+                        if entity.props.get('nocturnal', False) and not getattr(self, 'is_night', True):
+                            if random.random() < 0.1:
                                 self.npc_enter_structure(entity, screen_key, check_x, check_y, cell)
                                 return
+                        else:
+                            # Combat-driven entry — entity must be targeting a structure occupant
+                            state = getattr(entity, 'ai_state', 'idle')
+                            if state in ('targeting', 'combat'):
+                                if self.has_target_in_structure(entity, screen_key, check_x, check_y):
+                                    entity.target_door = None
+                                    self.npc_enter_structure(entity, screen_key, check_x, check_y, cell)
+                                    return
                     else:
                         # Original random entry for HOUSE, STONE_HOUSE, etc.
                         if random.random() < 0.1:
