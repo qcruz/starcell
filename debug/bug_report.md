@@ -1,7 +1,28 @@
 # StarCell Bug Report — Auto-Debug Sessions
 
-Each run: autopilot plays a new game, saves, quits. Time cap doubles per run (60s→120s→240s→420s max).
+Each run: autopilot plays a new game, saves, quits. Session cap: 60–120s.
 Reviewed from `debug/bugcatcher.log` after each session.
+
+---
+
+## Session 13 — 2026-03-08 (~3,328 ticks, ~63s, NEW GAME)
+
+### CONFIRMED — Full crafting sequence fires end-to-end [BUG-04 FIXED ✓]
+Three-part fix for autopilot simulated input:
+1. **`_ap_synthetic=True` event tagging** — synthetic pygame events skip `mark_input()` so autopilot cannot be disengaged by its own key presses.
+2. **Flush before menu guard** — `move_player()` now drains the autopilot input queue BEFORE the `open_menus` early-return, so click and Space events fire even while the crafting menu is open.
+3. **Closing C press** — sequence ends with a C keypress to leave the menu closed.
+
+Log confirms: `[AP] press C → [AP] click slot 'shovel' → [AP] press SPACE → [Craft] Crafted Shovel! → [AP] press C (close crafting)`.
+
+### CONFIRMED — Session cap reduced to 60–120s
+Bugs were appearing in the first seconds; shorter sessions catch them faster.
+
+### BUG-05 — `NameError: entity_structure_key` in `find_and_attack_enemy` [FIXED ✓]
+**File:** `npc_ai.py:1735`
+**Error:** `entity_structure` was assigned at line 1733, but line 1735 referenced the nonexistent `entity_structure_key`. Crashed whenever a hostile NPC tried to attack the player while the player was inside a structure. Side effect: the exception also prevented the backup save from completing (backup_save_error in Sessions 11–12 with `'bool' object has no attribute 'items'` — the exception path corrupted state before save).
+**Fix:** Renamed the variable at line 1733 to `entity_structure_key`.
+**Confirmed:** Session 14 backup save at tick 738 logged successfully (both backup1 and backup2).
 
 ---
 
