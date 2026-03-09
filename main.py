@@ -84,7 +84,7 @@ if __name__ == '__main__':
     import random, time, json, os
 
     # ── AUTO_DEBUG: set True to run headless autopilot debug sessions ──────────
-    AUTO_DEBUG = False
+    AUTO_DEBUG = True
     _STATE_FILE = 'debug/auto_debug_state.json'
     _MIN_SECS   = 60    # floor: 1 min
     _MAX_CAP    = 120   # ceiling: 2 min
