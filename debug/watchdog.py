@@ -24,6 +24,7 @@ so log readers can see what fraction was captured each cycle.
 Integrity checks (log-and-detect, no active healing):
   entity_in_subscreen_but_in_screen_entities
   entity_not_in_subscreen_but_in_subscreen_entities
+  proxy_stagnation — autopilot proxy grid unchanged across consecutive player samples
 """
 
 import random
@@ -44,6 +45,8 @@ class Watchdog:
         self._last_run_tick = -99999
         self._last_backup1_tick = -99999
         self._last_backup2_tick = -99999
+        self._last_proxy_grid = None   # for stagnation detection
+        self._last_proxy_tick = None
 
     # ------------------------------------------------------------------
     # Main entry point
@@ -237,6 +240,22 @@ class Watchdog:
             'last_input_tick': getattr(game, 'last_input_tick', None),
             'proxy': proxy_pos,
         })
+        # Stagnation check: flag if proxy grid hasn't changed since last player sample
+        if proxy_pos and getattr(game, 'autopilot', False):
+            current_grid = proxy_pos['grid']
+            if self._last_proxy_grid is not None and current_grid == self._last_proxy_grid:
+                self.bug_catcher.log({
+                    'tick': tick,
+                    'category': 'proxy_stagnation',
+                    'grid': current_grid,
+                    'ticks_stuck': tick - self._last_proxy_tick,
+                    'note': 'proxy grid unchanged since last player sample',
+                })
+            self._last_proxy_grid = current_grid
+            self._last_proxy_tick = tick
+        elif not getattr(game, 'autopilot', False):
+            self._last_proxy_grid = None
+            self._last_proxy_tick = None
 
     def _sample_structures(self, tick: int, game) -> None:
         """Log full state for ALL structures (type, cells, entities)."""
