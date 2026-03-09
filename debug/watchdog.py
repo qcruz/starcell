@@ -27,6 +27,7 @@ Integrity checks (log-and-detect, no active healing):
 """
 
 import random
+import traceback
 from debug.fixes import fix_entity_subscreen_flag
 
 
@@ -458,6 +459,7 @@ class Watchdog:
                     'category': 'backup_save_error',
                     'file': 'savegame_backup1.json',
                     'error': str(exc),
+                    'traceback': traceback.format_exc(),
                 })
 
         if tick - self._last_backup2_tick >= self.BACKUP2_INTERVAL:
@@ -477,4 +479,5 @@ class Watchdog:
                     'category': 'backup_save_error',
                     'file': 'savegame_backup2.json',
                     'error': str(exc),
+                    'traceback': traceback.format_exc(),
                 })

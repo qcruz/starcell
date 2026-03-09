@@ -1730,7 +1730,7 @@ class NpcAiMixin:
                     can_attack_player = True
             elif entity_in_structure and player_in_structure:
                 # Both in structure - check if same structure
-                entity_structure = getattr(entity, 'structure_key', None)
+                entity_structure_key = getattr(entity, 'structure_key', None)
                 player_structure_key = self.player.get('structure_key', None)
                 if entity_structure_key == player_structure_key:
                     can_attack_player = True
