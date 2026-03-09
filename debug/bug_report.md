@@ -5,6 +5,35 @@ Reviewed from `debug/bugcatcher.log` after each session.
 
 ---
 
+## Session 15 — 2026-03-08 (~5,900 ticks, ~119s, NEW GAME)
+
+### CONFIRMED — Clean run, no errors
+No exceptions, no backup_save_error. Two successful backup saves (ticks 606 and 4206).
+Entity count: 290 at tick 2706 → 373 at tick 4806 (well under 600 bloat threshold).
+
+### CONFIRMED — Crafting still working
+`[AP] press C → [AP] click slot 'seeds' → [AP] press SPACE → [Craft] Crafted Seeds! → [AP] press C (close crafting)`.
+
+### CONFIRMED — New spells in magic inventory
+`rain_spell` and `day_spell` appear in player magic inventory at tick 1506 — `new_game()` item grants working.
+
+### CONFIRMED — Follower stable
+TERMITE follower (id=270) healthy, zone=0,0 matching player zone, `hostile=False` at both sample points (ticks 2106, 4206).
+
+### CONFIRMED — NPC combat active
+GOBLIN (id=307) targeting MINER at tick 2406 (`ai_state=targeting`), in combat at tick 4506 (`ai_state=combat, in_combat=True`).
+
+### OBSERVATION-26 — Player never leaves zone 0,0
+All 3 player samples (ticks 1506, 3606, 5706) show zone=0,0. Autopilot does not cross zone boundaries. Zone travel is not yet implemented in autopilot.
+
+### OBSERVATION-27 — Inventory stagnant
+Items identical across all 3 samples: `carrot×3, tree_sapling×3, magic_rune×1, seeds×1`. No resource accumulation. Autopilot wanders and crafts but does not actively harvest cells or pick up items. Expected until harvest behaviour is added to autopilot.
+
+### OBSERVATION-28 — Quest stuck on FARM all session
+Same FARM quest at ticks 1506, 3606, 5706. Quest rotation requires player to complete or fail a quest, which requires active play. Not a bug — autopilot doesn't yet perform quest-related actions.
+
+---
+
 ## Session 13 — 2026-03-08 (~3,328 ticks, ~63s, NEW GAME)
 
 ### CONFIRMED — Full crafting sequence fires end-to-end [BUG-04 FIXED ✓]
