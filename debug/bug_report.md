@@ -5,6 +5,41 @@ Reviewed from `debug/bugcatcher.log` after each session.
 
 ---
 
+## Session 16 — 2026-03-08 (~3,108 ticks, ~52s, NEW GAME)
+
+### CONFIRMED — Clean run, no exceptions
+No tracebacks, no backup_save_error. Crafting (seeds) confirmed. Proxy moving. SHEEP follower (id=265) zone-matched and healthy throughout.
+
+### BUG-06 — 33 entities frozen: hunger/thirst/health unchanged for 2100 ticks [INVESTIGATE]
+**Severity:** Medium
+Entity samples at ticks 708 and 2808 show 33 entities with bitwise-identical hunger, thirst, health, and grid position. Affected types include SKELETON, BANDIT, TRADER, FARMER, GOBLIN, TERMITE, DEER, MINER, SHEEP — spread across multiple zones including the player's own zone 0,0. Hunger counter not advancing means the entity update loop is **not running for these entities** (not just that they are physically stuck).
+Notable: SKELETON id=171 in zone 0,0 grid (10,3) targeting GOBLIN id=0 — frozen mid-combat.
+**Suspected cause:** Entities accumulate in `self.entities` but are not present in any active `screen_entities` zone bucket, so the AI update loop never reaches them. Requires investigation of how entities fall out of `screen_entities`.
+
+### BUG-07 — 4 entities permanently stuck targeting EXIT cells [INVESTIGATE]
+**Severity:** Medium
+Three TERMITEs and one SKELETON are stuck in `targeting` state pointed at a zone EXIT cell, with zero movement across the full 2100-tick window:
+- TERMITE id=56 zone -1,-1 → EXIT [1,9]
+- TERMITE id=65 zone 0,-1 → EXIT [12,1]
+- SKELETON id=81 zone -1,-1 → EXIT [1,9]
+- TERMITE id=112 zone -1,0 → EXIT [12,16]
+These entities cannot reach or use the exit. Likely a pathfinding failure where EXIT cell is in a position the entity cannot path to (surrounded by walls or unreachable from spawn location).
+
+### BUG-08 — BAT id=280 trapped in cave structure for 900+ ticks [INVESTIGATE]
+**Severity:** Low-Medium
+BAT id=280 inside cave structure at zone -1000,0 targeting exit cell [11,6,'structure'] at both ticks 1908 and 2808. Cannot exit. May be related to the known bat subscreen transition issue — bat gets into the cave but the exit portal pathfinding fails. Monitor to confirm it persists across sessions.
+
+### OBSERVATION-29 — FARMER id=274 at 18% HP and near-max hunger, no flee/eat behavior
+At tick 2808: health=12.88/70, hunger=98.86, thirst=99.14, ai_state=wandering, no combat, no target. Entity is critically injured and nearly starved but the AI is not triggering flee or food-seek behavior. May indicate the self-preservation check threshold is not firing, or the entity has no reachable food/water source.
+
+### OBSERVATION-30 — 76% of sampled entities near hunger/thirst cap
+276 of 362 entity samples show hunger or thirst >= 98. NPC population (53 → 317 entities over ~52s) is outpacing food generation. Not a crash risk but world is in permanent near-starvation. Likely driven by TRADER mass-spawning settling as farmers who haven't yet had time to grow food.
+
+### OBSERVATION-31 — 2 Bandits (id=53, id=60) with max_health=100 (level-2 scaling)
+All other bandits are max_health=50, level=1. These two are level=2, max_health=100. Consistent with the level scaling table but worth verifying the BANDIT level-2 entry in ENTITY_TYPES is intentional.
+
+---
+
 ## Session 15 — 2026-03-08 (~5,900 ticks, ~119s, NEW GAME)
 
 ### CONFIRMED — Clean run, no errors
