@@ -54,11 +54,12 @@
 - [ ] Poisoned status — HP drain per tick; cured by antidote or milk
 - [ ] Burning status — HP drain; spreads to adjacent flammable cells
 - [ ] Frozen status — immobile for duration; bonus damage on shatter
-- [ ] Stunned status — skip next action
+- [ ] Stunned status
+- [ ] Parry - both take small HP damage and energy damage
 - [ ] Equipment panel UI — Weapon, Off-hand/Shield, Armor, Ring ×2, Amulet slots; passive stat bonuses
 - [ ] Armor types: cloth, leather, chain, plate — defense values and entity compatibility
 - [ ] Bow and arrow — craftable; ranged projectile; ammo consumption
-- [ ] Thrown weapons — rocks, knives, bombs; bomb destroys cells in small radius
+- [ ] Thrown weapons — rocks, knives, spear
 - [ ] Stealth / crouch mode — reduced detection radius; sneak attack bonus on first hit
 
 ## World & Zones
