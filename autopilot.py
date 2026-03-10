@@ -351,8 +351,12 @@ class AutopilotMixin:
         if getattr(proxy, 'in_structure', False):
             return
 
-        # Footstep sound and inventory close when proxy moves to a new grid cell
+        # Capture old position and zone before sync
         old_px, old_py = self.player.get('x', proxy.x), self.player.get('y', proxy.y)
+        old_sx = self.player.get('screen_x', proxy.screen_x)
+        old_sy = self.player.get('screen_y', proxy.screen_y)
+
+        # Footstep sound and inventory close when proxy moves to a new grid cell
         if (proxy.x != old_px or proxy.y != old_py) and self.current_screen:
             if self.inventory.open_menus:
                 self.inventory.close_all_menus()
@@ -376,6 +380,13 @@ class AutopilotMixin:
         if self.current_screen is not self.screens.get(new_sk):
             if new_sk in self.screens:
                 self.current_screen = self.screens[new_sk]
+
+        # On zone crossing: trigger catch-up simulation for the new zone
+        if proxy.screen_x != old_sx or proxy.screen_y != old_sy:
+            self.on_zone_transition(proxy.screen_x, proxy.screen_y)
+            if self.inventory.open_menus:
+                self.inventory.close_all_menus()
+                self.quest_ui_open = False
 
     # ── Inventory sync ────────────────────────────────────────────────────────
 

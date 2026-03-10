@@ -110,7 +110,7 @@ class WorldGenerationMixin:
                     if is_border:
                         row.append('WATER' if is_exit else 'CLIFF')
                     elif is_perimeter:
-                        row.append('WATER' if is_exit_corridor else 'SAND')
+                        row.append('WATER')
                     else:
                         row.append('WATER')
                 elif y == 0 or y == GRID_HEIGHT - 1 or x == 0 or x == GRID_WIDTH - 1:
