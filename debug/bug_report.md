@@ -5,6 +5,25 @@ Reviewed from `debug/bugcatcher.log` after each session.
 
 ---
 
+## Session 17 — 2026-03-09 (~1,545 ticks, ~79s, NEW GAME)
+
+### FOCUS: Autopilot UI close fix (trader_display + inspected_npc)
+
+### CONFIRMED — Fix working: no UI panels found stuck open
+No open_menus, trader_display, or inspected_npc flags were stuck on player state during the session. Crafting sequence completed cleanly: C → click seeds slot → Space → C. Proxy continued wandering immediately after (120 wandering + 41 targeting states logged). No alerts, no tracebacks, no anomalies.
+
+**Proxy behavior:** ai_state rotated between `wandering` and `targeting`. Proxy remained in zone 0,0 for full session (short 79s run did not trigger zone crossing).
+
+**Inventory at shutdown (tick 1545):** carrot×3, tree_sapling×3, magic_rune×1, iron_ore×1, seeds×1 | tools: axe, hoe, shovel, pickaxe, bucket, bone_sword | magic: star_spell, rain_spell, day_spell. Goblin follower (id=263) present.
+
+### OBSERVATION — Watchdog entity_count in zone samples shows 0
+Zone sample entries log `entity_count: null` (not populated). This is a Watchdog monitoring gap — zone samples don't include entity census. Not a gameplay bug.
+
+### OBSERVATION — Watchdog player sample does not log UI state
+The single player snapshot entry has no `open_menus`, `trader_display`, or `inspected_npc` fields. To properly monitor the UI close fix in future sessions, the Watchdog player snapshot should include these fields.
+
+---
+
 ## Session 16 — 2026-03-08 (~3,108 ticks, ~52s, NEW GAME)
 
 ### CONFIRMED — Clean run, no exceptions
