@@ -6,13 +6,14 @@
 ---
 
 - [ ] Add bird/bat item pickup — flying entities grab loose ground items; drop after 10–30 ticks at random adjacent cell
-- [ ] Add spell energy cost — spells draw from energy pool; block cast if insufficient energy
+- [ ] Add spell energy cost — spells draw from energy pool; if insufficient energy drains health instead
 - [ ] Create basic village biome — VILLAGE zone type; clustered housing, higher NPC density, market stall structure
-- [ ] Add energy cost for active followers — each follower reduces player max energy; recalculates on add/remove
+- [ ] Add energy cost for active followers — each follower reduces player max energy by 30% of the NPC max energy (higher level followers cost more); recalculates on add/remove
+- [ ] Expand keeper system - should apply to bind to cells, NPCs, items (anything with an x,y location), must stay within range of the keeper target. Can be used for follower system. NPCs are keeper of the player character via this system. NPCs can be keeper to each other and must stay close togther. Levels can determine distance rnage. Keeper level 1 = stands next to the target cell (guard behavior), 2 = 2 cell range (patrol behavior), 3 = 3 cell range (animal follower behavior), 4 - standard follower behaviro, 5 - ranged follower behavior, 6 - mini bos behaviro, 7 - structure keeper, 8 - zone keeper, 9 - can move up to 1 zone away, etc. On update, if outside of this range NPC targets the eeper target and moves there, breaking out of combat, flee, wander, etc to move back to their keeper target. As long as they are in range, they resume normal behavior.
 - [ ] Add spatial audio method — `SoundManager.play_sfx_spatial(key, dist)` volume falloff by distance; max 2 NPC sounds per tick
 - [ ] Add poisoned status effect — HP drain per tick; cured by antidote or milk
-- [ ] Add zone priority scoring to update loop — score by player proximity and ticks since last update; catch-up cycles on delayed zones
 - [ ] Add NPC quest type progression — NPC level unlocks more quest types; completing a quest levels up the NPC
+- [ ] Higher level NPCs reduce the chance of hostile raids in the zone and building destruction
 - [ ] Wire harvest sounds in ai/actions.py — TREE→wood_chop, STONE/IRON_ORE→rock_hit, crop→pickup
 - [ ] Add burning status effect — HP drain; spreads to adjacent flammable cells
 - [ ] Add house upgrade chain — lumberjack+miner → stone house; stone house+blacksmith → fort
@@ -21,17 +22,16 @@
 - [ ] Add frozen status effect — immobile for duration; shatter for bonus damage
 - [ ] Add Golem entity type — slow, very high defense, attacks only when attacked; guards ruins and dungeon entries
 - [ ] Add gift giving — player offers item to NPC to increase favor; preferred gift per NPC type
-- [ ] Rename WARRIOR → KNIGHT in entity data and all references
 - [ ] Add wolf/goblin ambient presence sounds — WOLF growl every ~300 ticks within 6 cells; GOBLIN every ~200 ticks
 - [ ] Add Troll entity type — health regen; weak to fire; forest and cave spawns
 - [ ] Add zone development score (ekistic) — zones accumulate score from NPC count and structure count; score gates higher-tier structure upgrades
-- [ ] Add Tavern structure — NPC gathering point; rest/time-skip; Tavernkeeper rumors
+- [ ] Add Tavern structure — NPC gathering point; rest/time-skip; Tavernkeeper quests
 - [ ] Add dungeon keys and locks — small key item, locked door cell, boss key item
 - [ ] Add stealth/crouch mode — reduced detection radius; sneak attack damage bonus on first hit
-- [ ] Add per-NPC favor system — -100 to 100 favorability; loyalty threshold triggers follower offer
+- [ ] Add per-NPC favor system — -100 to 100 favorability; reduces follower cost
 - [ ] Add item leveling with use — weapons, tools, and spells track use count; milestone stat bonuses
 - [ ] Add Zombie entity type — slow; contagion on hit; graveyard spawns; weak to holy
-- [ ] Add basic fishing — cast from water-adjacent cell; catch timer; common fish item
+- [ ] Add basic fishing 
 - [ ] Add hostile/peaceful reputation score — -100 to 100 global player score; updated by actions; affects faction reactions
 - [ ] Add rain_spell and day_spell items to data/items.py and constants.py
 - [ ] Add actions inventory tab (R key) and shove action item
@@ -119,9 +119,8 @@
 - [ ] Add dog entity — tameable; barks when hostiles enter zone; assists in combat
 - [ ] Add Dungeon Biome — deadland surface above; underground cave system with multiple levels; food and water sources for NPC survival underground
 - [ ] Add population-based domain system — 2×2 zone quad check; if all four share faction label, domain bonuses apply
-- [ ] Add rumor quest type — Tavernkeeper shares zone event info, item locations, and enemy sightings
+- [ ] Add adventure quest type — sequeence of quests which build a connected story generated, Tavernkeeper sends to a location, location is under raid attack, raid faction controls the nearby domain, fortress zone with underground dungeon, dungeon room with mini boss, book on table gives side quest to wizard tower, etc 
 - [ ] Add LoreEngine rise and fall tracking — logs major world events; NPCs may reference them; influences new zone generation
-- [ ] Add world age narrative — short generated prologue at game start describing simulated history before player arrived
 - [ ] Add Banshee entity type — wailing spirit; AoE scream stuns nearby entities; immune to physical; night-only
-- [ ] Add Basilisk entity type — petrifying gaze applies frozen; converts slain victims to gravestone cells
+- [ ] Add Basilisk entity type — petrifying gaze applies frozen; 
 - [ ] Add Library/Archive structure — Wizard Keeper; Tome items teach rare spells; ghost scholar guards
