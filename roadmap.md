@@ -7,13 +7,9 @@
 
 ---
 
-## Next Up
-> Claude: start here. Implement these in order, one per session, then run an observation session.
+## Implementation Order
 
-1. **Spatial NPC audio** — `SoundManager.play_sfx_spatial(key, dist)` + harvest/combat hooks in `ai/actions.py` and `npc_ai.py`. Design is in `MEMORY.md`.
-2. **Spells + Actions tab** — rain_spell, day_spell (toggle), shove action, R key, Shift+F NPC recruit. Full plan in `.claude/plans/rustling-crunching-sifakis.md`.
-3. **NPC crafting behavior** — Port autopilot's `_autopilot_try_craft()` to `ai/actions.py` as `try_craft_recipe()`. MINER and BLACKSMITH archetypes use it.
-4. **Code cleanup session** — Remove dead prints, audit legacy monolith methods that have been fully extracted, consolidate duplicate crafting/inventory logic.
+> See `next_up.md` for the ordered commit-sized work list.
 
 ---
 

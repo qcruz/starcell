@@ -24,7 +24,7 @@ The project owner (@qcruz) handles creative direction: roadmap additions, system
 ## Development Loop
 
 ```
-1. Read roadmap.md → identify next item in ## Next Up
+1. Read next_up.md → pick the first unchecked item
 2. Read relevant source files → understand current code
 3. Implement → commit to dev
 4. Sync dev-observation and run observation session (see below)
@@ -109,7 +109,8 @@ Run a cleanup session every ~5 feature additions or when the codebase shows sign
 
 | File / Dir | Role |
 |---|---|
-| `roadmap.md` | Authoritative feature list. Owner-maintained. Read this to find next work. |
+| `roadmap.md` | Big-picture feature vision. Owner-maintained. Do not edit during development. |
+| `next_up.md` | Ordered commit-sized work list. Read this to find next work. Owner-maintained. |
 | `current_features_and_planned.md` | Technical implementation notes for completed + in-progress features |
 | `debug/bug_report.md` | Session-by-session autopilot observations and confirmed bug fixes |
 | `constants.py` | Legacy all-in-one data file. Still used by `game_core.py`, `npc_ai.py` |
