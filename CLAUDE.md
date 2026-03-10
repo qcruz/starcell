@@ -53,7 +53,7 @@ echo "False" > debug/auto_debug.cfg
 
 **To run a session:**
 ```bash
-cd /Users/quanahcruz/Desktop/porn/starcell
+cd /path/to/starcell
 python3 main.py   # runs on dev-observation branch
 ```
 Session ends automatically (2–3 min timer). Review `debug/bug_catcher.log` and update `debug/bug_report.md` with findings. Document as `Session N` with CONFIRMED / OBSERVATION / BUG entries.
