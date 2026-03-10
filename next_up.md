@@ -1,130 +1,127 @@
 # StarCell — Next Up
 
-> Flat ordered work list. Each item is one commit or a small group of related commits.
-> Claude reads this top to bottom. @qcruz manages order and additions.
+> Two tiers. Claude works Tier 1 top-to-bottom without asking. Tier 2 items require explicit user sign-off before any code is written — post the item in chat, wait for a clear "go ahead."
+> @qcruz manages additions and order.
 
 ---
 
-- [ ] Add bird/bat item pickup — flying entities grab loose ground items; drop after 10–30 ticks at random adjacent cell
-- [ ] Add spell energy cost — spells draw from energy pool; if insufficient energy drains health instead
-- [ ] Create basic village biome — VILLAGE zone type; clustered housing, higher NPC density, market stall structure
-- [ ] Add energy cost for active followers — each follower reduces player max energy by 30% of the NPC max energy (higher level followers cost more); recalculates on add/remove
-- [ ] Expand keeper system — level-based range and behavior: level 1=guard (stand next to target), 2=patrol (2-cell range), 3=animal companion (3-cell), 4=standard follower, 5=ranged follower, 7=structure keeper, 8=zone keeper, 9=can move 1 zone away; NPC breaks out of combat/flee/wander to return to keeper target if out of range
-- [ ] Add poisoned status effect — HP drain per tick; cured by antidote or milk
-- [ ] Wire higher NPC level → reduced hostile raid chance in zone and reduced structure destruction probability
-- [ ] Add burning status effect — HP drain; spreads to adjacent flammable cells
-- [ ] Add house upgrade chain — lumberjack+miner → stone house; stone house+blacksmith → fort
-- [ ] Port try_craft_recipe() to ai/actions.py — from autopilot; MINER and BLACKSMITH use it
-- [ ] Complete NPC combat creature sound mapping — verify WOLF, GOBLIN, BAT, SKELETON, BANDIT all route correctly through _ENTITY_SOUND
-- [ ] Add frozen status effect — immobile for duration; shatter for bonus damage
-- [ ] Add Golem entity type — slow, very high defense, attacks only when attacked; guards ruins and dungeon entries
-- [ ] Add gift giving — player offers item to NPC to increase favor; preferred gift per NPC type
-- [ ] Add wolf/goblin ambient presence sounds — WOLF growl every ~300 ticks within 6 cells; GOBLIN every ~200 ticks
-- [ ] Add Troll entity type — health regen; weak to fire; forest and cave spawns
-- [ ] Add zone development score (ekistic) — zones accumulate score from NPC count and structure count; score gates higher-tier structure upgrades
-- [ ] Add Tavern structure — NPC gathering point; rest/time-skip; Tavernkeeper quests
-- [ ] Add dungeon keys and locks — small key item, locked door cell, boss key item
-- [ ] Add stealth/crouch mode — reduced detection radius; sneak attack damage bonus on first hit
-- [ ] Add per-NPC favor system — -100 to 100 favorability; reduces follower cost
-- [ ] Add Zombie entity type — slow; contagion on hit; graveyard spawns; weak to holy
-- [ ] Add basic fishing
-- [ ] Add hostile/peaceful reputation score — -100 to 100 global player score; updated by actions; affects faction reactions
-- [ ] Add actions inventory tab (R key) and shove action item
+## Tier 1 — Autonomous
+
+Small additions using existing systems. No new entity types, structure types, or major UI systems. One commit per item, ordered smallest to largest.
+
+- [ ] Remove dead debug prints outside autopilot.py and debug/
+- [ ] Add LAKE as valid water source for thirsty humanoid NPCs
+- [ ] Add NPC level display in inspect panel
+- [ ] Add item level display in inventory UI — show level badge on leveled items in all tabs
+- [ ] Add faction standing display when inspecting NPC — show favor score and faction label
 - [ ] Wire L key to dispatch selected magic spell; wire Space to execute selected action
 - [ ] Add cast_rain_spell() and cast_day_spell() toggle methods
+- [ ] Complete NPC combat creature sound mapping — verify WOLF, GOBLIN, BAT, SKELETON, BANDIT route through _ENTITY_SOUND
+- [ ] Add wolf/goblin ambient presence sounds — WOLF growl every ~300 ticks within 6 cells; GOBLIN every ~200 ticks
+- [ ] Add ambient rain sound during rain events — play rain_sound loop when is_raining; stop when false
 - [ ] Add do_shove() — push entity in facing direction one cell; blocked by solid cells
 - [ ] Add handle_npc_follow_interaction() — Shift+F on inspected NPC; 50% recruit chance
-- [ ] Remove dead debug prints outside autopilot.py and debug/
+- [ ] Boost night-time hostile spawn rate — BAT, GOBLIN, SKELETON have higher spawn weight at night
+- [ ] Add spell energy cost — spells draw from energy pool; drain health if insufficient
+- [ ] Rain affects crop growth — active rain reduces crop decay rate; speeds grass/tree spread
+- [ ] Fix combat follow-through — NPCs complete attack sequence before re-evaluating target; fixes oscillation at range threshold
+- [ ] Add poisoned status effect — HP drain per tick; cured by antidote or milk
+- [ ] Add burning status effect — HP drain per tick; spreads to adjacent flammable cells
+- [ ] Add frozen status effect — immobile for duration; shatter for bonus damage
+- [ ] Add stunned status effect — skip next action
+- [ ] Add gift giving — player offers item to NPC to increase favor; uses preferred gift tables
+- [ ] Add per-NPC favor system — -100 to 100 favorability score; reduces follower energy cost
+- [ ] Add NPC preferred gift tables — each NPC type lists preferred items for favor bonus
+- [ ] Add energy cost for active followers — each follower reduces max energy by 30% of their max; recalculates on add/remove
 - [ ] Add named villains — LoreEngine occasionally designates a high-level hostile NPC with unique stat boost and artifact drop
-- [ ] Add Werewolf entity type — human NPC by day; transforms at night; weak to silver; bitten NPC may turn
-- [ ] Add basic seasonal system — four seasons, ~7 in-game days each; season flag used by crop and weather rules
-- [ ] Add silver ore — rare cave resource; effective against werewolves and undead
-- [ ] Add bow and arrow — craftable; ranged projectile; arrow ammo item
-- [ ] Add Slime entity type — splits into smaller slimes on death; weak to fire
-- [ ] Add cooking station and basic recipes — forge→smithing; cooking pot→food; alchemy table→potions
-- [ ] Add bounty system — attacking peaceful NPCs triggers bounty; guards pursue across zones; clear at temple or bribe
-- [ ] Add dungeon traps — floor spike cell, arrow trap cell; pressure plate trigger
-- [ ] Add world map view — zoomed-out explored zone overlay with names and faction colors
-- [ ] Add foraging spawns — wild mushrooms, berries, herbs in forest and cave zones; biome rules
-- [ ] Add LoreEngine migration events — populations shift between zones on overcrowding or hostile pressure
-- [ ] Add Ghost entity type — passes through walls; immune to physical damage; weak to holy
-- [ ] Add waypoint stone structure — player teleports between owned waypoints; time passes on use
-- [ ] Add event witness system — NPCs near player events gain/lose favor; spreads via proximity
-- [ ] Audit monolith methods extracted to mixins — remove duplicates from game_core.py and npc_ai.py
-- [ ] Add equipment panel UI — Weapon, Off-hand/Shield, Armor, Ring ×2, Amulet slots; passive stat bonuses
-- [ ] Add Prophecy system — LoreEngine generates fragment pointing toward legendary item or boss; quest arrow
-- [ ] Add Dragon entity type — boss tier; fire breath; accumulates hoard in lair over simulated time
-- [ ] Add buried treasure — shovel digs soft cells; chance to uncover cached items; Detect spell reveals locations
-- [ ] Add Temple/Shrine structure — visit grants buff; Identify curse; unique quest giver
-- [ ] Add coal/fuel resource — required to operate forge; found in caves
-- [ ] Add NPC daily schedules — field at dawn, tavern at evening, temple on rest days
-- [ ] Add hidden dungeon rooms — pushable wall cells reveal secret passages and bonus vault
-- [ ] Add faction alt naming — goblin groups→warbands; criminal groups→guilds; animal groups→packs; religious groups→orders
-- [ ] Add armor types — cloth, leather, chain, plate; defense values and entity compatibility
-- [ ] Add multi-floor structures — dungeons and towers with staircase-connected floors; each floor separate structure with own generation
-- [ ] Add sheep/cow/chicken production — timed output: wool, milk, eggs; needs food/water
-- [ ] Add LoreEngine natural disaster events — flood, wildfire, earthquake; each creates recovery quest hooks
-- [ ] Add dungeon biome themes — Crypt, Dwarven Hall, Ice Cavern, Volcanic Lair, Flooded Ruins generation variants
-- [ ] Add trader follower economy — trader in party trades nearby NPCs; player earns gold share
-- [ ] Add entity genetics — behaviors numerically determined; traits mutate via spawning; high-threshold traits generate earned NPC titles
-- [ ] Fix combat follow-through — NPCs complete attack sequence before re-evaluating; fixes oscillation at range threshold
-- [ ] Add Ancient Map Fragments — combine three to reveal hidden dungeon zone; fragments found in boss rooms
+- [ ] Wire higher NPC level → reduced hostile raid chance in zone and reduced structure destruction probability
+- [ ] Port try_craft_recipe() to ai/actions.py — from autopilot; MINER and BLACKSMITH use it
 - [ ] Port follower NPC AI — followers use quest-targeting and obstacle-clearing loop; goal matches NPC archetype
-- [ ] Add recipe book UI — tracks known and undiscovered recipes
-- [ ] Add sinking city LoreEngine event — zone floods cell by cell over many updates; NPCs flee; becomes Flooded Ruins dungeon
-- [ ] Add winter effects — snow biome overlay, water→ice, reduced crop growth, NPCs shelter indoors
-- [ ] Add thrown weapons — rocks, knives, spear; knockback on hit
-- [ ] Add archaeology quest type — Archaeologist NPC gives dig-site quests; rewards rare items and lore
-- [ ] Add years passing optimization — probabilistic catch-up; speed multipliers during time-pass simulation
-- [ ] Add spell leveling with use — spells track cast count; milestone bonuses reduce cost or increase effect
-- [ ] Add zone and NPC name generation — unique generated names; zone gen seeded by name
-- [ ] Add barn/pen structure — houses livestock; prevents animal wandering
-- [ ] Add achievement system — milestone tracking; HUD notification on unlock
-- [ ] Add bestiary — logs defeated entity types with flavor text, stats, and weaknesses
-- [ ] Add tiered auto-correction in debug/fixes.py — zone too dense→termite invasion; NPC stuck→force update; population imbalance→disaster or migration
-- [ ] Add multiple save slots — save slot selection on main menu
-- [ ] Add Stunned status effect — skip next action
-- [ ] Add Parry mechanic — both attacker and defender take small HP and energy damage
-- [ ] Add fish variety by biome and season — rare collectible fish; common fish as food
-- [ ] Add fort → castle progression — castle generates interior guards and King NPC
-- [ ] Add zone and NPC name influence on generation — Blackthorn Forest generates darker cell variants, etc.
-- [ ] Add Shadow Realm portal — dark mirror overworld zone; stronger enemies; unique loot only found here
-- [ ] Add hellgate portal — constant level drain on proximity; blood fountain inside extends life
-- [ ] Add skygate portal — fairy fountain inside; slow max life increase; reduces hostile score
-- [ ] Add sponsor section to main menu or credits screen
+- [ ] Add zone development score (ekistic) — zones accumulate score from NPC and structure count; gates higher-tier upgrades
+- [ ] Add basic seasonal system — four seasons ~7 in-game days each; season flag used by crop and weather rules
+- [ ] Audit monolith methods extracted to mixins — remove duplicates from game_core.py and npc_ai.py
 - [ ] Consolidate duplicate crafting and inventory logic — code cleanup pass
-- [ ] Add dungeon Compass item — shows chest and key locations on dungeon map
-- [ ] Add dungeon Map item — reveals full layout of current dungeon level
-- [ ] Add Lich entity type — immune to hunger and thirst; commands skeleton thralls; requires Phylactery destruction to permanently kill
-- [ ] Add Vampire entity type — life drain on hit; retreats to coffin at daylight; transforms to bat when fleeing
-- [ ] Add NPC gift preferred tables — each NPC type has a list of preferred gift items for favor bonus
-- [ ] Add Blacksmith structure — dedicated smithing building; forge enables iron and steel recipes
-- [ ] Add Crypt structure — sealed underground zone; undead spawns; Vampire or Lich boss room at depth
-- [ ] Add Ancient Ruins structure type — crumbling zone; Golem and Mechanica guardians; lore-note drops
-- [ ] Add Evergael keeper variant — zone-exit boss that blocks all exits until defeated; drops unique key artifact
+
+---
+
+## Tier 2 — Needs Explicit Approval
+
+Post the item in chat before starting. Wait for a clear "go ahead." These introduce new entity types, structure types, UI systems, or world generation systems that require design decisions.
+
+### New Entity Types
+- [ ] Add bird/bat item pickup — flying entities grab loose ground items; drop after 10–30 ticks at random adjacent cell
+- [ ] Add SNAKE entity type — desert biome hostile; poison on hit; first concrete use of poisoned status effect
+- [ ] Add SPIDER entity type — cave biome hostile; web cell slows movement; poison on bite
+- [ ] Add Slime entity type — splits into smaller slimes on death; weak to fire
+- [ ] Add Troll entity type — health regen; weak to fire; forest and cave spawns
+- [ ] Add Zombie entity type — slow; contagion on hit; graveyard spawns; weak to holy
+- [ ] Add Werewolf entity type — human NPC by day; transforms at night; weak to silver; bitten NPC may turn
+- [ ] Add Ghost entity type — passes through walls; immune to physical; weak to holy
+- [ ] Add Golem entity type — slow, very high defense, attacks only when attacked; guards ruins and dungeon entries
 - [ ] Add horse/mount entity — tameable via favor; 2× movement speed; low follower energy cost; stabled at barn
 - [ ] Add cat entity — tameable via favor; hunts small creatures; reduces pest spawns in zone
 - [ ] Add dog entity — tameable; barks when hostiles enter zone; assists in combat
-- [ ] Add Dungeon Biome — deadland surface above; underground cave system with multiple levels; food and water sources for NPC survival underground
-- [ ] Add population-based domain system — 2×2 zone quad check; if all four share faction label, domain bonuses apply
-- [ ] Add adventure quest type — sequence of quests that build a connected story: Tavernkeeper sends to a location under raid, raid faction controls nearby domain, fortress zone with underground dungeon, dungeon room with mini boss, book on table gives side quest to wizard tower, etc.
-- [ ] Add LoreEngine rise and fall tracking — logs major world events; NPCs may reference them; influences new zone generation
+- [ ] Add Lich entity type — immune to hunger/thirst; commands skeleton thralls; requires Phylactery destruction to permanently kill
+- [ ] Add Vampire entity type — life drain on hit; retreats to coffin at daylight; transforms to bat when fleeing
 - [ ] Add Banshee entity type — wailing spirit; AoE scream stuns nearby entities; immune to physical; night-only
-- [ ] Add Basilisk entity type — petrifying gaze applies frozen
+- [ ] Add Basilisk entity type — petrifying gaze applies frozen status
+
+### New Structure Types
+- [ ] Create basic village biome — VILLAGE zone type; clustered housing, higher NPC density, market stall structure
+- [ ] Add Tavern structure — NPC gathering point; rest/time-skip; Tavernkeeper quests
+- [ ] Add Blacksmith structure — dedicated smithing building; forge enables iron and steel recipes
+- [ ] Add Crypt structure — sealed underground zone; undead spawns; Vampire or Lich boss room at depth
+- [ ] Add Temple/Shrine structure — visit grants buff; Identify curse; unique quest giver
+- [ ] Add Ancient Ruins structure type — crumbling zone; Golem and Mechanica guardians; lore-note drops
 - [ ] Add Library/Archive structure — Wizard Keeper; Tome items teach rare spells; ghost scholar guards
-- [ ] Add SNAKE entity type — desert biome hostile; poison on hit; first concrete use of poisoned status effect
-- [ ] Add SPIDER entity type — cave biome hostile; web cell slows movement; poison on bite
-- [ ] Add lore_note item type — found in ruins and dungeons; readable; contains generated zone history text
-- [ ] Add steel recipe — iron_ingot + coal → steel_ingot; enables higher-tier weapons and armor
 - [ ] Add oasis structure to desert zones — water source cell cluster in desert; NPCs and animals seek it
-- [ ] Add follower command: stay — simple state toggle; follower stops moving and holds position
-- [ ] Add follower command: attack nearest enemy — follower targets closest hostile regardless of range
-- [ ] Add Tavernkeeper NPC interaction — buy room (time skip + full stat restore); open rumors dialogue
-- [ ] Boost night-time hostile spawn rate — BAT, GOBLIN, SKELETON have higher spawn weight at night
-- [ ] Rain affects crop growth — active rain reduces crop decay rate; speeds up grass/tree cell spread
-- [ ] Add ambient rain sound during rain events — play rain_sound loop when is_raining is true; stop when false
-- [ ] Add NPC level display in inspect panel — show NPC type, name, and level when player inspects
-- [ ] Add LAKE as valid water source for thirsty humanoid NPCs — already in water_sources where WELL is; add LAKE
-- [ ] Add item level display in inventory UI — show level badge on leveled items in all inventory tabs
+- [ ] Add waypoint stone structure — player teleports between owned waypoints; time passes on use
+- [ ] Add barn/pen structure — houses livestock; prevents animal wandering
+
+### New UI Systems
+- [ ] Add actions inventory tab (R key) — shove and other contextual action items
+- [ ] Add equipment panel UI — Weapon, Off-hand, Armor, Ring ×2, Amulet slots; passive stat bonuses
+- [ ] Add world map view — zoomed-out explored zone overlay with names and faction colors
+- [ ] Add recipe book UI — tracks known and undiscovered recipes
+- [ ] Add bestiary — logs defeated entity types with flavor text, stats, and weaknesses
+- [ ] Add achievement system — milestone tracking; HUD notification on unlock
+
+### New World and Game Systems
+- [ ] Add dungeon keys and locks — small key item, locked door cell, boss key item
+- [ ] Add dungeon traps — floor spike cell, arrow trap cell; pressure plate trigger
+- [ ] Add stealth/crouch mode — reduced detection radius; sneak attack damage bonus on first hit
+- [ ] Add basic fishing — rod item; fish item by water cells; fish variety by biome and season
+- [ ] Add foraging spawns — wild mushrooms, berries, herbs in forest and cave zones; biome rules
+- [ ] Add NPC daily schedules — field at dawn, tavern at evening, temple on rest days
+- [ ] Add sheep/cow/chicken production — timed output: wool, milk, eggs; needs food/water
+- [ ] Add coal/fuel resource — required to operate forge; found in caves
+- [ ] Add steel recipe — iron_ingot + coal → steel_ingot; enables higher-tier weapons and armor
+- [ ] Add silver ore — rare cave resource; effective against werewolves and undead
+- [ ] Add bow and arrow — craftable; ranged projectile; arrow ammo item
+- [ ] Add cooking station and basic recipes — cooking pot→food; alchemy table→potions
+- [ ] Add armor types — cloth, leather, chain, plate; defense values and entity compatibility
+- [ ] Add bounty system — attacking peaceful NPCs triggers bounty; guards pursue across zones; clear at temple or bribe
+- [ ] Add hostile/peaceful reputation score — -100 to 100 global score; updated by actions; affects faction reactions
+- [ ] Add event witness system — NPCs near player events gain/lose favor; spreads via proximity
+- [ ] Add multi-floor structures — dungeons and towers with staircase-connected floors; each floor separate structure
 - [ ] Connect STAIRS_DOWN/STAIRS_UP cells between structure floors — entry/exit routing via stair cells
-- [ ] Add faction standing display when inspecting NPC — show favor score and faction label in inspect panel
+- [ ] Add house upgrade chain — lumberjack+miner → stone house; stone house+blacksmith → fort
+- [ ] Add fort → castle progression — castle generates interior guards and King NPC
+- [ ] Add expand keeper system — level-based range and behavior: level 1=guard, 2=patrol, 5=ranged follower, 9=zone keeper
+- [ ] Add follower command: stay — state toggle; follower stops moving and holds position
+- [ ] Add follower command: attack nearest — follower targets closest hostile regardless of range
+- [ ] Add Tavernkeeper NPC interaction — buy room (time skip + full stat restore); open rumors dialogue
+- [ ] Add trader follower economy — trader in party trades nearby NPCs; player earns gold share
+- [ ] Add LoreEngine migration events — populations shift between zones on overcrowding or hostile pressure
+- [ ] Add LoreEngine natural disaster events — flood, wildfire, earthquake; each creates recovery quest hooks
+- [ ] Add multiple save slots — save slot selection on main menu
+- [ ] Add hidden dungeon rooms — pushable wall cells reveal secret passages and bonus vault
+- [ ] Add buried treasure — shovel digs soft cells; chance to uncover cached items; Detect spell reveals locations
+- [ ] Add parry mechanic — both attacker and defender take small HP and energy damage
+- [ ] Add thrown weapons — rocks, knives, spear; knockback on hit
+- [ ] Add faction alt naming — goblin groups→warbands; criminal groups→guilds; animal groups→packs; religious groups→orders
+- [ ] Add lore_note item type — found in ruins and dungeons; readable; contains generated zone history text
+
+---
+
+Items that are far-future or speculative (Dragon boss, portals, genetics, prophecy systems, sinking city) are tracked in `roadmap.md` only and do not appear here until the prerequisite systems are in place.
