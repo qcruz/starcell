@@ -100,6 +100,7 @@ The LoreEngine generates a Prophecy fragment found in a dungeon chest: *"the swo
 - [ ] Winter: snow biome overlay, water freezes to ice, reduced crop growth, some NPCs shelter indoors, starve if no food stored.
 - [ ] Seasonal events and quests; calendar / day tracker visible in HUD; in-game year and season displayed
 - [ ] Village biome — clustered settlement zone with higher NPC density, market stalls, and communal structures; starting point for social and quest arcs, rare
+- [ ] Dungeon Biome - zones is deadland above, underground generates cave system, side caves, variable number of levels, food +water sources to keep NPCs alive underground, random humanoid NPC spawned to fill the levels, occasional raids from other hostile entities to keep the biome changing
 - [ ] ### Alternate Realms & Portals
 - [ ] Hellgates — portals that deal constant XP/level damage on proximity; contain blood fountains that reduce level but extend max life and increase hostility score; dangerous but rewarding
 - [ ] Skygates — portals with fairy fountains; swimming in fairy water reduces levels faster but slowly increases max life and reduces hostile score back toward neutral
@@ -202,7 +203,7 @@ The LoreEngine generates a Prophecy fragment found in a dungeon chest: *"the swo
 - [ ] Goblin Warchief — elite goblin leader who fortifies a zone; commands coordinated warband attacks; drops a War Banner artifact
 
 ### Peaceful & Animals
-- [ ] Birds — fly over the overworld; pick up small items and drop them randomly while flying; certain bird species pollinate adjacent cells, spreading crops and flowers to neighboring cells
+- [ ] Birds — fly over the overworld; pick up small items and drop them randomly while flying; certain bird species pollinate adjacent cells, spreading crops and flowers to neighboring cells, eat certain NPCs like bats and bugs.
 - [ ] Sheep — produces wool (behavior pass needed)
 - [ ] Cow — produces milk
 - [ ] Chicken — produces eggs
@@ -213,9 +214,9 @@ The LoreEngine generates a Prophecy fragment found in a dungeon chest: *"the swo
 
 ### Entity Genetics & Identity
 - [ ] Core NPC behaviors numerically determined — genetic strings control traits like flee chance, exploration rate, aggression, and resource preference
-- [ ] Traits mutate slowly over time via the Contagion System
+- [ ] Traits mutate slowly over time via the spawning System
 - [ ] Genetic variation reflected in sprite color/variant chances (RainbowMaker system)
-- [ ] High-trait thresholds generate earned titles — an NPC with high flee chance may become "the Coward"; high exploration rate → "the Bold"; high aggression → "the Relentless"; these names appear in dialogue, Keeper assignment, and rumor text
+- [ ] High-trait thresholds generate earned titles — an NPC with high flee chance may become "the Coward"; high exploration rate → "the Bold"; high aggression → "the Relentless"; these names appear in dialogue, Keeper assignment, and quest text
 - [ ] Rare color variants create hunting and collecting gameplay
 
 ---
@@ -223,7 +224,7 @@ The LoreEngine generates a Prophecy fragment found in a dungeon chest: *"the swo
 ## 5. NPC Behavior & AI
 
 ### NPC Types & Roles
-- [ ] Rename WARRIOR → KNIGHT
+- [ ] Rename WARRIOR → KNIGHT, or seperate NPC types for warrior, knight, soldier, guard, watchman, etc
 - [ ] Blacksmith NPC — seeks forge, crafts tools and weapons from available materials; opens trade on inspect; gives smithing quests that teach recipes and level up the NPC (distinct from the Keeper system — a Blacksmith NPC can also be assigned as a zone Keeper)
 - [ ] Faction alt naming — faction groups use contextual names based on type and size: goblin groups → warbands; humanoid criminal groups → guilds or cults; wandering entertainment groups → troupes; animal packs → packs; religious groups → cults or orders
 
@@ -250,6 +251,7 @@ The LoreEngine generates a Prophecy fragment found in a dungeon chest: *"the swo
 - [ ] Keepers have expanded dialogue unique to their role — greetings that reference world events, quest offers scaled to player level, lore hints about zone history, status reports on ongoing conflicts
 - [ ] Keeper health and status tracked; if a Keeper dies the role is vacant until a new NPC is promoted or recruited by the player
 - [ ] **Evergael (Keeper Variant)** — ancient or cursed entity trapped in a zone, blocking every exit until defeated; acts as zone-exit boss; drops a rare key or artifact that permanently unlocks the zone exit
+- [ ] tied to specific cells or NPCs - integrate with follower system. NPC must remain in x distance of given cell, item, NPC, etc.
 
 ### Autopilot → NPC AI Foundation
 > The autopilot is a **possession model**: it spawns a real NPC entity (the "proxy") at the player's position and drives it using the existing NPC AI state machine. The autopilot is the **development harness for all future NPC AI** — logic proven here is ported as the standard behavior layer for every NPC in the world.
@@ -422,7 +424,7 @@ The LoreEngine generates a Prophecy fragment found in a dungeon chest: *"the swo
 - [ ] Smoke Bomb — throwable; creates obscuring cloud; breaks NPC line of sight
 
 ### Artifacts & Legendary Items
-> Artifacts are rare named items with unique properties. Most cannot be crafted — they are found in boss rooms, Prophecy vaults, or ancient ruins. Each has procedurally generated flavor lore text hinting at its origin.
+> Artifacts are rare named items with unique properties. they are found in boss rooms, Prophecy vaults, or ancient ruins. Each has procedurally generated flavor lore text hinting at its origin.
 
 - [ ] Phylactery — the soul vessel of a Lich; destroying it in a temple fire or magical forge is the only path to permanent victory
 - [ ] Rings of Power — Ring of Invisibility, Ring of Regeneration, Ring of Fire Resistance, Ring of the Wyrm
