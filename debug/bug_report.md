@@ -1,26 +1,38 @@
 # StarCell Bug Report — Auto-Debug Sessions
 
-Each run: autopilot plays a new game, saves, quits. Session cap: 60–120s.
+Each run: autopilot plays a new game, saves, quits. Session cap: 30–45s (reduced 2026-03-09 for faster iteration).
 Reviewed from `debug/bugcatcher.log` after each session.
 
 ---
 
-## Session 17 — 2026-03-09 (~1,545 ticks, ~79s, NEW GAME)
+## Session 18 — 2026-03-09 (~2,233 ticks, ~37s, NEW GAME)
 
-### FOCUS: Autopilot UI close fix (trader_display + inspected_npc)
+### FOCUS: Autopilot UI close fix — real fix confirmed
 
-### CONFIRMED — Fix working: no UI panels found stuck open
-No open_menus, trader_display, or inspected_npc flags were stuck on player state during the session. Crafting sequence completed cleanly: C → click seeds slot → Space → C. Proxy continued wandering immediately after (120 wandering + 41 targeting states logged). No alerts, no tracebacks, no anomalies.
+### CONFIRMED — open_menus clear at player sample (tick 1557)
+Watchdog player sample (new fields added this session): `open_menus: [], quest_ui_open: false, trader_display: false, inspected_npc: null, ap_input_queue_len: 0`. All panels clear while proxy is walking. Fix is confirmed working.
 
-**Proxy behavior:** ai_state rotated between `wandering` and `targeting`. Proxy remained in zone 0,0 for full session (short 79s run did not trigger zone crossing).
+**Proxy:** wandering, grid moved from [18,16] at tick 657 to [15,10] at tick 1557. Zone 0,0 only (short session).
+**Shutdown (tick 2233):** 294 entities, 114 zones, 1 structure, 1 follower (TERMITE id=275, zone_match=true, healthy).
 
-**Inventory at shutdown (tick 1545):** carrot×3, tree_sapling×3, magic_rune×1, iron_ore×1, seeds×1 | tools: axe, hoe, shovel, pickaxe, bucket, bone_sword | magic: star_spell, rain_spell, day_spell. Goblin follower (id=263) present.
+### BUG-08 RECONFIRMED → escalated to held_back.md (HB-01)
+BAT id=392 at grid [15,7] targeting `["cell", 16, 7, "structure"]` for 50+ ticks (observed ticks 2161–2211). Grid unchanged, `in_subscreen=false`, `ai_timer=3` on every sample. Third session this behavior is observed (sessions 11, 16, 18). Moved to `debug/held_back.md` as HB-01 — full code review due on next fix attempt.
 
-### OBSERVATION — Watchdog entity_count in zone samples shows 0
-Zone sample entries log `entity_count: null` (not populated). This is a Watchdog monitoring gap — zone samples don't include entity census. Not a gameplay bug.
+### OBSERVATION — Watchdog player category fires once per ~2100 ticks
+With 7 categories rotating at 300-tick intervals, the player sample appears once every 2100 ticks. A 37s session at 60fps = ~2233 ticks → exactly one player sample. For future short sessions, consider reducing `SAMPLE_INTERVAL` or weighting player category more frequently to get more UI state snapshots per run.
 
-### OBSERVATION — Watchdog player sample does not log UI state
-The single player snapshot entry has no `open_menus`, `trader_display`, or `inspected_npc` fields. To properly monitor the UI close fix in future sessions, the Watchdog player snapshot should include these fields.
+---
+
+## Session 17 — 2026-03-09 (~1,545 ticks, ~79s, NEW GAME)  ⚠ RETRACTION
+
+### ~~CONFIRMED — Fix working~~ — INCORRECT. Fix was NOT working.
+The confirmation in this session was wrong. The Watchdog did not log `open_menus`, `trader_display`, or `inspected_npc` at the time — those fields were not yet in `_sample_player`. The "no stuck UI panels" conclusion was based on the absence of fields that were never captured. The bug persisted, as confirmed by direct visual observation.
+
+**Actual root cause (found session 18):** `move_player()` returns early at line 1502 when `open_menus` is non-empty. `update_autopilot()` at line 1545 is unreachable while any menu is open, so all close logic in it was dead code under the exact conditions needed. Additionally, the crafting close step queued a C key pygame event that re-opened `items`/`tools`/`magic` panels on the next frame.
+
+**Fix applied before session 18:**
+1. `game_core.py move_player()`: force-close block added before the `open_menus` early-return.
+2. `autopilot.py _autopilot_try_craft()`: closing step changed from queued C key event to direct `close_all_menus()` callable.
 
 ---
 

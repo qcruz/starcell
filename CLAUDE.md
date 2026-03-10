@@ -35,6 +35,27 @@ The project owner (@qcruz) handles creative direction: roadmap additions, system
 
 ---
 
+## Bug Escalation Protocol
+
+When a bug is not resolved after repeated attempts, escalate rather than keep patching:
+
+| Attempt | Action |
+|---|---|
+| 1st | Implement fix, run 1–2 sessions, observe |
+| 2nd | Revisit root cause, check related systems |
+| **3rd** | **Full code review** — grep all git-tracked files involved. Read every call site, data flow, and related system. Look for a stopgap using existing systems before adding new code. |
+| Still unresolved | Move to `debug/held_back.md` with full history |
+
+**Full code review** means: grep `game_core.py`, `npc_ai.py`, `autopilot.py`, `ai/`, `world/`, `systems/`, and `ui/` for every function and variable in the bug's call chain. Check `git log` for when the affected code last changed.
+
+A bug also moves to `held_back.md` if it:
+- Has caused adverse game impact across 3+ observation sessions with no resolution, or
+- Requires architectural changes that would block other work
+
+Issues in `held_back.md` are **not abandoned** — they get a clear symptom, suspected cause, what was tried, and a suggested next approach for when bandwidth exists.
+
+---
+
 ## Observation Workflow
 
 **Purpose:** Stress-test new features by running the autopilot headlessly for 2–3 min sessions and reviewing the Watchdog log.
@@ -115,6 +136,7 @@ Run a cleanup session every ~5 feature additions or when the codebase shows sign
 | `next_up.md` | Ordered commit-sized work list. Read this to find next work. Owner-maintained. |
 | `current_features_and_planned.md` | Technical implementation notes for completed + in-progress features |
 | `debug/bug_report.md` | Session-by-session autopilot observations and confirmed bug fixes |
+| `debug/held_back.md` | Issues held back from advancement: 3+ sessions unresolved, adverse impact, or pending code review |
 | `constants.py` | Legacy all-in-one data file. Still used by `game_core.py`, `npc_ai.py` |
 | `data/` | Modular data: cells.py, items.py, entities.py, factions.py, quests.py, spells.py |
 | `engine/` | Entity class, Inventory class, SpriteManager |
