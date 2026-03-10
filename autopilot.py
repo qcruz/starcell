@@ -351,12 +351,9 @@ class AutopilotMixin:
         if getattr(proxy, 'in_structure', False):
             return
 
-        # Footstep sound and inventory close when proxy moves to a new grid cell
+        # Footstep sound when proxy moves to a new grid cell
         old_px, old_py = self.player.get('x', proxy.x), self.player.get('y', proxy.y)
         if (proxy.x != old_px or proxy.y != old_py) and self.current_screen:
-            if self.inventory.open_menus:
-                self.inventory.close_all_menus()
-                self.quest_ui_open = False
             try:
                 stepped_cell = self.current_screen['grid'][proxy.y][proxy.x]
                 self.sound.on_footstep(stepped_cell)

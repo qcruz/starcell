@@ -565,7 +565,7 @@ class NpcAiActionsMixin:
             if not (0 <= cx < GRID_WIDTH and 0 <= cy < GRID_HEIGHT):
                 continue
             cell = screen['grid'][cy][cx]
-            if cell != 'CARROT3':
+            if cell not in ('CARROT3', 'CARROT2'):
                 continue
             entity.update_facing_toward(cx, cy)
             entity.trigger_action_animation()
