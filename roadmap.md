@@ -97,7 +97,7 @@ The LoreEngine generates a Prophecy fragment found in a dungeon chest: *"the swo
 - [ ] Seasonal events and quests; calendar / day tracker visible in HUD; in-game year and season displayed
 - [ ] Village biome — clustered settlement zone with higher NPC density, market stalls, and communal structures; starting point for social and quest arcs, rare
 - [ ] Dungeon Biome - zones is deadland above, underground generates cave system, side caves, variable number of levels, food +water sources to keep NPCs alive underground, random humanoid NPC spawned to fill the levels, occasional raids from other hostile entities to keep the biome changing
-- [ ] ### Alternate Realms & Portals
+### Alternate Realms & Portals
 - [ ] Hellgates — portals that deal constant XP/level damage on proximity; contain blood fountains that reduce level but extend max life and increase hostility score; dangerous but rewarding
 - [ ] Skygates — portals with fairy fountains; swimming in fairy water reduces levels faster but slowly increases max life and reduces hostile score back toward neutral
 
