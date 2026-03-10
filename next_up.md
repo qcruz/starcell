@@ -10,7 +10,6 @@
 Small additions using existing systems. No new entity types, structure types, or major UI systems. One commit per item, ordered smallest to largest.
 
 - [ ] Remove dead debug prints outside autopilot.py and debug/
-- [ ] Add LAKE as valid water source for thirsty humanoid NPCs
 - [ ] Add NPC level display in inspect panel
 - [ ] Add item level display in inventory UI — show level badge on leveled items in all tabs
 - [ ] Add faction standing display when inspecting NPC — show favor score and faction label
