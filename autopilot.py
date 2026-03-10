@@ -117,11 +117,15 @@ class AutopilotMixin:
         # Drain any queued synthetic button presses first
         self._ap_flush_input_queue()
 
-        # Close any open inventory menus unless a queued action sequence is actively
-        # using the UI (crafting opens menus deliberately for a few ticks)
-        if self.inventory.open_menus and not self._ap_input_queue:
+        # Close all UI panels unless a queued action sequence is actively using them.
+        # Covers: inventory panels, quest UI, trader display, and NPC inspect panel.
+        _any_ui = (self.inventory.open_menus or self.quest_ui_open
+                   or self.trader_display or self.inspected_npc)
+        if _any_ui and not self._ap_input_queue:
             self.inventory.close_all_menus()
             self.quest_ui_open = False
+            self.trader_display = None
+            self.inspected_npc = None
 
         # Spawn proxy if not yet created
         if self.autopilot_proxy_id is None:
@@ -362,11 +366,13 @@ class AutopilotMixin:
         old_sx = self.player.get('screen_x', proxy.screen_x)
         old_sy = self.player.get('screen_y', proxy.screen_y)
 
-        # Footstep sound and inventory close when proxy moves to a new grid cell
+        # Close all UI panels when proxy moves to a new grid cell
         if (proxy.x != old_px or proxy.y != old_py) and self.current_screen:
-            if self.inventory.open_menus:
+            if self.inventory.open_menus or self.trader_display or self.inspected_npc:
                 self.inventory.close_all_menus()
                 self.quest_ui_open = False
+                self.trader_display = None
+                self.inspected_npc = None
             try:
                 stepped_cell = self.current_screen['grid'][proxy.y][proxy.x]
                 self.sound.on_footstep(stepped_cell)
@@ -390,9 +396,11 @@ class AutopilotMixin:
         # On zone crossing: trigger catch-up simulation for the new zone
         if proxy.screen_x != old_sx or proxy.screen_y != old_sy:
             self.on_zone_transition(proxy.screen_x, proxy.screen_y)
-            if self.inventory.open_menus:
+            if self.inventory.open_menus or self.trader_display or self.inspected_npc:
                 self.inventory.close_all_menus()
                 self.quest_ui_open = False
+                self.trader_display = None
+                self.inspected_npc = None
 
     # ── Inventory sync ────────────────────────────────────────────────────────
 
