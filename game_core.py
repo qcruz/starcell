@@ -1499,6 +1499,18 @@ class GameCoreMixin:
         # fire even while inventory/crafting menus are open.
         if getattr(self, 'autopilot', False):
             self._ap_flush_input_queue()
+            # Force-close all UI panels when the queue is idle.
+            # MUST run before the open_menus early-return below — update_autopilot()
+            # (where the close logic also lives) is never reached when open_menus
+            # is non-empty, so this is the only reliable close site.
+            if not self._ap_input_queue:
+                _any_ui = (self.inventory.open_menus or self.quest_ui_open
+                           or self.trader_display or self.inspected_npc)
+                if _any_ui:
+                    self.inventory.close_all_menus()
+                    self.quest_ui_open = False
+                    self.trader_display = None
+                    self.inspected_npc = None
         if self.state != 'playing' or self.inventory.open_menus:
             return
         

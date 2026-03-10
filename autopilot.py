@@ -752,7 +752,11 @@ class AutopilotMixin:
         self._ap_queue(lambda c=chosen: self._ap_click_crafting_slot(c),
                                                   d1 + d2,     f"click slot '{chosen}'")
         self._ap_queue(self._ap_key(pygame.K_SPACE), d1+d2+d3, "press SPACE (craft)")
-        self._ap_queue(self._ap_key(pygame.K_c), d1+d2+d3+d4, "press C  (close crafting)")
+        # Use close_all_menus() directly instead of queuing another C key press.
+        # A queued C event would be processed by handle_input() the *next* frame,
+        # at which point open_menus is still non-empty → toggle_menu('crafting')
+        # removes 'crafting' but leaves 'items','tools','magic' open permanently.
+        self._ap_queue(self.inventory.close_all_menus, d1+d2+d3+d4, "close_all_menus (post-craft)")
         return True
 
 
