@@ -56,13 +56,28 @@ python3 main.py   # runs on dev-observation branch
 ```
 Session ends automatically (2–3 min timer). Review `debug/bug_catcher.log` and update `debug/bug_report.md` with findings. Document as `Session N` with CONFIRMED / OBSERVATION / BUG entries.
 
-**What to watch for:**
-- Primary purpose is to monitor all game mechanics working correctly, in as much detail as possible. This includes zones, cells, entities, items, and all features and systems. The watchdog method is intended to take reasonable snapshots of different systems on rotation.
-- In order to get better long term data, we will need autopilot to develop more capabilites equal to the player abilities. For now, lets be sure ot observe:
+**Observation run process:**
+1. Choose 2–3 features from roadmap randomly
+2. Update the Watchdog as needed to sample game data relevant to those features
+3. Set a run time limit long enough to observe those features
+4. Run a small number of sessions focused on observing those features
+5. After each run, record observed bugs and interesting game behaviors in `debug/bug_report.md`
+6. After all runs complete, review the bug report, summarize improvements needed, and make changes
+7. Repeat 1–3 runs → check if bugs resolved → if not, make edits → repeat
+8. When issues appear addressed, start a new observation test session (new random features, new Watchdog focus)
+
+**Primary focus — general game health:**
+- Monitor all game mechanics working correctly in as much detail as possible: zones, cells, entities, items, features, and systems
+- Watchdog rotates snapshots across all systems each cycle
+
+**Secondary focus — autopilot as long-term proxy:**
+- The autopilot is the proxy for observing game performance over time
+- In order to get better long-term data, autopilot should develop capabilities equal to player abilities
+- For now, observe:
   - Inventory growth (stone, iron_ore, wood accumulating → harvest working)
   - Quest rotation (should cycle 4–6 quest types per session)
   - Zone travel (proxy should cross at least one zone boundary)
-  - Crafting (new: proxy should attempt craft when ingredients available)
+  - Crafting (proxy should attempt craft when ingredients available)
   - Entity count at shutdown (watch for bloat >600 entities)
   - Log size (watch for >1000 entries/category)
 
