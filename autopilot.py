@@ -117,12 +117,6 @@ class AutopilotMixin:
         # Drain any queued synthetic button presses first
         self._ap_flush_input_queue()
 
-        # Close any open inventory menus unless a queued action sequence is actively
-        # using the UI (crafting opens menus deliberately for a few ticks)
-        if self.inventory.open_menus and not self._ap_input_queue:
-            self.inventory.close_all_menus()
-            self.quest_ui_open = False
-
         # Spawn proxy if not yet created
         if self.autopilot_proxy_id is None:
             self._autopilot_engage()
