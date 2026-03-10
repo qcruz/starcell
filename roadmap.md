@@ -64,7 +64,6 @@ The LoreEngine generates a Prophecy fragment found in a dungeon chest: *"the swo
 ### Perks & Skills
 - [ ] Perks earned through natural gameplay (e.g. killing goblins repeatedly builds a goblin-damage bonus)
 - [ ] Perks decay slowly over time if not maintained
-- [ ] Skill trees per activity — combat, crafting, farming, exploration, magic — each with tiered unlocks
 
 ### Lifetime & Aging
 - [ ] Player character gradually loses max life as they age → permadeath pressure
@@ -77,7 +76,7 @@ The LoreEngine generates a Prophecy fragment found in a dungeon chest: *"the swo
   - [ ] Philosopher's Stone — legendary crafted item; halts aging permanently
 
 ### Inventory & Equipment
-- [ ] Tool slot = equipped — item in the active tool slot is treated as equipped; applying passive stat bonuses and acting as the equipped tool when that slot is selected
+- [x] ~~Tool inventory bar — items from any inventory tab can be assigned to tool slots; the active tool slot item acts as the equipped tool~~ — completed!
 - [ ] Separate equipment panel: Weapon, Off-hand/Shield, Armor, Ring (×2), Amulet
 - [ ] Equipped items apply passive stat bonuses and are distinct from inventory
 - [ ] Armor types: cloth (mage), leather (rogue), chain (warrior), plate (knight)
@@ -138,7 +137,7 @@ The LoreEngine generates a Prophecy fragment found in a dungeon chest: *"the swo
 - [ ] When zone is attacked, guards and a commander spawn from the castle (if not already present)
 - [ ] Tavern / Inn — NPCs gather to rest, trade rumors, recover health; player can sleep here to skip time and restore stats; the classic adventurer's hub where Prophecy fragments and dragon rumors circulate; Tavernkeeper interaction: opens trade on inspect, opens unique NPC quest on quest panel
 - [ ] Temple / Shrine — visiting grants a brief buff (cure curse, restore stats, or temporary protection); unique quest giver; only location where a Cursed Crown or cursed item can be exorcised
-- [ ] Blacksmith structure — Blacksmith Keeper interaction: opens trade on inspect; gives crafting/smithing quests; teaches recipes; completing Blacksmith quests levels up the NPC and accelerates zone development
+- [ ] Blacksmith structure — dedicated smithing building; contains a forge; enables iron and steel recipes; primary spawn location for the Blacksmith NPC; zones with a Blacksmith develop faster toward fort-tier
 - [ ] Ancient Ruins — crumbling remnants of a past civilization; no living NPC residents; contains lore-note items describing zone history; spawns Golem and Mechanica guardians; Archaeologist quest giver may take up residence nearby; secret entrances (wells, houses) lead to cave or basement with necromancer items
 - [ ] Crypt — sealed underground structure accessed from a graveyard zone; spawns undead (skeletons, zombies, ghosts, banshees); contains a coffin cell that may house a Vampire Keeper; boss room at the deepest level holds a Lich or Undead Dragon
 - [ ] Underground City — when a goblin or outcast faction claims multiple adjacent cave zones, structures build organically into a subterranean settlement with its own Keeper hierarchy, economy, raid schedules, and dungeon architecture
@@ -148,8 +147,8 @@ The LoreEngine generates a Prophecy fragment found in a dungeon chest: *"the swo
 ### Dungeon Mechanics
 > Dungeons are the beating heart of the D&D experience — dark places full of danger, treasure, and secrets. They generate procedurally under the overworld, shaped by the zone's biome and history.
 
-- [ ] Multi-floor subscreens — towers and dungeons have multiple vertical levels connected by staircases or ladders; each level is a separate subscreen with increasing difficulty and unique generation; the overworld entry point connects to level 1
-- [ ] NPC travel to subscreens — NPCs can enter and navigate between subscreen levels using the same exit/entry logic as the player; enables cave-dwelling factions, dungeon keepers, and multi-floor encounters
+- [ ] Multi-floor structures — towers and dungeons have multiple vertical levels connected by staircases or ladders; each floor is a separate structure with increasing difficulty and unique generation; the overworld entry point connects to floor 1
+- [ ] NPC travel into structures — NPCs can enter and navigate between structure floors using the same exit/entry logic as the player; enables cave-dwelling factions, dungeon keepers, and multi-floor encounters
 - [ ] Dungeon rooms with environmental puzzles — pressure plates, levers, locked doors, push-block puzzles
 - [ ] Small keys — found in chests or dropped by miniboss enemies; open locked doors in the same dungeon
 - [ ] Boss key — opens the final boss room door; guarded by the dungeon's hardest non-boss encounter
@@ -231,7 +230,7 @@ The LoreEngine generates a Prophecy fragment found in a dungeon chest: *"the swo
 
 ### NPC Types & Roles
 - [ ] Rename WARRIOR → KNIGHT
-- [ ] Blacksmith Keeper — smith behavior: seeks forge, crafts tools and weapons from available materials; interaction opens trade and gives crafting quests
+- [ ] Blacksmith NPC — seeks forge, crafts tools and weapons from available materials; opens trade on inspect; gives smithing quests that teach recipes and level up the NPC (distinct from the Keeper system — a Blacksmith NPC can also be assigned as a zone Keeper)
 - [ ] Faction alt naming — faction groups use contextual names based on type and size: goblin groups → warbands; humanoid criminal groups → guilds or cults; wandering entertainment groups → troupes; animal packs → packs; religious groups → cults or orders
 
 ### NPC Behavior
@@ -324,7 +323,7 @@ The LoreEngine generates a Prophecy fragment found in a dungeon chest: *"the swo
 - [ ] **Identify** — reveals the true stats and any curses on an unknown item
 - [ ] **Detect** — highlights hidden doors, traps, buried treasure, and hostile entities in the zone
 - [ ] **Bard Song** — passive AoE buff to all friendly entities in zone (damage, speed, or morale)
-- [ ] Spell learning on use — casting spells repeatedly increases proficiency; at a threshold, the spell is "learned" and costs slightly less energy; encourages building a signature spell repertoire
+- [ ] Spell leveling with use — spells level up through repeated casting, like equipment and items; higher levels reduce cast cost and/or increase effect; spells are not learned through use — they must be acquired first (via spell item, Tome, or NPC)
 
 ---
 
@@ -487,6 +486,17 @@ The LoreEngine generates a Prophecy fragment found in a dungeon chest: *"the swo
 ### Mining & Exploration
 - [ ] Miner digs caves into mineshafts — mineshafts suppress hostile spawns; only regular NPC movement in/out; miners are the primary source of cave infrastructure
 - [ ] Deeper cave levels unlocked by miners at higher levels
+
+### Treasure Hunting
+> One of the primary player activities — explore, dig, and follow clues to uncover the world's hidden wealth.
+
+- [ ] Shovel — player digs into soft ground cells; chance to uncover buried items or a buried treasure cache
+- [ ] Buried treasure caches — hidden in specific cell types; locations can be marked by quest arrows, revealed by the Detect spell, or hinted by Archaeologist NPCs and lore-note fragments
+- [ ] Ancient Map Fragments — combine three to reveal a hidden dungeon or treasure zone; fragments found in boss rooms and lore chests
+- [ ] Archaeology quest type — Archaeologist Keeper gives targeted dig quests; rewards rare items and zone lore
+
+### Questing
+> One of the primary player activities — NPC quests, rumor quests, and Prophecy quests are how players engage the world. Quest mechanics and NPC quest sources are detailed in Section 7. Quest types span all activities: gather, craft, deliver, defeat, explore, build, protect, escort.
 
 ---
 
