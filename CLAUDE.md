@@ -13,7 +13,7 @@ The project owner (@qcruz) handles creative direction: roadmap additions, system
 |---|---|---|
 | `main` | Stable release | **Never push without explicit user confirmation** |
 | `dev` | Active development | Push freely after each work session |
-| `dev-observation` | AUTO_DEBUG headless testing | Push after observation sessions; keep AUTO_DEBUG=True |
+| `dev-observation` | AUTO_DEBUG headless testing | Push after observation sessions; AUTO_DEBUG controlled by `debug/auto_debug.cfg` (git-ignored) |
 
 **After any coding session:** commit and push to `dev`.
 **Before observation run:** sync `dev-observation` from `dev` (see Observation Workflow below).
@@ -43,10 +43,12 @@ The project owner (@qcruz) handles creative direction: roadmap additions, system
 ```bash
 git checkout dev-observation
 git merge dev --no-edit
-# Set AUTO_DEBUG = True in main.py (line 87)
-git add main.py && git commit -m "dev-observation: sync from dev + AUTO_DEBUG on"
 git push origin dev-observation
 git checkout dev
+# Then enable AUTO_DEBUG locally (git-ignored, never committed):
+echo "True" > debug/auto_debug.cfg
+# After the session, disable it:
+echo "False" > debug/auto_debug.cfg
 ```
 
 **To run a session:**

@@ -83,8 +83,15 @@ class Game(
 if __name__ == '__main__':
     import random, time, json, os
 
-    # ── AUTO_DEBUG: set True to run headless autopilot debug sessions ──────────
-    AUTO_DEBUG = True
+    # ── AUTO_DEBUG: loaded from debug/auto_debug.cfg (git-ignored) ────────────
+    # To enable: create debug/auto_debug.cfg containing the single line: True
+    # Never set this in code — that's how it leaks across branches.
+    _AUTO_DEBUG_CFG = 'debug/auto_debug.cfg'
+    try:
+        with open(_AUTO_DEBUG_CFG) as _cfg:
+            AUTO_DEBUG = _cfg.read().strip().lower() in ('true', '1', 'yes')
+    except FileNotFoundError:
+        AUTO_DEBUG = False
     _STATE_FILE = 'debug/auto_debug_state.json'
     _MIN_SECS   = 60    # floor: 1 min
     _MAX_CAP    = 120   # ceiling: 2 min
