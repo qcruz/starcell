@@ -129,7 +129,9 @@ class Watchdog:
                 'in_structure': getattr(entity, 'in_structure', False),
                 'structure_key': getattr(entity, 'structure_key', None),
                 'anim_frame': getattr(entity, 'anim_frame', None),
+                'anim_timer': getattr(entity, 'anim_timer', None),
                 'facing': getattr(entity, 'facing', None),
+                'sprite_base': entity.props.get('sprite_name', entity.type).lower(),
                 'faction': getattr(entity, 'faction', None),
                 'quest_focus': getattr(entity, 'quest_focus', None),
             })
