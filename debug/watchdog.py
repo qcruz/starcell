@@ -71,6 +71,7 @@ class Watchdog:
         }
         _SAMPLERS[category](tick, game)
 
+        self._sample_spiders(tick, game)
         self._check_integrity(tick, game)
         self._maybe_backup(tick, game)
         self.bug_catcher.flush()
@@ -381,6 +382,36 @@ class Watchdog:
                 'is_follower': eid in followers,
                 'last_ai_tick': getattr(entity, 'last_ai_tick', None),
                 'stuck_counter': getattr(entity, 'stuck_counter', 0),
+            })
+
+    def _sample_spiders(self, tick: int, game) -> None:
+        """Log full animation + AI state for every BLACK_SPIDER every cycle — no trimming."""
+        player_zone = f"{game.player.get('screen_x', 0)},{game.player.get('screen_y', 0)}"
+        spider_types = {'BLACK_SPIDER', 'BLACK_SPIDER_double'}
+        spiders = [(eid, e) for eid, e in game.entities.items() if e.type in spider_types]
+        if not spiders:
+            return
+        for eid, entity in spiders:
+            entity_zone = f"{entity.screen_x},{entity.screen_y}"
+            self.bug_catcher.log({
+                'tick': tick,
+                'category': 'spider_sample',
+                'id': eid,
+                'type': entity.type,
+                'zone': entity_zone,
+                'on_player_screen': entity_zone == player_zone,
+                'grid': [entity.x, entity.y],
+                'world': [round(entity.world_x, 2), round(entity.world_y, 2)],
+                'facing': getattr(entity, 'facing', None),
+                'anim_frame': getattr(entity, 'anim_frame', None),
+                'anim_timer': getattr(entity, 'anim_timer', None),
+                'sprite_base': entity.props.get('sprite_name', entity.type).lower(),
+                'is_moving': getattr(entity, 'is_moving', None),
+                'ai_state': getattr(entity, 'ai_state', None),
+                'in_combat': getattr(entity, 'in_combat', False),
+                'current_target': getattr(entity, 'current_target', None),
+                'health': entity.health,
+                'is_alive': entity.is_alive(),
             })
 
     # ------------------------------------------------------------------
