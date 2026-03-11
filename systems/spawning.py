@@ -959,8 +959,7 @@ class SpawningMixin:
                     self.screen_entities[screen_key] = []
                 self.screen_entities[screen_key].append(entity_id)
 
-                if random.random() < 0.05:
-                    return True
+                return True
 
         return False
 

@@ -5,6 +5,21 @@ Reviewed from `debug/bugcatcher.log` after each session.
 
 ---
 
+## Session 19 — 2026-03-10 (live player session)
+
+### FIXED — BLACK_SPIDER step animation not playing
+**Root cause:** Still-frame sprites for BLACK_SPIDER (and BUTTERFLY, CHICKEN, COW) were renamed from `blackSpider_down_still_1.png` → `blackSpider_down_still.png` in the dev folder but never committed to git. The live game dir (`~/StarCell/`) only had the old `_still_1` format. The sprite loader looks for `blackSpider_down_still.png` — it was silently failing, falling back to frame `1` for the still step. Walk frames `_1` and `_2` were present and loading correctly.
+**Fix:** Committed renamed still sprites for spider, butterfly, chicken, cow. All four entity types now have correct still frames in the live game dir.
+**Note:** `is_combat_idle` animation during combat stance was separately proposed and reverted twice — confirmed by user as incorrect behavior. Entities correctly freeze at still when not physically moving.
+
+### BUG — Entity spawn bloat: 2,736 entities observed vs ~294 in session 18
+**Severity:** High
+**Confirmed cause:** `spawn_single_entity_at_entrance` in `systems/spawning.py` has a missing `break` after successful spawn. The `for attempt in range(10)` loop spawns an entity each time it finds a non-solid cell, only exiting on a 5% random roll (`if random.random() < 0.05: return True`). Expected: 1 entity per call. Actual: ~9-10 entities per call.
+`check_zone_spawning` calls this up to 3 times per cycle across a 5×5 zone grid around the player, and runs continuously. This compounds: each call spawns ~9 entities instead of 1.
+**Fix:** Replace `if random.random() < 0.05: return True` with `return True` to exit after the first successful spawn.
+
+---
+
 ## Session 18 — 2026-03-09 (~2,233 ticks, ~37s, NEW GAME)
 
 ### FOCUS: Autopilot UI close fix — real fix confirmed
