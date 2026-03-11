@@ -57,9 +57,7 @@ Post the item in chat before starting. Wait for a clear "go ahead." These introd
 - [ ] Add bird/bat item pickup — flying entities grab loose ground items; drop after 10–30 ticks at random adjacent cell
 - [ ] Add SNAKE entity type — desert biome hostile; poison on hit; first concrete use of poisoned status effect
 - [ ] Add SPIDER entity type — cave biome hostile; web cell slows movement; poison on bite
-- [ ] Add Slime entity type — splits into smaller slimes on death; weak to fire
 - [ ] Add Troll entity type — health regen; weak to fire; forest and cave spawns
-- [ ] Add Zombie entity type — slow; contagion on hit; graveyard spawns; weak to holy
 - [ ] Add Werewolf entity type — human NPC by day; transforms at night; weak to silver; bitten NPC may turn
 - [ ] Add Ghost entity type — passes through walls; immune to physical; weak to holy
 - [ ] Add Golem entity type — slow, very high defense, attacks only when attacked; guards ruins and dungeon entries
@@ -73,6 +71,7 @@ Post the item in chat before starting. Wait for a clear "go ahead." These introd
 
 ### New Structure Types
 - [ ] Create basic village biome — VILLAGE zone type; clustered housing, higher NPC density, market stall structure
+- [ ] chance for stone house to become fort or belltower - fort spawns traveling soldiers (agressive) of the local faction, belltower spawns guards (relaxed, protect zone) 
 - [ ] Add Tavern structure — NPC gathering point; rest/time-skip; Tavernkeeper quests
 - [ ] Add Blacksmith structure — dedicated smithing building; forge enables iron and steel recipes
 - [ ] Add Crypt structure — sealed underground zone; undead spawns; Vampire or Lich boss room at depth
@@ -80,7 +79,7 @@ Post the item in chat before starting. Wait for a clear "go ahead." These introd
 - [ ] Add Ancient Ruins structure type — crumbling zone; Golem and Mechanica guardians; lore-note drops
 - [ ] Add Library/Archive structure — Wizard Keeper; Tome items teach rare spells; ghost scholar guards
 - [ ] Add oasis structure to desert zones — water source cell cluster in desert; NPCs and animals seek it
-- [ ] Add waypoint stone structure — player teleports between owned waypoints; time passes on use
+- [ ] Add waypoint stone structure — player teleports between owned waypoints; significant time passes on use
 - [ ] Add barn/pen structure — houses livestock; prevents animal wandering
 
 ### New UI Systems
