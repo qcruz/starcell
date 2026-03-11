@@ -943,7 +943,7 @@ class ZonesMixin:
             for x in range(1, GRID_WIDTH - 1):
                 cell = screen['grid'][y][x]
 
-                if cell in ['WALL', 'HOUSE', 'CAVE']:
+                if cell in ['WALL', 'HOUSE', 'CAVE', 'CLIFF']:
                     continue
 
                 counts = neighbor_cache.get((x, y), {})

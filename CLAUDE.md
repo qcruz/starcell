@@ -24,7 +24,7 @@ The project owner (@qcruz) handles creative direction: roadmap additions, system
 ## Development Loop
 
 ```
-1. Read next_up.md → pick the first unchecked item
+1. Read next_up.md → pick the first unchecked Tier 1 item
 2. Read relevant source files → understand current code
 3. Implement → commit to dev
 4. Sync dev-observation and run observation session (see below)
@@ -32,6 +32,49 @@ The project owner (@qcruz) handles creative direction: roadmap additions, system
 6. Periodic: code cleanup session (see Code Cleanup below)
 7. User reviews dev manually → pushes to main when satisfied
 ```
+
+---
+
+## Autonomous vs. Approval Rule
+
+`next_up.md` has two tiers. This rule governs which tier an item belongs to and what is required before starting.
+
+**Tier 1 — Build autonomously:**
+- Small additions to existing systems
+- No new entity types, structure types, or major UI systems
+- Examples: config value changes, wiring existing keys/calls, adding a status effect, porting a method between files, small data additions, code cleanup
+
+**Tier 2 — Requires explicit user approval:**
+- New entity types (any new entry in ENTITY_TYPES)
+- New structure types (any new zone or subscreen layout)
+- New major UI panels or tabs
+- New world-generation systems
+- New game loops or economy systems (fishing, crafting stations, bounties, etc.)
+
+**Before starting a Tier 2 item:** post the item name in chat and wait for a clear "go ahead" before writing any code. Do not infer approval from roadmap entries or previous conversations.
+
+**When adding new items:** Tier 1 items go at the bottom of the Tier 1 list, ordered by scope (smallest first). Tier 2 items go in the appropriate subsection of the Tier 2 list. Far-future or speculative items belong in `roadmap.md` only — do not add them to `next_up.md` until prerequisite systems are in place.
+
+---
+
+## Bug Escalation Protocol
+
+When a bug is not resolved after repeated attempts, escalate rather than keep patching:
+
+| Attempt | Action |
+|---|---|
+| 1st | Implement fix, run 1–2 sessions, observe |
+| 2nd | Revisit root cause, check related systems |
+| **3rd** | **Full code review** — grep all git-tracked files involved. Read every call site, data flow, and related system. Look for a stopgap using existing systems before adding new code. |
+| Still unresolved | Move to `debug/held_back.md` with full history |
+
+**Full code review** means: grep `game_core.py`, `npc_ai.py`, `autopilot.py`, `ai/`, `world/`, `systems/`, and `ui/` for every function and variable in the bug's call chain. Check `git log` for when the affected code last changed.
+
+A bug also moves to `held_back.md` if it:
+- Has caused adverse game impact across 3+ observation sessions with no resolution, or
+- Requires architectural changes that would block other work
+
+Issues in `held_back.md` are **not abandoned** — they get a clear symptom, suspected cause, what was tried, and a suggested next approach for when bandwidth exists.
 
 ---
 
@@ -112,9 +155,10 @@ Run a cleanup session every ~5 feature additions or when the codebase shows sign
 | File / Dir | Role |
 |---|---|
 | `roadmap.md` | Big-picture feature vision. Owner-maintained. Do not edit during development. |
-| `next_up.md` | Ordered commit-sized work list. Read this to find next work. Owner-maintained. |
+| `next_up.md` | Two-tier work list: Tier 1 (autonomous) and Tier 2 (needs approval). Claude reads Tier 1 top to bottom. Owner-maintained. |
 | `current_features_and_planned.md` | Technical implementation notes for completed + in-progress features |
 | `debug/bug_report.md` | Session-by-session autopilot observations and confirmed bug fixes |
+| `debug/held_back.md` | Issues held back from advancement: 3+ sessions unresolved, adverse impact, or pending code review |
 | `constants.py` | Legacy all-in-one data file. Still used by `game_core.py`, `npc_ai.py` |
 | `data/` | Modular data: cells.py, items.py, entities.py, factions.py, quests.py, spells.py |
 | `engine/` | Entity class, Inventory class, SpriteManager |

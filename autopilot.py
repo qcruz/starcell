@@ -117,6 +117,16 @@ class AutopilotMixin:
         # Drain any queued synthetic button presses first
         self._ap_flush_input_queue()
 
+        # Close all UI panels unless a queued action sequence is actively using them.
+        # Covers: inventory panels, quest UI, trader display, and NPC inspect panel.
+        _any_ui = (self.inventory.open_menus or self.quest_ui_open
+                   or self.trader_display or self.inspected_npc)
+        if _any_ui and not self._ap_input_queue:
+            self.inventory.close_all_menus()
+            self.quest_ui_open = False
+            self.trader_display = None
+            self.inspected_npc = None
+
         # Spawn proxy if not yet created
         if self.autopilot_proxy_id is None:
             self._autopilot_engage()
@@ -351,9 +361,18 @@ class AutopilotMixin:
         if getattr(proxy, 'in_structure', False):
             return
 
-        # Footstep sound when proxy moves to a new grid cell
+        # Capture old position and zone before sync
         old_px, old_py = self.player.get('x', proxy.x), self.player.get('y', proxy.y)
+        old_sx = self.player.get('screen_x', proxy.screen_x)
+        old_sy = self.player.get('screen_y', proxy.screen_y)
+
+        # Close all UI panels when proxy moves to a new grid cell
         if (proxy.x != old_px or proxy.y != old_py) and self.current_screen:
+            if self.inventory.open_menus or self.trader_display or self.inspected_npc:
+                self.inventory.close_all_menus()
+                self.quest_ui_open = False
+                self.trader_display = None
+                self.inspected_npc = None
             try:
                 stepped_cell = self.current_screen['grid'][proxy.y][proxy.x]
                 self.sound.on_footstep(stepped_cell)
@@ -373,6 +392,15 @@ class AutopilotMixin:
         if self.current_screen is not self.screens.get(new_sk):
             if new_sk in self.screens:
                 self.current_screen = self.screens[new_sk]
+
+        # On zone crossing: trigger catch-up simulation for the new zone
+        if proxy.screen_x != old_sx or proxy.screen_y != old_sy:
+            self.on_zone_transition(proxy.screen_x, proxy.screen_y)
+            if self.inventory.open_menus or self.trader_display or self.inspected_npc:
+                self.inventory.close_all_menus()
+                self.quest_ui_open = False
+                self.trader_display = None
+                self.inspected_npc = None
 
     # ── Inventory sync ────────────────────────────────────────────────────────
 
@@ -724,7 +752,11 @@ class AutopilotMixin:
         self._ap_queue(lambda c=chosen: self._ap_click_crafting_slot(c),
                                                   d1 + d2,     f"click slot '{chosen}'")
         self._ap_queue(self._ap_key(pygame.K_SPACE), d1+d2+d3, "press SPACE (craft)")
-        self._ap_queue(self._ap_key(pygame.K_c), d1+d2+d3+d4, "press C  (close crafting)")
+        # Use close_all_menus() directly instead of queuing another C key press.
+        # A queued C event would be processed by handle_input() the *next* frame,
+        # at which point open_menus is still non-empty → toggle_menu('crafting')
+        # removes 'crafting' but leaves 'items','tools','magic' open permanently.
+        self._ap_queue(self.inventory.close_all_menus, d1+d2+d3+d4, "close_all_menus (post-craft)")
         return True
 
 

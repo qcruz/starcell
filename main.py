@@ -93,8 +93,8 @@ if __name__ == '__main__':
     except FileNotFoundError:
         AUTO_DEBUG = False
     _STATE_FILE = 'debug/auto_debug_state.json'
-    _MIN_SECS   = 60    # floor: 1 min
-    _MAX_CAP    = 120   # ceiling: 2 min
+    _MIN_SECS   = 30    # floor: 30 s
+    _MAX_CAP    = 45    # ceiling: 45 s
     # ──────────────────────────────────────────────────────────────────────────
 
     game = Game()

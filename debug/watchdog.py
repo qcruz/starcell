@@ -239,6 +239,12 @@ class Watchdog:
             'autopilot_proxy_id': proxy_id,
             'last_input_tick': getattr(game, 'last_input_tick', None),
             'proxy': proxy_pos,
+            # UI state — critical for diagnosing stuck inventory panels
+            'open_menus': list(getattr(game.inventory, 'open_menus', set())),
+            'quest_ui_open': getattr(game, 'quest_ui_open', False),
+            'trader_display': bool(getattr(game, 'trader_display', None)),
+            'inspected_npc': getattr(game, 'inspected_npc', None),
+            'ap_input_queue_len': len(getattr(game, '_ap_input_queue', [])),
         })
         # Stagnation check: flag if proxy grid hasn't changed since last player sample
         if proxy_pos and getattr(game, 'autopilot', False):
