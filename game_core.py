@@ -352,8 +352,8 @@ class GameCoreMixin:
                                     sprite_img = pygame.image.load(filename).convert_alpha()
                                     sprite_img = pygame.transform.scale(sprite_img, (CELL_SIZE, CELL_SIZE))
                                     
-                                    # Store with normalized name (underscores only)
-                                    normalized_name = f"{entity_type}_{direction}_{frame_name}"
+                                    # Store with normalized name (underscores only, lowercased to match HUD lookup)
+                                    normalized_name = f"{entity_type}_{direction}_{frame_name}".lower()
                                     self.sprite_manager.sprites[normalized_name] = sprite_img
                                     sprite_files_loaded += 1
                                     found = True
