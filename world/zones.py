@@ -115,17 +115,6 @@ class ZonesMixin:
             total_entities_updated += int(ent_count * entity_coverage)
             total_cells_updated += int(GRID_WIDTH * GRID_HEIGHT * cell_coverage)
 
-        if self.tick % 1800 == 0:
-            total_entities = len(self.entities)
-            total_zones = len(self.screens)
-            print(f"[UpdateCycle] tick={self.tick} "
-                  f"zones={zones_updated}/{total_zones} "
-                  f"entities={total_entities_updated}/{total_entities} "
-                  f"cells={total_cells_updated} "
-                  f"mandatory={len(mandatory_zones)} "
-                  f"player_zone={player_zone_key}"
-                  f"({len(self.screen_entities.get(player_zone_key, []))}ent) "
-                  f"queue={len(priority_queue)}")
 
     # -------------------------------------------------------------------------
     # Per-zone update methods
@@ -306,7 +295,6 @@ class ZonesMixin:
                             if entity_id not in self.factions[new_faction]['warriors']:
                                 self.factions[new_faction]['warriors'].append(entity_id)
 
-                            print(f"{entity.name} defected from {old_faction} to {new_faction}!")
 
                 # Age entities every 600 ticks (accelerated during time pass)
                 age_interval = max(1, int(600 / _tp))
@@ -457,7 +445,6 @@ class ZonesMixin:
                         self.factions[new_faction] = {'warriors': [], 'zones': set()}
                     if warrior_id not in self.factions[new_faction]['warriors']:
                         self.factions[new_faction]['warriors'].append(warrior_id)
-                print(f"ZONE REVOLUTION in [{zone_key}]! {len(warriors_in_zone)} warriors formed {new_faction} faction!")
 
         # Faction raid: 0.1% chance for raid on high-population zones
         if zone_key in self.screen_entities and random.random() < 0.001:
@@ -499,7 +486,7 @@ class ZonesMixin:
                                 raiders_spawned += 1
 
                     if raiders_spawned > 0:
-                        print(f"FACTION RAID in [{zone_key}]! {raiders_spawned} {raiding_faction} warriors invade!")
+                        pass  # raid initiated
 
         # Population maintenance (every 5 seconds)
         if not hasattr(self, 'zone_last_spawn_check'):
@@ -533,17 +520,11 @@ class ZonesMixin:
                 spawned = False
                 if 'TRADER' not in types_in_zone:
                     spawned = self.spawn_single_entity_at_entrance(zone_x, zone_y, biome, force_type='TRADER')
-                    if spawned:
-                        print(f"[SPAWN] TRADER spawned in [{zone_key}] (pop: {npc_count})")
                 elif 'GUARD' not in types_in_zone:
                     spawned = self.spawn_single_entity_at_entrance(zone_x, zone_y, biome, force_type='GUARD')
-                    if spawned:
-                        print(f"[SPAWN] GUARD spawned in [{zone_key}] (pop: {npc_count})")
 
                 if not spawned:
                     spawned = self.spawn_single_entity_at_entrance(zone_x, zone_y, biome)
-                    if spawned:
-                        print(f"[SPAWN] Entity spawned in [{zone_key}] (pop: {npc_count})")
 
             # NPC role conversion / settlement
             if zone_key in self.screen_entities:
@@ -575,7 +556,6 @@ class ZonesMixin:
                         if t1.can_merge_with(t2):
                             t1.merge_with(t2)
                             del self.entities[t2_id]
-                            print(f"Two traders merged into {t1.type} at [{zone_key}]")
 
                     if len(guards) > 2:
                         g1_id, g1 = guards[0]
@@ -583,38 +563,27 @@ class ZonesMixin:
                         if g1.can_merge_with(g2):
                             g1.merge_with(g2)
                             del self.entities[g2_id]
-                            print(f"Two guards merged into {g1.type} at [{zone_key}]")
 
                     if traders:
                         trader_id, trader = random.choice(traders)
                         if not has_farmer and random.random() < 0.5:
-                            old_name = trader.name
                             trader.type = 'FARMER'
                             trader.props = ENTITY_TYPES['FARMER']
-                            print(f"{old_name} (Trader) settled as a farmer at [{zone_key}]")
                         elif not has_lumberjack and random.random() < 0.5:
-                            old_name = trader.name
                             trader.type = 'LUMBERJACK'
                             trader.props = ENTITY_TYPES['LUMBERJACK']
-                            print(f"{old_name} (Trader) settled as a lumberjack at [{zone_key}]")
                         elif not has_miner:
-                            old_name = trader.name
                             trader.type = 'MINER'
                             trader.props = ENTITY_TYPES['MINER']
-                            print(f"{old_name} (Trader) settled as a miner at [{zone_key}]")
 
                     if guards:
                         guard_id, guard = random.choice(guards)
                         if not has_farmer and random.random() < 0.5:
-                            old_name = guard.name
                             guard.type = 'FARMER'
                             guard.props = ENTITY_TYPES['FARMER']
-                            print(f"{old_name} (Guard) settled as a farmer at [{zone_key}]")
                         elif not has_miner and random.random() < 0.5:
-                            old_name = guard.name
                             guard.type = 'MINER'
                             guard.props = ENTITY_TYPES['MINER']
-                            print(f"{old_name} (Guard) settled as a miner at [{zone_key}]")
 
             if self.tick % 600 == 0:
                 self.promote_to_commander(zone_key)
@@ -731,7 +700,6 @@ class ZonesMixin:
                         cave_y = random.randint(2, GRID_HEIGHT - 3)
                         screen['grid'][cave_y][cave_x] = 'CAVE'
 
-                    print(f"Catch-up: Raid event simulated in [{screen_key}] - {hostile_count} {hostile_type}(s) spawned")
 
         # Faction simulation for warriors during catch-up
         if cycles > 10:
@@ -760,7 +728,6 @@ class ZonesMixin:
                     else:
                         casualty_id, casualty = random.choice(faction_groups[faction2])
                     self.remove_entity(casualty_id)
-                    print(f"Catch-up: Faction war in [{screen_key}] - {casualty.name} ({casualty.faction}) killed")
 
         entities_to_remove = []
         entities_to_transition = []
@@ -799,8 +766,9 @@ class ZonesMixin:
                             has_water = True
 
             for cycle_num in range(cycles):
-                entity.hunger = max(0, entity.hunger - 0.5)
-                entity.thirst = max(0, entity.thirst - 0.3)
+                if not getattr(entity, 'keeper', False):
+                    entity.hunger = max(0, entity.hunger - 0.5)
+                    entity.thirst = max(0, entity.thirst - 0.3)
 
                 if cycle_num % 2 == 0:
                     behavior_config = entity.props.get('behavior_config')
@@ -1195,7 +1163,6 @@ class ZonesMixin:
 
         if new_biome != current_biome:
             screen['biome'] = new_biome
-            print(f"Zone [{screen_x},{screen_y}] biome shifted: {current_biome} → {new_biome}")
 
     def is_near_structure(self, x, y, screen_key):
         """Check if cell is near HOUSE/CAMP (within 2 cells)"""
@@ -1351,7 +1318,12 @@ class ZonesMixin:
             if ktype in keepers:
                 continue  # Slot already occupied
 
-            if random.random() < KEEPER_ASSIGNMENT_RATE:
-                entity.keeper = True
-                keepers[ktype] = eid
-                print(f"[Keeper] {entity.type} (id={eid}) assigned as {ktype} keeper in {zone_key}")
+            # In non-structure zones the first entity of each type is immediately
+            # assigned keeper — no probability roll needed.
+            # Structure zones use the slower probabilistic rate.
+            is_structure_zone = zone_key in self.structure_zones
+            if is_structure_zone:
+                if random.random() >= KEEPER_ASSIGNMENT_RATE:
+                    continue
+            entity.keeper = True
+            keepers[ktype] = eid

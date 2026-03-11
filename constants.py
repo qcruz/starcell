@@ -218,14 +218,18 @@ KEEPER_ASSIGNMENT_RATE = 0.02  # 2% chance per zone update to assign a vacant ke
 # KING intentionally omitted — singular, always traveling.
 # All peaceful worker humanoids share one slot so a zone doesn't accumulate one of every type.
 KEEPER_ENTITY_TYPE = {
-    'WOLF':       'wolf',
-    'BAT':        'bat',
-    'GOBLIN':     'goblin',
-    'BANDIT':     'bandit',
-    'SKELETON':   'skeleton',
-    'TERMITE':    'termite',
-    'SHEEP':      'sheep',
-    'DEER':       'deer',
+    'WOLF':         'wolf',
+    'BAT':          'bat',
+    'GOBLIN':       'goblin',
+    'BANDIT':       'bandit',
+    'SKELETON':     'skeleton',
+    'TERMITE':      'termite',
+    'SHEEP':        'sheep',
+    'DEER':         'deer',
+    'RED_BIRD':     'red_bird',
+    'BUTTERFLY':    'butterfly',
+    'CHICKEN':      'chicken',
+    'BLACK_SPIDER': 'black_spider',
     # Peaceful worker types share one 'humanoid' slot per zone
     'FARMER':     'humanoid',
     'GUARD':      'humanoid',

@@ -238,6 +238,8 @@ class GameCoreMixin:
             os.path.join(script_dir, "starcell", "sprites") + os.sep,
             os.path.join(script_dir, "starcell", "sprites", "grass_sprites") + os.sep,
             os.path.join(script_dir, "sprites", "grass_sprites") + os.sep,
+            os.path.join(script_dir, "sprites", "NPCs") + os.sep,
+            os.path.join(script_dir, "sprites", "animal sprites") + os.sep,
         ]
         
         for cell_type in ['GRASS', 'DIRT', 'SAND', 'STONE', 'WATER', 'DEEP_WATER',
@@ -321,10 +323,10 @@ class GameCoreMixin:
         # Support both 2-frame and 3-frame animations
         # 2-frame: entity_direction_1, entity_direction_2
         # 3-frame: entity_direction_1, entity_direction_still, entity_direction_2
-        entity_types = ['sheep', 'wolf', 'deer', 'farmer', 'guard', 'trader', 
-                       'lumberjack', 'miner', 'blacksmith', 'bandit', 'goblin', 
+        entity_types = ['sheep', 'wolf', 'deer', 'farmer', 'guard', 'trader',
+                       'lumberjack', 'miner', 'blacksmith', 'bandit', 'goblin',
                        'king', 'skeleton', 'warrior', 'commander', 'yellow termite', 'wizard',
-                       'black bat']
+                       'black bat', 'red bird', 'butterfly', 'chicken', 'blackSpider']
         directions = ['up', 'down', 'left', 'right']
         
         for entity_type in entity_types:

@@ -695,11 +695,6 @@ class NpcAiMixin:
                         if item_name == 'gold' and player_adjacent:
                             self.process_npc_trade(entity, entity_id, count)
                         
-                        # 10% chance to log pickup
-                        if random.random() < 0.10:
-                            name_str = entity.name if entity.name else entity.type
-                            print(f"{name_str} picked up {count} {item_name}(s) at [{screen_key}]")
-                    
                     # Clear dropped items at this position
                     del self.dropped_items[screen_key][pos_key_str]
                 
@@ -723,14 +718,13 @@ class NpcAiMixin:
                         if item_name == 'gold' and player_adjacent:
                             self.process_npc_trade(entity, entity_id, count)
                         
-                        # 10% chance to log pickup
-                        if random.random() < 0.10:
-                            name_str = entity.name if entity.name else entity.type
-                            print(f"{name_str} picked up {count} {item_name}(s) at [{screen_key}]")
-                    
                     # Clear dropped items at this position
                     del self.dropped_items[screen_key][pos_key_tuple]
-        
+
+        # Flying entities occasionally drop one inventory item over ground cells
+        if entity.props.get('flying', False):
+            self._try_flying_item_drop(entity, screen_key)
+
         # ========================================================================
         # OLD TARGET_PRIORITY AI SYSTEM - DISABLED
         # This entire section has been replaced by the state machine above
@@ -1098,7 +1092,6 @@ class NpcAiMixin:
                         entity.health = entity.max_health
                         entity.strength = entity.props['strength'] * entity.level
                         self.assign_warrior_faction(entity, screen_key)
-                        print(f"{old_name} ({old_type} L{entity.level}) became a WARRIOR!")
                         aggressiveness = entity.aggressiveness
                         flee_chance = getattr(entity, 'flee_chance', 0.05)
                         combat_chance = getattr(entity, 'combat_chance', 0.95)
@@ -1633,6 +1626,42 @@ class NpcAiMixin:
         
         return 'wander', None
     
+    def _try_flying_item_drop(self, entity, screen_key):
+        """Flying entities (birds, bats) have a small chance to drop one item when
+        positioned over a non-structure ground cell.  ~4% per tick when carrying items."""
+        if not entity.inventory:
+            return
+        # Only drop on passable, non-structure ground cells
+        if screen_key not in self.screens:
+            return
+        try:
+            current_cell = self.screens[screen_key]['grid'][entity.y][entity.x]
+        except (IndexError, KeyError):
+            return
+        cell_props = CELL_TYPES.get(current_cell, {})
+        if cell_props.get('solid', False):
+            return
+        # Exclude structure cells (house, camp, well, etc.)
+        _structure_cells = {'HOUSE', 'CAMP', 'WELL', 'STONE_HOUSE', 'FORGE',
+                            'FLOOR_WOOD', 'WALL', 'CHEST', 'STAIRS_DOWN', 'STAIRS_UP'}
+        if current_cell in _structure_cells:
+            return
+        if random.random() >= 0.04:
+            return
+        # Pick a random item to drop
+        item_name = random.choice(list(entity.inventory.keys()))
+        entity.inventory[item_name] -= 1
+        if entity.inventory[item_name] <= 0:
+            del entity.inventory[item_name]
+        pos_key = (entity.x, entity.y)
+        if screen_key not in self.dropped_items:
+            self.dropped_items[screen_key] = {}
+        if pos_key not in self.dropped_items[screen_key]:
+            self.dropped_items[screen_key][pos_key] = {}
+        self.dropped_items[screen_key][pos_key][item_name] = (
+            self.dropped_items[screen_key][pos_key].get(item_name, 0) + 1
+        )
+
     def find_and_attack_enemy(self, entity_id, entity):
         """Find enemies and attack them"""
         # Only skip combat if actively fleeing
@@ -1870,7 +1899,6 @@ class NpcAiMixin:
                                 heal_amount = entity.max_health * 0.25
                                 entity.health = min(entity.max_health, entity.health + heal_amount)
                                 entity.hunger = min(entity.max_hunger, entity.hunger + 50)
-                                print(f"{entity.name or entity.type} consumed meat and healed {int(heal_amount)} HP!")
 
                         # Check if enemy died and handle king promotion
                         if not closest_enemy.is_alive():
@@ -1887,7 +1915,6 @@ class NpcAiMixin:
                                 entity.hunger = entity.max_hunger
                                 entity.thirst = entity.max_thirst
 
-                                print(f"{old_name} slew a KING and claims the throne of {entity.faction}!")
             else:
                 # Not adjacent - movement handled by state machine (targeting state)
                 # DO NOT set states here
@@ -2194,8 +2221,6 @@ class NpcAiMixin:
                             screen['grid'][check_y][check_x] = 'DIRT'  # Trees decay to dirt when termites destroy them
                             # Termite eats the tree
                             entity.hunger = min(entity.max_hunger, entity.hunger + 30)
-                            if random.random() < 0.1:
-                                print(f"Termite consumed a tree at [{screen_key}]")
                         return  # Only one action per update
                     
                     # Attack wooden structures - medium chance
@@ -2206,16 +2231,12 @@ class NpcAiMixin:
                         if cell == 'CAMP' and random.random() < 0.08:  # 8% chance
                             screen['grid'][check_y][check_x] = 'GRASS'
                             entity.hunger = min(entity.max_hunger, entity.hunger + 15)
-                            if random.random() < 0.2:
-                                print(f"Termite destroyed a camp at [{screen_key}]")
                         elif cell == 'HOUSE' and random.random() < 0.03:  # 3% chance
                             screen['grid'][check_y][check_x] = 'GRASS'
                             entity.hunger = min(entity.max_hunger, entity.hunger + 20)
-                            print(f"Termite destroyed a house at [{screen_key}]!")
                         elif cell == 'STONE_HOUSE' and random.random() < 0.00002:  # 0.002% — stone heavily resists termites (10x lower than HOUSE rate)
                             screen['grid'][check_y][check_x] = 'GRASS'
                             entity.hunger = min(entity.max_hunger, entity.hunger + 10)
-                            print(f"Termite destroyed a stone house at [{screen_key}]!")
                         return  # Only one action per update
 
             # Priority 2: Move toward nearest tree or structure

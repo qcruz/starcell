@@ -539,7 +539,111 @@ ENTITY_TYPES = {
             'attack_chance': 0.30,
             'target_types': ['hostile']  # Attacks other NPCs
         }
-    }
+    },
+    'RED_BIRD': {
+        'color': (200, 60, 40),
+        'symbol': 'r',
+        'sprite_name': 'red bird',
+        'max_health': 8,
+        'max_hunger': 60,
+        'max_thirst': 60,
+        'strength': 2,
+        'speed': 1.8,
+        'food_sources': ['GRASS', 'FLOWER'],
+        'water_sources': ['WATER', 'LAKE'],
+        'hostile': False,
+        'edible': True,
+        'flying': True,
+        'drops': [
+            {'item': 'meat', 'amount': 1, 'chance': 0.5},
+            {'item': 'bones', 'amount': 1, 'chance': 0.2}
+        ],
+        'ai_params': {
+            'aggressiveness': 0.02,
+            'passiveness': 0.60,
+            'idleness': 0.30,
+            'flee_chance': 0.95,
+            'combat_chance': 0.05,
+            'target_types': ['food', 'water']
+        }
+    },
+    'BUTTERFLY': {
+        'color': (180, 120, 220),
+        'symbol': 'u',
+        'sprite_name': 'butterfly',
+        'max_health': 4,
+        'max_hunger': 40,
+        'max_thirst': 40,
+        'strength': 1,
+        'speed': 1.4,
+        'food_sources': ['FLOWER', 'GRASS'],
+        'water_sources': ['WATER'],
+        'hostile': False,
+        'edible': False,
+        'flying': True,
+        'drops': [],
+        'ai_params': {
+            'aggressiveness': 0.01,
+            'passiveness': 0.70,
+            'idleness': 0.25,
+            'flee_chance': 0.99,
+            'combat_chance': 0.01,
+            'target_types': ['food', 'water']
+        }
+    },
+    'CHICKEN': {
+        'color': (240, 220, 160),
+        'symbol': 'c',
+        'sprite_name': 'chicken',
+        'max_health': 15,
+        'max_hunger': 80,
+        'max_thirst': 80,
+        'strength': 3,
+        'speed': 0.9,
+        'food_sources': ['GRASS', 'CARROT1', 'CARROT2', 'CARROT3'],
+        'water_sources': ['WATER', 'WELL'],
+        'hostile': False,
+        'edible': True,
+        'drops': [
+            {'item': 'meat', 'amount': 1, 'chance': 0.7},
+            {'item': 'bones', 'amount': 1, 'chance': 0.2}
+        ],
+        'ai_params': {
+            'aggressiveness': 0.02,
+            'passiveness': 0.65,
+            'idleness': 0.25,
+            'flee_chance': 0.90,
+            'combat_chance': 0.10,
+            'target_types': ['food', 'water']
+        }
+    },
+    'BLACK_SPIDER': {
+        'color': (20, 20, 30),
+        'symbol': 's',
+        'sprite_name': 'blackSpider',
+        'max_health': 30,
+        'max_hunger': 100,
+        'max_thirst': 100,
+        'strength': 15,
+        'speed': 1.5,
+        'food_sources': ['SHEEP', 'DEER', 'CHICKEN'],
+        'water_sources': ['WATER'],
+        'hostile': True,
+        'edible': False,
+        'cave_spawner': True,
+        'drops': [
+            {'item': 'bones', 'amount': 1, 'chance': 0.4}
+        ],
+        'ai_params': {
+            'aggressiveness': 0.80,
+            'passiveness': 0.10,
+            'idleness': 0.05,
+            'flee_chance': 0.20,
+            'combat_chance': 0.80,
+            'attack_chance': 0.60,
+            'target_types': ['food', 'water', 'hostile']
+        }
+    },
 
 }
 
@@ -561,10 +665,17 @@ NPC_QUEST_FOCUS_DEFAULT = {
     'COMMANDER':  'combat_hostile',
     'KING':       'combat_hostile',
     # Hostile types: default to all-combat
-    'WOLF':       'combat_all',
-    'GOBLIN':     'combat_all',
-    'BANDIT':     'combat_all',
-    'SKELETON':   'combat_all',
+    'WOLF':         'combat_all',
+    'GOBLIN':       'combat_all',
+    'BANDIT':       'combat_all',
+    'SKELETON':     'combat_all',
+    'BLACK_SPIDER': 'combat_all',
+    # Passive animals
+    'SHEEP':      'exploring',
+    'DEER':       'exploring',
+    'RED_BIRD':   'exploring',
+    'BUTTERFLY':  'exploring',
+    'CHICKEN':    'exploring',
 }
 
 # Per-level-up unlock probabilities

@@ -77,7 +77,10 @@ class SpawningMixin:
                 ('GUARD', 1.0, 1, 2),     # Always spawn
                 ('BANDIT', 0.2, 0, 1),
                 ('GOBLIN', 0.3, 0, 2),
-                ('TERMITE', 0.4, 0, 2)    # Termites love forests (trees)
+                ('TERMITE', 0.4, 0, 2),   # Termites love forests (trees)
+                ('RED_BIRD', 0.6, 1, 3),
+                ('BUTTERFLY', 0.5, 0, 2),
+                ('BLACK_SPIDER', 0.3, 0, 2),
             ],
             'PLAINS': [
                 ('SHEEP', 0.6, 1, 3),
@@ -91,7 +94,10 @@ class SpawningMixin:
                 ('GUARD', 1.0, 1, 2),     # Always spawn
                 ('BANDIT', 0.2, 0, 1),
                 ('GOBLIN', 0.2, 0, 1),
-                ('TERMITE', 0.2, 0, 1)    # Some termites in plains
+                ('TERMITE', 0.2, 0, 1),   # Some termites in plains
+                ('CHICKEN', 0.7, 1, 3),
+                ('RED_BIRD', 0.5, 0, 2),
+                ('BUTTERFLY', 0.6, 1, 3),
             ],
             'DESERT': [
                 ('SHEEP', 0.2, 0, 1),
@@ -105,7 +111,8 @@ class SpawningMixin:
                 ('MINER', 0.5, 0, 2),
                 ('TRADER', 1.0, 1, 2),    # Always spawn
                 ('BLACKSMITH', 0.4, 0, 1),
-                ('GUARD', 1.0, 1, 2)      # Always spawn
+                ('GUARD', 1.0, 1, 2),     # Always spawn
+                ('BLACK_SPIDER', 0.4, 0, 2),
             ],
             'MOUNTAINS': [
                 ('WOLF', 0.6, 1, 3),
@@ -119,7 +126,9 @@ class SpawningMixin:
                 ('MINER', 0.7, 1, 3),
                 ('TRADER', 1.0, 1, 2),    # Always spawn
                 ('BLACKSMITH', 0.6, 0, 1),
-                ('GUARD', 1.0, 1, 2)      # Always spawn
+                ('GUARD', 1.0, 1, 2),     # Always spawn
+                ('BLACK_SPIDER', 0.5, 0, 2),
+                ('RED_BIRD', 0.3, 0, 1),
             ],
             'LAKE': []                    # No spawns in lake zones
         }
@@ -185,8 +194,6 @@ class SpawningMixin:
                         self.entities[entity_id] = entity
                         self.screen_entities[screen_key].append(entity_id)
 
-                        if random.random() < 0.1:
-                            print(f"{entity_type} has arrived at [{screen_key}]")
                         break
                 attempts += 1
 
@@ -217,10 +224,9 @@ class SpawningMixin:
                                 self.screen_entities[screen_key] = []
                             self.screen_entities[screen_key].append(entity_id)
 
-                            print(f"A skeleton rises from the bones!")
                             return entity_id
 
-        print("No space to spawn skeleton!")
+        return None  # No space to spawn skeleton
         return None
 
     def spawn_quest_entity(self, entity_type, screen_x, screen_y, x, y):
@@ -359,7 +365,6 @@ class SpawningMixin:
 
         self.zone_has_hostiles[screen_key] = True
 
-        print(f"RAID! {raid_count} {raid_type}s attack zone [{screen_key}]!")
 
     def spawn_hidden_cave(self, screen_key):
         """Spawn a hidden cave in the zone, returns (x, y) or None"""
@@ -382,7 +387,6 @@ class SpawningMixin:
         cave_x, cave_y = random.choice(valid_positions)
         grid[cave_y][cave_x] = 'HIDDEN_CAVE'
 
-        print(f"A hidden cave appears at ({cave_x}, {cave_y}) in [{screen_key}]!")
         return (cave_x, cave_y)
 
     def spawn_raid_group(self, screen_key, entity_type, count, cave_pos):
@@ -433,7 +437,6 @@ class SpawningMixin:
 
             spawned += 1
 
-        print(f"Spawned {spawned} {entity_type}s at ({center_x}, {center_y})")
 
     # -------------------------------------------------------------------------
     # Zone threat tracking
@@ -457,7 +460,6 @@ class SpawningMixin:
 
         if not has_hostiles:
             self.zone_has_hostiles[screen_key] = False
-            print(f"Zone [{screen_key}] cleared of hostiles!")
 
     def check_zone_threats(self, screen_key):
         """Efficiently check zone for hostiles and faction conflicts - called once per zone update"""
@@ -668,7 +670,6 @@ class SpawningMixin:
 
             self.zone_has_hostiles[screen_key] = True
 
-            print(f"A skeleton rises from the darkness in [{screen_key}]!")
 
     # -------------------------------------------------------------------------
     # Termite spawning
@@ -763,7 +764,6 @@ class SpawningMixin:
 
             self.zone_has_hostiles[screen_key] = True
 
-            print(f"A termite appears near trees in [{screen_key}]!")
 
     # -------------------------------------------------------------------------
     # Continuous zone population maintenance
@@ -952,8 +952,7 @@ class SpawningMixin:
                 self.screen_entities[screen_key].append(entity_id)
 
                 if random.random() < 0.05:
-                    print(f"{entity_type} arrived at [{screen_key}]")
-                return True
+                    return True
 
         return False
 
@@ -1023,7 +1022,7 @@ class SpawningMixin:
             self.screen_entities[subscreen_key] = []
 
         if evacuated_count > 0:
-            print(f"  Evacuated {evacuated_count} entities from destroyed structure")
+            pass  # evacuation complete
 
     def process_house_destruction(self, x, y, screen_key):
         """Handle house destruction with proper NPC/item evacuation"""
