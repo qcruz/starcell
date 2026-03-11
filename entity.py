@@ -518,7 +518,12 @@ class Entity:
         is_flying_idle = (self.props.get('flying', False) and not is_moving
                           and not (hasattr(self, 'in_structure') and self.in_structure))
 
-        if is_moving or is_flying_idle:
+        # Hostile entities animate while in close-range combat stance (facing player
+        # without physically moving — dist==1 combat loop updates facing each tick)
+        is_combat_idle = (getattr(self, 'in_combat', False) and not is_moving
+                          and self.props.get('hostile', False))
+
+        if is_moving or is_flying_idle or is_combat_idle:
             self.anim_timer += 1
             if self.anim_timer >= TICKS_PER_FRAME:
                 if self.anim_frame == '1':
