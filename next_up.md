@@ -25,16 +25,16 @@ double.
 - [ ] Add ambient rain sound during rain events — play rain_sound loop when is_raining; stop when false
 - [ ] Add do_shove() — push entity in facing direction one cell; blocked by solid cells
 - [ ] Add handle_npc_follow_interaction() — Shift+F on inspected NPC; 50% recruit chance
+- [ ] Add buried treasure — shovel digs soft cells; chance to uncover cached items; Detect spell reveals locations
 - [ ] Boost night-time hostile spawn rate — BAT, GOBLIN, SKELETON have higher spawn weight at night
 - [ ] Add spell energy cost — spells draw from energy pool; drain health if insufficient
 - [ ] Rain affects crop growth — active rain reduces crop decay rate; speeds grass/tree spread
-- [ ] Fix combat follow-through — NPCs complete attack sequence before re-evaluating target; fixes oscillation at range threshold
 - [ ] Add poisoned status effect — HP drain per tick; cured by antidote or milk
 - [ ] Add burning status effect — HP drain per tick; spreads to adjacent flammable cells
-- [ ] Add frozen status effect — immobile for duration; shatter for bonus damage
+- [ ] Add cold status effect — immobile for duration; 
 - [ ] Add stunned status effect?
 - [ ] Remove dead debug prints outside autopilot.py and debug/
-- [ ] Add gift giving — player offers item to NPC to increase favor; uses preferred gift tables
+- [ ] Add gift giving — player offers item to NPC to increase favor; 
 - [ ] Add per-NPC favor system — -100 to 100 favorability score; reduces follower energy cost
 - [ ] Add NPC preferred gift tables — each NPC type lists preferred items for favor bonus
 - [ ] Add energy cost for active followers — each follower reduces max energy by 30% of their max; recalculates on add/remove
@@ -86,8 +86,6 @@ Post the item in chat before starting. Wait for a clear "go ahead." These introd
 - [ ] Add actions inventory tab (R key) — shove and other contextual action items
 - [ ] Add equipment panel UI — Weapon, Off-hand, Armor, Ring ×2, Amulet slots; passive stat bonuses
 - [ ] Add world map view — zoomed-out explored zone overlay with names and faction colors
-- [ ] Add recipe book UI — tracks known and undiscovered recipes
-- [ ] Add bestiary — logs defeated entity types with flavor text, stats, and weaknesses
 - [ ] Add achievement system — milestone tracking; HUD notification on unlock
 
 ### New World and Game Systems
@@ -103,6 +101,7 @@ Post the item in chat before starting. Wait for a clear "go ahead." These introd
 - [ ] Add cooking station and basic recipes — cooking pot→food; alchemy table→potions
 - [ ] Add armor types — cloth, leather, chain, plate; defense values and entity compatibility
 - [ ] Add bounty system — attacking peaceful NPCs triggers bounty; guards pursue across zones; clear at temple or bribe
+- [ ] Add item value system - items automatically valued based on inverse total count in game? Distance from next instance?
 - [ ] Add hostile/peaceful reputation score — -100 to 100 global score; updated by actions; affects faction reactions
 - [ ] Add event witness system — NPCs near player events gain/lose favor; spreads via proximity
 - [ ] Add multi-floor structures — dungeons and towers with staircase-connected floors; each floor separate structure
