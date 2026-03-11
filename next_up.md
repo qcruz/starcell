@@ -9,11 +9,16 @@
 
 Small additions using existing systems. No new entity types, structure types, or major UI systems. One commit per item, ordered smallest to largest.
 
-- [ ] Remove dead debug prints outside autopilot.py and debug/
+- [ ]  give sand cells a slightly higher chance to       
+change to water cells during rain. Whatever the rate is for dirt, it should be  
+double.
+- [ ] More Keeper types based on range - Keeper type 1 (guard) - stand directly next to keeper target, type 2 small area, type 3 full zone
+- [ ] Add specific cells, items, and NPCs can be keeper target - keeper moves to keeper target when out of range
+- [ ] Add NPC quest assignment - player can assign NPCs quests from their quest inventory.
 - [ ] Add NPC level display in inspect panel
 - [ ] Add item level display in inventory UI — show level badge on leveled items in all tabs
 - [ ] Add faction standing display when inspecting NPC — show favor score and faction label
-- [ ] Wire L key to dispatch selected magic spell; wire Space to execute selected action
+- [ ] Make actions default on spawn - 'attack', 'block' - allow player to collect resources without tools (low success chance)
 - [ ] Add cast_rain_spell() and cast_day_spell() toggle methods
 - [ ] Complete NPC combat creature sound mapping — verify WOLF, GOBLIN, BAT, SKELETON, BANDIT route through _ENTITY_SOUND
 - [ ] Add wolf/goblin ambient presence sounds — WOLF growl every ~300 ticks within 6 cells; GOBLIN every ~200 ticks
@@ -27,7 +32,8 @@ Small additions using existing systems. No new entity types, structure types, or
 - [ ] Add poisoned status effect — HP drain per tick; cured by antidote or milk
 - [ ] Add burning status effect — HP drain per tick; spreads to adjacent flammable cells
 - [ ] Add frozen status effect — immobile for duration; shatter for bonus damage
-- [ ] Add stunned status effect — skip next action
+- [ ] Add stunned status effect?
+- [ ] Remove dead debug prints outside autopilot.py and debug/
 - [ ] Add gift giving — player offers item to NPC to increase favor; uses preferred gift tables
 - [ ] Add per-NPC favor system — -100 to 100 favorability score; reduces follower energy cost
 - [ ] Add NPC preferred gift tables — each NPC type lists preferred items for favor bonus
@@ -86,10 +92,8 @@ Post the item in chat before starting. Wait for a clear "go ahead." These introd
 - [ ] Add achievement system — milestone tracking; HUD notification on unlock
 
 ### New World and Game Systems
-- [ ] Add dungeon keys and locks — small key item, locked door cell, boss key item
-- [ ] Add dungeon traps — floor spike cell, arrow trap cell; pressure plate trigger
-- [ ] Add stealth/crouch mode — reduced detection radius; sneak attack damage bonus on first hit
-- [ ] Add basic fishing — rod item; fish item by water cells; fish variety by biome and season
+- [ ] Expand Keeper system - keeper types include different distance ranges and ties to cell, NPC, or item.
+- [ ] Add quest assignment - some NPCs can be given quest from player quest inventory, will then pursue quest target
 - [ ] Add foraging spawns — wild mushrooms, berries, herbs in forest and cave zones; biome rules
 - [ ] Add NPC daily schedules — field at dawn, tavern at evening, temple on rest days
 - [ ] Add sheep/cow/chicken production — timed output: wool, milk, eggs; needs food/water
@@ -120,6 +124,10 @@ Post the item in chat before starting. Wait for a clear "go ahead." These introd
 - [ ] Add thrown weapons — rocks, knives, spear; knockback on hit
 - [ ] Add faction alt naming — goblin groups→warbands; criminal groups→guilds; animal groups→packs; religious groups→orders
 - [ ] Add lore_note item type — found in ruins and dungeons; readable; contains generated zone history text
+- [ ] Add dungeon keys and locks — small key item, locked door cell, boss key item
+- [ ] Add dungeon traps — floor spike cell, arrow trap cell; pressure plate trigger
+- [ ] Add stealth/crouch mode — reduced detection radius; sneak attack damage bonus on first hit
+- [ ] Add basic fishing — rod item; fish item by water cells; fish variety by biome and season
 
 ---
 
