@@ -55,8 +55,8 @@ class CombatMixin:
         if not weapon or 'damage' not in ITEMS.get(weapon, {}):
             return False  # No weapon equipped
 
-        # Attack cooldown (~0.33 seconds / 3 attacks per second)
-        if self.tick - self.player.get('last_attack_tick', 0) < 20:
+        # Attack cooldown (1 second)
+        if self.tick - self.player.get('last_attack_tick', 0) < 60:
             return False
 
         self.player['last_attack_tick'] = self.tick
