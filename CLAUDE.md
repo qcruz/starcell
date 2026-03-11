@@ -102,7 +102,7 @@ python3 main.py   # runs on dev-observation branch
 Session ends automatically (2–3 min timer). Review `debug/bug_catcher.log` and update `debug/bug_report.md` with findings. Document as `Session N` with CONFIRMED / OBSERVATION / BUG entries.
 
 **Observation run process:**
-1. Choose 2–3 features from roadmap randomly
+1. Choose 2–3 features from nextup randomly
 2. Update the Watchdog as needed to sample game data relevant to those features
 3. Set a run time limit long enough to observe those features
 4. Run a small number of sessions focused on observing those features
