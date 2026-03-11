@@ -58,7 +58,6 @@ class FactionsMixin:
 
         if entity_id:
             self.factions[new_faction] = {'warriors': [entity_id], 'zones': set(), 'hostile': True}
-            print(f"{entity.name} formed the {new_faction} hostile faction!")
 
     def assign_warrior_faction(self, warrior, screen_key):
         """Assign faction to a new warrior based on zone warriors"""

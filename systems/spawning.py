@@ -823,25 +823,29 @@ class SpawningMixin:
                             ('TRADER', 0.10), ('GUARD', 0.10),
                             ('LUMBERJACK', 0.20), ('FARMER', 0.18),
                             ('DEER', 0.15), ('WOLF', 0.10),
-                            ('SHEEP', 0.08), ('GOBLIN', 0.06), ('BANDIT', 0.03)
+                            ('SHEEP', 0.08), ('GOBLIN', 0.06), ('BANDIT', 0.03),
+                            ('RED_BIRD', 0.12), ('BUTTERFLY', 0.10), ('BLACK_SPIDER', 0.06)
                         ],
                         'PLAINS': [
                             ('TRADER', 0.10), ('GUARD', 0.10),
                             ('FARMER', 0.25), ('SHEEP', 0.18),
                             ('DEER', 0.12), ('LUMBERJACK', 0.08),
-                            ('WOLF', 0.08), ('GOBLIN', 0.06), ('BANDIT', 0.03)
+                            ('WOLF', 0.08), ('GOBLIN', 0.06), ('BANDIT', 0.03),
+                            ('CHICKEN', 0.14), ('RED_BIRD', 0.10), ('BUTTERFLY', 0.12)
                         ],
                         'DESERT': [
                             ('TRADER', 0.10), ('GUARD', 0.10),
                             ('GOBLIN', 0.20), ('BANDIT', 0.15),
                             ('MINER', 0.18), ('FARMER', 0.10),
-                            ('WOLF', 0.08), ('DEER', 0.06), ('SHEEP', 0.03)
+                            ('WOLF', 0.08), ('DEER', 0.06), ('SHEEP', 0.03),
+                            ('BLACK_SPIDER', 0.08)
                         ],
                         'MOUNTAINS': [
                             ('TRADER', 0.10), ('GUARD', 0.10),
                             ('MINER', 0.22), ('GOBLIN', 0.18),
                             ('WOLF', 0.15), ('LUMBERJACK', 0.10),
-                            ('BANDIT', 0.08), ('DEER', 0.04), ('SHEEP', 0.03)
+                            ('BANDIT', 0.08), ('DEER', 0.04), ('SHEEP', 0.03),
+                            ('BLACK_SPIDER', 0.08), ('RED_BIRD', 0.06)
                         ]
                     }
 
@@ -879,25 +883,29 @@ class SpawningMixin:
                 ('DEER', 0.18), ('WOLF', 0.10), ('SHEEP', 0.05),
                 ('FARMER', 0.12), ('LUMBERJACK', 0.15),
                 ('TRADER', 0.15), ('GUARD', 0.15),
-                ('BANDIT', 0.05), ('GOBLIN', 0.05)
+                ('BANDIT', 0.05), ('GOBLIN', 0.05),
+                ('RED_BIRD', 0.12), ('BUTTERFLY', 0.10), ('BLACK_SPIDER', 0.06)
             ],
             'PLAINS': [
                 ('SHEEP', 0.20), ('DEER', 0.12), ('WOLF', 0.05),
                 ('FARMER', 0.18), ('LUMBERJACK', 0.05),
                 ('TRADER', 0.15), ('GUARD', 0.15),
-                ('BANDIT', 0.05), ('GOBLIN', 0.05)
+                ('BANDIT', 0.05), ('GOBLIN', 0.05),
+                ('CHICKEN', 0.14), ('RED_BIRD', 0.10), ('BUTTERFLY', 0.12)
             ],
             'DESERT': [
                 ('GOBLIN', 0.20), ('BANDIT', 0.14), ('MINER', 0.10),
                 ('SHEEP', 0.05), ('DEER', 0.05), ('WOLF', 0.05),
                 ('FARMER', 0.07), ('LUMBERJACK', 0.04),
-                ('TRADER', 0.18), ('GUARD', 0.12)
+                ('TRADER', 0.18), ('GUARD', 0.12),
+                ('BLACK_SPIDER', 0.08)
             ],
             'MOUNTAINS': [
                 ('WOLF', 0.18), ('GOBLIN', 0.16), ('MINER', 0.14),
                 ('BANDIT', 0.09), ('DEER', 0.07), ('SHEEP', 0.04),
                 ('FARMER', 0.03), ('LUMBERJACK', 0.09),
-                ('TRADER', 0.12), ('GUARD', 0.08)
+                ('TRADER', 0.12), ('GUARD', 0.08),
+                ('BLACK_SPIDER', 0.08), ('RED_BIRD', 0.06)
             ]
         }
 

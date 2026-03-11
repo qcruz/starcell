@@ -638,7 +638,6 @@ class NpcAiMovementMixin:
                 entity.target_stuck_counter = 0
                 entity.last_target_position = None
 
-                print(f"{entity.type} stuck on target {current_target}, added to memory and selecting new target")
                 return
         else:
             # Target changed - reset counter
@@ -781,7 +780,6 @@ class NpcAiMovementMixin:
                     entity.stuck_counter += 1
             else:
                 # Invalid move detected - don't execute it
-                print(f"WARNING: Blocked invalid move for {entity.type}: ({entity.x},{entity.y}) -> ({new_x},{new_y})")
                 entity.stuck_counter += 1
 
     def seek_zone_exit(self, entity, entity_id=None):
@@ -929,8 +927,6 @@ class NpcAiMovementMixin:
         entity.world_x = float(entity.x)
         entity.world_y = float(entity.y)
 
-        if entity.name:
-            print(f"{entity.name} entered {entrance_type}")
 
     def npc_exit_structure(self, entity):
         """Move NPC back to overworld from structure"""
@@ -1008,8 +1004,6 @@ class NpcAiMovementMixin:
                                     if len(entity.memory_lane) < entity.max_memory_length:
                                         entity.memory_lane.append(mem_cell)
 
-                            if entity.name:
-                                print(f"{entity.name} exited to overworld")
                             return
 
         entity.world_x = float(entity.x)
@@ -1362,7 +1356,6 @@ class NpcAiMovementMixin:
             self.screen_entities[screen_key] = []
         self.screen_entities[screen_key].append(new_id)
 
-        print(f"[Split] {base_type}_double split into two {base_type}s at zone {screen_key}")
         return True
 
     def teleport_follower_to_player(self, entity_id, entity):
@@ -1608,15 +1601,10 @@ class NpcAiMovementMixin:
         sub_id, sub_dist, sub_door = self.find_hostile_in_connected_structures(entity, screen_key)
         if sub_id is not None and sub_dist < closest_dist:
             entity.target_door = sub_door
-            if debug:
-                print(f"  [FIND_HOSTILE] Subscreen result: {sub_id} via door {sub_door}")
             return sub_id
         else:
             # Clear stale target_door if we're using an overworld target
             entity.target_door = None
-
-        if debug:
-            print(f"  [FIND_HOSTILE] Result: {closest}")
 
         return closest
 

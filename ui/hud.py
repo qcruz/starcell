@@ -308,7 +308,7 @@ class HudMixin:
                         continue
 
                     # BugCatcher: log every frame for tracked entity types + autopilot proxy
-                    _STUTTER_TRACKED = ('BAT', 'BAT_double', 'WOLF', 'WOLF_double')
+                    _STUTTER_TRACKED = ('BAT', 'BAT_double', 'WOLF', 'WOLF_double', 'BLACK_SPIDER')
                     is_proxy = (entity_id == getattr(self, 'autopilot_proxy_id', None))
                     if entity.type in _STUTTER_TRACKED or is_proxy:
                         self.bug_catcher.log_bat_state(self.tick, entity_id, entity, screen_key)
