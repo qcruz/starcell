@@ -366,6 +366,7 @@ class NpcAiMixin:
                             entity.current_target = None
                             entity.ai_state       = 'wandering'
                             entity.ai_state_timer = 2
+                            self._try_complete_assigned_quest(entity)
                         elif entity.target_type == 'food':
                             # Eat food — use behavior_config actions or direct consumption
                             behavior_config = entity.props.get('behavior_config')
@@ -1945,6 +1946,30 @@ class NpcAiMixin:
             
             # Wandering handled by state machine
     
+    def _try_complete_assigned_quest(self, entity):
+        """Remove the front non-base quest from entity.quest_queue and award player 1 XP.
+
+        No-op if the queue is empty, has only the base quest, or the entity type
+        doesn't use the queue system.
+        """
+        queue = getattr(entity, 'quest_queue', None)
+        if not queue or queue[0].get('base', True):
+            return  # Only base quest remaining — nothing to complete
+
+        completed = queue.pop(0)
+        q_name = QUEST_TYPES.get(completed['type'], {}).get('name', completed['type'])
+        npc_name = entity.name if entity.name else entity.type
+
+        # Restore quest_focus to next in queue (always the base quest at minimum)
+        entity.quest_focus = queue[0]['type'] if queue else None
+        entity.assigned_quest = None
+        entity.quest_target = None
+        entity._quest_update_counter = 0
+
+        # Award player XP
+        self.gain_xp(1)
+        print(f"{npc_name} completed [{q_name}]! Player +1 XP.")
+
     def _assign_specific_quest_target(self, entity, screen_key):
         """Pick a specific quest target cell/entity for a 'specific' quest cycle.
         Only called ~20% of the time every 10 AI updates.  Stores result in
@@ -2054,6 +2079,18 @@ class NpcAiMixin:
         #               Every ~10 AI updates, 20% chance to assign a specific target.
         #               Survival needs (extreme hunger/thirst) preempt both modes.
         # ─────────────────────────────────────────────────────────────────────
+        # Initialize quest queue for NPCs that have a base quest (FARMER etc.)
+        if entity.type in NPC_BASE_QUEST and not hasattr(entity, 'quest_queue'):
+            base_qt = NPC_BASE_QUEST[entity.type]
+            entity.quest_queue = [{'type': base_qt, 'base': True, 'slot': None}]
+            if not getattr(entity, 'quest_focus', None):
+                entity.quest_focus = base_qt
+
+        # Sync quest_focus from queue head (queue-managed NPCs only)
+        queue = getattr(entity, 'quest_queue', None)
+        if queue:
+            entity.quest_focus = queue[0]['type']
+
         quest_focus = getattr(entity, 'quest_focus', None)
         if quest_focus and not low_hunger and not low_thirst:
 
@@ -2085,7 +2122,7 @@ class NpcAiMixin:
                         # Close enough — treat as completed, drop back to general
                         entity.quest_target = None
                         entity._quest_update_counter = 0
-                        # Fall through to general / default behavior this cycle
+                        self._try_complete_assigned_quest(entity)
                     else:
                         # Still heading there
                         return 'quest_target'
@@ -2096,11 +2133,13 @@ class NpcAiMixin:
                         if dist <= 2:
                             entity.quest_target = None
                             entity._quest_update_counter = 0
+                            self._try_complete_assigned_quest(entity)
                         else:
                             return 'quest_target'
                     else:
                         entity.quest_target = None
                         entity._quest_update_counter = 0
+                        self._try_complete_assigned_quest(entity)
 
             # GENERAL MODE — every ~10 updates, 20% chance to assign a specific target
             if entity.quest_target is None and entity._quest_update_counter >= 10:

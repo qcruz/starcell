@@ -1455,10 +1455,10 @@ class GameCoreMixin:
     def handle_npc_quest_assign(self):
         """Shift+A while inspecting an NPC: assign the player's selected quest to the NPC.
 
-        Standing quests (FARM, HUNT, etc.) are shared — the NPC gains the quest_focus
-        and the player keeps it.  Special quests (received from NPCs, in npc_quests) are
-        transferred — removed from the player's npc_quests list and stored on the NPC as
-        assigned_quest so their AI can pursue the specific target.
+        For NPCs with a base quest (FARMER etc.) the queue system is used — assigned quests
+        insert at the front of their queue (max NPC_QUEST_QUEUE_MAX) and become the primary
+        target until completed.  Special (transferred) quests are removed from the player's
+        npc_quests list.  For other NPC types the existing single quest_focus path is used.
         """
         npc_id = self.inspected_npc
         if npc_id not in self.entities:
@@ -1475,30 +1475,69 @@ class GameCoreMixin:
                 None,
             )
 
-        if active_special:
-            # Transfer the special quest to this NPC
-            qt = active_special.quest.quest_type
-            q_name = QUEST_TYPES[qt]['name']
+        qt = active_special.quest.quest_type if active_special else self.active_quest
+        if not qt:
+            print("No quest selected to assign.")
+            return
+        q_name = QUEST_TYPES.get(qt, {}).get('name', qt)
+
+        # Queue-based assignment for NPCs with a base quest (FARMER etc.)
+        if entity.type in NPC_BASE_QUEST:
+            # Ensure queue is initialized with base quest
+            if not hasattr(entity, 'quest_queue') or not entity.quest_queue:
+                base_qt = NPC_BASE_QUEST[entity.type]
+                entity.quest_queue = [{'type': base_qt, 'base': True, 'slot': None}]
+
+            # Reject if already at max capacity
+            if len(entity.quest_queue) >= NPC_QUEST_QUEUE_MAX:
+                print(f"Quest queue full for {npc_name} (max {NPC_QUEST_QUEUE_MAX}).")
+                return
+
+            # Reject duplicate quest types already in queue
+            if any(e['type'] == qt for e in entity.quest_queue):
+                print(f"{npc_name} already has a [{q_name}] quest queued.")
+                return
+
+            slot = active_special  # None for standing quests
+            entity.quest_queue.insert(0, {'type': qt, 'base': False, 'slot': slot})
             entity.quest_focus = qt
-            entity.assigned_quest = active_special  # NPC carries the full quest object
             entity.quest_target = None
             entity._quest_update_counter = 0
-            # Remove from player inventory
+
+            # Pre-seed quest_target if the special quest has a known target
+            if slot:
+                q = slot.quest
+                if q.target_entity_id is not None:
+                    entity.quest_target = q.target_entity_id
+                elif q.target_cell is not None:
+                    entity.quest_target = ('cell', q.target_cell[2], q.target_cell[3])
+                entity.assigned_quest = slot
+
+            if active_special:
+                self.npc_quests.remove(active_special)
+                self.active_npc_quest_npc_id = None
+                print(f"Assigned special quest [{q_name}] to {npc_name}. Quest transferred.")
+            else:
+                print(f"Assigned quest [{q_name}] to {npc_name}.")
+            self.sound.on_quest_received()
+            return
+
+        # Fallback for NPC types without a base quest — single quest_focus (existing behavior)
+        if active_special:
+            entity.quest_focus = qt
+            entity.assigned_quest = active_special
+            entity.quest_target = None
+            entity._quest_update_counter = 0
             self.npc_quests.remove(active_special)
             self.active_npc_quest_npc_id = None
             self.sound.on_quest_received()
             print(f"Assigned special quest [{q_name}] to {npc_name}. Quest transferred.")
-        elif self.active_quest:
-            # Share a standing quest — NPC gains the focus, player keeps the quest
-            qt = self.active_quest
-            q_name = QUEST_TYPES[qt]['name']
+        else:
             entity.quest_focus = qt
             entity.quest_target = None
             entity._quest_update_counter = 0
             self.sound.on_quest_received()
             print(f"Assigned quest [{q_name}] to {npc_name}.")
-        else:
-            print("No quest selected to assign.")
 
     def select_inventory_slot(self, slot_index):
         """Select an inventory slot by number (0-9)"""

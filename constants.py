@@ -216,6 +216,14 @@ DESERT_ORE_FORMATION_RATE  = 0.00002  # Stone very rarely yields ore in deserts
 WARRIOR_PROMOTION_CHANCE = 0.60 # 60% chance highest level entity becomes warrior after raid clear
 KEEPER_ASSIGNMENT_RATE = 0.02  # 2% chance per zone update to assign a vacant keeper slot
 
+# NPC quest queue system
+NPC_QUEST_QUEUE_MAX = 3  # Max quests per NPC including base quest
+# Base quest per NPC type — permanent, never removed from queue.
+# Expand this dict when rolling out queue system to other NPC types.
+NPC_BASE_QUEST = {
+    'FARMER': 'FARM',
+}
+
 # Keeper patrol types and their movement radii (Manhattan distance from keeper_target_pos).
 # Type 1 (guard): stands within 1 cell of target — door guard, escort
 # Type 2 (patrol): roams within 5 cells of target — area patrol

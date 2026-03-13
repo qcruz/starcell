@@ -298,9 +298,18 @@ class MenusMixin:
             ktype_label = {1: 'Guard', 2: 'Patrol', 3: 'Zone'}.get(ktype, 'Keeper')
             info_lines.append(f"Keeper ({ktype_label})")
 
-        # Assigned quest focus
-        qfocus = getattr(entity, 'quest_focus', None)
-        if qfocus:
+        # Quest queue (FARMER etc. with queue system)
+        queue = getattr(entity, 'quest_queue', None)
+        if queue:
+            info_lines.append("Quests:")
+            for entry in queue:
+                q_label = QUEST_TYPES.get(entry['type'], {}).get('name', entry['type'])
+                active_marker = '>' if entry['type'] == getattr(entity, 'quest_focus', None) else ' '
+                base_marker = '(base)' if entry.get('base') else ''
+                info_lines.append(f" {active_marker}{q_label}{base_marker}")
+        elif getattr(entity, 'quest_focus', None):
+            # Non-queue NPC: show single quest_focus
+            qfocus = entity.quest_focus
             q_label = QUEST_TYPES.get(qfocus, {}).get('name', qfocus)
             assigned = getattr(entity, 'assigned_quest', None)
             prefix = "Quest*" if assigned else "Quest"
