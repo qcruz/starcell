@@ -682,6 +682,11 @@ class GameCoreMixin:
                 watcher.keeper_target_pos = None
                 self._try_complete_assigned_quest(watcher)
 
+        # Broadcast to player quests targeting this entity
+        for qt, quest in self.quests.items():
+            if getattr(quest, 'target_entity_id', None) == entity_id and quest.status == 'active':
+                quest.clear_target()
+
         # Remove from followers if it was a follower
         if entity_id in self.followers:
             self.followers.remove(entity_id)
