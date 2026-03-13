@@ -15,7 +15,7 @@ double.
 - [x] More Keeper types based on range - Keeper type 1 (guard) - stand directly next to keeper target, type 2 small area, type 3 full zone
 - [x] Add specific cells, items, and NPCs can be keeper target - keeper moves to keeper target when out of range
 - [x] Add NPC quest assignment - player can assign NPCs quests from their quest inventory.
-- [ ] Add NPC level display in inspect panel
+- [x] Add NPC level display in inspect panel
 - [ ] Add item level display in inventory UI — show level badge on leveled items in all tabs
 - [ ] Add faction standing display when inspecting NPC — show favor score and faction label
 - [ ] Make actions default on spawn - 'attack', 'block' - allow player to collect resources without tools (low success chance)

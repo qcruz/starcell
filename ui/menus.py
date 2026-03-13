@@ -294,7 +294,17 @@ class MenusMixin:
 
         # Keeper status
         if getattr(entity, 'keeper', False):
-            info_lines.append("Keeper")
+            ktype = getattr(entity, 'keeper_type', 3)
+            ktype_label = {1: 'Guard', 2: 'Patrol', 3: 'Zone'}.get(ktype, 'Keeper')
+            info_lines.append(f"Keeper ({ktype_label})")
+
+        # Assigned quest focus
+        qfocus = getattr(entity, 'quest_focus', None)
+        if qfocus:
+            q_label = QUEST_TYPES.get(qfocus, {}).get('name', qfocus)
+            assigned = getattr(entity, 'assigned_quest', None)
+            prefix = "Quest*" if assigned else "Quest"
+            info_lines.append(f"{prefix}: {q_label}")
 
         # Faction (if entity has faction)
         if hasattr(entity, 'faction') and entity.faction:
@@ -319,6 +329,8 @@ class MenusMixin:
         else:
             if len(getattr(self, 'npc_quests', [])) < 3:
                 info_lines.append("Shift+Q: Get quest")
+        if self.active_quest or getattr(self, 'active_npc_quest_npc_id', None):
+            info_lines.append("Shift+A: Assign quest")
 
         # Draw each line (no background box)
         for i, line in enumerate(info_lines):
