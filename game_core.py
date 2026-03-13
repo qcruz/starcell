@@ -1054,10 +1054,13 @@ class GameCoreMixin:
                         if not _was_open:
                             self.sound.on_inventory_open()
                     elif event.key == pygame.K_t:
-                        _was_open = 'tools' in self.inventory.open_menus
-                        self.inventory.toggle_menu('tools')
-                        if not _was_open:
-                            self.sound.on_inventory_open()
+                        if (pygame.key.get_mods() & pygame.KMOD_SHIFT) and self.inspected_npc:
+                            self.open_npc_trade_window()
+                        else:
+                            _was_open = 'tools' in self.inventory.open_menus
+                            self.inventory.toggle_menu('tools')
+                            if not _was_open:
+                                self.sound.on_inventory_open()
                     elif event.key == pygame.K_m:
                         _was_open = 'magic' in self.inventory.open_menus
                         self.inventory.toggle_menu('magic')
@@ -1100,9 +1103,6 @@ class GameCoreMixin:
                         self.cycle_inventory_slot(-1)
                     elif event.key == pygame.K_RIGHT and (pygame.key.get_mods() & pygame.KMOD_SHIFT):
                         self.cycle_inventory_slot(1)
-                    elif event.key == pygame.K_t and (pygame.key.get_mods() & pygame.KMOD_SHIFT):
-                        if self.inspected_npc:
-                            self.open_npc_trade_window()
                     elif event.key == pygame.K_a and (pygame.key.get_mods() & pygame.KMOD_SHIFT):
                         if self.inspected_npc:
                             self.handle_npc_quest_assign()
