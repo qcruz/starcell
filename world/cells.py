@@ -342,15 +342,28 @@ class CellsMixin:
         screen = self.screens[key]
         biome = screen.get('biome', 'FOREST')
 
-        rain_multiplier = 1.0
+        # Desert: rare puddles (10% chance per tick to attempt one sand→water conversion).
+        # Gives ~1-2 puddles over a full rain cycle. No grass — rain doesn't green desert.
         if biome == 'DESERT':
-            rain_multiplier = 0.1
-        elif biome == 'MOUNTAINS':
-            rain_multiplier = 0.3
-        elif biome == 'PLAINS':
-            rain_multiplier = 1.2
+            if random.random() < 0.1:
+                x = random.randint(1, GRID_WIDTH - 2)
+                y = random.randint(1, GRID_HEIGHT - 2)
+                cell = screen['grid'][y][x]
+                if cell == 'SAND' and not self.is_cell_enchanted(x, y, key):
+                    if random.random() < 0.6:
+                        screen['grid'][y][x] = 'WATER'
+            return
 
-        water_spawns = int(RAIN_WATER_SPAWNS * rain_multiplier)
+        water_mult = 1.0
+        grass_mult = 1.0
+        if biome == 'MOUNTAINS':
+            water_mult = 0.6
+            grass_mult = 0.3
+        elif biome == 'PLAINS':
+            water_mult = 1.2
+            grass_mult = 1.2
+
+        water_spawns = max(1, int(RAIN_WATER_SPAWNS * water_mult))
         for _ in range(water_spawns):
             x = random.randint(1, GRID_WIDTH - 2)
             y = random.randint(1, GRID_HEIGHT - 2)
@@ -358,11 +371,8 @@ class CellsMixin:
             if cell == 'DIRT' and not self.is_cell_enchanted(x, y, key):
                 if random.random() < 0.3:
                     screen['grid'][y][x] = 'WATER'
-            elif cell == 'SAND' and not self.is_cell_enchanted(x, y, key):
-                if random.random() < 0.6:
-                    screen['grid'][y][x] = 'WATER'
 
-        grass_spawns = int(RAIN_GRASS_SPAWNS * rain_multiplier)
+        grass_spawns = max(1, int(RAIN_GRASS_SPAWNS * grass_mult))
         for _ in range(grass_spawns):
             x = random.randint(1, GRID_WIDTH - 2)
             y = random.randint(1, GRID_HEIGHT - 2)
