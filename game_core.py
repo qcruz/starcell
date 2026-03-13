@@ -963,17 +963,6 @@ class GameCoreMixin:
                         # Apply decay
                         self.set_grid_cell(screen, x, y, cell_info['degrades_to'])
 
-        # Desert rock/ore formation — SAND slowly solidifies into STONE;
-        # existing STONE rarely yields IRON_ORE
-        if screen.get('biome') == 'DESERT':
-            for y in range(1, GRID_HEIGHT - 1):
-                for x in range(1, GRID_WIDTH - 1):
-                    cell = screen['grid'][y][x]
-                    if cell == 'SAND' and random.random() < DESERT_ROCK_FORMATION_RATE:
-                        self.set_grid_cell(screen, x, y, 'STONE')
-                    elif cell == 'STONE' and random.random() < DESERT_ORE_FORMATION_RATE:
-                        self.set_grid_cell(screen, x, y, 'IRON_ORE')
-
         # Track last update
         self.screen_last_update[key] = self.tick
     
@@ -2527,6 +2516,7 @@ class GameCoreMixin:
             pygame.display.flip()
             self.clock.tick(FPS)
         
+        self.bug_catcher.flush()
         pygame.quit()
 
 if __name__ == "__main__":

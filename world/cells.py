@@ -6,7 +6,7 @@ from constants import (
     # Cellular automata rates
     DIRT_TO_GRASS_RATE, GRASS_TO_DIRT_RATE, DIRT_TO_SAND_RATE,
     TREE_GROWTH_RATE, TREE_DECAY_RATE, TREE_CROWD_DECAY_RATE,
-    SAND_RECLAIM_RATE,
+    SAND_RAIN_RECLAIM_RATE, CACTUS_DROUGHT_RATE, TREE_DROUGHT_RATE,
     FLOWER_SPREAD_RATE, FLOWER_DECAY_RATE,
     DEEP_WATER_FORM_RATE, DEEP_WATER_EVAPORATE_RATE,
     WATER_TO_DIRT_RATE, FLOODING_RATE,
@@ -206,9 +206,9 @@ class CellsMixin:
                     if random.random() < min(1.0, TREE_GROWTH_RATE * _growth):
                         new_grid[y][x] = 'TREE1'
 
-                # Sand reclamation (water converts sand back to dirt)
-                elif cell == 'SAND' and total_water >= 1:
-                    if random.random() < min(1.0, SAND_RECLAIM_RATE * _growth):
+                # Sand → Dirt (rain only — puddles sink into soil, forming oasis pockets)
+                elif cell == 'SAND' and total_water >= 1 and self.is_raining:
+                    if random.random() < min(1.0, SAND_RAIN_RECLAIM_RATE * _tp):
                         new_grid[y][x] = 'DIRT'
 
                 # Deep water formation: all 4 cardinal neighbors must be water/deepwater
@@ -243,6 +243,11 @@ class CellsMixin:
                     if random.random() < min(1.0, GRASS_WATER_ABSORB_RATE * _tp):
                         new_grid[y][x] = 'WATER'
 
+                # Tree → Grass (drought — mirrors Cactus drought decay; fires when no water and drought is moderate+)
+                elif cell.startswith('TREE') and total_water == 0 and drought_severity > 0.5:
+                    if random.random() < min(1.0, TREE_DROUGHT_RATE * _decay):
+                        new_grid[y][x] = 'GRASS'
+
                 # Tree → Cobblestone (tree stranded inside a cobblestone road — 5+ of 8 neighbors cobblestone)
                 # High threshold prevents cascade: edge trees are untouched, only truly embedded ones convert
                 elif cell.startswith('TREE') and cobblestone_count >= 5:
@@ -264,6 +269,11 @@ class CellsMixin:
                 elif cell.startswith('TREE') and tree_count >= 1:
                     if random.random() < min(1.0, TREE_CROWD_DECAY_RATE * _decay):
                         new_grid[y][x] = 'GRASS'
+
+                # Cactus → Sand (drought — mirrors tree drought decay in lush biomes)
+                elif cell == 'CACTUS' and total_water == 0 and drought_severity > 0.5:
+                    if random.random() < min(1.0, CACTUS_DROUGHT_RATE * _decay):
+                        new_grid[y][x] = 'SAND'
 
                 # General neighbor-copy: base terrain may adopt a random NSEW neighbor's type
                 if new_grid[y][x] == cell and cell in ('GRASS', 'DIRT', 'SAND', 'WATER'):
@@ -397,10 +407,7 @@ class CellsMixin:
         old_is_night = self.is_night
         self.is_night = self.day_night_timer >= DAY_LENGTH
 
-        if self.is_night and not old_is_night:
-            print("Night falls...")
-        elif not self.is_night and old_is_night:
-            print("Dawn breaks...")
+        if not self.is_night and old_is_night:
             if hasattr(self, 'sound'):
                 self.sound.play_dawn_music()
 
