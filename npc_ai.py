@@ -2039,8 +2039,10 @@ class NpcAiMixin:
                     entity.keeper_target_pos = None
                     self._try_complete_assigned_quest(entity)
             else:
+                # Entity ID no longer in entities dict — treat as gone
                 entity.keeper_target = None
                 entity.keeper_target_pos = None
+                self._try_complete_assigned_quest(entity)
 
         elif kt['type'] == 'item':
             registry = getattr(self, 'item_registry', {})
@@ -2107,12 +2109,23 @@ class NpcAiMixin:
         entity.quest_focus = queue[0]['type'] if queue else None
         entity.assigned_quest = None
         entity.quest_target = None
+        entity.keeper_target = None
+        entity.keeper_target_pos = None
         entity._quest_update_counter = 0
 
         # If back to base quest only, release keeper anchor so NPC roams freely
         has_non_base = any(not e.get('base') for e in queue)
         if not has_non_base:
             entity.keeper = False
+            entity.keeper_type = getattr(entity, '_base_keeper_type', 3)
+
+        # Reset AI state so entity immediately starts acting on the next quest
+        # rather than staying frozen in targeting/idle with a stale current_target
+        entity.ai_state = 'wandering'
+        entity.ai_state_timer = 1
+        entity.current_target = None
+        entity.target_type = None
+        entity.in_combat = False
 
         # Award player XP
         self.gain_xp(1)
