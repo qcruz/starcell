@@ -144,22 +144,25 @@ class MenusMixin:
 
         entity = self.entities[npc_id]
         items = self.trader_display['items']
-        if not items:
-            self.trader_display = None
-            return
 
         tx, ty = self.trader_display['position']
         slot_size = CELL_SIZE
         padding = 4
 
-        # Anchor above the NPC
+        # Anchor above the NPC (minimum 2 rows tall even when empty)
+        row_count = max(len(items), 1)
         ui_x = tx * slot_size
-        ui_y = ty * slot_size - (len(items) + 1) * (slot_size + padding) - 10
+        ui_y = ty * slot_size - (row_count + 1) * (slot_size + padding) - 10
 
         # Header
         npc_name = entity.name if entity.name else entity.type
         header = self.tiny_font.render(f"{npc_name}'s goods (Shift+T to close)", True, COLORS['WHITE'])
         self.screen.blit(header, (ui_x, ui_y - 14))
+
+        if not items:
+            empty_surf = self.tiny_font.render("Nothing to trade.", True, (180, 180, 180))
+            self.screen.blit(empty_surf, (ui_x, ui_y))
+            return
 
         for i, entry in enumerate(items):
             row_y = ui_y + i * (slot_size + padding)

@@ -67,6 +67,11 @@ class NpcAiMixin:
             if not entity.in_combat:
                 return  # Skip AI update - NPC stays still
 
+        # FARMER inventory guarantee: always carry at least 1 carrot for planting
+        if entity.type == 'FARMER':
+            if entity.inventory.get('carrot', 0) < 1:
+                entity.inventory['carrot'] = 1
+
         # UNIFIED AI STATE SYSTEM - Update entity AI state based on parameters
         self.update_entity_ai_state(entity_id, entity)
         
@@ -1354,6 +1359,24 @@ class NpcAiMixin:
                 entity.ai_state_timer = 2
                 return
         
+        # =====================================================================
+        # KEEPER OUT-OF-RANGE CHECK (overrides timer — always evaluated)
+        # If a keeper NPC is outside its target range, immediately enter targeting.
+        # =====================================================================
+        if (getattr(entity, 'keeper', False) and
+                entity.ai_state not in ('combat', 'flee')):
+            ktype = getattr(entity, 'keeper_type', 3)
+            ktarget = getattr(entity, 'keeper_target_pos', None)
+            krange = KEEPER_RANGE.get(ktype)
+            if ktype < 3 and ktarget and krange is not None:
+                dist = abs(entity.x - ktarget[0]) + abs(entity.y - ktarget[1])
+                if dist > krange:
+                    entity.ai_state = 'targeting'
+                    entity.target_type = 'keeper_target'
+                    entity.current_target = (ktarget[0], ktarget[1])
+                    entity.ai_state_timer = 1
+                    return
+
         # =====================================================================
         # TIMER-BASED STATE TRANSITIONS (only when timer expired)
         # =====================================================================

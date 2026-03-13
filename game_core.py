@@ -1565,9 +1565,6 @@ class GameCoreMixin:
 
         # Build item list: only items with count > 0
         items = [(item, count) for item, count in entity.inventory.items() if count > 0]
-        if not items:
-            print(f"{entity.name or entity.type} has nothing to trade.")
-            return
 
         trade_items = []
         for item_name, count in items:
