@@ -138,7 +138,7 @@ class MenusMixin:
             return
 
         npc_id = self.trader_display['entity_id']
-        if npc_id not in self.entities:
+        if npc_id not in self.entities or self.inspected_npc != npc_id:
             self.trader_display = None
             return
 
@@ -368,7 +368,11 @@ class MenusMixin:
         if getattr(entity, 'keeper', False):
             ktype = getattr(entity, 'keeper_type', 3)
             ktype_label = {1: 'Guard', 2: 'Patrol', 3: 'Zone'}.get(ktype, 'Keeper')
-            info_lines.append(f"Keeper ({ktype_label})")
+            ktarget = getattr(entity, 'keeper_target_pos', None)
+            if ktarget:
+                info_lines.append(f"Keeper {ktype_label} @({ktarget[0]},{ktarget[1]})")
+            else:
+                info_lines.append(f"Keeper ({ktype_label})")
 
         # Quest queue (FARMER etc. with queue system)
         queue = getattr(entity, 'quest_queue', None)

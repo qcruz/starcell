@@ -2019,7 +2019,7 @@ class NpcAiMixin:
 
         target = None
 
-        if focus == 'farming':
+        if focus in ('farming', 'FARM'):
             target = self._find_closest_crop(entity, screen_key)
             if target is None and entity.level >= 5:
                 for dsx, dsy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
@@ -2028,18 +2028,18 @@ class NpcAiMixin:
                     if target:
                         break
 
-        elif focus == 'building':
+        elif focus in ('building', 'LUMBER'):
             target = self._find_closest_tree(entity, screen_key)
             if target is None:
                 target = self.find_closest_structure(entity, screen_key)
 
-        elif focus == 'mining':
+        elif focus in ('mining', 'MINE'):
             target = self._find_closest_stone(entity, screen_key)
 
         elif focus == 'crafting':
             target = self.find_closest_structure(entity, screen_key)
 
-        elif focus == 'exploring':
+        elif focus in ('exploring', 'EXPLORE'):
             exits = [
                 (GRID_WIDTH // 2, 1),
                 (GRID_WIDTH // 2, GRID_HEIGHT - 2),
@@ -2049,10 +2049,10 @@ class NpcAiMixin:
             ex, ey = random.choice(exits)
             target = ('cell', ex, ey, 'EXIT')
 
-        elif focus == 'combat_hostile':
+        elif focus in ('combat_hostile', 'HUNT', 'SLAY'):
             target = self.find_closest_hostile_entity(entity, screen_key)
 
-        elif focus == 'combat_all':
+        elif focus in ('combat_all', 'GATHER', 'RESCUE'):
             target = self._find_closest_any_entity(entity, screen_key)
             if target is None:
                 exits = [

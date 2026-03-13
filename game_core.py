@@ -1517,13 +1517,15 @@ class GameCoreMixin:
                     entity.quest_target = ('cell', q.target_cell[2], q.target_cell[3])
                 entity.assigned_quest = slot
 
-            # Quest becomes the keeper target — NPC is anchored to the quest until done
+            # Quest becomes the keeper target — NPC anchors to the quest target once found.
+            # If no target is pre-known (e.g. standing HUNT quest), keeper_target_pos stays
+            # None so the NPC roams freely while _assign_specific_quest_target finds one.
             entity.keeper = True
             entity.keeper_type = 1 if entity.quest_target else 2
             entity.keeper_target_pos = (
                 (entity.quest_target[1], entity.quest_target[2])
                 if isinstance(entity.quest_target, tuple) else
-                (entity.x, entity.y)
+                None
             )
 
             if active_special:
