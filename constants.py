@@ -216,6 +216,25 @@ DESERT_ORE_FORMATION_RATE  = 0.00002  # Stone very rarely yields ore in deserts
 WARRIOR_PROMOTION_CHANCE = 0.60 # 60% chance highest level entity becomes warrior after raid clear
 KEEPER_ASSIGNMENT_RATE = 0.02  # 2% chance per zone update to assign a vacant keeper slot
 
+# Keeper patrol types and their movement radii (Manhattan distance from keeper_target_pos).
+# Type 1 (guard): stands within 1 cell of target — door guard, escort
+# Type 2 (patrol): roams within 5 cells of target — area patrol
+# Type 3 (zone): anchored to zone but no specific target — full-zone roam (default)
+KEEPER_RANGE = {1: 1, 2: 5, 3: None}
+
+# Maps entity type → keeper patrol type.  Defaults to 3 for anything not listed.
+KEEPER_TYPE_BY_ENTITY = {
+    'GUARD':      1,
+    'WARRIOR':    1,
+    'COMMANDER':  1,
+    'BLACKSMITH': 2,
+    'WIZARD':     2,
+    'FARMER':     2,
+    'LUMBERJACK': 2,
+    'MINER':      2,
+    'TRADER':     2,
+}
+
 # Maps entity type → keeper slot name for keeper assignment.
 # KING intentionally omitted — singular, always traveling.
 # All peaceful worker humanoids share one slot so a zone doesn't accumulate one of every type.

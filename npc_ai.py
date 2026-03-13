@@ -295,10 +295,23 @@ class NpcAiMixin:
                             self._try_targeting_zone_cross(entity, entity_id)
             
             elif entity.ai_state == 'wandering':
-                # Random movement with natural pauses
-                # 60% move, 40% stand still for a beat
-                if random.random() < 0.6:
-                    self.wander_entity(entity)
+                # Keeper type 1/2: return to anchor target if out of range
+                ktype = getattr(entity, 'keeper_type', 3)
+                ktarget = getattr(entity, 'keeper_target_pos', None)
+                krange = KEEPER_RANGE.get(ktype)
+                if ktype < 3 and ktarget and krange is not None:
+                    dist = abs(entity.x - ktarget[0]) + abs(entity.y - ktarget[1])
+                    if dist > krange:
+                        self.move_toward_position(entity, ktarget[0], ktarget[1], screen_key)
+                    elif ktype == 2 and random.random() < 0.6:
+                        # Type 2 (patrol): wander freely within range
+                        self.wander_entity(entity)
+                    # Type 1 (guard): hold position when at target
+                else:
+                    # Type 3 or no target: random movement with natural pauses
+                    # 60% move, 40% stand still for a beat
+                    if random.random() < 0.6:
+                        self.wander_entity(entity)
             
             elif entity.ai_state == 'idle':
                 # Stand still - NO MOVEMENT in idle state

@@ -9,11 +9,11 @@
 
 Small additions using existing systems. No new entity types, structure types, or major UI systems. One commit per item, ordered smallest to largest.
 
-- [ ]  give sand cells a slightly higher chance to       
-change to water cells during rain. Whatever the rate is for dirt, it should be  
+- [x]  give sand cells a slightly higher chance to
+change to water cells during rain. Whatever the rate is for dirt, it should be
 double.
-- [ ] More Keeper types based on range - Keeper type 1 (guard) - stand directly next to keeper target, type 2 small area, type 3 full zone
-- [ ] Add specific cells, items, and NPCs can be keeper target - keeper moves to keeper target when out of range
+- [x] More Keeper types based on range - Keeper type 1 (guard) - stand directly next to keeper target, type 2 small area, type 3 full zone
+- [x] Add specific cells, items, and NPCs can be keeper target - keeper moves to keeper target when out of range
 - [ ] Add NPC quest assignment - player can assign NPCs quests from their quest inventory.
 - [ ] Add NPC level display in inspect panel
 - [ ] Add item level display in inventory UI — show level badge on leveled items in all tabs
