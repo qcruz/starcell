@@ -12,10 +12,12 @@ The project owner (@qcruz) handles creative direction: roadmap additions, system
 | Branch | Purpose | Push rules |
 |---|---|---|
 | `main` | Stable release | **Never push without explicit user confirmation** |
-| `dev` | Active development | Push freely after each work session |
+| `dev` | Integration branch | Push after @qcruz reviews and approves Q branch work |
+| `dev-q-updates` | @qcruz personal testing branch | Claude works here by default; @qcruz reviews before merging to dev |
 | `dev-observation` | AUTO_DEBUG headless testing | Push after observation sessions; AUTO_DEBUG controlled by `debug/auto_debug.cfg` (git-ignored) |
 
-**After any coding session:** commit and push to `dev`.
+**Default work branch:** `dev-q-updates`. All feature work and bug fixes land here first.
+**Flow:** `dev-q-updates` → (user reviews) → `dev` → (user tests) → `main`
 **Before observation run:** sync `dev-observation` from `dev` (see Observation Workflow below).
 **Stale branches** (`NPC-behavior-updates`, `autopilot-fixes-and-improvements`, `feature/subscreen-overhaul`): these have been merged into dev. Can be deleted from origin when convenient.
 
@@ -26,11 +28,13 @@ The project owner (@qcruz) handles creative direction: roadmap additions, system
 ```
 1. Read next_up.md → pick the first unchecked Tier 1 item
 2. Read relevant source files → understand current code
-3. Implement → commit to dev
-4. Sync dev-observation and run observation session (see below)
-5. Review debug/bug_report.md → fix confirmed bugs → commit to dev
-6. Periodic: code cleanup session (see Code Cleanup below)
-7. User reviews dev manually → pushes to main when satisfied
+3. Implement → commit to dev-q-updates
+4. @qcruz reviews dev-q-updates manually
+5. When approved: merge dev-q-updates → dev → push
+6. Sync dev-observation from dev and run observation session (see below)
+7. Review debug/bug_report.md → fix confirmed bugs → commit to dev-q-updates
+8. Periodic: code cleanup session (see Code Cleanup below)
+9. @qcruz tests dev → pushes to main when satisfied
 ```
 
 ---

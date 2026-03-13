@@ -70,12 +70,22 @@ Lots of fixes
 ## 2. Branch Structure
 
 ```
-main          ← stable, tested releases only; tagged at milestones
-└── dev       ← integration branch; features merge here when complete
-    └── system/subsystem-name   ← all feature work
+main                ← stable, tested releases only; tagged at milestones
+└── dev             ← integration branch; @qcruz approves merges here
+    └── dev-q-updates   ← @qcruz personal testing layer; Claude's default work branch
+        └── dev-observation ← AUTO_DEBUG headless testing only
 ```
 
-### Naming Convention
+### Default Flow
+All feature work and bug fixes land on `dev-q-updates` first. @qcruz reviews manually before merging to `dev`. `dev` is tested before merging to `main`.
+
+```
+dev-q-updates  →  (review)  →  dev  →  (test)  →  main
+```
+
+### Named Feature Branches
+For larger isolated features, branch off `dev-q-updates` using the convention:
+
 `system/subsystem-specific-work`
 
 Examples:
@@ -84,11 +94,14 @@ Examples:
 - `entities/werewolf`
 - `content/desert-biome-pass`
 
+Merge back to `dev-q-updates` when complete, not directly to `dev`.
+
 ### Branch Lifecycle
-1. Branch off `dev`: `git checkout -b audio/foundation dev`
+1. Work on `dev-q-updates` (or branch off it for isolated features)
 2. Commit small and often while working
-3. When complete and tested, merge back to `dev`
-4. Periodically, when `dev` is stable, merge `dev` → `main` and tag a version
+3. @qcruz reviews `dev-q-updates` manually
+4. When approved, merge `dev-q-updates` → `dev`
+5. Periodically, when `dev` is stable, merge `dev` → `main` and tag a version
 
 ---
 
