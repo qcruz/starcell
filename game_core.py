@@ -981,6 +981,7 @@ class GameCoreMixin:
                 if event.button == 1 and self.state == 'menu':
                     self._handle_menu_click(event.pos)
                 elif event.button == 1 and self.state == 'playing':
+                    self.handle_npc_trade_click(event.pos)
                     self.handle_inventory_click(event.pos)
                     self.handle_quest_ui_click(event.pos)
             
@@ -1099,6 +1100,9 @@ class GameCoreMixin:
                         self.cycle_inventory_slot(-1)
                     elif event.key == pygame.K_RIGHT and (pygame.key.get_mods() & pygame.KMOD_SHIFT):
                         self.cycle_inventory_slot(1)
+                    elif event.key == pygame.K_t and (pygame.key.get_mods() & pygame.KMOD_SHIFT):
+                        if self.inspected_npc:
+                            self.open_npc_trade_window()
                     elif event.key == pygame.K_a and (pygame.key.get_mods() & pygame.KMOD_SHIFT):
                         if self.inspected_npc:
                             self.handle_npc_quest_assign()
@@ -1513,6 +1517,15 @@ class GameCoreMixin:
                     entity.quest_target = ('cell', q.target_cell[2], q.target_cell[3])
                 entity.assigned_quest = slot
 
+            # Quest becomes the keeper target — NPC is anchored to the quest until done
+            entity.keeper = True
+            entity.keeper_type = 1 if entity.quest_target else 2
+            entity.keeper_target_pos = (
+                (entity.quest_target[1], entity.quest_target[2])
+                if isinstance(entity.quest_target, tuple) else
+                (entity.x, entity.y)
+            )
+
             if active_special:
                 self.npc_quests.remove(active_special)
                 self.active_npc_quest_npc_id = None
@@ -1538,6 +1551,87 @@ class GameCoreMixin:
             entity._quest_update_counter = 0
             self.sound.on_quest_received()
             print(f"Assigned quest [{q_name}] to {npc_name}.")
+
+    def open_npc_trade_window(self):
+        """Shift+T on inspected NPC: open an inventory trade window.
+
+        Builds trader_display from the NPC's current inventory with random per-item
+        gold prices (5–10 gold each, generated fresh each open).
+        """
+        npc_id = self.inspected_npc
+        if npc_id not in self.entities:
+            return
+        entity = self.entities[npc_id]
+
+        # Build item list: only items with count > 0
+        items = [(item, count) for item, count in entity.inventory.items() if count > 0]
+        if not items:
+            print(f"{entity.name or entity.type} has nothing to trade.")
+            return
+
+        trade_items = []
+        for item_name, count in items:
+            price = random.randint(5, 10)
+            trade_items.append({'item': item_name, 'count': count, 'price': price})
+
+        self.trader_display = {
+            'mode': 'inventory',
+            'entity_id': npc_id,
+            'position': (entity.x, entity.y),
+            'items': trade_items,
+        }
+        self.trader_display_tick = self.tick
+
+    def handle_npc_trade_click(self, pos):
+        """Handle mouse click on the NPC inventory trade window.
+
+        Each item slot is 32px wide with 4px padding.  Clicking an item slot
+        transfers gold from the player and moves the item to player inventory.
+        """
+        if not self.trader_display or self.trader_display.get('mode') != 'inventory':
+            return False
+
+        npc_id = self.trader_display['entity_id']
+        if npc_id not in self.entities:
+            self.trader_display = None
+            return False
+
+        entity = self.entities[npc_id]
+        items = self.trader_display['items']
+
+        slot_size = CELL_SIZE
+        padding = 4
+        # UI anchored above the NPC — same layout as draw_npc_inventory_trade_ui
+        tx, ty = self.trader_display['position']
+        ui_x = tx * slot_size
+        ui_y = ty * slot_size - (len(items) + 1) * (slot_size + padding) - 10
+
+        for i, entry in enumerate(items):
+            # Each row: [gold slot][padding][arrow(20px)][item slot]
+            row_y = ui_y + i * (slot_size + padding)
+            item_slot_x = ui_x + slot_size + padding + 20  # matches draw_npc_inventory_trade_ui
+            if (item_slot_x <= pos[0] <= item_slot_x + slot_size and
+                    row_y <= pos[1] <= row_y + slot_size):
+                # Player clicked this item
+                player_gold = self.inventory.items.get('gold', 0)
+                price = entry['price']
+                if player_gold < price:
+                    print(f"Not enough gold. Need {price}, have {player_gold}.")
+                    return True
+                # Transfer gold
+                self.inventory.remove_item('gold', price)
+                entity.inventory['gold'] = entity.inventory.get('gold', 0) + price
+                # Transfer item
+                item_name = entry['item']
+                self.inventory.add_item(item_name, 1)
+                entity.inventory[item_name] = max(0, entity.inventory.get(item_name, 0) - 1)
+                print(f"Bought {item_name} for {price} gold.")
+                # Refresh display or close if empty
+                items[:] = [e for e in items if entity.inventory.get(e['item'], 0) > 0]
+                if not items:
+                    self.trader_display = None
+                return True
+        return False
 
     def select_inventory_slot(self, slot_index):
         """Select an inventory slot by number (0-9)"""

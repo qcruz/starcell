@@ -574,11 +574,9 @@ class NpcAiActionsMixin:
             if entity.xp >= entity.xp_to_level:
                 entity.level_up()
             if random.random() < FARMER_HARVEST_SUCCESS:
-                harvest_info = CELL_TYPES[cell].get('harvest')
-                if harvest_info:
-                    item, amount = harvest_info['item'], harvest_info['amount']
-                    entity.inventory[item] = entity.inventory.get(item, 0) + amount
-                screen['grid'][cy][cx] = 'SOIL'
+                # Harvest: always 2 carrots, decay cell to CARROT1 (regrows naturally)
+                entity.inventory['carrot'] = entity.inventory.get('carrot', 0) + 2
+                screen['grid'][cy][cx] = 'CARROT1'
                 entity.level_up_from_activity('harvest', self)
             return True   # acted; stop scanning
         return False

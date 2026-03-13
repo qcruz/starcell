@@ -128,6 +128,75 @@ class MenusMixin:
     # Trader UI
     # -------------------------------------------------------------------------
 
+    def draw_npc_inventory_trade_ui(self):
+        """Draw the Shift+T NPC inventory trade window.
+
+        Layout per row: [gold slot] [price] → [item slot]
+        Player clicks the item slot to buy it.
+        """
+        if not self.trader_display or self.trader_display.get('mode') != 'inventory':
+            return
+
+        npc_id = self.trader_display['entity_id']
+        if npc_id not in self.entities:
+            self.trader_display = None
+            return
+
+        entity = self.entities[npc_id]
+        items = self.trader_display['items']
+        if not items:
+            self.trader_display = None
+            return
+
+        tx, ty = self.trader_display['position']
+        slot_size = CELL_SIZE
+        padding = 4
+
+        # Anchor above the NPC
+        ui_x = tx * slot_size
+        ui_y = ty * slot_size - (len(items) + 1) * (slot_size + padding) - 10
+
+        # Header
+        npc_name = entity.name if entity.name else entity.type
+        header = self.tiny_font.render(f"{npc_name}'s goods (Shift+T to close)", True, COLORS['WHITE'])
+        self.screen.blit(header, (ui_x, ui_y - 14))
+
+        for i, entry in enumerate(items):
+            row_y = ui_y + i * (slot_size + padding)
+            cur_x = ui_x
+
+            # Gold slot (input)
+            pygame.draw.rect(self.screen, COLORS['BLACK'], (cur_x, row_y, slot_size, slot_size))
+            pygame.draw.rect(self.screen, (200, 170, 50), (cur_x, row_y, slot_size, slot_size), 2)
+            gold_label = self.tiny_font.render(str(entry['price']), True, (255, 215, 0))
+            gold_g = self.tiny_font.render('g', True, (200, 170, 50))
+            self.screen.blit(gold_label, (cur_x + 2, row_y + 2))
+            self.screen.blit(gold_g, (cur_x + 2, row_y + slot_size - 12))
+            cur_x += slot_size + padding
+
+            # Arrow
+            arrow = self.tiny_font.render('→', True, COLORS['WHITE'])
+            self.screen.blit(arrow, (cur_x, row_y + slot_size // 2 - 6))
+            cur_x += 20
+
+            # Item slot (output — clickable)
+            item_name = entry['item']
+            count = entity.inventory.get(item_name, 0)
+            has_sprite = (self.use_sprites and hasattr(self, 'sprite_manager') and
+                          item_name in self.sprite_manager.sprites)
+            pygame.draw.rect(self.screen, COLORS['BLACK'], (cur_x, row_y, slot_size, slot_size))
+            pygame.draw.rect(self.screen, (0, 200, 100), (cur_x, row_y, slot_size, slot_size), 2)
+            if has_sprite:
+                self.screen.blit(self.sprite_manager.sprites[item_name], (cur_x, row_y))
+            else:
+                item_color = ITEMS.get(item_name, {}).get('color', (180, 180, 180))
+                pygame.draw.rect(self.screen, item_color,
+                                 (cur_x + 4, row_y + 4, slot_size - 8, slot_size - 8))
+            # Item name + count
+            label = ITEMS.get(item_name, {}).get('name', item_name)
+            name_surf = self.tiny_font.render(f"{label} x{count}", True, COLORS['WHITE'])
+            self.screen.blit(name_surf, (cur_x + slot_size + 4, row_y + slot_size // 2 - 6))
+
     def draw_trader_ui(self):
         """Draw trader recipe UI above the trader NPC"""
         if not self.trader_display:
@@ -340,6 +409,9 @@ class MenusMixin:
                 info_lines.append("Shift+Q: Get quest")
         if self.active_quest or getattr(self, 'active_npc_quest_npc_id', None):
             info_lines.append("Shift+A: Assign quest")
+        # Show trade hint if NPC has items
+        if entity.inventory:
+            info_lines.append("Shift+T: Trade")
 
         # Draw each line (no background box)
         for i, line in enumerate(info_lines):

@@ -814,7 +814,10 @@ class HudMixin:
 
             # Draw trader UI if active
             if self.trader_display:
-                self.draw_trader_ui()
+                if self.trader_display.get('mode') == 'inventory':
+                    self.draw_npc_inventory_trade_ui()
+                else:
+                    self.draw_trader_ui()
 
             # Draw NPC inspection if targeting peaceful NPC
             self.draw_inspected_npc()

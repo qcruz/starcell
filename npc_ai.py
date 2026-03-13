@@ -1367,7 +1367,7 @@ class NpcAiMixin:
                 if target_type:
                     entity.ai_state = 'targeting'
                     entity.target_type = target_type
-                    entity.current_target = None
+                    entity.current_target = self._quest_target_as_current(entity) if target_type == 'quest_target' else None
                     entity.ai_state_timer = 2
                 else:
                     # Nothing to target — wander instead
@@ -1380,7 +1380,7 @@ class NpcAiMixin:
                 entity.ai_state_timer = 2
             else:
                 entity.ai_state_timer = random.randint(2, 4)  # Stay idle with variable duration
-        
+
         elif entity.ai_state == 'wandering':
             roll = random.random()
             if roll < aggressiveness:
@@ -1389,7 +1389,7 @@ class NpcAiMixin:
                 if target_type:
                     entity.ai_state = 'targeting'
                     entity.target_type = target_type
-                    entity.current_target = None
+                    entity.current_target = self._quest_target_as_current(entity) if target_type == 'quest_target' else None
                     entity.ai_state_timer = 2
                 else:
                     # Nothing to target — keep wandering longer
@@ -1946,6 +1946,17 @@ class NpcAiMixin:
             
             # Wandering handled by state machine
     
+    def _quest_target_as_current(self, entity):
+        """Return entity.quest_target in a form usable as entity.current_target, or None."""
+        qt = getattr(entity, 'quest_target', None)
+        if qt is None:
+            return None
+        if isinstance(qt, tuple):
+            return qt  # already ('cell', x, y)
+        if isinstance(qt, int) and qt in self.entities:
+            return qt  # entity id — targeting state handles int targets
+        return None
+
     def _try_complete_assigned_quest(self, entity):
         """Remove the front non-base quest from entity.quest_queue and award player 1 XP.
 
@@ -1965,6 +1976,11 @@ class NpcAiMixin:
         entity.assigned_quest = None
         entity.quest_target = None
         entity._quest_update_counter = 0
+
+        # If back to base quest only, release keeper anchor so NPC roams freely
+        has_non_base = any(not e.get('base') for e in queue)
+        if not has_non_base:
+            entity.keeper = False
 
         # Award player XP
         self.gain_xp(1)
@@ -2031,7 +2047,13 @@ class NpcAiMixin:
                 target = None
 
         entity.quest_target = target
-    
+
+        # Sync keeper_target_pos to the new specific quest target (quest-managed keepers only)
+        if target and getattr(entity, 'keeper', False):
+            if isinstance(target, tuple) and len(target) >= 3 and target[0] == 'cell':
+                entity.keeper_target_pos = (target[1], target[2])
+                entity.keeper_type = 1  # promote to guard: move directly to target
+
     def update_entity_combat_state(self, entity):
         """Update entity combat state (blocking/evading/attacking)"""
         # Hostile entities are aggressive - mostly attacking
