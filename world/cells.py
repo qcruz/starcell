@@ -6,7 +6,7 @@ from constants import (
     # Cellular automata rates
     DIRT_TO_GRASS_RATE, GRASS_TO_DIRT_RATE, DIRT_TO_SAND_RATE,
     TREE_GROWTH_RATE, TREE_DECAY_RATE, TREE_CROWD_DECAY_RATE,
-    SAND_RAIN_RECLAIM_RATE, CACTUS_DROUGHT_RATE, TREE_DROUGHT_RATE,
+    SAND_RECLAIM_RATE, CACTUS_DROUGHT_RATE, TREE_DROUGHT_RATE,
     FLOWER_SPREAD_RATE, FLOWER_DECAY_RATE,
     DEEP_WATER_FORM_RATE, DEEP_WATER_EVAPORATE_RATE,
     WATER_TO_DIRT_RATE, FLOODING_RATE,
@@ -206,9 +206,9 @@ class CellsMixin:
                     if random.random() < min(1.0, TREE_GROWTH_RATE * _growth):
                         new_grid[y][x] = 'TREE1'
 
-                # Sand → Dirt (rain only — puddles sink into soil, forming oasis pockets)
-                elif cell == 'SAND' and total_water >= 1 and self.is_raining:
-                    if random.random() < min(1.0, SAND_RAIN_RECLAIM_RATE * _tp):
+                # Sand → Dirt (any water neighbor — universal rule, supercedes biome-specific rules)
+                elif cell == 'SAND' and total_water >= 1:
+                    if random.random() < min(1.0, SAND_RECLAIM_RATE * _growth):
                         new_grid[y][x] = 'DIRT'
 
                 # Deep water formation: all 4 cardinal neighbors must be water/deepwater

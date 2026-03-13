@@ -1321,18 +1321,13 @@ class GameCoreMixin:
 
     def cast_rain_spell(self):
         if self.player['energy'] < 90:
-            print("[Spell] Not enough energy!")
+            return
+        if self.is_raining:
             return
         self.player['energy'] -= 90
-        if self.is_raining:
-            self.is_raining = False
-            self.rain_timer = 0
-            print("[Spell] Rain stopped.")
-        else:
-            self.is_raining = True
-            self.rain_timer = 0
-            self.rain_duration = random.randint(RAIN_DURATION_MIN, RAIN_DURATION_MAX)
-            print("[Spell] Rain started.")
+        self.is_raining = True
+        self.rain_timer = 0
+        self.rain_duration = random.randint(RAIN_DURATION_MIN, RAIN_DURATION_MAX)
 
     def cast_day_spell(self):
         if self.player['energy'] < 90:
