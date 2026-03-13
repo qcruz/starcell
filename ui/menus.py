@@ -1,7 +1,7 @@
 import pygame
 
 from constants import (
-    COLORS, ITEMS, QUEST_TYPES,
+    COLORS, ITEMS, QUEST_TYPES, CELL_TYPES,
     CELL_SIZE, SCREEN_WIDTH, SCREEN_HEIGHT,
     GRID_WIDTH, GRID_HEIGHT,
 )
@@ -577,29 +577,51 @@ class MenusMixin:
 
             distance_text = f"{cell_distance}"
         else:
-            # Target is in different zone - calculate zone direction
-            cell_dx = zone_dx * GRID_WIDTH
-            cell_dy = zone_dy * GRID_HEIGHT
+            # Target is in different zone — find valid exit on border toward target
+            grid = self.current_screen.get('grid') if self.current_screen else None
 
-            # Calculate arrow position (at screen edge)
-            arrow_x, arrow_y = SCREEN_WIDTH // 2, (SCREEN_HEIGHT - 60) // 2
-            arrow_symbol = "○"
+            def border_walkable(cx, cy):
+                if grid and 0 <= cy < len(grid) and 0 <= cx < len(grid[0]):
+                    return not CELL_TYPES.get(grid[cy][cx], {}).get('solid', False)
+                return False
 
-            # Determine direction
-            if abs(cell_dx) > abs(cell_dy):
-                if cell_dx > 0:
-                    arrow_symbol = ">"
-                    arrow_x = SCREEN_WIDTH - 40
+            exit_cell_x, exit_cell_y = None, None
+            if grid:
+                if abs(zone_dx) >= abs(zone_dy):
+                    # East or west border — scan column nearest to player_y
+                    bx = GRID_WIDTH - 1 if zone_dx > 0 else 0
+                    for radius in range(0, GRID_HEIGHT // 2 + 1):
+                        for dy in ([0, radius, -radius] if radius else [0]):
+                            cy = player_y + dy
+                            if 0 <= cy < GRID_HEIGHT and border_walkable(bx, cy):
+                                exit_cell_x, exit_cell_y = bx, cy
+                                break
+                        if exit_cell_x is not None:
+                            break
                 else:
-                    arrow_symbol = "<"
-                    arrow_x = 40
+                    # North or south border — scan row nearest to player_x
+                    by = GRID_HEIGHT - 1 if zone_dy > 0 else 0
+                    for radius in range(0, GRID_WIDTH // 2 + 1):
+                        for dx in ([0, radius, -radius] if radius else [0]):
+                            cx = player_x + dx
+                            if 0 <= cx < GRID_WIDTH and border_walkable(cx, by):
+                                exit_cell_x, exit_cell_y = cx, by
+                                break
+                        if exit_cell_x is not None:
+                            break
+
+            if exit_cell_x is not None:
+                arrow_x = exit_cell_x * CELL_SIZE + CELL_SIZE // 2
+                arrow_y = exit_cell_y * CELL_SIZE + CELL_SIZE // 2
+                arrow_symbol = "○"
             else:
-                if cell_dy > 0:
-                    arrow_symbol = "v"
-                    arrow_y = SCREEN_HEIGHT - 100
+                # Fallback: fixed edge position
+                arrow_x, arrow_y = SCREEN_WIDTH // 2, (SCREEN_HEIGHT - 60) // 2
+                arrow_symbol = "○"
+                if abs(zone_dx) >= abs(zone_dy):
+                    arrow_x = SCREEN_WIDTH - 40 if zone_dx > 0 else 40
                 else:
-                    arrow_symbol = "^"
-                    arrow_y = 40
+                    arrow_y = SCREEN_HEIGHT - 100 if zone_dy > 0 else 40
 
             distance_text = f"{zone_distance}"
 

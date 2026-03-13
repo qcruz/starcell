@@ -105,6 +105,7 @@ class CombatMixin:
                         total_damage *= (1 - entity.block_reduction)
 
                     entity.take_damage(total_damage, 'player')
+                    self.gain_xp(1)
 
                     # Temp energy cost for attacking
                     self.player['energy'] = max(0, self.player.get('energy', 0) - 2)
