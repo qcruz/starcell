@@ -166,6 +166,11 @@ class CellsMixin:
                     if random.random() < min(1.0, FLOODING_RATE * _tp):
                         new_grid[y][x] = 'WATER'
 
+                # Sand → Water (rain flooding — 2x dirt rate; sand absorbs water faster)
+                elif cell == 'SAND' and total_water >= 3 and self.is_raining:
+                    if random.random() < min(1.0, FLOODING_RATE * 2.0 * _tp):
+                        new_grid[y][x] = 'WATER'
+
                 # Dirt → Grass (water >= 2)
                 elif cell == 'DIRT' and total_water >= 2:
                     if random.random() < min(1.0, DIRT_TO_GRASS_RATE * _growth):
@@ -340,8 +345,11 @@ class CellsMixin:
             x = random.randint(1, GRID_WIDTH - 2)
             y = random.randint(1, GRID_HEIGHT - 2)
             cell = screen['grid'][y][x]
-            if cell in ['DIRT', 'SAND'] and not self.is_cell_enchanted(x, y, key):
+            if cell == 'DIRT' and not self.is_cell_enchanted(x, y, key):
                 if random.random() < 0.3:
+                    screen['grid'][y][x] = 'WATER'
+            elif cell == 'SAND' and not self.is_cell_enchanted(x, y, key):
+                if random.random() < 0.6:
                     screen['grid'][y][x] = 'WATER'
 
         grass_spawns = int(RAIN_GRASS_SPAWNS * rain_multiplier)
