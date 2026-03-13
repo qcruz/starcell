@@ -1520,7 +1520,7 @@ class GameCoreMixin:
             entity.quest_queue.insert(0, {'type': qt, 'base': False, 'slot': slot})
             entity.quest_focus = qt
             entity.quest_target = None
-            entity._quest_update_counter = 0
+            entity._quest_update_counter = 10  # trigger immediate retry on next AI cycle
 
             # Pre-seed quest_target if the special quest has a known target
             if slot:
@@ -1531,6 +1531,12 @@ class GameCoreMixin:
                     entity.quest_target = ('cell', q.target_cell[2], q.target_cell[3])
                 entity.assigned_quest = slot
 
+            # Immediately try to resolve a target so the keeper anchors right away
+            # (avoids waiting ~50 AI ticks for the periodic _assign_specific_quest_target)
+            if entity.quest_target is None:
+                screen_key = f"{entity.screen_x},{entity.screen_y}"
+                self._assign_specific_quest_target(entity, screen_key)
+
             # Quest becomes the keeper target — anchor NPC to the quest target.
             # keeper_target tracks entity/cell/item by reference; pos updated each tick.
             entity.keeper = True
@@ -1540,7 +1546,7 @@ class GameCoreMixin:
             elif isinstance(qt, tuple) and len(qt) >= 3 and qt[0] == 'cell':
                 self._set_keeper_target_cell(entity, qt[1], qt[2])
             else:
-                # No pre-known target — roam freely (keeper_type 2) until AI finds one
+                # No target found yet — roam freely (keeper_type 2) until AI finds one
                 entity.keeper_type = 2
                 entity.keeper_target = None
                 entity.keeper_target_pos = None
