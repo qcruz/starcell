@@ -364,15 +364,31 @@ class MenusMixin:
         if hasattr(entity, 'age'):
             info_lines.append(f"Age:{int(entity.age)}y")
 
-        # Keeper status
+        # Keeper status + target info
         if getattr(entity, 'keeper', False):
             ktype = getattr(entity, 'keeper_type', 3)
             ktype_label = {1: 'Guard', 2: 'Patrol', 3: 'Zone'}.get(ktype, 'Keeper')
+            kt = getattr(entity, 'keeper_target', None)
             ktarget = getattr(entity, 'keeper_target_pos', None)
-            if ktarget:
+            if kt and kt.get('type') == 'entity':
+                eid = kt['ref']
+                if eid in self.entities:
+                    t = self.entities[eid]
+                    pct = int((1.0 - t.health / max(t.max_health, 1)) * 100)
+                    zone_tag = '' if kt.get('screen') == (entity.screen_x, entity.screen_y) else ' [x-zone]'
+                    info_lines.append(f"Keeper {ktype_label}: {t.type}{zone_tag}")
+                    info_lines.append(f"  Target HP: {100-pct}% remaining")
+                else:
+                    info_lines.append(f"Keeper {ktype_label} (target gone)")
+            elif kt and kt.get('type') == 'item':
+                item_name = getattr(self, 'item_registry', {}).get(kt['ref'], {}).get('name', '?')
+                info_lines.append(f"Keeper {ktype_label}: find {item_name}")
+                if ktarget:
+                    info_lines.append(f"  @({ktarget[0]},{ktarget[1]})")
+            elif ktarget:
                 info_lines.append(f"Keeper {ktype_label} @({ktarget[0]},{ktarget[1]})")
             else:
-                info_lines.append(f"Keeper ({ktype_label})")
+                info_lines.append(f"Keeper {ktype_label} (searching)")
 
         # Quest queue (FARMER etc. with queue system)
         queue = getattr(entity, 'quest_queue', None)

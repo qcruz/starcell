@@ -186,6 +186,12 @@ class GameCoreMixin:
         self.inspected_npc = None  # Entity being inspected
         self.inspected_npc_tick = 0  # When inspection started  # When to hide display
 
+        # Item UID registry — tracks individually identified items (quest/keeper targets)
+        self._item_uid_counter = 0
+        self.item_registry = {}
+        # {uid: {'name': str, 'location': 'world'|'inventory',
+        #         'holder': entity_id or (sx,sy,x,y), 'pos': (x,y), 'screen': (sx,sy)}}
+
         # Debug / bug-tracking
         self.bug_catcher = BugCatcher()
         self.watchdog = Watchdog(self.bug_catcher)
@@ -667,6 +673,14 @@ class GameCoreMixin:
                     if eid == entity_id:
                         del slots[ktype]
                         break
+
+        # Broadcast quest completion to all keeper NPCs targeting this entity
+        for watcher_id, watcher in list(self.entities.items()):
+            kt = getattr(watcher, 'keeper_target', None)
+            if kt and kt.get('type') == 'entity' and kt.get('ref') == entity_id:
+                watcher.keeper_target = None
+                watcher.keeper_target_pos = None
+                self._try_complete_assigned_quest(watcher)
 
         # Remove from followers if it was a follower
         if entity_id in self.followers:
@@ -1517,16 +1531,19 @@ class GameCoreMixin:
                     entity.quest_target = ('cell', q.target_cell[2], q.target_cell[3])
                 entity.assigned_quest = slot
 
-            # Quest becomes the keeper target — NPC anchors to the quest target once found.
-            # If no target is pre-known (e.g. standing HUNT quest), keeper_target_pos stays
-            # None so the NPC roams freely while _assign_specific_quest_target finds one.
+            # Quest becomes the keeper target — anchor NPC to the quest target.
+            # keeper_target tracks entity/cell/item by reference; pos updated each tick.
             entity.keeper = True
-            entity.keeper_type = 1 if entity.quest_target else 2
-            entity.keeper_target_pos = (
-                (entity.quest_target[1], entity.quest_target[2])
-                if isinstance(entity.quest_target, tuple) else
-                None
-            )
+            qt = entity.quest_target
+            if isinstance(qt, int) and qt in self.entities:
+                self._set_keeper_target_entity(entity, qt)
+            elif isinstance(qt, tuple) and len(qt) >= 3 and qt[0] == 'cell':
+                self._set_keeper_target_cell(entity, qt[1], qt[2])
+            else:
+                # No pre-known target — roam freely (keeper_type 2) until AI finds one
+                entity.keeper_type = 2
+                entity.keeper_target = None
+                entity.keeper_target_pos = None
 
             if active_special:
                 self.npc_quests.remove(active_special)
@@ -1553,6 +1570,35 @@ class GameCoreMixin:
             entity._quest_update_counter = 0
             self.sound.on_quest_received()
             print(f"Assigned quest [{q_name}] to {npc_name}.")
+
+    def _next_item_uid(self):
+        """Return a new unique item ID for individually tracked items."""
+        self._item_uid_counter += 1
+        return self._item_uid_counter
+
+    def register_item_target(self, item_name, entity_id=None, cell=None, screen=None):
+        """Register a specific item instance for quest/keeper tracking.
+
+        Pass entity_id if the item is in an entity's inventory, or cell=(x,y) if it
+        is a world drop.  Returns the assigned UID.
+        """
+        uid = self._next_item_uid()
+        if entity_id is not None and entity_id in self.entities:
+            e = self.entities[entity_id]
+            pos = (e.x, e.y)
+            scr = (e.screen_x, e.screen_y)
+            self.item_registry[uid] = {
+                'name': item_name, 'location': 'inventory',
+                'holder': entity_id, 'pos': pos, 'screen': scr,
+            }
+        elif cell is not None:
+            pos = cell
+            scr = screen or (self.player['screen_x'], self.player['screen_y'])
+            self.item_registry[uid] = {
+                'name': item_name, 'location': 'world',
+                'holder': cell, 'pos': pos, 'screen': scr,
+            }
+        return uid
 
     def open_npc_trade_window(self):
         """Shift+T on inspected NPC: open an inventory trade window.

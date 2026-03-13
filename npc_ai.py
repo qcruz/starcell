@@ -72,6 +72,10 @@ class NpcAiMixin:
             if entity.inventory.get('carrot', 0) < 1:
                 entity.inventory['carrot'] = 1
 
+        # Resolve keeper target: updates keeper_target_pos from live entity/item position
+        if getattr(entity, 'keeper', False):
+            self.resolve_keeper_target(entity)
+
         # UNIFIED AI STATE SYSTEM - Update entity AI state based on parameters
         self.update_entity_ai_state(entity_id, entity)
         
@@ -1362,13 +1366,29 @@ class NpcAiMixin:
         # =====================================================================
         # KEEPER OUT-OF-RANGE CHECK (overrides timer — always evaluated)
         # If a keeper NPC is outside its target range, immediately enter targeting.
+        # Handles cross-zone chasing: routes to zone exit when target is in another zone.
         # =====================================================================
         if (getattr(entity, 'keeper', False) and
                 entity.ai_state not in ('combat', 'flee')):
             ktype = getattr(entity, 'keeper_type', 3)
             ktarget = getattr(entity, 'keeper_target_pos', None)
             krange = KEEPER_RANGE.get(ktype)
+            kt_ref = getattr(entity, 'keeper_target', None)
             if ktype < 3 and ktarget and krange is not None:
+                # Cross-zone: target is in a different zone — head toward exit
+                if kt_ref and kt_ref.get('type') == 'entity':
+                    target_screen = kt_ref.get('screen')
+                    my_screen = (entity.screen_x, entity.screen_y)
+                    if target_screen and target_screen != my_screen:
+                        ex, ey = self._get_exit_toward_zone(
+                            my_screen[0], my_screen[1],
+                            target_screen[0], target_screen[1])
+                        entity.ai_state = 'targeting'
+                        entity.target_type = 'keeper_target'
+                        entity.current_target = (ex, ey)
+                        entity.ai_state_timer = 1
+                        return
+                # Same zone: check distance
                 dist = abs(entity.x - ktarget[0]) + abs(entity.y - ktarget[1])
                 if dist > krange:
                     entity.ai_state = 'targeting'
@@ -1980,6 +2000,92 @@ class NpcAiMixin:
             return qt  # entity id — targeting state handles int targets
         return None
 
+    # =========================================================================
+    # KEEPER TARGET HELPERS
+    # =========================================================================
+
+    def resolve_keeper_target(self, entity):
+        """Update keeper_target_pos from the live position of the tracked target.
+
+        For entity targets: follows them across zones, triggers quest completion
+        when target dies.  For item targets: tracks the registered item location.
+        Cell targets are static and need no resolution.
+        """
+        kt = getattr(entity, 'keeper_target', None)
+        if not kt:
+            # Migrate legacy plain keeper_target_pos (no ref dict) — treat as static cell
+            if getattr(entity, 'keeper_target_pos', None):
+                entity.keeper_target = {
+                    'type': 'cell', 'ref': None,
+                    'pos': entity.keeper_target_pos,
+                    'screen': (entity.screen_x, entity.screen_y),
+                }
+            return
+
+        if kt['type'] == 'entity':
+            eid = kt['ref']
+            if eid in self.entities:
+                t = self.entities[eid]
+                if t.is_alive():
+                    kt['pos'] = (t.x, t.y)
+                    kt['screen'] = (t.screen_x, t.screen_y)
+                    entity.keeper_target_pos = (t.x, t.y)
+                else:
+                    # Target died — quest complete
+                    entity.keeper_target = None
+                    entity.keeper_target_pos = None
+                    self._try_complete_assigned_quest(entity)
+            else:
+                entity.keeper_target = None
+                entity.keeper_target_pos = None
+
+        elif kt['type'] == 'item':
+            registry = getattr(self, 'item_registry', {})
+            loc = registry.get(kt['ref'])
+            if loc:
+                kt['pos'] = loc['pos']
+                kt['screen'] = loc.get('screen', (entity.screen_x, entity.screen_y))
+                entity.keeper_target_pos = loc['pos']
+            else:
+                # Item gone — quest complete
+                entity.keeper_target = None
+                entity.keeper_target_pos = None
+                self._try_complete_assigned_quest(entity)
+        # 'cell' type: static, nothing to update
+
+    def _set_keeper_target_cell(self, entity, cx, cy, sx=None, sy=None):
+        """Set a static cell as the keeper anchor."""
+        sx = sx if sx is not None else entity.screen_x
+        sy = sy if sy is not None else entity.screen_y
+        entity.keeper_target = {'type': 'cell', 'ref': None, 'pos': (cx, cy), 'screen': (sx, sy)}
+        entity.keeper_target_pos = (cx, cy)
+        entity.keeper_type = 1
+
+    def _set_keeper_target_entity(self, entity, target_entity_id):
+        """Set a live entity as the keeper target — position tracked each tick."""
+        if target_entity_id not in self.entities:
+            return
+        t = self.entities[target_entity_id]
+        entity.keeper_target = {
+            'type': 'entity', 'ref': target_entity_id,
+            'pos': (t.x, t.y), 'screen': (t.screen_x, t.screen_y),
+        }
+        entity.keeper_target_pos = (t.x, t.y)
+        entity.keeper_type = 1
+
+    def _set_keeper_target_item(self, entity, item_uid):
+        """Set a registered item UID as the keeper target."""
+        registry = getattr(self, 'item_registry', {})
+        loc = registry.get(item_uid)
+        if not loc:
+            return
+        entity.keeper_target = {
+            'type': 'item', 'ref': item_uid,
+            'pos': loc['pos'], 'screen': loc.get('screen', (entity.screen_x, entity.screen_y)),
+        }
+        entity.keeper_target_pos = loc['pos']
+        entity.keeper_type = 1
+
     def _try_complete_assigned_quest(self, entity):
         """Remove the front non-base quest from entity.quest_queue and award player 1 XP.
 
@@ -2050,7 +2156,17 @@ class NpcAiMixin:
             target = ('cell', ex, ey, 'EXIT')
 
         elif focus in ('combat_hostile', 'HUNT', 'SLAY'):
-            target = self.find_closest_hostile_entity(entity, screen_key)
+            # Prefer the player's current quest target (same specific entity)
+            player_qt = None
+            if hasattr(self, 'active_quest') and self.active_quest in ('HUNT', 'SLAY'):
+                for qt_key, qt_val in self.quests.items():
+                    if qt_key in ('HUNT', 'SLAY') and hasattr(qt_val, 'target_entity_id') and qt_val.target_entity_id:
+                        player_qt = qt_val.target_entity_id
+                        break
+            if player_qt and player_qt in self.entities and self.entities[player_qt].is_alive():
+                target = player_qt
+            else:
+                target = self.find_closest_hostile_entity(entity, screen_key)
 
         elif focus in ('combat_all', 'GATHER', 'RESCUE'):
             target = self._find_closest_any_entity(entity, screen_key)
@@ -2064,6 +2180,16 @@ class NpcAiMixin:
                 ex, ey = random.choice(exits)
                 target = ('cell', ex, ey, 'EXIT')
 
+        elif focus == 'SEARCH':
+            # Item search: use the keeper_target item UID if already set
+            kt = getattr(entity, 'keeper_target', None)
+            if kt and kt.get('type') == 'item':
+                # Target position already tracked by resolve_keeper_target — no new target needed
+                target = None
+            else:
+                # No item target yet — wait for quest assignment to register one
+                target = None
+
         # Never assign the entity's own cell as a target
         if isinstance(target, tuple) and len(target) >= 3 and target[0] == 'cell':
             if (target[1], target[2]) == (entity.x, entity.y):
@@ -2071,11 +2197,12 @@ class NpcAiMixin:
 
         entity.quest_target = target
 
-        # Sync keeper_target_pos to the new specific quest target (quest-managed keepers only)
+        # Sync keeper_target to the newly found quest target
         if target and getattr(entity, 'keeper', False):
             if isinstance(target, tuple) and len(target) >= 3 and target[0] == 'cell':
-                entity.keeper_target_pos = (target[1], target[2])
-                entity.keeper_type = 1  # promote to guard: move directly to target
+                self._set_keeper_target_cell(entity, target[1], target[2])
+            elif isinstance(target, int):
+                self._set_keeper_target_entity(entity, target)
 
     def update_entity_combat_state(self, entity):
         """Update entity combat state (blocking/evading/attacking)"""
