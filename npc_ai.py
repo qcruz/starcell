@@ -2062,6 +2062,18 @@ class NpcAiMixin:
                 entity._quest_update_counter = 0
             entity._quest_update_counter += 1
 
+            # Seed quest_target from a transferred special quest on first evaluation
+            assigned = getattr(entity, 'assigned_quest', None)
+            if assigned and getattr(entity, 'quest_target', None) is None:
+                q = assigned.quest
+                if q.target_entity_id is not None:
+                    entity.quest_target = q.target_entity_id
+                elif q.target_cell is not None:
+                    # target_cell is (screen_x, screen_y, x, y)
+                    entity.quest_target = ('cell', q.target_cell[2], q.target_cell[3])
+                elif q.target_location is not None:
+                    entity.quest_target = ('cell', q.target_location[0], q.target_location[1])
+
             specific = getattr(entity, 'quest_target', None)
 
             if specific is not None:

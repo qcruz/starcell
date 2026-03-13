@@ -1100,7 +1100,10 @@ class GameCoreMixin:
                     elif event.key == pygame.K_RIGHT and (pygame.key.get_mods() & pygame.KMOD_SHIFT):
                         self.cycle_inventory_slot(1)
                     elif event.key == pygame.K_a and (pygame.key.get_mods() & pygame.KMOD_SHIFT):
-                        self.toggle_autopilot()
+                        if self.inspected_npc:
+                            self.handle_npc_quest_assign()
+                        else:
+                            self.toggle_autopilot()
                     elif event.key == pygame.K_g:
                         # Toggle debug memory lanes visualization
                         self.debug_memory_lanes = not self.debug_memory_lanes
@@ -1448,6 +1451,54 @@ class GameCoreMixin:
             print(f"Received quest [{q_name}] from {npc_name}!")
         else:
             print(f"No quest available from {npc_name} right now.")
+
+    def handle_npc_quest_assign(self):
+        """Shift+A while inspecting an NPC: assign the player's selected quest to the NPC.
+
+        Standing quests (FARM, HUNT, etc.) are shared — the NPC gains the quest_focus
+        and the player keeps it.  Special quests (received from NPCs, in npc_quests) are
+        transferred — removed from the player's npc_quests list and stored on the NPC as
+        assigned_quest so their AI can pursue the specific target.
+        """
+        npc_id = self.inspected_npc
+        if npc_id not in self.entities:
+            return
+
+        entity = self.entities[npc_id]
+        npc_name = entity.name if entity.name else entity.type
+
+        # Check if a special NPC quest is currently active/selected
+        active_special = None
+        if self.active_npc_quest_npc_id is not None:
+            active_special = next(
+                (nq for nq in self.npc_quests if nq.npc_id == self.active_npc_quest_npc_id),
+                None,
+            )
+
+        if active_special:
+            # Transfer the special quest to this NPC
+            qt = active_special.quest.quest_type
+            q_name = QUEST_TYPES[qt]['name']
+            entity.quest_focus = qt
+            entity.assigned_quest = active_special  # NPC carries the full quest object
+            entity.quest_target = None
+            entity._quest_update_counter = 0
+            # Remove from player inventory
+            self.npc_quests.remove(active_special)
+            self.active_npc_quest_npc_id = None
+            self.sound.on_quest_received()
+            print(f"Assigned special quest [{q_name}] to {npc_name}. Quest transferred.")
+        elif self.active_quest:
+            # Share a standing quest — NPC gains the focus, player keeps the quest
+            qt = self.active_quest
+            q_name = QUEST_TYPES[qt]['name']
+            entity.quest_focus = qt
+            entity.quest_target = None
+            entity._quest_update_counter = 0
+            self.sound.on_quest_received()
+            print(f"Assigned quest [{q_name}] to {npc_name}.")
+        else:
+            print("No quest selected to assign.")
 
     def select_inventory_slot(self, slot_index):
         """Select an inventory slot by number (0-9)"""
