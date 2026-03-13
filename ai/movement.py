@@ -385,9 +385,18 @@ class NpcAiMovementMixin:
         if screen_key not in self.screens:
             return
 
-        # Keepers are anchored to their current zone — never transition
+        # Keepers are anchored to their zone — UNLESS their target is in another zone
         if getattr(entity, 'keeper', False):
-            return
+            kt = getattr(entity, 'keeper_target', None)
+            if kt and kt.get('type') == 'entity':
+                target_screen = kt.get('screen')
+                my_screen = (entity.screen_x, entity.screen_y)
+                if target_screen and target_screen != my_screen:
+                    pass  # Allow cross — fall through to transition logic
+                else:
+                    return  # Target in same zone — hold position
+            else:
+                return  # Cell/item targets or no target — stay in zone
 
         # Check travel cooldown - prevent rapid zone switching
         if not hasattr(entity, 'last_zone_change_tick'):
