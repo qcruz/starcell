@@ -1000,8 +1000,10 @@ class GameCoreMixin:
                 if event.button == 1 and self.state == 'menu':
                     self._handle_menu_click(event.pos)
                 elif event.button == 1 and self.state == 'playing':
-                    self.handle_npc_trade_click(event.pos)
-                    self.handle_inventory_click(event.pos)
+                    if self.handle_npc_trade_click(event.pos):
+                        self.gain_xp(1)
+                    else:
+                        self.handle_inventory_click(event.pos)
                     self.handle_quest_ui_click(event.pos)
             
             if event.type == pygame.KEYDOWN:
@@ -1021,13 +1023,16 @@ class GameCoreMixin:
                     elif event.key == pygame.K_SPACE:
                         if 'crafting' in self.inventory.open_menus and self.inventory.selected.get('crafting'):
                             self.attempt_craft_selected()
+                            self.gain_xp(1)
                             continue
                         if 'actions' in self.inventory.open_menus:
                             selected_action = self.inventory.selected.get('actions')
                             if selected_action:
                                 self.execute_action(selected_action)
+                                self.gain_xp(1)
                                 continue
                         self.interact()
+                        self.gain_xp(1)
                     elif event.key == pygame.K_l:
                         selected = self.inventory.selected_magic
                         if selected == 'rain_spell':
@@ -1036,23 +1041,26 @@ class GameCoreMixin:
                             self.cast_day_spell()
                         else:
                             self.cast_star_spell()
+                        self.gain_xp(1)
                     elif event.key == pygame.K_k:
-                        # Release all enchantments
                         self.release_enchantments()
+                        self.gain_xp(1)
                     elif event.key == pygame.K_j:
-                        # Release selected follower
                         self.release_follower()
+                        self.gain_xp(1)
                     elif event.key == pygame.K_b:
                         # Toggle blocking
                         self.player['blocking'] = not self.player['blocking']
                         print(f"Blocking: {'ON' if self.player['blocking'] else 'OFF'}")
+                        self.gain_xp(1)
                     elif event.key == pygame.K_v:
                         # Toggle friendly fire (allow/deny damage to peaceful entities)
                         self.player['friendly_fire'] = not self.player.get('friendly_fire', False)
                         state = 'ON — can attack anyone' if self.player['friendly_fire'] else 'OFF — peaceful entities protected'
                         print(f"Friendly Fire: {state}")
+                        self.gain_xp(1)
                     elif event.key == pygame.K_c:
-                        # Toggle crafting screen
+                        # Toggle crafting screen (UI open/close — no XP)
                         _was_open = 'crafting' in self.inventory.open_menus
                         self.inventory.toggle_menu('crafting')
                         if not _was_open:
@@ -1065,8 +1073,8 @@ class GameCoreMixin:
                                 self.inventory.selected['crafting'] = _craftable[0][0]
                             self.sound.on_inventory_open()
                     elif event.key == pygame.K_x:
-                        # Attempt to craft with selected items
                         self.attempt_craft()
+                        self.gain_xp(1)
                     elif event.key == pygame.K_i:
                         _was_open = 'items' in self.inventory.open_menus
                         self.inventory.toggle_menu('items')
@@ -1094,30 +1102,32 @@ class GameCoreMixin:
                         if pygame.key.get_mods() & pygame.KMOD_SHIFT:
                             if self.inspected_npc:
                                 self.handle_npc_follow_interaction()
+                                self.gain_xp(1)
                         else:
                             _was_open = 'followers' in self.inventory.open_menus
                             self.inventory.toggle_menu('followers')
                             if not _was_open:
                                 self.sound.on_inventory_open()
                     elif event.key == pygame.K_e:
-                        # Pick up cell or items from target
                         self.pickup_cell_or_items()
+                        self.gain_xp(1)
                     elif event.key == pygame.K_n:
-                        # NPC trade interaction
                         self.npc_trade_interaction()
+                        self.gain_xp(1)
                     elif event.key == pygame.K_p:
-                        # Place selected item as cell
                         self.place_selected_item()
+                        self.gain_xp(1)
                     elif event.key == pygame.K_q:
                         mods = pygame.key.get_mods()
                         if (mods & pygame.KMOD_SHIFT) and self.inspected_npc:
                             self.handle_npc_quest_interaction()
+                            self.gain_xp(1)
                         else:
-                            # Toggle quest UI
+                            # Toggle quest UI (no XP)
                             self.quest_ui_open = not self.quest_ui_open
                     elif event.key == pygame.K_d:
-                        # Drop selected item
                         self.drop_selected_item()
+                        self.gain_xp(1)
                     elif event.key == pygame.K_LEFT and (pygame.key.get_mods() & pygame.KMOD_SHIFT):
                         self.cycle_inventory_slot(-1)
                     elif event.key == pygame.K_RIGHT and (pygame.key.get_mods() & pygame.KMOD_SHIFT):
@@ -1125,15 +1135,16 @@ class GameCoreMixin:
                     elif event.key == pygame.K_a and (pygame.key.get_mods() & pygame.KMOD_SHIFT):
                         if self.inspected_npc:
                             self.handle_npc_quest_assign()
+                            self.gain_xp(1)
                         else:
                             self.toggle_autopilot()
                     elif event.key == pygame.K_g:
                         # Toggle debug memory lanes visualization
                         self.debug_memory_lanes = not self.debug_memory_lanes
                         print(f"Debug Memory Lanes: {'ON' if self.debug_memory_lanes else 'OFF'}")
-                    # Number keys to select inventory slots
-                    elif event.key in [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4, 
-                                      pygame.K_5, pygame.K_6, pygame.K_7, pygame.K_8, 
+                    # Number keys to select inventory slots (no XP)
+                    elif event.key in [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4,
+                                      pygame.K_5, pygame.K_6, pygame.K_7, pygame.K_8,
                                       pygame.K_9, pygame.K_0]:
                         slot = (event.key - pygame.K_1) if event.key != pygame.K_0 else 9
                         self.select_inventory_slot(slot)
@@ -1444,7 +1455,6 @@ class GameCoreMixin:
         if existing and existing.quest.status == 'completed':
             # TURN IN — player and NPC both gain XP
             xp_reward = 1
-            self.gain_xp(xp_reward)
             entity.gain_xp(100)
             leveled = entity.xp == 0  # gain_xp resets xp to 0 on level-up
             self.npc_quests.remove(existing)
@@ -2023,7 +2033,6 @@ class GameCoreMixin:
             self.player['energy'] = max(0, self.player.get('energy', 0) - 1)
             self.handle_drops(cell, check_x, check_y)
             self.show_attack_animation(check_x, check_y)
-            self.gain_xp(1)
             return
 
         # Mine iron ore — pickaxe must be selected tool
@@ -2032,7 +2041,6 @@ class GameCoreMixin:
             self.inventory.add_item('iron_ore', 1)
             self.current_screen['grid'][check_y][check_x] = self.get_biome_base_cell()
             self.show_attack_animation(check_x, check_y)
-            self.gain_xp(1)
             return
 
         # Mine stone — pickaxe must be selected tool
@@ -2090,7 +2098,6 @@ class GameCoreMixin:
         if cell == 'SOIL' and self.inventory.has_item('carrot'):
             self.inventory.remove_item('carrot', 1)
             self.current_screen['grid'][check_y][check_x] = 'CARROT1'
-            self.gain_xp(1)
             return
         
         # Place bones as decoration on ground cells

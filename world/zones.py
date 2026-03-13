@@ -949,6 +949,7 @@ class ZonesMixin:
 
     def on_zone_transition(self, new_screen_x, new_screen_y):
         """When player enters new zone, catch up nearby zones"""
+        self.gain_xp(1)
         new_key = f"{new_screen_x},{new_screen_y}"
         if new_key in self.screen_last_update:
             cycles = (self.tick - self.screen_last_update[new_key]) // 60
