@@ -233,6 +233,9 @@ class NpcAiMixin:
                         new_x = entity.x + move_x
                         new_y = entity.y + move_y
                         self.move_toward_position(entity, new_x, new_y, screen_key)
+                        # Allow non-keeper fleeing entities to cross zone boundaries
+                        if not getattr(entity, 'keeper', False):
+                            self._try_targeting_zone_cross(entity, entity_id)
 
             elif entity.ai_state == 'exit':
                 if getattr(entity, 'keeper', False):

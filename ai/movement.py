@@ -378,6 +378,52 @@ class NpcAiMovementMixin:
                     entity.last_zone_change_tick = self.tick
                     entity.memory_lane = []  # Clear memory for fresh zone
 
+    def _find_valid_entrance_cell(self, target_screen, entry_x, entry_y, center_x, center_y):
+        """Find the nearest walkable cell at a zone entrance when the computed spot is solid.
+
+        Scans outward along the entrance row (horizontal exits) or column (vertical exits)
+        from center, then tries the row/column immediately behind the entrance edge.
+        Returns (x, y) of the first walkable cell, or (None, None) if all blocked.
+        """
+        grid = target_screen.get('grid', [])
+        h = len(grid)
+        w = len(grid[0]) if h else 0
+
+        def walkable(cx, cy):
+            if 0 <= cx < w and 0 <= cy < h:
+                return not CELL_TYPES.get(grid[cy][cx], {}).get('solid', False)
+            return False
+
+        # Determine scan axis: horizontal scan for top/bottom (entry_y near edge),
+        # vertical scan for left/right (entry_x near edge).
+        if entry_y <= 2 or entry_y >= h - 3:
+            # Top or bottom entrance — scan along x at entry_y, then row behind
+            for radius in range(0, (w // 2) + 1):
+                for dx in [0, radius, -radius]:
+                    cx = center_x + dx
+                    if walkable(cx, entry_y):
+                        return cx, entry_y
+                # Try one row further inside
+                inner_y = entry_y + 1 if entry_y <= 2 else entry_y - 1
+                for dx in [0, radius, -radius]:
+                    cx = center_x + dx
+                    if walkable(cx, inner_y):
+                        return cx, inner_y
+        else:
+            # Left or right entrance — scan along y at entry_x, then column behind
+            for radius in range(0, (h // 2) + 1):
+                for dy in [0, radius, -radius]:
+                    cy = center_y + dy
+                    if walkable(entry_x, cy):
+                        return entry_x, cy
+                inner_x = entry_x + 1 if entry_x <= 2 else entry_x - 1
+                for dy in [0, radius, -radius]:
+                    cy = center_y + dy
+                    if walkable(inner_x, cy):
+                        return inner_x, cy
+
+        return None, None
+
     def try_entity_zone_transition(self, entity_id, entity):
         """Attempt to move entity to adjacent zone ONLY through actual entrances"""
         screen_key = f"{entity.screen_x},{entity.screen_y}"
@@ -473,7 +519,16 @@ class NpcAiMovementMixin:
                 target_screen = self.screens[new_screen_key]
                 target_cell = target_screen['grid'][new_y][new_x]
 
-                if not CELL_TYPES[target_cell].get('solid', False):
+                # If computed entrance cell is solid, scan nearby entrance cells
+                if CELL_TYPES.get(target_cell, {}).get('solid', False):
+                    new_x, new_y = self._find_valid_entrance_cell(
+                        target_screen, new_x, new_y, center_x, center_y)
+                    if new_x is None:
+                        pass  # All blocked — skip transition below
+                    else:
+                        target_cell = target_screen['grid'][new_y][new_x]
+
+                if new_x is not None and not CELL_TYPES.get(target_cell, {}).get('solid', False):
                     # Remove from old screen
                     if screen_key in self.screen_entities:
                         if entity_id in self.screen_entities[screen_key]:
@@ -513,9 +568,16 @@ class NpcAiMovementMixin:
         if entity.in_structure:
             return
 
-        # Keepers are anchored to their current zone — never cross
+        # Keepers are anchored to their zone — UNLESS chasing an entity target cross-zone
         if getattr(entity, 'keeper', False):
-            return
+            kt = getattr(entity, 'keeper_target', None)
+            if kt and kt.get('type') == 'entity':
+                target_screen = kt.get('screen')
+                my_screen = (entity.screen_x, entity.screen_y)
+                if not (target_screen and target_screen != my_screen):
+                    return  # Target in same zone — hold
+            else:
+                return  # Cell/item/no target — stay in zone
 
         # Anti-bounce: prevent an immediate return trip
         if self.tick - getattr(entity, 'last_zone_change_tick', -9999) < NPC_SEAMLESS_CROSS_COOLDOWN:
@@ -573,9 +635,13 @@ class NpcAiMovementMixin:
         if new_screen_key not in self.screens:
             return
 
-        # Destination must be walkable
-        if CELL_TYPES.get(self.screens[new_screen_key]['grid'][new_y][new_x], {}).get('solid', False):
-            return
+        # Destination must be walkable — fall back to nearest valid entrance cell if blocked
+        target_screen_data = self.screens[new_screen_key]
+        if CELL_TYPES.get(target_screen_data['grid'][new_y][new_x], {}).get('solid', False):
+            new_x, new_y = self._find_valid_entrance_cell(
+                target_screen_data, new_x, new_y, center_x, center_y)
+            if new_x is None:
+                return  # All entrance cells blocked
 
         # Population cap
         if new_screen_key not in self.screen_entities:
