@@ -5,6 +5,27 @@ Reviewed from `debug/bugcatcher.log` after each session.
 
 ---
 
+## Session 20 — 2026-03-13 (live player review)
+
+### OBSERVATION — Houses spawning with no lumberjack in zone
+**Severity:** Low / polish
+**Root cause:** HOUSE placement (world/generation.py ~line 158) and LUMBERJACK spawning are completely independent. A HOUSE is placed at 30% chance per zone (random choice of HOUSE or CAVE), with no lumberjack spawn guarantee. House interiors have a 50% chance to spawn any NPC, and only ever pick FARMER or TRADER — never LUMBERJACK. Lumberjacks only appear via the probabilistic zone spawn table.
+**Result:** A HOUSE can exist with an empty interior and no lumberjack anywhere in the zone.
+**Suggested fix:** When placing a HOUSE, guarantee at least one LUMBERJACK in the zone's spawn list, or prefer placing the house only when the zone spawn table has already produced a LUMBERJACK.
+
+### OBSERVATION — Bandits crowding zones
+**Severity:** Medium
+**Root cause:** Multiple independent systems stack bandit counts:
+1. Initial spawn: 20–50% per zone (desert 50%), up to 2 per zone
+2. Continuous spawn: desert 15% weight — highest of any entity
+3. Raid events: spawn 2 bandits at once when 6+ peaceful NPCs present; TRADER+GUARD always spawn so threshold is frequently met; raid cooldown is only 600 ticks (~10s)
+4. Cave spawns: 20% of cave hostile spawns are bandits — continuous low-rate
+5. Zone crossing: bandits in targeting state cross zone boundaries at 100% travel rate with no block
+**Bandit stats are also aggressive:** strength 20, speed 1.3, aggressiveness 0.90, attacks_structures True.
+**Suggested angles:** Reduce desert continuous spawn weight, raise raid threshold or increase raid cooldown, add per-zone bandit hard cap, or reduce aggressiveness so bandits don't chain-trigger pursuit across zones.
+
+---
+
 ## Session 19 — 2026-03-10 (live player session)
 
 ### FIXED — BLACK_SPIDER step animation not playing
