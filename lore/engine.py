@@ -511,7 +511,7 @@ class LoreEngineMixin:
                 entity = self.entities[quest.target_entity_id]
                 if entity.is_dead:
                     completed = True
-                    xp_reward = 1 if entity.killed_by == 'player' else 0
+                    xp_reward = 1
 
         # Check cell-based quests (explore/gather/farm/search)
         elif quest.target_cell:
