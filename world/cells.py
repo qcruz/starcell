@@ -342,14 +342,21 @@ class CellsMixin:
         screen = self.screens[key]
         biome = screen.get('biome', 'FOREST')
 
-        # Separate multipliers: water_mult controls puddle formation, grass_mult controls greening.
-        # Desert gets high water_mult (dramatic puddles when it rains) but zero grass growth.
+        # Desert: rare puddles (10% chance per tick to attempt one sand→water conversion).
+        # Gives ~1-2 puddles over a full rain cycle. No grass — rain doesn't green desert.
+        if biome == 'DESERT':
+            if random.random() < 0.1:
+                x = random.randint(1, GRID_WIDTH - 2)
+                y = random.randint(1, GRID_HEIGHT - 2)
+                cell = screen['grid'][y][x]
+                if cell == 'SAND' and not self.is_cell_enchanted(x, y, key):
+                    if random.random() < 0.6:
+                        screen['grid'][y][x] = 'WATER'
+            return
+
         water_mult = 1.0
         grass_mult = 1.0
-        if biome == 'DESERT':
-            water_mult = 1.5   # Puddles form eagerly — rain is a rare, visible event in desert
-            grass_mult = 0.0   # Rain does not green the desert
-        elif biome == 'MOUNTAINS':
+        if biome == 'MOUNTAINS':
             water_mult = 0.6
             grass_mult = 0.3
         elif biome == 'PLAINS':
@@ -364,11 +371,8 @@ class CellsMixin:
             if cell == 'DIRT' and not self.is_cell_enchanted(x, y, key):
                 if random.random() < 0.3:
                     screen['grid'][y][x] = 'WATER'
-            elif cell == 'SAND' and not self.is_cell_enchanted(x, y, key):
-                if random.random() < 0.6:
-                    screen['grid'][y][x] = 'WATER'
 
-        grass_spawns = int(RAIN_GRASS_SPAWNS * grass_mult)
+        grass_spawns = max(1, int(RAIN_GRASS_SPAWNS * grass_mult))
         for _ in range(grass_spawns):
             x = random.randint(1, GRID_WIDTH - 2)
             y = random.randint(1, GRID_HEIGHT - 2)
