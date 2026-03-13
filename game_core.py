@@ -1331,7 +1331,7 @@ class GameCoreMixin:
         else:
             self.is_raining = True
             self.rain_timer = 0
-            self.rain_duration = random.randint(RAIN_DURATION_MIN, RAIN_DURATION_MAX)
+            self.rain_duration = random.randint(600, 1800)  # 10–30 s at 60 FPS; longer than natural rain
             print("[Spell] Rain started.")
 
     def cast_day_spell(self):

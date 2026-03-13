@@ -79,8 +79,8 @@ HOSTILE_FACTION_SYMBOLS = ['Fang', 'Claw', 'Knife', 'Death', 'Hunger', 'Blade', 
 # Weather System
 RAIN_FREQUENCY_MIN = 1800   # Minimum ticks between rain (~30 s at 60 FPS)
 RAIN_FREQUENCY_MAX = 18000  # Maximum ticks between rain (~5 min at 60 FPS)
-RAIN_DURATION_MIN = 10    # Minimum rain duration (5 seconds)
-RAIN_DURATION_MAX = 60    # Maximum rain duration (15 seconds)
+RAIN_DURATION_MIN = 10    # Minimum natural rain duration (~0.2 s at 60 FPS; short bursts)
+RAIN_DURATION_MAX = 60    # Maximum natural rain duration (~1 s at 60 FPS)
 RAIN_WATER_SPAWNS = 5      # Water cells created per rain tick per screen
 RAIN_GRASS_SPAWNS = 8      # Dirt→Grass conversions per rain tick
 
