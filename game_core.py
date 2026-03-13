@@ -1531,8 +1531,16 @@ class GameCoreMixin:
                     entity.quest_target = ('cell', q.target_cell[2], q.target_cell[3])
                 entity.assigned_quest = slot
 
-            # Immediately try to resolve a target so the keeper anchors right away
-            # (avoids waiting ~50 AI ticks for the periodic _assign_specific_quest_target)
+            # Seed target directly from the player's quest object if it has one
+            # (e.g. player's HUNT quest already tracking a named entity)
+            if entity.quest_target is None:
+                player_quest = self.quests.get(qt)
+                if player_quest and getattr(player_quest, 'target_entity_id', None):
+                    eid = player_quest.target_entity_id
+                    if eid in self.entities and self.entities[eid].is_alive():
+                        entity.quest_target = eid
+
+            # Fall back to AI search if player quest had no specific target yet
             if entity.quest_target is None:
                 screen_key = f"{entity.screen_x},{entity.screen_y}"
                 self._assign_specific_quest_target(entity, screen_key)
