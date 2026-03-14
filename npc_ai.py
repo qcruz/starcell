@@ -67,6 +67,15 @@ class NpcAiMixin:
             if not entity.in_combat:
                 return  # Skip AI update - NPC stays still
 
+        # FARMER inventory guarantee: always carry at least 1 carrot for planting
+        if entity.type == 'FARMER':
+            if entity.inventory.get('carrot', 0) < 1:
+                entity.inventory['carrot'] = 1
+
+        # Resolve keeper target: updates keeper_target_pos from live entity/item position
+        if getattr(entity, 'keeper', False):
+            self.resolve_keeper_target(entity)
+
         # UNIFIED AI STATE SYSTEM - Update entity AI state based on parameters
         self.update_entity_ai_state(entity_id, entity)
         
@@ -224,6 +233,9 @@ class NpcAiMixin:
                         new_x = entity.x + move_x
                         new_y = entity.y + move_y
                         self.move_toward_position(entity, new_x, new_y, screen_key)
+                        # Allow non-keeper fleeing entities to cross zone boundaries
+                        if not getattr(entity, 'keeper', False):
+                            self._try_targeting_zone_cross(entity, entity_id)
 
             elif entity.ai_state == 'exit':
                 if getattr(entity, 'keeper', False):
@@ -295,10 +307,23 @@ class NpcAiMixin:
                             self._try_targeting_zone_cross(entity, entity_id)
             
             elif entity.ai_state == 'wandering':
-                # Random movement with natural pauses
-                # 60% move, 40% stand still for a beat
-                if random.random() < 0.6:
-                    self.wander_entity(entity)
+                # Keeper type 1/2: return to anchor target if out of range
+                ktype = getattr(entity, 'keeper_type', None) or 3
+                ktarget = getattr(entity, 'keeper_target_pos', None)
+                krange = KEEPER_RANGE.get(ktype)
+                if ktype < 3 and ktarget and krange is not None:
+                    dist = abs(entity.x - ktarget[0]) + abs(entity.y - ktarget[1])
+                    if dist > krange:
+                        self.move_toward_position(entity, ktarget[0], ktarget[1], screen_key)
+                    elif ktype == 2 and random.random() < 0.6:
+                        # Type 2 (patrol): wander freely within range
+                        self.wander_entity(entity)
+                    # Type 1 (guard): hold position when at target
+                else:
+                    # Type 3 or no target: random movement with natural pauses
+                    # 60% move, 40% stand still for a beat
+                    if random.random() < 0.6:
+                        self.wander_entity(entity)
             
             elif entity.ai_state == 'idle':
                 # Stand still - NO MOVEMENT in idle state
@@ -353,6 +378,7 @@ class NpcAiMixin:
                             entity.current_target = None
                             entity.ai_state       = 'wandering'
                             entity.ai_state_timer = 2
+                            self._try_complete_assigned_quest(entity)
                         elif entity.target_type == 'food':
                             # Eat food — use behavior_config actions or direct consumption
                             behavior_config = entity.props.get('behavior_config')
@@ -1341,6 +1367,40 @@ class NpcAiMixin:
                 return
         
         # =====================================================================
+        # KEEPER OUT-OF-RANGE CHECK (overrides timer — always evaluated)
+        # If a keeper NPC is outside its target range, immediately enter targeting.
+        # Handles cross-zone chasing: routes to zone exit when target is in another zone.
+        # =====================================================================
+        if (getattr(entity, 'keeper', False) and
+                entity.ai_state not in ('combat', 'flee')):
+            ktype = getattr(entity, 'keeper_type', 3)
+            ktarget = getattr(entity, 'keeper_target_pos', None)
+            krange = KEEPER_RANGE.get(ktype)
+            kt_ref = getattr(entity, 'keeper_target', None)
+            if ktype < 3 and ktarget and krange is not None:
+                # Cross-zone: target is in a different zone — head toward exit
+                if kt_ref and kt_ref.get('type') == 'entity':
+                    target_screen = kt_ref.get('screen')
+                    my_screen = (entity.screen_x, entity.screen_y)
+                    if target_screen and target_screen != my_screen:
+                        ex, ey = self._get_exit_toward_zone(
+                            my_screen[0], my_screen[1],
+                            target_screen[0], target_screen[1])
+                        entity.ai_state = 'targeting'
+                        entity.target_type = 'keeper_target'
+                        entity.current_target = (ex, ey)
+                        entity.ai_state_timer = 1
+                        return
+                # Same zone: check distance
+                dist = abs(entity.x - ktarget[0]) + abs(entity.y - ktarget[1])
+                if dist > krange:
+                    entity.ai_state = 'targeting'
+                    entity.target_type = 'keeper_target'
+                    entity.current_target = (ktarget[0], ktarget[1])
+                    entity.ai_state_timer = 1
+                    return
+
+        # =====================================================================
         # TIMER-BASED STATE TRANSITIONS (only when timer expired)
         # =====================================================================
         if entity.ai_state_timer > 0:
@@ -1353,7 +1413,7 @@ class NpcAiMixin:
                 if target_type:
                     entity.ai_state = 'targeting'
                     entity.target_type = target_type
-                    entity.current_target = None
+                    entity.current_target = self._quest_target_as_current(entity) if target_type == 'quest_target' else None
                     entity.ai_state_timer = 2
                 else:
                     # Nothing to target — wander instead
@@ -1366,7 +1426,7 @@ class NpcAiMixin:
                 entity.ai_state_timer = 2
             else:
                 entity.ai_state_timer = random.randint(2, 4)  # Stay idle with variable duration
-        
+
         elif entity.ai_state == 'wandering':
             roll = random.random()
             if roll < aggressiveness:
@@ -1375,7 +1435,7 @@ class NpcAiMixin:
                 if target_type:
                     entity.ai_state = 'targeting'
                     entity.target_type = target_type
-                    entity.current_target = None
+                    entity.current_target = self._quest_target_as_current(entity) if target_type == 'quest_target' else None
                     entity.ai_state_timer = 2
                 else:
                     # Nothing to target — keep wandering longer
@@ -1932,6 +1992,145 @@ class NpcAiMixin:
             
             # Wandering handled by state machine
     
+    def _quest_target_as_current(self, entity):
+        """Return entity.quest_target in a form usable as entity.current_target, or None."""
+        qt = getattr(entity, 'quest_target', None)
+        if qt is None:
+            return None
+        if isinstance(qt, tuple):
+            return qt  # already ('cell', x, y)
+        if isinstance(qt, int) and qt in self.entities:
+            return qt  # entity id — targeting state handles int targets
+        return None
+
+    # =========================================================================
+    # KEEPER TARGET HELPERS
+    # =========================================================================
+
+    def resolve_keeper_target(self, entity):
+        """Update keeper_target_pos from the live position of the tracked target.
+
+        For entity targets: follows them across zones, triggers quest completion
+        when target dies.  For item targets: tracks the registered item location.
+        Cell targets are static and need no resolution.
+        """
+        kt = getattr(entity, 'keeper_target', None)
+        if not kt:
+            # Migrate legacy plain keeper_target_pos (no ref dict) — treat as static cell
+            if getattr(entity, 'keeper_target_pos', None):
+                entity.keeper_target = {
+                    'type': 'cell', 'ref': None,
+                    'pos': entity.keeper_target_pos,
+                    'screen': (entity.screen_x, entity.screen_y),
+                }
+            return
+
+        if kt['type'] == 'entity':
+            eid = kt['ref']
+            if eid in self.entities:
+                t = self.entities[eid]
+                if t.is_alive():
+                    kt['pos'] = (t.x, t.y)
+                    kt['screen'] = (t.screen_x, t.screen_y)
+                    entity.keeper_target_pos = (t.x, t.y)
+                else:
+                    # Target died — quest complete
+                    entity.keeper_target = None
+                    entity.keeper_target_pos = None
+                    self._try_complete_assigned_quest(entity)
+            else:
+                # Entity ID no longer in entities dict — treat as gone
+                entity.keeper_target = None
+                entity.keeper_target_pos = None
+                self._try_complete_assigned_quest(entity)
+
+        elif kt['type'] == 'item':
+            registry = getattr(self, 'item_registry', {})
+            loc = registry.get(kt['ref'])
+            if loc:
+                kt['pos'] = loc['pos']
+                kt['screen'] = loc.get('screen', (entity.screen_x, entity.screen_y))
+                entity.keeper_target_pos = loc['pos']
+            else:
+                # Item gone — quest complete
+                entity.keeper_target = None
+                entity.keeper_target_pos = None
+                self._try_complete_assigned_quest(entity)
+        # 'cell' type: static, nothing to update
+
+    def _set_keeper_target_cell(self, entity, cx, cy, sx=None, sy=None):
+        """Set a static cell as the keeper anchor."""
+        sx = sx if sx is not None else entity.screen_x
+        sy = sy if sy is not None else entity.screen_y
+        entity.keeper_target = {'type': 'cell', 'ref': None, 'pos': (cx, cy), 'screen': (sx, sy)}
+        entity.keeper_target_pos = (cx, cy)
+        entity.keeper_type = 1
+
+    def _set_keeper_target_entity(self, entity, target_entity_id):
+        """Set a live entity as the keeper target — position tracked each tick."""
+        if target_entity_id not in self.entities:
+            return
+        t = self.entities[target_entity_id]
+        entity.keeper_target = {
+            'type': 'entity', 'ref': target_entity_id,
+            'pos': (t.x, t.y), 'screen': (t.screen_x, t.screen_y),
+        }
+        entity.keeper_target_pos = (t.x, t.y)
+        entity.keeper_type = 1
+
+    def _set_keeper_target_item(self, entity, item_uid):
+        """Set a registered item UID as the keeper target."""
+        registry = getattr(self, 'item_registry', {})
+        loc = registry.get(item_uid)
+        if not loc:
+            return
+        entity.keeper_target = {
+            'type': 'item', 'ref': item_uid,
+            'pos': loc['pos'], 'screen': loc.get('screen', (entity.screen_x, entity.screen_y)),
+        }
+        entity.keeper_target_pos = loc['pos']
+        entity.keeper_type = 1
+
+    def _try_complete_assigned_quest(self, entity):
+        """Remove the front non-base quest from entity.quest_queue and award player 1 XP.
+
+        No-op if the queue is empty, has only the base quest, or the entity type
+        doesn't use the queue system.
+        """
+        queue = getattr(entity, 'quest_queue', None)
+        if not queue or queue[0].get('base', True):
+            return  # Only base quest remaining — nothing to complete
+
+        completed = queue.pop(0)
+        q_name = QUEST_TYPES.get(completed['type'], {}).get('name', completed['type'])
+        npc_name = entity.name if entity.name else entity.type
+
+        # Restore quest_focus to next in queue (always the base quest at minimum)
+        entity.quest_focus = queue[0]['type'] if queue else None
+        entity.assigned_quest = None
+        entity.quest_target = None
+        entity.keeper_target = None
+        entity.keeper_target_pos = None
+        entity._quest_update_counter = 0
+
+        # If back to base quest only, release keeper anchor so NPC roams freely
+        has_non_base = any(not e.get('base') for e in queue)
+        if not has_non_base:
+            entity.keeper = False
+            entity.keeper_type = getattr(entity, '_base_keeper_type', 3)
+
+        # Reset AI state so entity immediately starts acting on the next quest
+        # rather than staying frozen in targeting/idle with a stale current_target
+        entity.ai_state = 'wandering'
+        entity.ai_state_timer = 1
+        entity.current_target = None
+        entity.target_type = None
+        entity.in_combat = False
+
+        # Award player XP
+        self.gain_xp(1)
+        print(f"{npc_name} completed [{q_name}]! Player +1 XP.")
+
     def _assign_specific_quest_target(self, entity, screen_key):
         """Pick a specific quest target cell/entity for a 'specific' quest cycle.
         Only called ~20% of the time every 10 AI updates.  Stores result in
@@ -1942,7 +2141,7 @@ class NpcAiMixin:
 
         target = None
 
-        if focus == 'farming':
+        if focus in ('farming', 'FARM'):
             target = self._find_closest_crop(entity, screen_key)
             if target is None and entity.level >= 5:
                 for dsx, dsy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
@@ -1951,18 +2150,18 @@ class NpcAiMixin:
                     if target:
                         break
 
-        elif focus == 'building':
+        elif focus in ('building', 'LUMBER'):
             target = self._find_closest_tree(entity, screen_key)
             if target is None:
                 target = self.find_closest_structure(entity, screen_key)
 
-        elif focus == 'mining':
+        elif focus in ('mining', 'MINE'):
             target = self._find_closest_stone(entity, screen_key)
 
         elif focus == 'crafting':
             target = self.find_closest_structure(entity, screen_key)
 
-        elif focus == 'exploring':
+        elif focus in ('exploring', 'EXPLORE'):
             exits = [
                 (GRID_WIDTH // 2, 1),
                 (GRID_WIDTH // 2, GRID_HEIGHT - 2),
@@ -1972,10 +2171,20 @@ class NpcAiMixin:
             ex, ey = random.choice(exits)
             target = ('cell', ex, ey, 'EXIT')
 
-        elif focus == 'combat_hostile':
-            target = self.find_closest_hostile_entity(entity, screen_key)
+        elif focus in ('combat_hostile', 'HUNT', 'SLAY'):
+            # Prefer the player's current quest target (same specific entity)
+            player_qt = None
+            if hasattr(self, 'active_quest') and self.active_quest in ('HUNT', 'SLAY'):
+                for qt_key, qt_val in self.quests.items():
+                    if qt_key in ('HUNT', 'SLAY') and hasattr(qt_val, 'target_entity_id') and qt_val.target_entity_id:
+                        player_qt = qt_val.target_entity_id
+                        break
+            if player_qt and player_qt in self.entities and self.entities[player_qt].is_alive():
+                target = player_qt
+            else:
+                target = self.find_closest_hostile_entity(entity, screen_key)
 
-        elif focus == 'combat_all':
+        elif focus in ('combat_all', 'GATHER', 'RESCUE'):
             target = self._find_closest_any_entity(entity, screen_key)
             if target is None:
                 exits = [
@@ -1987,13 +2196,30 @@ class NpcAiMixin:
                 ex, ey = random.choice(exits)
                 target = ('cell', ex, ey, 'EXIT')
 
+        elif focus == 'SEARCH':
+            # Item search: use the keeper_target item UID if already set
+            kt = getattr(entity, 'keeper_target', None)
+            if kt and kt.get('type') == 'item':
+                # Target position already tracked by resolve_keeper_target — no new target needed
+                target = None
+            else:
+                # No item target yet — wait for quest assignment to register one
+                target = None
+
         # Never assign the entity's own cell as a target
         if isinstance(target, tuple) and len(target) >= 3 and target[0] == 'cell':
             if (target[1], target[2]) == (entity.x, entity.y):
                 target = None
 
         entity.quest_target = target
-    
+
+        # Sync keeper_target to the newly found quest target
+        if target and getattr(entity, 'keeper', False):
+            if isinstance(target, tuple) and len(target) >= 3 and target[0] == 'cell':
+                self._set_keeper_target_cell(entity, target[1], target[2])
+            elif isinstance(target, int):
+                self._set_keeper_target_entity(entity, target)
+
     def update_entity_combat_state(self, entity):
         """Update entity combat state (blocking/evading/attacking)"""
         # Hostile entities are aggressive - mostly attacking
@@ -2041,6 +2267,18 @@ class NpcAiMixin:
         #               Every ~10 AI updates, 20% chance to assign a specific target.
         #               Survival needs (extreme hunger/thirst) preempt both modes.
         # ─────────────────────────────────────────────────────────────────────
+        # Initialize quest queue for NPCs that have a base quest (FARMER etc.)
+        if entity.type in NPC_BASE_QUEST and not hasattr(entity, 'quest_queue'):
+            base_qt = NPC_BASE_QUEST[entity.type]
+            entity.quest_queue = [{'type': base_qt, 'base': True, 'slot': None}]
+            if not getattr(entity, 'quest_focus', None):
+                entity.quest_focus = base_qt
+
+        # Sync quest_focus from queue head (queue-managed NPCs only)
+        queue = getattr(entity, 'quest_queue', None)
+        if queue:
+            entity.quest_focus = queue[0]['type']
+
         quest_focus = getattr(entity, 'quest_focus', None)
         if quest_focus and not low_hunger and not low_thirst:
 
@@ -2048,6 +2286,18 @@ class NpcAiMixin:
             if not hasattr(entity, '_quest_update_counter'):
                 entity._quest_update_counter = 0
             entity._quest_update_counter += 1
+
+            # Seed quest_target from a transferred special quest on first evaluation
+            assigned = getattr(entity, 'assigned_quest', None)
+            if assigned and getattr(entity, 'quest_target', None) is None:
+                q = assigned.quest
+                if q.target_entity_id is not None:
+                    entity.quest_target = q.target_entity_id
+                elif q.target_cell is not None:
+                    # target_cell is (screen_x, screen_y, x, y)
+                    entity.quest_target = ('cell', q.target_cell[2], q.target_cell[3])
+                elif q.target_location is not None:
+                    entity.quest_target = ('cell', q.target_location[0], q.target_location[1])
 
             specific = getattr(entity, 'quest_target', None)
 
@@ -2060,7 +2310,7 @@ class NpcAiMixin:
                         # Close enough — treat as completed, drop back to general
                         entity.quest_target = None
                         entity._quest_update_counter = 0
-                        # Fall through to general / default behavior this cycle
+                        self._try_complete_assigned_quest(entity)
                     else:
                         # Still heading there
                         return 'quest_target'
@@ -2071,11 +2321,13 @@ class NpcAiMixin:
                         if dist <= 2:
                             entity.quest_target = None
                             entity._quest_update_counter = 0
+                            self._try_complete_assigned_quest(entity)
                         else:
                             return 'quest_target'
                     else:
                         entity.quest_target = None
                         entity._quest_update_counter = 0
+                        self._try_complete_assigned_quest(entity)
 
             # GENERAL MODE — every ~10 updates, 20% chance to assign a specific target
             if entity.quest_target is None and entity._quest_update_counter >= 10:
@@ -2261,8 +2513,12 @@ class NpcAiMixin:
             return
         
         # GOBLIN/BANDIT BEHAVIOR (original code)
-        # PRIORITY 1: Pick up items from ground (goblins are looters)
-        if entity.type == 'GOBLIN' and screen_key in self.dropped_items and self.dropped_items[screen_key]:
+        # Inventory "full" threshold: 8 unique item types or 30 total items
+        _goblin_inv_full = (len(entity.inventory) >= 8 or
+                            sum(entity.inventory.values()) >= 30)
+
+        # PRIORITY 1: Pick up items from ground (goblins are looters) — skip if full
+        if entity.type == 'GOBLIN' and not _goblin_inv_full and screen_key in self.dropped_items and self.dropped_items[screen_key]:
             # Check for items at current position first
             for dy in range(-1, 2):
                 for dx in range(-1, 2):
@@ -2312,8 +2568,8 @@ class NpcAiMixin:
                 self.move_entity_towards(entity, closest_loot_x, closest_loot_y)
                 return  # Moving toward loot
         
-        # PRIORITY 2: Place chest with loot (goblins hoard treasure)
-        if entity.type == 'GOBLIN' and entity.inventory and random.random() < 0.005:  # 0.5% chance
+        # PRIORITY 2: Place chest with loot — only when inventory is too full
+        if entity.type == 'GOBLIN' and _goblin_inv_full and random.random() < 0.0005:  # 0.05% chance
             # Find empty adjacent spot
             for dy in range(-1, 2):
                 for dx in range(-1, 2):
@@ -2383,6 +2639,9 @@ class NpcAiMixin:
                         entity.trigger_action_animation()
                         self.show_attack_animation(check_x, check_y, entity=entity)
                         screen['grid'][check_y][check_x] = 'GRASS'
+                        # Scatter wood debris so destruction looks visible
+                        for _ in range(random.randint(1, 3)):
+                            self.drop_item('wood', check_x, check_y)
                         name_str = entity.name if entity.name else entity.type
                         print(f"{name_str} destroyed a house at [{screen_key}]!")
                         return

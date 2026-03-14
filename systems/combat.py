@@ -105,7 +105,6 @@ class CombatMixin:
                         total_damage *= (1 - entity.block_reduction)
 
                     entity.take_damage(total_damage, 'player')
-                    self.gain_xp(1)
 
                     # Temp energy cost for attacking
                     self.player['energy'] = max(0, self.player.get('energy', 0) - 2)
@@ -340,6 +339,9 @@ class CombatMixin:
             self.inventory.add_follower(follower_item, 1)
             print(f"{pending} follower spawned (ID: {follower_id})")
 
+        # Re-register any ghost entities created during time-pass simulation or death
+        self.reconcile_screen_entities()
+
         self.state = 'playing'
         # Autopilot grace period: don't engage for 15 seconds after entering game
         self.last_input_tick = self.tick + 900
@@ -355,6 +357,26 @@ class CombatMixin:
                     print(f"  {quest_type}: No target found yet")
 
         print(f"{self.death_years} years have passed...")
+
+    def reconcile_screen_entities(self):
+        """Scan self.entities for any entity absent from screen_entities and re-register it.
+
+        Ghost entities (in self.entities but missing from screen_entities) are invisible and
+        never receive AI updates. This can happen after zone crossing, structure entry/exit,
+        time-pass simulation, or player death if any remove/append pair fails mid-sequence.
+        """
+        reregistered = 0
+        for entity_id, entity in self.entities.items():
+            zone_key = f"{entity.screen_x},{entity.screen_y}"
+            bucket = self.screen_entities.get(zone_key)
+            if bucket is None:
+                self.screen_entities[zone_key] = [entity_id]
+                reregistered += 1
+            elif entity_id not in bucket:
+                bucket.append(entity_id)
+                reregistered += 1
+        if reregistered:
+            print(f"[Reconcile] Re-registered {reregistered} ghost entity/entities into screen_entities")
 
     # -------------------------------------------------------------------------
     # Attack animations

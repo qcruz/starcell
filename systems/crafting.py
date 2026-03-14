@@ -486,7 +486,26 @@ class CraftingMixin:
 
         if cell_type in exact_pickup_map:
             item_name = exact_pickup_map[cell_type]
-            self.inventory.add_item(item_name, 1)
+
+            # HOUSE and CHEST scatter their components as dropped items instead of
+            # going into inventory as a single item (looks better than silent removal)
+            if cell_type == 'HOUSE':
+                self.drop_item('wood', target_x, target_y)
+                self.drop_item('wood', target_x, target_y)
+            elif cell_type == 'CHEST':
+                # Scatter contents if present; empty chests leave nothing (no plank drop)
+                chest_key = f"{screen_key}:{target_x},{target_y}"
+                contents = getattr(self, 'chest_contents', {}).pop(chest_key, None)
+                if contents:
+                    for citem, ccount in contents.items():
+                        for _ in range(ccount):
+                            self.drop_item(citem, target_x, target_y)
+                # Remove background entry if present
+                if hasattr(self, 'chest_backgrounds'):
+                    self.chest_backgrounds.pop(chest_key, None)
+            else:
+                self.inventory.add_item(item_name, 1)
+
             self.sound.on_pickup()
 
             # Replace cell: inside structures → restore structure floor, else biome base

@@ -211,6 +211,12 @@ class CellsMixin:
                     if random.random() < min(1.0, SAND_RECLAIM_RATE * _growth):
                         new_grid[y][x] = 'DIRT'
 
+                # Sand → Dirt (grass neighbor — vegetation slowly reclaims desert edges)
+                # Half the water-reclaim rate so deserts don't erode too quickly
+                elif cell == 'SAND' and grass_count >= 1:
+                    if random.random() < min(1.0, SAND_RECLAIM_RATE * 0.05 * _growth):
+                        new_grid[y][x] = 'DIRT'
+
                 # Deep water formation: all 4 cardinal neighbors must be water/deepwater
                 elif cell == 'WATER':
                     cardinal_water = sum(
@@ -223,9 +229,15 @@ class CellsMixin:
                     elif total_water <= 1 and random.random() < min(1.0, WATER_TO_DIRT_RATE * _decay):
                         new_grid[y][x] = 'DIRT'
 
-                # Deep water evaporation
-                elif cell == 'DEEP_WATER' and (water_count + deep_water_count) < 2:
-                    if random.random() < min(1.0, DEEP_WATER_EVAPORATE_RATE * _decay):
+                # Deep water evaporation — mirrors formation: requires all 4 cardinal
+                # neighbors to be water/deep_water to stay deep; decays quickly otherwise
+                elif cell == 'DEEP_WATER':
+                    cardinal_water_dw = sum(
+                        1 for cdx, cdy in ((0, -1), (0, 1), (-1, 0), (1, 0))
+                        if 0 <= x + cdx < GRID_WIDTH and 0 <= y + cdy < GRID_HEIGHT
+                        and screen['grid'][y + cdy][x + cdx] in ('WATER', 'DEEP_WATER')
+                    )
+                    if cardinal_water_dw < 4 and random.random() < min(1.0, DEEP_WATER_EVAPORATE_RATE * _decay):
                         new_grid[y][x] = 'WATER'
 
                 # Flower spread

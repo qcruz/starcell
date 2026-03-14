@@ -6,6 +6,30 @@ from entity import Entity, Quest, NpcQuestSlot
 from constants import ITEMS, COLORS
 
 
+def _serialize_keeper_target(kt):
+    """Convert keeper_target dict (which may have tuple values) to JSON-safe form."""
+    if not kt:
+        return None
+    out = dict(kt)
+    if isinstance(out.get('pos'), tuple):
+        out['pos'] = list(out['pos'])
+    if isinstance(out.get('screen'), tuple):
+        out['screen'] = list(out['screen'])
+    return out
+
+
+def _deserialize_keeper_target(kt):
+    """Restore tuple values in a loaded keeper_target dict."""
+    if not kt:
+        return None
+    out = dict(kt)
+    if isinstance(out.get('pos'), list):
+        out['pos'] = tuple(out['pos'])
+    if isinstance(out.get('screen'), list):
+        out['screen'] = tuple(out['screen'])
+    return out
+
+
 class SaveLoadMixin:
     """Handles saving and loading game state to/from JSON."""
 
@@ -35,7 +59,10 @@ class SaveLoadMixin:
                 'movement_pattern': getattr(entity, 'movement_pattern', None),
                 'item_levels': getattr(entity, 'item_levels', {}),
                 'item_names': getattr(entity, 'item_names', {}),
-                'keeper': getattr(entity, 'keeper', False)
+                'keeper': getattr(entity, 'keeper', False),
+                'keeper_type': getattr(entity, 'keeper_type', None),
+                'keeper_target': _serialize_keeper_target(getattr(entity, 'keeper_target', None)),
+                'keeper_target_pos': list(getattr(entity, 'keeper_target_pos', None) or []) or None,
             }
 
         # Convert dropped_items tuple keys to strings for JSON serialization
@@ -136,6 +163,8 @@ class SaveLoadMixin:
             'follower_items': {str(k): v for k, v in self.follower_items.items()},
             'structures': structures_serializable,
             'opened_chests': list(self.opened_chests),  # Convert set to list for JSON
+            'chest_contents': getattr(self, 'chest_contents', {}),
+            'chest_backgrounds': getattr(self, 'chest_backgrounds', {}),
             'next_structure_id': self.next_structure_id,
             # Zone priority system
             'zone_connections': zone_connections_serializable,
@@ -144,6 +173,21 @@ class SaveLoadMixin:
             'next_structure_zone_id': self.next_structure_zone_id,
             'active_quest': self.active_quest,
             'active_npc_quest_npc_id': getattr(self, 'active_npc_quest_npc_id', None),
+            'quests': {
+                qt: {
+                    'status':           q.status,
+                    'cooldown_remaining': q.cooldown_remaining,
+                    'completed_count':  q.completed_count,
+                    'target_entity_id': q.target_entity_id,
+                    'target_location':  list(q.target_location) if q.target_location else None,
+                    'target_cell':      list(q.target_cell) if q.target_cell else None,
+                    'target_info':      q.target_info,
+                    'target_zone':      q.target_zone,
+                    'original_cell':    getattr(q, '_original_cell', None),
+                    'progress':         getattr(q, 'progress', 0.0),
+                }
+                for qt, q in self.quests.items()
+            },
             'zone_keepers': self.zone_keepers,
             'zone_cave_systems': getattr(self, 'zone_cave_systems', {}),
             'npc_quests': [
@@ -286,7 +330,7 @@ class SaveLoadMixin:
                     entity_data['screen_y'],
                     entity_data['level']
                 )
-                entity.health = entity_data['health']
+                entity.health = min(entity_data['health'], entity.max_health)
                 entity.hunger = entity_data['hunger']
                 entity.thirst = entity_data['thirst']
                 entity.inventory = entity_data.get('inventory', {})
@@ -303,6 +347,10 @@ class SaveLoadMixin:
                 entity.item_levels = entity_data.get('item_levels', {})
                 entity.item_names = entity_data.get('item_names', {})
                 entity.keeper = entity_data.get('keeper', False)
+                entity.keeper_type = entity_data.get('keeper_type', None)
+                entity.keeper_target = _deserialize_keeper_target(entity_data.get('keeper_target'))
+                ktp = entity_data.get('keeper_target_pos')
+                entity.keeper_target_pos = tuple(ktp) if ktp else None
 
                 # Ensure wizards from old saves have spell and alignment
                 if entity.type == 'WIZARD':
@@ -353,6 +401,8 @@ class SaveLoadMixin:
                 self.structures[structure_key] = deserialized_structure
 
             self.opened_chests = set(save_data.get('opened_chests', []))
+            self.chest_contents = save_data.get('chest_contents', {})
+            self.chest_backgrounds = save_data.get('chest_backgrounds', {})
             self.next_structure_id = save_data.get('next_structure_id', save_data.get('next_subscreen_id', 0))
 
             # Load zone priority system data
@@ -423,6 +473,20 @@ class SaveLoadMixin:
             self.state = 'playing'
             # Restore active quest (default to FARM for older saves)
             self.active_quest = save_data.get('active_quest', 'FARM')
+            # Restore player quest state (targets, cooldowns, completion counts)
+            for qt, qd in save_data.get('quests', {}).items():
+                if qt in self.quests:
+                    q = self.quests[qt]
+                    q.status             = qd.get('status', 'inactive')
+                    q.cooldown_remaining = qd.get('cooldown_remaining', 0)
+                    q.completed_count    = qd.get('completed_count', 0)
+                    q.target_entity_id   = qd.get('target_entity_id')
+                    q.target_location    = tuple(qd['target_location']) if qd.get('target_location') else None
+                    q.target_cell        = tuple(qd['target_cell'])     if qd.get('target_cell')     else None
+                    q.target_info        = qd.get('target_info', '')
+                    q.target_zone        = qd.get('target_zone')
+                    q._original_cell     = qd.get('original_cell')
+                    q.progress           = qd.get('progress', 0.0)
             # Restore NPC quests
             self.npc_quests = []
             for d in save_data.get('npc_quests', []):
@@ -438,6 +502,19 @@ class SaveLoadMixin:
                 q.progress         = d.get('progress', 0.0)
                 self.npc_quests.append(NpcQuestSlot(d['npc_id'], q))
             self.active_npc_quest_npc_id = save_data.get('active_npc_quest_npc_id')
+
+            # Reconcile screen_entities against self.entities: any entity whose
+            # saved screen_x/screen_y doesn't match the screen_entities registry
+            # is a ghost — visible in world data but never rendered or updated.
+            # Re-register them so they appear and move correctly.
+            for entity_id, entity in self.entities.items():
+                zone_key = f"{entity.screen_x},{entity.screen_y}"
+                if zone_key not in self.screen_entities:
+                    self.screen_entities[zone_key] = []
+                if entity_id not in self.screen_entities[zone_key]:
+                    self.screen_entities[zone_key].append(entity_id)
+                    print(f"[Load] Re-registered ghost entity {entity_id} ({entity.type}) into {zone_key}")
+
             # Autopilot grace period: don't engage for 15 seconds after loading
             self.last_input_tick = self.tick + 900
             self.bug_catcher.clear()

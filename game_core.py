@@ -186,6 +186,12 @@ class GameCoreMixin:
         self.inspected_npc = None  # Entity being inspected
         self.inspected_npc_tick = 0  # When inspection started  # When to hide display
 
+        # Item UID registry — tracks individually identified items (quest/keeper targets)
+        self._item_uid_counter = 0
+        self.item_registry = {}
+        # {uid: {'name': str, 'location': 'world'|'inventory',
+        #         'holder': entity_id or (sx,sy,x,y), 'pos': (x,y), 'screen': (sx,sy)}}
+
         # Debug / bug-tracking
         self.bug_catcher = BugCatcher()
         self.watchdog = Watchdog(self.bug_catcher)
@@ -668,6 +674,19 @@ class GameCoreMixin:
                         del slots[ktype]
                         break
 
+        # Broadcast quest completion to all keeper NPCs targeting this entity
+        for watcher_id, watcher in list(self.entities.items()):
+            kt = getattr(watcher, 'keeper_target', None)
+            if kt and kt.get('type') == 'entity' and kt.get('ref') == entity_id:
+                watcher.keeper_target = None
+                watcher.keeper_target_pos = None
+                self._try_complete_assigned_quest(watcher)
+
+        # Player quest targeting this entity: let check_quest_completion handle the
+        # kill on the next update_quests tick — entity.is_dead (health<=0) triggers
+        # proper completion with XP and sound. Don't clear_target() here or the
+        # completion logic is bypassed.
+
         # Remove from followers if it was a follower
         if entity_id in self.followers:
             self.followers.remove(entity_id)
@@ -981,7 +1000,10 @@ class GameCoreMixin:
                 if event.button == 1 and self.state == 'menu':
                     self._handle_menu_click(event.pos)
                 elif event.button == 1 and self.state == 'playing':
-                    self.handle_inventory_click(event.pos)
+                    if self.handle_npc_trade_click(event.pos):
+                        self.gain_xp(1)
+                    else:
+                        self.handle_inventory_click(event.pos)
                     self.handle_quest_ui_click(event.pos)
             
             if event.type == pygame.KEYDOWN:
@@ -1001,13 +1023,16 @@ class GameCoreMixin:
                     elif event.key == pygame.K_SPACE:
                         if 'crafting' in self.inventory.open_menus and self.inventory.selected.get('crafting'):
                             self.attempt_craft_selected()
+                            self.gain_xp(1)
                             continue
                         if 'actions' in self.inventory.open_menus:
                             selected_action = self.inventory.selected.get('actions')
                             if selected_action:
                                 self.execute_action(selected_action)
+                                self.gain_xp(1)
                                 continue
                         self.interact()
+                        self.gain_xp(1)
                     elif event.key == pygame.K_l:
                         selected = self.inventory.selected_magic
                         if selected == 'rain_spell':
@@ -1016,23 +1041,26 @@ class GameCoreMixin:
                             self.cast_day_spell()
                         else:
                             self.cast_star_spell()
+                        self.gain_xp(1)
                     elif event.key == pygame.K_k:
-                        # Release all enchantments
                         self.release_enchantments()
+                        self.gain_xp(1)
                     elif event.key == pygame.K_j:
-                        # Release selected follower
                         self.release_follower()
+                        self.gain_xp(1)
                     elif event.key == pygame.K_b:
                         # Toggle blocking
                         self.player['blocking'] = not self.player['blocking']
                         print(f"Blocking: {'ON' if self.player['blocking'] else 'OFF'}")
+                        self.gain_xp(1)
                     elif event.key == pygame.K_v:
                         # Toggle friendly fire (allow/deny damage to peaceful entities)
                         self.player['friendly_fire'] = not self.player.get('friendly_fire', False)
                         state = 'ON — can attack anyone' if self.player['friendly_fire'] else 'OFF — peaceful entities protected'
                         print(f"Friendly Fire: {state}")
+                        self.gain_xp(1)
                     elif event.key == pygame.K_c:
-                        # Toggle crafting screen
+                        # Toggle crafting screen (UI open/close — no XP)
                         _was_open = 'crafting' in self.inventory.open_menus
                         self.inventory.toggle_menu('crafting')
                         if not _was_open:
@@ -1045,18 +1073,21 @@ class GameCoreMixin:
                                 self.inventory.selected['crafting'] = _craftable[0][0]
                             self.sound.on_inventory_open()
                     elif event.key == pygame.K_x:
-                        # Attempt to craft with selected items
                         self.attempt_craft()
+                        self.gain_xp(1)
                     elif event.key == pygame.K_i:
                         _was_open = 'items' in self.inventory.open_menus
                         self.inventory.toggle_menu('items')
                         if not _was_open:
                             self.sound.on_inventory_open()
                     elif event.key == pygame.K_t:
-                        _was_open = 'tools' in self.inventory.open_menus
-                        self.inventory.toggle_menu('tools')
-                        if not _was_open:
-                            self.sound.on_inventory_open()
+                        if (pygame.key.get_mods() & pygame.KMOD_SHIFT) and self.inspected_npc:
+                            self.open_npc_trade_window()
+                        else:
+                            _was_open = 'tools' in self.inventory.open_menus
+                            self.inventory.toggle_menu('tools')
+                            if not _was_open:
+                                self.sound.on_inventory_open()
                     elif event.key == pygame.K_m:
                         _was_open = 'magic' in self.inventory.open_menus
                         self.inventory.toggle_menu('magic')
@@ -1071,43 +1102,49 @@ class GameCoreMixin:
                         if pygame.key.get_mods() & pygame.KMOD_SHIFT:
                             if self.inspected_npc:
                                 self.handle_npc_follow_interaction()
+                                self.gain_xp(1)
                         else:
                             _was_open = 'followers' in self.inventory.open_menus
                             self.inventory.toggle_menu('followers')
                             if not _was_open:
                                 self.sound.on_inventory_open()
                     elif event.key == pygame.K_e:
-                        # Pick up cell or items from target
                         self.pickup_cell_or_items()
+                        self.gain_xp(1)
                     elif event.key == pygame.K_n:
-                        # NPC trade interaction
                         self.npc_trade_interaction()
+                        self.gain_xp(1)
                     elif event.key == pygame.K_p:
-                        # Place selected item as cell
                         self.place_selected_item()
+                        self.gain_xp(1)
                     elif event.key == pygame.K_q:
                         mods = pygame.key.get_mods()
                         if (mods & pygame.KMOD_SHIFT) and self.inspected_npc:
                             self.handle_npc_quest_interaction()
+                            self.gain_xp(1)
                         else:
-                            # Toggle quest UI
+                            # Toggle quest UI (no XP)
                             self.quest_ui_open = not self.quest_ui_open
                     elif event.key == pygame.K_d:
-                        # Drop selected item
                         self.drop_selected_item()
+                        self.gain_xp(1)
                     elif event.key == pygame.K_LEFT and (pygame.key.get_mods() & pygame.KMOD_SHIFT):
                         self.cycle_inventory_slot(-1)
                     elif event.key == pygame.K_RIGHT and (pygame.key.get_mods() & pygame.KMOD_SHIFT):
                         self.cycle_inventory_slot(1)
                     elif event.key == pygame.K_a and (pygame.key.get_mods() & pygame.KMOD_SHIFT):
-                        self.toggle_autopilot()
+                        if self.inspected_npc:
+                            self.handle_npc_quest_assign()
+                            self.gain_xp(1)
+                        else:
+                            self.toggle_autopilot()
                     elif event.key == pygame.K_g:
                         # Toggle debug memory lanes visualization
                         self.debug_memory_lanes = not self.debug_memory_lanes
                         print(f"Debug Memory Lanes: {'ON' if self.debug_memory_lanes else 'OFF'}")
-                    # Number keys to select inventory slots
-                    elif event.key in [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4, 
-                                      pygame.K_5, pygame.K_6, pygame.K_7, pygame.K_8, 
+                    # Number keys to select inventory slots (no XP)
+                    elif event.key in [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4,
+                                      pygame.K_5, pygame.K_6, pygame.K_7, pygame.K_8,
                                       pygame.K_9, pygame.K_0]:
                         slot = (event.key - pygame.K_1) if event.key != pygame.K_0 else 9
                         self.select_inventory_slot(slot)
@@ -1418,7 +1455,6 @@ class GameCoreMixin:
         if existing and existing.quest.status == 'completed':
             # TURN IN — player and NPC both gain XP
             xp_reward = 1
-            self.gain_xp(xp_reward)
             entity.gain_xp(100)
             leveled = entity.xp == 0  # gain_xp resets xp to 0 on level-up
             self.npc_quests.remove(existing)
@@ -1448,6 +1484,228 @@ class GameCoreMixin:
             print(f"Received quest [{q_name}] from {npc_name}!")
         else:
             print(f"No quest available from {npc_name} right now.")
+
+    def handle_npc_quest_assign(self):
+        """Shift+A while inspecting an NPC: assign the player's selected quest to the NPC.
+
+        For NPCs with a base quest (FARMER etc.) the queue system is used — assigned quests
+        insert at the front of their queue (max NPC_QUEST_QUEUE_MAX) and become the primary
+        target until completed.  Special (transferred) quests are removed from the player's
+        npc_quests list.  For other NPC types the existing single quest_focus path is used.
+        """
+        npc_id = self.inspected_npc
+        if npc_id not in self.entities:
+            return
+
+        entity = self.entities[npc_id]
+        npc_name = entity.name if entity.name else entity.type
+
+        # Check if a special NPC quest is currently active/selected
+        active_special = None
+        if self.active_npc_quest_npc_id is not None:
+            active_special = next(
+                (nq for nq in self.npc_quests if nq.npc_id == self.active_npc_quest_npc_id),
+                None,
+            )
+
+        qt = active_special.quest.quest_type if active_special else self.active_quest
+        if not qt:
+            print("No quest selected to assign.")
+            return
+        q_name = QUEST_TYPES.get(qt, {}).get('name', qt)
+
+        # Queue-based assignment for NPCs with a base quest (FARMER etc.)
+        if entity.type in NPC_BASE_QUEST:
+            # Ensure queue is initialized with base quest
+            if not hasattr(entity, 'quest_queue') or not entity.quest_queue:
+                base_qt = NPC_BASE_QUEST[entity.type]
+                entity.quest_queue = [{'type': base_qt, 'base': True, 'slot': None}]
+
+            # Reject if already at max capacity
+            if len(entity.quest_queue) >= NPC_QUEST_QUEUE_MAX:
+                print(f"Quest queue full for {npc_name} (max {NPC_QUEST_QUEUE_MAX}).")
+                return
+
+            # Reject duplicate quest types already in queue
+            if any(e['type'] == qt for e in entity.quest_queue):
+                print(f"{npc_name} already has a [{q_name}] quest queued.")
+                return
+
+            slot = active_special  # None for standing quests
+            entity.quest_queue.insert(0, {'type': qt, 'base': False, 'slot': slot})
+            entity.quest_focus = qt
+            entity.quest_target = None
+            entity._quest_update_counter = 10  # trigger immediate retry on next AI cycle
+
+            # Pre-seed quest_target if the special quest has a known target
+            if slot:
+                q = slot.quest
+                if q.target_entity_id is not None:
+                    entity.quest_target = q.target_entity_id
+                elif q.target_cell is not None:
+                    entity.quest_target = ('cell', q.target_cell[2], q.target_cell[3])
+                entity.assigned_quest = slot
+
+            # Seed target directly from the player's quest object if it has one
+            # (e.g. player's HUNT quest already tracking a named entity)
+            if entity.quest_target is None:
+                player_quest = self.quests.get(qt)
+                if player_quest and getattr(player_quest, 'target_entity_id', None):
+                    eid = player_quest.target_entity_id
+                    if eid in self.entities and self.entities[eid].is_alive():
+                        entity.quest_target = eid
+
+            # Fall back to AI search if player quest had no specific target yet
+            if entity.quest_target is None:
+                screen_key = f"{entity.screen_x},{entity.screen_y}"
+                self._assign_specific_quest_target(entity, screen_key)
+
+            # Quest becomes the keeper target — anchor NPC to the quest target.
+            # keeper_target tracks entity/cell/item by reference; pos updated each tick.
+            entity.keeper = True
+            qt = entity.quest_target
+            if isinstance(qt, int) and qt in self.entities:
+                self._set_keeper_target_entity(entity, qt)
+            elif isinstance(qt, tuple) and len(qt) >= 3 and qt[0] == 'cell':
+                self._set_keeper_target_cell(entity, qt[1], qt[2])
+            else:
+                # No target found yet — roam freely (keeper_type 2) until AI finds one
+                entity.keeper_type = 2
+                entity.keeper_target = None
+                entity.keeper_target_pos = None
+
+            if active_special:
+                self.npc_quests.remove(active_special)
+                self.active_npc_quest_npc_id = None
+                print(f"Assigned special quest [{q_name}] to {npc_name}. Quest transferred.")
+            else:
+                print(f"Assigned quest [{q_name}] to {npc_name}.")
+            self.sound.on_quest_received()
+            return
+
+        # Fallback for NPC types without a base quest — single quest_focus (existing behavior)
+        if active_special:
+            entity.quest_focus = qt
+            entity.assigned_quest = active_special
+            entity.quest_target = None
+            entity._quest_update_counter = 0
+            self.npc_quests.remove(active_special)
+            self.active_npc_quest_npc_id = None
+            self.sound.on_quest_received()
+            print(f"Assigned special quest [{q_name}] to {npc_name}. Quest transferred.")
+        else:
+            entity.quest_focus = qt
+            entity.quest_target = None
+            entity._quest_update_counter = 0
+            self.sound.on_quest_received()
+            print(f"Assigned quest [{q_name}] to {npc_name}.")
+
+    def _next_item_uid(self):
+        """Return a new unique item ID for individually tracked items."""
+        self._item_uid_counter += 1
+        return self._item_uid_counter
+
+    def register_item_target(self, item_name, entity_id=None, cell=None, screen=None):
+        """Register a specific item instance for quest/keeper tracking.
+
+        Pass entity_id if the item is in an entity's inventory, or cell=(x,y) if it
+        is a world drop.  Returns the assigned UID.
+        """
+        uid = self._next_item_uid()
+        if entity_id is not None and entity_id in self.entities:
+            e = self.entities[entity_id]
+            pos = (e.x, e.y)
+            scr = (e.screen_x, e.screen_y)
+            self.item_registry[uid] = {
+                'name': item_name, 'location': 'inventory',
+                'holder': entity_id, 'pos': pos, 'screen': scr,
+            }
+        elif cell is not None:
+            pos = cell
+            scr = screen or (self.player['screen_x'], self.player['screen_y'])
+            self.item_registry[uid] = {
+                'name': item_name, 'location': 'world',
+                'holder': cell, 'pos': pos, 'screen': scr,
+            }
+        return uid
+
+    def open_npc_trade_window(self):
+        """Shift+T on inspected NPC: open an inventory trade window.
+
+        Builds trader_display from the NPC's current inventory with random per-item
+        gold prices (5–10 gold each, generated fresh each open).
+        """
+        npc_id = self.inspected_npc
+        if npc_id not in self.entities:
+            return
+        entity = self.entities[npc_id]
+
+        # Build item list: only items with count > 0
+        items = [(item, count) for item, count in entity.inventory.items() if count > 0]
+
+        trade_items = []
+        for item_name, count in items:
+            price = random.randint(5, 10)
+            trade_items.append({'item': item_name, 'count': count, 'price': price})
+
+        self.trader_display = {
+            'mode': 'inventory',
+            'entity_id': npc_id,
+            'position': (entity.x, entity.y),
+            'items': trade_items,
+        }
+        self.trader_display_tick = self.tick
+
+    def handle_npc_trade_click(self, pos):
+        """Handle mouse click on the NPC inventory trade window.
+
+        Each item slot is 32px wide with 4px padding.  Clicking an item slot
+        transfers gold from the player and moves the item to player inventory.
+        """
+        if not self.trader_display or self.trader_display.get('mode') != 'inventory':
+            return False
+
+        npc_id = self.trader_display['entity_id']
+        if npc_id not in self.entities:
+            self.trader_display = None
+            return False
+
+        entity = self.entities[npc_id]
+        items = self.trader_display['items']
+
+        slot_size = CELL_SIZE
+        padding = 4
+        # UI anchored above the NPC — same layout as draw_npc_inventory_trade_ui
+        tx, ty = self.trader_display['position']
+        ui_x = tx * slot_size
+        ui_y = ty * slot_size - (len(items) + 1) * (slot_size + padding) - 10
+
+        for i, entry in enumerate(items):
+            # Each row: [gold slot][padding][arrow(20px)][item slot]
+            row_y = ui_y + i * (slot_size + padding)
+            item_slot_x = ui_x + slot_size + padding + 20  # matches draw_npc_inventory_trade_ui
+            if (item_slot_x <= pos[0] <= item_slot_x + slot_size and
+                    row_y <= pos[1] <= row_y + slot_size):
+                # Player clicked this item
+                player_gold = self.inventory.items.get('gold', 0)
+                price = entry['price']
+                if player_gold < price:
+                    print(f"Not enough gold. Need {price}, have {player_gold}.")
+                    return True
+                # Transfer gold
+                self.inventory.remove_item('gold', price)
+                entity.inventory['gold'] = entity.inventory.get('gold', 0) + price
+                # Transfer item
+                item_name = entry['item']
+                self.inventory.add_item(item_name, 1)
+                entity.inventory[item_name] = max(0, entity.inventory.get(item_name, 0) - 1)
+                print(f"Bought {item_name} for {price} gold.")
+                # Refresh display or close if empty
+                items[:] = [e for e in items if entity.inventory.get(e['item'], 0) > 0]
+                if not items:
+                    self.trader_display = None
+                return True
+        return False
 
     def select_inventory_slot(self, slot_index):
         """Select an inventory slot by number (0-9)"""
@@ -1775,7 +2033,6 @@ class GameCoreMixin:
             self.player['energy'] = max(0, self.player.get('energy', 0) - 1)
             self.handle_drops(cell, check_x, check_y)
             self.show_attack_animation(check_x, check_y)
-            self.gain_xp(1)
             return
 
         # Mine iron ore — pickaxe must be selected tool
@@ -1784,7 +2041,6 @@ class GameCoreMixin:
             self.inventory.add_item('iron_ore', 1)
             self.current_screen['grid'][check_y][check_x] = self.get_biome_base_cell()
             self.show_attack_animation(check_x, check_y)
-            self.gain_xp(1)
             return
 
         # Mine stone — pickaxe must be selected tool
@@ -1842,7 +2098,6 @@ class GameCoreMixin:
         if cell == 'SOIL' and self.inventory.has_item('carrot'):
             self.inventory.remove_item('carrot', 1)
             self.current_screen['grid'][check_y][check_x] = 'CARROT1'
-            self.gain_xp(1)
             return
         
         # Place bones as decoration on ground cells
@@ -2451,6 +2706,10 @@ class GameCoreMixin:
                 # Check if targeting peaceful NPC for inspection
                 self.check_npc_inspection()
                 
+                # Periodic ghost-entity reconciliation (every ~10 seconds)
+                if self.tick % 600 == 1:
+                    self.reconcile_screen_entities()
+
                 # Freeze detector — log if any entity in the player's zone has idle_timer
                 if self.tick % 300 == 0:
                     _pk = f"{self.player['screen_x']},{self.player['screen_y']}"

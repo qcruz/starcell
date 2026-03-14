@@ -128,6 +128,78 @@ class MenusMixin:
     # Trader UI
     # -------------------------------------------------------------------------
 
+    def draw_npc_inventory_trade_ui(self):
+        """Draw the Shift+T NPC inventory trade window.
+
+        Layout per row: [gold slot] [price] → [item slot]
+        Player clicks the item slot to buy it.
+        """
+        if not self.trader_display or self.trader_display.get('mode') != 'inventory':
+            return
+
+        npc_id = self.trader_display['entity_id']
+        if npc_id not in self.entities or self.inspected_npc != npc_id:
+            self.trader_display = None
+            return
+
+        entity = self.entities[npc_id]
+        items = self.trader_display['items']
+
+        tx, ty = self.trader_display['position']
+        slot_size = CELL_SIZE
+        padding = 4
+
+        # Anchor above the NPC (minimum 2 rows tall even when empty)
+        row_count = max(len(items), 1)
+        ui_x = tx * slot_size
+        ui_y = ty * slot_size - (row_count + 1) * (slot_size + padding) - 10
+
+        # Header
+        npc_name = entity.name if entity.name else entity.type
+        header = self.tiny_font.render(f"{npc_name}'s goods (Shift+T to close)", True, COLORS['WHITE'])
+        self.screen.blit(header, (ui_x, ui_y - 14))
+
+        if not items:
+            empty_surf = self.tiny_font.render("Nothing to trade.", True, (180, 180, 180))
+            self.screen.blit(empty_surf, (ui_x, ui_y))
+            return
+
+        for i, entry in enumerate(items):
+            row_y = ui_y + i * (slot_size + padding)
+            cur_x = ui_x
+
+            # Gold slot (input)
+            pygame.draw.rect(self.screen, COLORS['BLACK'], (cur_x, row_y, slot_size, slot_size))
+            pygame.draw.rect(self.screen, (200, 170, 50), (cur_x, row_y, slot_size, slot_size), 2)
+            gold_label = self.tiny_font.render(str(entry['price']), True, (255, 215, 0))
+            gold_g = self.tiny_font.render('g', True, (200, 170, 50))
+            self.screen.blit(gold_label, (cur_x + 2, row_y + 2))
+            self.screen.blit(gold_g, (cur_x + 2, row_y + slot_size - 12))
+            cur_x += slot_size + padding
+
+            # Arrow
+            arrow = self.tiny_font.render('→', True, COLORS['WHITE'])
+            self.screen.blit(arrow, (cur_x, row_y + slot_size // 2 - 6))
+            cur_x += 20
+
+            # Item slot (output — clickable)
+            item_name = entry['item']
+            count = entity.inventory.get(item_name, 0)
+            has_sprite = (self.use_sprites and hasattr(self, 'sprite_manager') and
+                          item_name in self.sprite_manager.sprites)
+            pygame.draw.rect(self.screen, COLORS['BLACK'], (cur_x, row_y, slot_size, slot_size))
+            pygame.draw.rect(self.screen, (0, 200, 100), (cur_x, row_y, slot_size, slot_size), 2)
+            if has_sprite:
+                self.screen.blit(self.sprite_manager.sprites[item_name], (cur_x, row_y))
+            else:
+                item_color = ITEMS.get(item_name, {}).get('color', (180, 180, 180))
+                pygame.draw.rect(self.screen, item_color,
+                                 (cur_x + 4, row_y + 4, slot_size - 8, slot_size - 8))
+            # Item name + count
+            label = ITEMS.get(item_name, {}).get('name', item_name)
+            name_surf = self.tiny_font.render(f"{label} x{count}", True, COLORS['WHITE'])
+            self.screen.blit(name_surf, (cur_x + slot_size + 4, row_y + slot_size // 2 - 6))
+
     def draw_trader_ui(self):
         """Draw trader recipe UI above the trader NPC"""
         if not self.trader_display:
@@ -292,9 +364,48 @@ class MenusMixin:
         if hasattr(entity, 'age'):
             info_lines.append(f"Age:{int(entity.age)}y")
 
-        # Keeper status
+        # Keeper status + target info
         if getattr(entity, 'keeper', False):
-            info_lines.append("Keeper")
+            ktype = getattr(entity, 'keeper_type', 3)
+            ktype_label = {1: 'Guard', 2: 'Patrol', 3: 'Zone'}.get(ktype, 'Keeper')
+            kt = getattr(entity, 'keeper_target', None)
+            ktarget = getattr(entity, 'keeper_target_pos', None)
+            if kt and kt.get('type') == 'entity':
+                eid = kt['ref']
+                if eid in self.entities:
+                    t = self.entities[eid]
+                    pct = int((1.0 - t.health / max(t.max_health, 1)) * 100)
+                    zone_tag = '' if kt.get('screen') == (entity.screen_x, entity.screen_y) else ' [x-zone]'
+                    info_lines.append(f"Keeper {ktype_label}: {t.type}{zone_tag}")
+                    info_lines.append(f"  Target HP: {100-pct}% remaining")
+                else:
+                    info_lines.append(f"Keeper {ktype_label} (target gone)")
+            elif kt and kt.get('type') == 'item':
+                item_name = getattr(self, 'item_registry', {}).get(kt['ref'], {}).get('name', '?')
+                info_lines.append(f"Keeper {ktype_label}: find {item_name}")
+                if ktarget:
+                    info_lines.append(f"  @({ktarget[0]},{ktarget[1]})")
+            elif ktarget:
+                info_lines.append(f"Keeper {ktype_label} @({ktarget[0]},{ktarget[1]})")
+            else:
+                info_lines.append(f"Keeper {ktype_label} (searching)")
+
+        # Quest queue (FARMER etc. with queue system)
+        queue = getattr(entity, 'quest_queue', None)
+        if queue:
+            info_lines.append("Quests:")
+            for entry in queue:
+                q_label = QUEST_TYPES.get(entry['type'], {}).get('name', entry['type'])
+                active_marker = '>' if entry['type'] == getattr(entity, 'quest_focus', None) else ' '
+                base_marker = '(base)' if entry.get('base') else ''
+                info_lines.append(f" {active_marker}{q_label}{base_marker}")
+        elif getattr(entity, 'quest_focus', None):
+            # Non-queue NPC: show single quest_focus
+            qfocus = entity.quest_focus
+            q_label = QUEST_TYPES.get(qfocus, {}).get('name', qfocus)
+            assigned = getattr(entity, 'assigned_quest', None)
+            prefix = "Quest*" if assigned else "Quest"
+            info_lines.append(f"{prefix}: {q_label}")
 
         # Faction (if entity has faction)
         if hasattr(entity, 'faction') and entity.faction:
@@ -319,6 +430,11 @@ class MenusMixin:
         else:
             if len(getattr(self, 'npc_quests', [])) < 3:
                 info_lines.append("Shift+Q: Get quest")
+        if self.active_quest or getattr(self, 'active_npc_quest_npc_id', None):
+            info_lines.append("Shift+A: Assign quest")
+        # Show trade hint if NPC has items
+        if entity.inventory:
+            info_lines.append("Shift+T: Trade")
 
         # Draw each line (no background box)
         for i, line in enumerate(info_lines):
@@ -420,11 +536,11 @@ class MenusMixin:
         target_x, target_y = None, None
 
         if quest.target_entity_id:
-            # Find entity
+            # Find entity — if it's underground, point to the surface entrance
             if quest.target_entity_id in self.entities:
                 entity = self.entities[quest.target_entity_id]
-                target_screen_x, target_screen_y = entity.screen_x, entity.screen_y
-                target_x, target_y = entity.x, entity.y
+                target_screen_x, target_screen_y, target_x, target_y = \
+                    self.get_surface_pos_for_entity(entity)
         elif quest.target_location:
             target_screen_x, target_screen_y = quest.target_location
             target_x, target_y = GRID_WIDTH // 2, GRID_HEIGHT // 2  # Center of zone
@@ -461,29 +577,36 @@ class MenusMixin:
 
             distance_text = f"{cell_distance}"
         else:
-            # Target is in different zone - calculate zone direction
-            cell_dx = zone_dx * GRID_WIDTH
-            cell_dy = zone_dy * GRID_HEIGHT
+            # Target is in different zone — use exits dict to find valid direction
+            # exits = {top, bottom, left, right: bool} on current screen
+            current_key = f"{player_sx},{player_sy}"
+            exits = self.screens.get(current_key, {}).get('exits', {})
 
-            # Calculate arrow position (at screen edge)
-            arrow_x, arrow_y = SCREEN_WIDTH // 2, (SCREEN_HEIGHT - 60) // 2
-            arrow_symbol = "○"
-
-            # Determine direction
-            if abs(cell_dx) > abs(cell_dy):
-                if cell_dx > 0:
-                    arrow_symbol = ">"
-                    arrow_x = SCREEN_WIDTH - 40
-                else:
-                    arrow_symbol = "<"
-                    arrow_x = 40
+            # Build ordered candidate directions by closeness to target
+            # Primary: dominant axis toward target. Secondary: other axis.
+            # If neither is a valid exit, try remaining directions (north preferred over east).
+            if abs(zone_dx) >= abs(zone_dy):
+                primary   = ('right', '>', SCREEN_WIDTH - 40, SCREEN_HEIGHT // 2) if zone_dx > 0 \
+                            else ('left',  '<', 40,              SCREEN_HEIGHT // 2)
+                secondary = ('bottom', 'v', SCREEN_WIDTH // 2, SCREEN_HEIGHT - 100) if zone_dy >= 0 \
+                            else ('top',    '^', SCREEN_WIDTH // 2, 40)
             else:
-                if cell_dy > 0:
-                    arrow_symbol = "v"
-                    arrow_y = SCREEN_HEIGHT - 100
-                else:
-                    arrow_symbol = "^"
-                    arrow_y = 40
+                primary   = ('bottom', 'v', SCREEN_WIDTH // 2, SCREEN_HEIGHT - 100) if zone_dy > 0 \
+                            else ('top',    '^', SCREEN_WIDTH // 2, 40)
+                secondary = ('right', '>', SCREEN_WIDTH - 40, SCREEN_HEIGHT // 2) if zone_dx >= 0 \
+                            else ('left',  '<', 40,              SCREEN_HEIGHT // 2)
+            # Remaining directions, north/east preferred on tie
+            remaining = [d for d in [('top','^',SCREEN_WIDTH//2,40),
+                                      ('right','>',SCREEN_WIDTH-40,SCREEN_HEIGHT//2),
+                                      ('bottom','v',SCREEN_WIDTH//2,SCREEN_HEIGHT-100),
+                                      ('left','<',40,SCREEN_HEIGHT//2)]
+                         if d[0] not in (primary[0], secondary[0])]
+
+            arrow_symbol, arrow_x, arrow_y = '○', SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2
+            for side, sym, ax, ay in [primary, secondary] + remaining:
+                if exits.get(side, False):
+                    arrow_symbol, arrow_x, arrow_y = sym, ax, ay
+                    break
 
             distance_text = f"{zone_distance}"
 

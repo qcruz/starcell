@@ -504,18 +504,15 @@ class LoreEngineMixin:
 
         # Check entity-based quests
         if quest.target_entity_id:
-            if quest.target_entity_id not in self.entities:
-                quest.clear_target()
-                return
+            entity = self.entities.get(quest.target_entity_id)
+            if entity is None or entity.is_dead:
+                # Entity killed or removed from world — credit as completed
+                completed = True
+                xp_reward = 1
             else:
-                entity = self.entities[quest.target_entity_id]
-                if entity.is_dead:
-                    if entity.killed_by == 'player':
-                        completed = True
-                        xp_reward = 1
-                    else:
-                        quest.clear_target()
-                        return
+                # Still alive — track progress as missing health %
+                if entity.max_health > 0:
+                    quest.progress = (entity.max_health - entity.health) / entity.max_health
 
         # Check cell-based quests (explore/gather/farm/search)
         elif quest.target_cell:
@@ -561,6 +558,35 @@ class LoreEngineMixin:
             quest.complete()
             self.sound.on_quest_complete()
 
+    def get_surface_pos_for_entity(self, entity):
+        """Trace entity through parent structures until reaching an overworld zone.
+
+        Returns (screen_x, screen_y, cell_x, cell_y) of the surface entrance
+        cell.  For entities already on the overworld, returns their current
+        position.  Handles arbitrarily deep cave/dungeon chains.
+        """
+        if not getattr(entity, 'in_structure', False):
+            return entity.screen_x, entity.screen_y, entity.x, entity.y
+
+        structure_key = getattr(entity, 'structure_key', None)
+        for _ in range(20):  # cap at 20 levels deep to prevent infinite loops
+            if not structure_key or structure_key not in self.structures:
+                break
+            structure = self.structures[structure_key]
+            parent_screen = structure.get('parent_screen')
+            parent_cell = structure.get('parent_cell')
+            if not parent_screen or not parent_cell:
+                break
+            parent_sx, parent_sy = parent_screen
+            parent_key = f"{parent_sx},{parent_sy}"
+            if self.is_overworld_zone(parent_key):
+                return parent_sx, parent_sy, parent_cell[0], parent_cell[1]
+            # Parent is another structure — keep climbing
+            structure_key = parent_key
+
+        # Fallback — return entity's current coords as-is
+        return entity.screen_x, entity.screen_y, entity.x, entity.y
+
     def update_quests(self):
         """Update quest system — assign targets, check completion, run lore events."""
         # Update cooldowns
@@ -569,6 +595,31 @@ class LoreEngineMixin:
                 quest.cooldown_remaining -= 1
                 if quest.cooldown_remaining == 0:
                     quest.status = 'inactive'
+
+        # Guard: entity-based quest types must never be active with a cell target
+        # or without an entity target. If detected, reset to inactive so
+        # loreEngine reassigns a proper entity target immediately.
+        _entity_quest_types = {'HUNT', 'SLAY', 'COMBAT_HOSTILE', 'COMBAT_ALL', 'RESCUE'}
+        for quest_type, quest in self.quests.items():
+            if (quest_type in _entity_quest_types and
+                    quest.status == 'active' and
+                    not quest.target_entity_id):
+                quest.status = 'inactive'
+
+        # Live-track entity targets: refresh target_zone every tick.
+        # Dead entities stay in self.entities (health <= 0) until cleaned up —
+        # let check_quest_completion detect them and credit the kill.
+        for quest in self.quests.values():
+            if quest.status != 'active' or not quest.target_entity_id:
+                continue
+            entity = self.entities.get(quest.target_entity_id)
+            if entity is None:
+                # Fully removed from world — check_quest_completion will complete
+                continue
+            # Keep target_zone in sync — use surface overworld zone even when
+            # entity is inside a cave/structure so the arrow stays meaningful.
+            sx, sy, _, _ = self.get_surface_pos_for_entity(entity)
+            quest.target_zone = f"{sx},{sy}"
 
         # Check for quest completion
         self.check_quest_completion()

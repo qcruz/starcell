@@ -10,6 +10,7 @@ from constants import (
     CAMP_HEALING_MULTIPLIER, HOUSE_HEALING_MULTIPLIER,
     NPC_CAMP_PLACE_RATE, ENHANCED_SETTLEMENT_RATE,
     KEEPER_ENTITY_TYPE, KEEPER_ASSIGNMENT_RATE,
+    KEEPER_TYPE_BY_ENTITY, KEEPER_RANGE,
     DESERT_ROCK_FORMATION_RATE, DESERT_ORE_FORMATION_RATE,
 )
 from entity import Entity
@@ -142,8 +143,11 @@ class ZonesMixin:
 
         # === CELL UPDATES ===
         if self.is_raining:
+            # During time-pass all loaded zones need rain (no player-proximity limit);
+            # during normal play restrict to nearby zones for performance.
+            time_passing = getattr(self, 'time_pass_active', False)
             distance = abs(zone_x - self.player['screen_x']) + abs(zone_y - self.player['screen_y'])
-            if distance <= 2:
+            if time_passing or distance <= 2:
                 self.apply_rain(zone_x, zone_y)
 
         self.apply_cellular_automata(zone_x, zone_y, cell_coverage)
@@ -948,6 +952,7 @@ class ZonesMixin:
 
     def on_zone_transition(self, new_screen_x, new_screen_y):
         """When player enters new zone, catch up nearby zones"""
+        self.gain_xp(1)
         new_key = f"{new_screen_x},{new_screen_y}"
         if new_key in self.screen_last_update:
             cycles = (self.tick - self.screen_last_update[new_key]) // 60
@@ -1327,3 +1332,26 @@ class ZonesMixin:
                     continue
             entity.keeper = True
             keepers[ktype] = eid
+            # Assign patrol type and target position
+            entity.keeper_type = KEEPER_TYPE_BY_ENTITY.get(entity.type, 3)
+            if entity.keeper_type < 3:
+                entity.keeper_target_pos = self._find_keeper_target(zone_key)
+
+    def _find_keeper_target(self, zone_key):
+        """Return (grid_x, grid_y) for a keeper's anchor point in zone_key.
+
+        Priority:
+        1. First WELL cell found in the zone grid
+        2. First structure entrance cell (DOOR, STAIRS_DOWN) found
+        3. Zone center as fallback
+        """
+        screen = self.screens.get(zone_key)
+        if screen:
+            grid = screen.get('grid', [])
+            target_cells = {'WELL', 'DOOR', 'STAIRS_DOWN'}
+            for y, row in enumerate(grid):
+                for x, cell in enumerate(row):
+                    if cell in target_cells:
+                        return (x, y)
+        # Fallback: zone center
+        return (GRID_WIDTH // 2, GRID_HEIGHT // 2)

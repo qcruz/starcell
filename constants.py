@@ -77,10 +77,15 @@ HOSTILE_FACTION_SYMBOLS = ['Fang', 'Claw', 'Knife', 'Death', 'Hunger', 'Blade', 
 # ============================================================================
 
 # Weather System
-RAIN_FREQUENCY_MIN = 1800   # Minimum ticks between rain (~30 s at 60 FPS)
-RAIN_FREQUENCY_MAX = 18000  # Maximum ticks between rain (~5 min at 60 FPS)
-RAIN_DURATION_MIN = 10    # Minimum natural rain duration (~0.2 s at 60 FPS; short bursts)
-RAIN_DURATION_MAX = 60    # Maximum natural rain duration (~1 s at 60 FPS)
+# weather_timer increments once per update_weather() call (every UPDATE_FREQUENCY=30 ticks
+# during normal play; every tick during time-pass). So RAIN_FREQUENCY_* are in
+# update_weather call-counts, not raw ticks.
+# Normal play: MIN=120 → ~1 min between rains; MAX=600 → ~5 min between rains.
+# Time-pass (600 sim ticks, no gate): MIN=120 → rain fires ~4-5 times during sim.
+RAIN_FREQUENCY_MIN = 120    # minimum update_weather calls between rains
+RAIN_FREQUENCY_MAX = 600    # maximum update_weather calls between rains
+RAIN_DURATION_MIN = 30      # rain lasts ≥30 calls (~15 s normal play)
+RAIN_DURATION_MAX = 180     # rain lasts ≤180 calls (~90 s normal play)
 RAIN_WATER_SPAWNS = 5      # Water cells created per rain tick per screen
 RAIN_GRASS_SPAWNS = 8      # Dirt→Grass conversions per rain tick
 
@@ -105,8 +110,8 @@ CACTUS_DROUGHT_RATE = 0.0003    # Cactus dies to sand during drought (mirrors TR
 FLOWER_SPREAD_RATE = 0.0001     # Flowers spread to nearby grass (was 0.0005)
 FLOWER_DECAY_RATE = 0.0005      # Flowers die from overcrowding/drought (was 0.002)
 DEEP_WATER_FORM_RATE = 0.05     # Water becomes deep water (apply_cellular_automata)
-DEEP_WATER_EVAPORATE_RATE = 0.03 # Deep water becomes water (apply_cellular_automata)
-WATER_TO_DIRT_RATE = 0.005      # Water slowly evaporates to dirt without neighbors (apply_cellular_automata)
+DEEP_WATER_EVAPORATE_RATE = 0.3  # Deep water → water when any cardinal neighbor isn't water (was 0.03)
+WATER_TO_DIRT_RATE = 0.02       # Water evaporates to dirt when isolated (was 0.005)
 FLOODING_RATE = 0.08            # Water spreads to dirt during rain only (apply_cellular_automata)
 BIOME_SPREAD_RATE = 0.004          # Chance per update a base cell copies a different NSEW neighbor type (4x increase)
 TREE_CROWD_DECAY_RATE = 0.001      # Trees thin when touching any adjacent tree (produces checkerboard spacing)
@@ -215,6 +220,33 @@ DESERT_ROCK_FORMATION_RATE = 0.00008  # Sand slowly forms into stone in deserts
 DESERT_ORE_FORMATION_RATE  = 0.00002  # Stone very rarely yields ore in deserts
 WARRIOR_PROMOTION_CHANCE = 0.60 # 60% chance highest level entity becomes warrior after raid clear
 KEEPER_ASSIGNMENT_RATE = 0.02  # 2% chance per zone update to assign a vacant keeper slot
+
+# NPC quest queue system
+NPC_QUEST_QUEUE_MAX = 3  # Max quests per NPC including base quest
+# Base quest per NPC type — permanent, never removed from queue.
+# Expand this dict when rolling out queue system to other NPC types.
+NPC_BASE_QUEST = {
+    'FARMER': 'FARM',
+}
+
+# Keeper patrol types and their movement radii (Manhattan distance from keeper_target_pos).
+# Type 1 (guard): stands within 1 cell of target — door guard, escort
+# Type 2 (patrol): roams within 5 cells of target — area patrol
+# Type 3 (zone): anchored to zone but no specific target — full-zone roam (default)
+KEEPER_RANGE = {1: 1, 2: 5, 3: None}
+
+# Maps entity type → keeper patrol type.  Defaults to 3 for anything not listed.
+KEEPER_TYPE_BY_ENTITY = {
+    'GUARD':      1,
+    'WARRIOR':    1,
+    'COMMANDER':  1,
+    'BLACKSMITH': 2,
+    'WIZARD':     2,
+    'FARMER':     2,
+    'LUMBERJACK': 2,
+    'MINER':      2,
+    'TRADER':     2,
+}
 
 # Maps entity type → keeper slot name for keeper assignment.
 # KING intentionally omitted — singular, always traveling.
