@@ -493,15 +493,13 @@ class CraftingMixin:
                 self.drop_item('wood', target_x, target_y)
                 self.drop_item('wood', target_x, target_y)
             elif cell_type == 'CHEST':
-                # Return chest_contents if present, else give back planks
+                # Scatter contents if present; empty chests leave nothing (no plank drop)
                 chest_key = f"{screen_key}:{target_x},{target_y}"
                 contents = getattr(self, 'chest_contents', {}).pop(chest_key, None)
                 if contents:
                     for citem, ccount in contents.items():
                         for _ in range(ccount):
                             self.drop_item(citem, target_x, target_y)
-                else:
-                    self.drop_item('planks', target_x, target_y)
                 # Remove background entry if present
                 if hasattr(self, 'chest_backgrounds'):
                     self.chest_backgrounds.pop(chest_key, None)

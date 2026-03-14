@@ -2569,7 +2569,7 @@ class NpcAiMixin:
                 return  # Moving toward loot
         
         # PRIORITY 2: Place chest with loot — only when inventory is too full
-        if entity.type == 'GOBLIN' and _goblin_inv_full and random.random() < 0.005:  # 0.5% chance
+        if entity.type == 'GOBLIN' and _goblin_inv_full and random.random() < 0.0005:  # 0.05% chance
             # Find empty adjacent spot
             for dy in range(-1, 2):
                 for dx in range(-1, 2):
