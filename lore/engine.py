@@ -504,14 +504,15 @@ class LoreEngineMixin:
 
         # Check entity-based quests
         if quest.target_entity_id:
-            if quest.target_entity_id not in self.entities:
-                quest.clear_target()
-                return
+            entity = self.entities.get(quest.target_entity_id)
+            if entity is None or entity.is_dead:
+                # Entity killed or removed from world — credit as completed
+                completed = True
+                xp_reward = 1
             else:
-                entity = self.entities[quest.target_entity_id]
-                if entity.is_dead:
-                    completed = True
-                    xp_reward = 1
+                # Still alive — track progress as missing health %
+                if entity.max_health > 0:
+                    quest.progress = (entity.max_health - entity.health) / entity.max_health
 
         # Check cell-based quests (explore/gather/farm/search)
         elif quest.target_cell:
@@ -566,15 +567,15 @@ class LoreEngineMixin:
                 if quest.cooldown_remaining == 0:
                     quest.status = 'inactive'
 
-        # Live-track entity targets: refresh target_zone every tick and clear
-        # stale pointers so the arrow always reflects the entity's real position.
+        # Live-track entity targets: refresh target_zone every tick.
+        # Only clear stale pointers when entity is fully gone from the world;
+        # dead entities are left for check_quest_completion to credit as kills.
         for quest in self.quests.values():
             if quest.status != 'active' or not quest.target_entity_id:
                 continue
             entity = self.entities.get(quest.target_entity_id)
-            if entity is None or getattr(entity, 'is_dead', False):
-                # Target gone — clear so loreEngine reassigns next cycle
-                quest.clear_target()
+            if entity is None:
+                # Entity removed from world — treat as killed in check_quest_completion
                 continue
             # Keep target_zone in sync with entity's actual current zone
             quest.target_zone = f"{entity.screen_x},{entity.screen_y}"
