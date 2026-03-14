@@ -88,7 +88,9 @@ For planned and desired future features, see [`roadmap.md`](roadmap.md).
 | C | Crafting tab |
 | X | Attempt craft with selected items |
 | Q | Toggle quest panel |
-| Shift+Q | Get / turn in quest from inspected NPC (NPC Quest Source) |
+| Shift+Q | Get / turn in quest from inspected NPC (NPC quest source) |
+| Shift+A | Assign player's selected quest to inspected NPC |
+| Shift+T | Open inventory trade window with inspected NPC |
 | Shift+F | Attempt to recruit inspected NPC as follower (50% chance) |
 | 1–9, 0 | Select inventory slot |
 
@@ -103,7 +105,7 @@ For planned and desired future features, see [`roadmap.md`](roadmap.md).
 
 | Key | Action |
 |---|---|
-| Shift+A | Toggle autopilot on/off (off by default; any other input also disengages) |
+| Shift+A | Toggle autopilot on/off (off by default; any other input also disengages) — context-sensitive: only activates autopilot when no NPC is being inspected; otherwise assigns quest to NPC |
 
 **Menu / Pause**
 
@@ -507,11 +509,59 @@ giving every NPC in the world rich, autonomous behavior without special-case cod
 
 ### Keeper System
 
-- A Keeper is an NPC permanently assigned to a zone or structure; Keepers never leave their domain
-- LoreEngine assigns Keeper status when a qualifying zone or structure condition is met; assignment persists in save
-- Keeper types: WOLF, BAT, GOBLIN, BANDIT, SKELETON, TERMITE, SHEEP, DEER (zone-specific)
-- TRADER is eligible as a Keeper (zone trader)
-- Shift+inspect on a Keeper NPC shows keeper status; Keepers are exempt from the structure overcrowding eviction mechanic
+A Keeper is an NPC permanently assigned to a zone or structure. Keepers never leave their domain, are immune to structure overcrowding eviction, and don't seek shelter at night.
+
+**Keeper patrol types** (`KEEPER_RANGE` in `constants.py`):
+
+| Type | Name | Radius | Default NPC types |
+|---|---|---|---|
+| 1 | Guard | 1 cell from target | GUARD, WARRIOR, COMMANDER |
+| 2 | Patrol | 5 cells from target | BLACKSMITH, WIZARD, FARMER, LUMBERJACK, MINER, TRADER |
+| 3 | Zone | Full zone roam (no anchor) | All others (default) |
+
+- Type 1 and 2 keepers return to their anchor target whenever out of range, overriding other AI states
+- Type 3 keepers roam freely within their assigned zone
+- Cross-zone pursuit: when keeper target is in another zone, keeper routes to the zone exit then crosses seamlessly
+
+**Keeper target types**: targets can be a specific entity (entity ID), a cell position, or a zone exit. `resolve_keeper_target()` refreshes `keeper_target_pos` from the live entity/item position each tick.
+
+**Keeper slot system** (`KEEPER_ENTITY_TYPE` in `constants.py`): one keeper per slot per zone. All peaceful worker humanoids (FARMER, GUARD, WARRIOR, COMMANDER, BLACKSMITH, WIZARD, LUMBERJACK, MINER, TRADER) share one `'humanoid'` slot so a zone doesn't accumulate one keeper of every type. Animal/hostile types each have their own slot.
+
+**LoreEngine assignment**: Keeper status assigned automatically when a zone or structure meets qualifying conditions; persists in save/load via `zone_keepers` dict (`{zone_key: {slot: entity_id}}`).
+
+**Inspect panel**: shows keeper type and patrol range when inspecting a Keeper NPC.
+
+---
+
+### NPC Quest System
+
+NPCs have their own quest focus and target system, independent of the player's quests. The player can interact with this system in two ways:
+
+**Shift+Q — NPC as Quest Giver** (get/turn in quest from an inspected NPC):
+- When the NPC has an active quest target, the player receives that quest and its current target is transferred
+- When the player has a matching active quest, turns it in for XP and clears the NPC's queue entry
+- Only works while inspecting an NPC (`Space` to inspect)
+
+**Shift+A — Assign Quest to NPC** (push player quest to inspected NPC):
+- Assigns the player's currently selected quest to the NPC
+- The quest target (entity ID or cell) is seeded directly from the player's quest object when available
+- For NPCs with a base quest (currently FARMER → FARM), uses the queue system: assigned quests insert at the front of the queue and become the primary target until completed
+- Assigned quests also become the NPC's keeper target — the NPC is anchored to pursue the quest target
+
+**NPC Quest Queue** (`NPC_QUEST_QUEUE_MAX = 3`):
+- Each queued NPC holds up to 3 quests (including its permanent base quest)
+- Base quest: always present at the back of the queue, never removed; type defined in `NPC_BASE_QUEST` per NPC type
+- Assigned quests insert at front; duplicate quest types rejected; queue-full assignments rejected with feedback
+- On quest completion, `_try_complete_assigned_quest()` pops the front entry and resumes the next queued quest
+
+**Shift+T — NPC Trade Window**:
+- Opens a full inventory trade window with the inspected NPC
+- Player and NPC inventories displayed side-by-side; items can be exchanged directly
+
+**NPC quest focus types** (7 total):
+- `farming`, `building`, `mining`, `crafting`, `exploring`, `combat_hostile`, `combat_all`
+- Unlocked via leveling: 10% chance/level (peaceful focuses), 3% chance/level (`combat_all`)
+- 10% chance to switch focus when multiple focuses are unlocked
 
 ---
 
