@@ -682,10 +682,10 @@ class GameCoreMixin:
                 watcher.keeper_target_pos = None
                 self._try_complete_assigned_quest(watcher)
 
-        # Broadcast to player quests targeting this entity
-        for qt, quest in self.quests.items():
-            if getattr(quest, 'target_entity_id', None) == entity_id and quest.status == 'active':
-                quest.clear_target()
+        # Player quest targeting this entity: let check_quest_completion handle the
+        # kill on the next update_quests tick — entity.is_dead (health<=0) triggers
+        # proper completion with XP and sound. Don't clear_target() here or the
+        # completion logic is bypassed.
 
         # Remove from followers if it was a follower
         if entity_id in self.followers:

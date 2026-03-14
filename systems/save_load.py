@@ -330,7 +330,7 @@ class SaveLoadMixin:
                     entity_data['screen_y'],
                     entity_data['level']
                 )
-                entity.health = entity_data['health']
+                entity.health = min(entity_data['health'], entity.max_health)
                 entity.hunger = entity_data['hunger']
                 entity.thirst = entity_data['thirst']
                 entity.inventory = entity_data.get('inventory', {})
