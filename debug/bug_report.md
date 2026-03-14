@@ -1,7 +1,51 @@
 # StarCell Bug Report — Auto-Debug Sessions
 
-Each run: autopilot plays a new game, saves, quits. Session cap: 30–45s (reduced 2026-03-09 for faster iteration).
+Each run: autopilot plays a new game, saves, quits. Session cap: 180–300s (extended 2026-03-14 for quest/keeper observation).
 Reviewed from `debug/bugcatcher.log` after each session.
+
+---
+
+## Session 22 — 2026-03-14 (observation runs, quest/keeper focus)
+
+### Run 1 — 270s, new game, tick 15130
+
+**Focus:** NPC quest queue system, LoreEngine random assignment, keeper no-target flags.
+
+#### CONFIRMED — LoreEngine random quest assignment working
+LoreEngine assigned MINE quest to MINER(id=249). Quest appeared in watchdog_npc_quests with `base: false` at front of queue, STONE cell as quest_target. Functional.
+
+#### OBSERVATION — Two quest focus systems coexisting
+At tick 516, early entities show `quest_focus='farming'` (lowercase, old entity.py system) and `quest_queue=null`. By tick 2916 most have uppercase focus and initialized queues. npc_ai.py queue init runs on first AI update and overwrites. No functional damage but dual-system is confusing in early-game window.
+
+#### BUG — Some NPCs (FARMER, MINER, LUMBERJACK) get wrong base quest type
+FARMER(id=4,15) show `quest_queue=[{"type":"COMBAT_HOSTILE","base":true}]` across all 5 watchdog cycles. MINER/LUMBERJACK similarly get EXPLORE as base quest. `NPC_BASE_QUEST['FARMER']='FARM'` — this should not be possible. Both FARMERs remain `ai_state='wandering'` with no active combat. Root cause not isolated after code review of npc_ai.py:2271, game_core.py:1522, lore/engine.py:836 — all correctly use `NPC_BASE_QUEST[entity.type]`. **Carried to Run 2 for confirmation.**
+
+#### OBSERVATION — Entity count approaching bloat threshold
+Shutdown entity_count: **588** (threshold: 600). 270s / 15130 ticks. Monitoring.
+
+#### OBSERVATION — 468 keeper_no_target flags at tick 2616
+Normal early-game transient — keepers just assigned, haven't completed first search cycle. Not present in later ticks.
+
+#### OBSERVATION — 60 ghost entities reconciled on respawn
+`reconcile_screen_entities()` caught 60 ghosts at respawn. Root desync site not yet isolated.
+
+---
+
+### Run 2 — ~210s, tick 11837
+
+**Focus:** Confirm wrong base quest bug, autopilot shovel crafting loop, entity count.
+
+#### CONFIRMED — Wrong base quest bug is reproducible across new-game sessions
+New session, new entity IDs: FARMER(id=154) → COMBAT_HOSTILE base=True; MINER(id=16,158,228,250) → EXPLORE base=True; LUMBERJACK(id=150,209,240,257) → EXPLORE base=True. Pattern: FARMER→COMBAT_HOSTILE, MINER/LUMBERJACK→EXPLORE, consistently across sessions. Added to bug report for fix.
+
+#### BUG — Autopilot crafting shovel in tight loop
+Terminal output shows repeated `[AP] press C → click shovel → SPACE → Crafted Shovel!` with no delay between cycles. Proxy accumulating multiple shovels, not switching to other actions. Likely the shovel craft is cheap/fast and the autopilot craft-trigger condition keeps re-firing. Low gameplay impact but wastes ticks.
+
+#### OBSERVATION — Proxy stuck at zone exit again
+"Stuck at exit (0,9) — entering wander cooldown" logged. Exit-crossing stall persists but wander cooldown recovery mechanism is working.
+
+#### OBSERVATION — NPC built forge
+"Zephyr Meadowbrook built a forge!" — MINER NPC self-built a structure. `try_build_well` or similar action. Organic NPC behavior working.
 
 ---
 
