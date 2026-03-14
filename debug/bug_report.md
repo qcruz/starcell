@@ -5,6 +5,40 @@ Reviewed from `debug/bugcatcher.log` after each session.
 
 ---
 
+## Session 21 — 2026-03-14 (live player review + balance work)
+
+### FIXED — Ghost entities invisible after zone cross / player death
+**Root cause:** `screen_entities` remove/append pairs during zone crossing, structure entry/exit, time-pass simulation, or player death can desync from `self.entities`. Ghosts exist in the master dict but are absent from `screen_entities` — invisible, never AI-updated. Save/load recovered them but runtime ghosts persisted until restart.
+**Fix:** `reconcile_screen_entities()` added to CombatMixin. Called at load time, after every respawn, and every 600 ticks during normal play.
+
+### FIXED — Quest HUNT target pointing to cell instead of entity
+**Root cause:** Multiple compounding issues: live-tracking loop was clearing `is_dead` before `check_quest_completion` could fire; kill handler in game_core.py was calling `quest.clear_target()` directly (bypassing XP + sound); old saves had stale cell coords in target fields.
+**Fix:** Kill handler removed (let `check_quest_completion` own detection via `entity.is_dead`); live-tracking guard resets quests with no `target_entity_id`; entity health clamped to `min(saved, max_health)` on load.
+
+### FIXED — Quest arrow pointing wrong location when target inside cave
+**Root cause:** `entity.screen_x/y` are virtual coords (−1000,N) when `in_structure=True`. Live-tracking was copying these directly into `quest.target_zone`.
+**Fix:** `get_surface_pos_for_entity()` added to LoreEngine — traces `parent_screen` chain recursively up to the overworld surface. Quest arrow and HUD now show the cave entrance cell.
+
+### FIXED — NPC stall at zone exits when pursuing cross-zone target
+**Root cause:** `_try_targeting_zone_cross` was calling `try_entity_zone_transition` (1800-tick cooldown), causing 30-second stalls. Should use `try_entity_screen_crossing` (30-tick cooldown, OOB coordinates).
+**Fix:** Rewrote `_try_targeting_zone_cross` to derive OOB coords from `is_at_exit()` direction and call the fast path.
+
+### FIXED — TypeError: keeper_type None comparison
+**Root cause:** `getattr(entity, 'keeper_type', 3)` doesn't catch explicit `None` values stored in save data.
+**Fix:** `ktype = getattr(entity, 'keeper_type', None) or 3`
+
+### FIXED — Chest destruction plank feedback loop
+**Root cause:** Empty chests dropped a `planks` item when harvested. NPCs harvested chests, picked up the plank, had "full" inventory, then placed a new chest — infinite loop.
+**Fix:** Empty chest destruction leaves nothing. Only chests with stored contents scatter items. Goblin chest-placement chance also reduced 0.5% → 0.05%.
+
+### BALANCE — Rain/biome desertification
+**Root cause (rain too rare):** `RAIN_FREQUENCY_*` are `update_weather` call-counts (called every 30 ticks), not raw ticks. Old values (1800–18000) = 15–150 min between rains.
+**Root cause (time-pass, no rain):** Time-pass sim is only 600 ticks total — old minimum (1800) was never reached, so zero rain fired during 200-year simulation.
+**Root cause (rain coverage):** `apply_rain` gated to distance ≤ 2 from player, so most zones never got rain during time-pass.
+**Fixes applied:** Frequency tuned to 120–600 calls (~1–5 min); duration 30–180 calls (~15–90 s); distance limit removed during `time_pass_active`; sand→dirt grass-reclaim rule added at 0.05× base rate; water evaporation 0.005 → 0.02; deep water evaporation condition corrected to mirror formation rule (cardinal_water < 4), rate 0.03 → 0.3.
+
+---
+
 ## Session 20 — 2026-03-13 (live player review)
 
 ### OBSERVATION — Houses spawning with no lumberjack in zone
