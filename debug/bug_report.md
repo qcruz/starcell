@@ -70,9 +70,27 @@ Zero `[QuestBug]` prints. No wrong-quest entries in watchdog samples. Entity cou
 
 ---
 
-### BUG — Autopilot not taking damage; gaining XP it shouldn't
+### FIXED — Autopilot gaining XP from synthetic key events
 
-Player-reported: autopilot proxy is not receiving combat damage, and appears to be gaining XP. Autopilot is intended to be a passive observer — should be subject to full combat mechanics (takes damage, can die) but should NOT gain XP from kills it doesn't participate in. Investigation needed in `autopilot.py` and combat system to find where damage is bypassed and where XP accrues to the proxy.
+**Root cause:** `gain_xp(1)` is called in `game_core.py` inside the KEYDOWN/MOUSEBUTTONDOWN event handler for every action key (SPACE, E, N, P, D, X, L, etc.). Synthetic autopilot events (`_ap_synthetic=True`) correctly skip idle detection but were NOT skipping XP grants.
+
+**Fix:** Added early return in `gain_xp()` in `systems/combat.py`:
+```python
+if getattr(self, 'autopilot', False):
+    return  # Autopilot proxy does not earn XP
+```
+This gates all XP from any source during autopilot mode.
+
+### FIXED — Autopilot damage not visible in HUD/watchdog
+
+**Root cause:** NPCs attack the proxy entity (real Entity object in `self.entities`), reducing `proxy.health`. But `self.player['health']` was never synced from `proxy.health`, so the HUD and watchdog always showed 100 HP regardless of combat damage taken.
+
+**Fix:** Added health sync in `_sync_player_from_proxy()` in `autopilot.py`:
+```python
+self.player['health']     = proxy.health
+self.player['max_health'] = proxy.max_health
+```
+Damage is now visible in the HUD and logged correctly by the watchdog.
 
 ---
 

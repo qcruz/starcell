@@ -142,6 +142,8 @@ class CombatMixin:
 
     def gain_xp(self, amount):
         """Award XP to player and handle leveling up"""
+        if getattr(self, 'autopilot', False):
+            return  # Autopilot proxy does not earn XP
         self.player['xp'] += amount
 
         # Check for level up

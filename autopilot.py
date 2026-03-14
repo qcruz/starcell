@@ -387,6 +387,10 @@ class AutopilotMixin:
         self.player['screen_x'] = proxy.screen_x
         self.player['screen_y'] = proxy.screen_y
 
+        # Sync proxy HP → player dict so HUD and watchdog reflect real damage
+        self.player['health']     = proxy.health
+        self.player['max_health'] = proxy.max_health
+
         # Keep current_screen tracking the proxy's zone so rendering is correct
         new_sk = f"{proxy.screen_x},{proxy.screen_y}"
         if self.current_screen is not self.screens.get(new_sk):
