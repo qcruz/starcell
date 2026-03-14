@@ -365,18 +365,25 @@ class NpcAiMovementMixin:
 
         Called after a targeting-mode move so entities naturally flow through
         zone boundaries when pursuing a cross-zone target.
+        Uses the seamless crossing path (30-tick cooldown) so entities don't stall.
         """
-        at_exit, _ = self.is_at_exit(entity.x, entity.y)
+        at_exit, direction = self.is_at_exit(entity.x, entity.y)
         if at_exit:
-            # Check cooldown
-            ticks_since = self.tick - getattr(entity, 'last_zone_change_tick', -9999)
-            if ticks_since >= ZONE_CHANGE_COOLDOWN:
-                old_zone = f"{entity.screen_x},{entity.screen_y}"
-                self.try_entity_zone_transition(entity_id, entity)
-                new_zone = f"{entity.screen_x},{entity.screen_y}"
-                if old_zone != new_zone:
-                    entity.last_zone_change_tick = self.tick
-                    entity.memory_lane = []  # Clear memory for fresh zone
+            # Map exit direction to one-step-out-of-bounds coordinate
+            if direction == 'top':
+                oob_x, oob_y = entity.x, -1
+            elif direction == 'bottom':
+                oob_x, oob_y = entity.x, GRID_HEIGHT
+            elif direction == 'left':
+                oob_x, oob_y = -1, entity.y
+            else:  # right
+                oob_x, oob_y = GRID_WIDTH, entity.y
+
+            old_zone = f"{entity.screen_x},{entity.screen_y}"
+            self.try_entity_screen_crossing(entity, oob_x, oob_y)
+            new_zone = f"{entity.screen_x},{entity.screen_y}"
+            if old_zone != new_zone:
+                entity.memory_lane = []  # Clear memory for fresh zone
 
     def _find_valid_entrance_cell(self, target_screen, entry_x, entry_y, center_x, center_y):
         """Find the nearest walkable cell at a zone entrance when the computed spot is solid.
