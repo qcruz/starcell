@@ -566,6 +566,19 @@ class LoreEngineMixin:
                 if quest.cooldown_remaining == 0:
                     quest.status = 'inactive'
 
+        # Live-track entity targets: refresh target_zone every tick and clear
+        # stale pointers so the arrow always reflects the entity's real position.
+        for quest in self.quests.values():
+            if quest.status != 'active' or not quest.target_entity_id:
+                continue
+            entity = self.entities.get(quest.target_entity_id)
+            if entity is None or getattr(entity, 'is_dead', False):
+                # Target gone — clear so loreEngine reassigns next cycle
+                quest.clear_target()
+                continue
+            # Keep target_zone in sync with entity's actual current zone
+            quest.target_zone = f"{entity.screen_x},{entity.screen_y}"
+
         # Check for quest completion
         self.check_quest_completion()
 
