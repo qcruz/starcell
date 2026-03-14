@@ -2706,6 +2706,10 @@ class GameCoreMixin:
                 # Check if targeting peaceful NPC for inspection
                 self.check_npc_inspection()
                 
+                # Periodic ghost-entity reconciliation (every ~10 seconds)
+                if self.tick % 600 == 1:
+                    self.reconcile_screen_entities()
+
                 # Freeze detector — log if any entity in the player's zone has idle_timer
                 if self.tick % 300 == 0:
                     _pk = f"{self.player['screen_x']},{self.player['screen_y']}"
