@@ -211,6 +211,11 @@ class CellsMixin:
                     if random.random() < min(1.0, SAND_RECLAIM_RATE * _growth):
                         new_grid[y][x] = 'DIRT'
 
+                # Sand → Dirt (grass neighbor — vegetation slowly reclaims desert edges)
+                elif cell == 'SAND' and grass_count >= 1:
+                    if random.random() < min(1.0, SAND_RECLAIM_RATE * _growth):
+                        new_grid[y][x] = 'DIRT'
+
                 # Deep water formation: all 4 cardinal neighbors must be water/deepwater
                 elif cell == 'WATER':
                     cardinal_water = sum(
