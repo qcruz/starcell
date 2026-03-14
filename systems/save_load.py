@@ -502,6 +502,19 @@ class SaveLoadMixin:
                 q.progress         = d.get('progress', 0.0)
                 self.npc_quests.append(NpcQuestSlot(d['npc_id'], q))
             self.active_npc_quest_npc_id = save_data.get('active_npc_quest_npc_id')
+
+            # Reconcile screen_entities against self.entities: any entity whose
+            # saved screen_x/screen_y doesn't match the screen_entities registry
+            # is a ghost — visible in world data but never rendered or updated.
+            # Re-register them so they appear and move correctly.
+            for entity_id, entity in self.entities.items():
+                zone_key = f"{entity.screen_x},{entity.screen_y}"
+                if zone_key not in self.screen_entities:
+                    self.screen_entities[zone_key] = []
+                if entity_id not in self.screen_entities[zone_key]:
+                    self.screen_entities[zone_key].append(entity_id)
+                    print(f"[Load] Re-registered ghost entity {entity_id} ({entity.type}) into {zone_key}")
+
             # Autopilot grace period: don't engage for 15 seconds after loading
             self.last_input_tick = self.tick + 900
             self.bug_catcher.clear()
