@@ -80,12 +80,12 @@ HOSTILE_FACTION_SYMBOLS = ['Fang', 'Claw', 'Knife', 'Death', 'Hunger', 'Blade', 
 # weather_timer increments once per update_weather() call (every UPDATE_FREQUENCY=30 ticks
 # during normal play; every tick during time-pass). So RAIN_FREQUENCY_* are in
 # update_weather call-counts, not raw ticks.
-# Normal play: MIN=60 → ~30 s between rains; MAX=300 → ~2.5 min between rains.
-# Time-pass (600 sim ticks, no gate): MIN=60 → rain fires ~10 times during sim.
-RAIN_FREQUENCY_MIN = 60     # was 1800 — minimum update_weather calls between rains
-RAIN_FREQUENCY_MAX = 300    # was 18000 — maximum update_weather calls between rains
-RAIN_DURATION_MIN = 30      # was 10 — rain lasts ≥30 calls (~15 s normal play)
-RAIN_DURATION_MAX = 180     # was 60 — rain lasts ≤180 calls (~90 s normal play)
+# Normal play: MIN=120 → ~1 min between rains; MAX=600 → ~5 min between rains.
+# Time-pass (600 sim ticks, no gate): MIN=120 → rain fires ~4-5 times during sim.
+RAIN_FREQUENCY_MIN = 120    # minimum update_weather calls between rains
+RAIN_FREQUENCY_MAX = 600    # maximum update_weather calls between rains
+RAIN_DURATION_MIN = 30      # rain lasts ≥30 calls (~15 s normal play)
+RAIN_DURATION_MAX = 180     # rain lasts ≤180 calls (~90 s normal play)
 RAIN_WATER_SPAWNS = 5      # Water cells created per rain tick per screen
 RAIN_GRASS_SPAWNS = 8      # Dirt→Grass conversions per rain tick
 
