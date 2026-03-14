@@ -570,24 +570,35 @@ class ZonesMixin:
 
                     if traders:
                         trader_id, trader = random.choice(traders)
+                        new_trader_type = None
                         if not has_farmer and random.random() < 0.5:
-                            trader.type = 'FARMER'
-                            trader.props = ENTITY_TYPES['FARMER']
+                            new_trader_type = 'FARMER'
                         elif not has_lumberjack and random.random() < 0.5:
-                            trader.type = 'LUMBERJACK'
-                            trader.props = ENTITY_TYPES['LUMBERJACK']
+                            new_trader_type = 'LUMBERJACK'
                         elif not has_miner:
-                            trader.type = 'MINER'
-                            trader.props = ENTITY_TYPES['MINER']
+                            new_trader_type = 'MINER'
+                        if new_trader_type:
+                            trader.type = new_trader_type
+                            trader.props = ENTITY_TYPES[new_trader_type]
+                            if hasattr(trader, 'quest_queue'):
+                                del trader.quest_queue
+                            trader.quest_focus = None
+                            trader.quest_target = None
 
                     if guards:
                         guard_id, guard = random.choice(guards)
+                        new_guard_type = None
                         if not has_farmer and random.random() < 0.5:
-                            guard.type = 'FARMER'
-                            guard.props = ENTITY_TYPES['FARMER']
+                            new_guard_type = 'FARMER'
                         elif not has_miner and random.random() < 0.5:
-                            guard.type = 'MINER'
-                            guard.props = ENTITY_TYPES['MINER']
+                            new_guard_type = 'MINER'
+                        if new_guard_type:
+                            guard.type = new_guard_type
+                            guard.props = ENTITY_TYPES[new_guard_type]
+                            if hasattr(guard, 'quest_queue'):
+                                del guard.quest_queue
+                            guard.quest_focus = None
+                            guard.quest_target = None
 
             if self.tick % 600 == 0:
                 self.promote_to_commander(zone_key)

@@ -49,6 +49,33 @@ Terminal output shows repeated `[AP] press C → click shovel → SPACE → Craf
 
 ---
 
+### FIXED — Wrong base quest type on FARMER/MINER/LUMBERJACK
+
+**Root cause (confirmed via debug tracking):** Entity type is changed by multiple code paths AFTER `quest_queue` is already initialized with the old type's base quest. The type-change paths were:
+- `world/zones.py` (settlement logic): TRADER→FARMER/LUMBERJACK/MINER, GUARD→FARMER/MINER — no quest reset
+- `systems/factions.py` `promote_to_commander()`: WARRIOR→COMMANDER — no quest reset
+- `npc_ai.py:1115` warrior promotion (already had partial fix from prior session)
+- `npc_ai.py:3171` `check_npc_transformation` settlement transform (already had fix from prior session)
+
+Debug trace confirmed entity 24 was type=GUARD when quest_queue initialized (COMBAT_HOSTILE), later became FARMER via `world/zones.py:586`. `engine/entity.py` `level_up()` GUARD→WARRIOR also found but WARRIOR has same base quest (COMBAT_HOSTILE) — no mismatch.
+
+**Fix:** Added quest reset block (`del quest_queue`, clear `quest_focus`/`quest_target`) immediately after every `entity.type = <new_type>` assignment in:
+- `world/zones.py:574–600` (trader and guard settlement rewrites)
+- `systems/factions.py:456` (warrior→commander promotion)
+
+Removed debug tracking attributes (`_quest_init_type`, `_quest_init_eid`) and `[QuestBug]` print from `npc_ai.py`.
+
+**Verification run (Session 22, Run 3 — 2026-03-14, ~10,991 ticks, NEW GAME):**
+Zero `[QuestBug]` prints. No wrong-quest entries in watchdog samples. Entity count at shutdown: 485 (well below 600 threshold). World healthy: 128 zones, 7 structures, 1 follower. Bug confirmed resolved.
+
+---
+
+### BUG — Autopilot not taking damage; gaining XP it shouldn't
+
+Player-reported: autopilot proxy is not receiving combat damage, and appears to be gaining XP. Autopilot is intended to be a passive observer — should be subject to full combat mechanics (takes damage, can die) but should NOT gain XP from kills it doesn't participate in. Investigation needed in `autopilot.py` and combat system to find where damage is bypassed and where XP accrues to the proxy.
+
+---
+
 ## Session 21 — 2026-03-14 (live player review + balance work)
 
 ### FIXED — Ghost entities invisible after zone cross / player death

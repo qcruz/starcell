@@ -466,6 +466,12 @@ class FactionsMixin:
                     # Commanders stay in their zone (like guards)
                     best_warrior.home_zone = screen_key
 
+                    # Reset quest state for new role
+                    if hasattr(best_warrior, 'quest_queue'):
+                        del best_warrior.quest_queue
+                    best_warrior.quest_focus = None
+                    best_warrior.quest_target = None
+
                     print(f"{old_name} promoted to COMMANDER of {faction} in [{screen_key}]!")
 
     def promote_to_king(self):

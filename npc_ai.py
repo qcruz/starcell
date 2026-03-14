@@ -1118,6 +1118,15 @@ class NpcAiMixin:
                         entity.health = entity.max_health
                         entity.strength = entity.props['strength'] * entity.level
                         self.assign_warrior_faction(entity, screen_key)
+                        # Reset quest state — old queue belongs to old type
+                        if hasattr(entity, 'quest_queue'):
+                            del entity.quest_queue
+                        entity.quest_focus = None
+                        entity.quest_target = None
+                        entity.keeper = False
+                        entity.keeper_type = None
+                        entity.keeper_target = None
+                        entity.keeper_target_pos = None
                         aggressiveness = entity.aggressiveness
                         flee_chance = getattr(entity, 'flee_chance', 0.05)
                         combat_chance = getattr(entity, 'combat_chance', 0.95)
@@ -3151,7 +3160,17 @@ class NpcAiMixin:
             old_name = entity.name if entity.name else entity_type
             entity.type = new_type
             entity.props = ENTITY_TYPES[new_type]
-            
+
+            # Reset quest state for new role — old quest_queue belongs to the old type
+            if hasattr(entity, 'quest_queue'):
+                del entity.quest_queue
+            entity.quest_focus = None
+            entity.quest_target = None
+            entity.keeper = False
+            entity.keeper_type = None
+            entity.keeper_target = None
+            entity.keeper_target_pos = None
+
             # Reset AI state for new role
             entity.ai_state = 'wandering'
             if hasattr(entity, 'target_exit'):
