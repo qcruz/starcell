@@ -807,6 +807,8 @@ class AutopilotMixin:
 
         Sets self.inspected_npc so the normal per-tick NPC inspection logic runs,
         exercising trade menus, dialogue, and relationship checks.
+        30% of the time, if the NPC can accept a quest, also queue a Shift+A
+        assignment so the quest-assign path is exercised during observation runs.
         """
         screen_key = f"{proxy.screen_x},{proxy.screen_y}"
         candidates = []
@@ -825,6 +827,14 @@ class AutopilotMixin:
         if dist <= 4:
             self.inspected_npc = eid
             print(f"[Autopilot] Inspecting {e.type} (id={eid}) dist={dist}")
+            # 30% chance: queue a Shift+A to assign the active quest to this NPC
+            if (random.random() < 0.30
+                    and self.active_quest
+                    and e.type in NPC_BASE_QUEST
+                    and not getattr(e, 'keeper', False)):
+                d1 = random.randint(10, 20)
+                self._ap_queue(self.handle_npc_quest_assign, d1,
+                               f"Shift+A assign {self.active_quest} → {e.type}(id={eid})")
 
     def _autopilot_try_clear_obstacle(self, proxy):
         """When the proxy is stuck in 'targeting' state, scan adjacent cells for

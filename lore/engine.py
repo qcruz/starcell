@@ -12,6 +12,7 @@ import random
 from constants import (
     QUEST_TYPES, ITEMS,
     GRID_WIDTH, GRID_HEIGHT,
+    NPC_BASE_QUEST, NPC_QUEST_QUEUE_MAX,
 )
 
 
@@ -787,6 +788,64 @@ class LoreEngineMixin:
                 key = f"{px + dx},{py + dy}"
                 if key in self.screens:
                     self.check_secret_entrances(key)
+
+        # ~5% chance each lore cycle to assign a random quest to a nearby idle NPC
+        self._lore_assign_random_npc_quest()
+
+    def _lore_assign_random_npc_quest(self):
+        """World-event: pick a random nearby peaceful NPC with no active quest target
+        and assign it a quest appropriate to its type.
+
+        This generates organic NPC activity independent of the player's quest system.
+        Each lore cycle has a 5% chance to trigger; at most one NPC is assigned per cycle.
+        """
+        if random.random() >= 0.05:
+            return
+
+        px, py = self.player['screen_x'], self.player['screen_y']
+        candidates = []
+        for dx in range(-2, 3):
+            for dy in range(-2, 3):
+                key = f"{px + dx},{py + dy}"
+                for eid in self.screen_entities.get(key, []):
+                    entity = self.entities.get(eid)
+                    if entity is None:
+                        continue
+                    if entity.type not in NPC_BASE_QUEST:
+                        continue
+                    if getattr(entity, 'keeper', False):
+                        continue
+                    # Only target NPCs that are idle or wandering with no active target
+                    if entity.ai_state in ('targeting', 'combat'):
+                        continue
+                    if entity.quest_target is not None:
+                        continue
+                    candidates.append((eid, entity))
+
+        if not candidates:
+            return
+
+        eid, entity = random.choice(candidates)
+        # Pick a quest matching the NPC's role (base quest) or a random quest type
+        qt = NPC_BASE_QUEST.get(entity.type)
+        if not qt:
+            return
+
+        # Init queue if needed and insert at front if not already queued
+        if not hasattr(entity, 'quest_queue') or not entity.quest_queue:
+            entity.quest_queue = [{'type': qt, 'base': True, 'slot': None}]
+        elif any(e['type'] == qt for e in entity.quest_queue):
+            return  # already queued
+
+        if len(entity.quest_queue) < NPC_QUEST_QUEUE_MAX:
+            entity.quest_queue.insert(0, {'type': qt, 'base': False, 'slot': None})
+
+        entity.quest_focus = qt
+        entity.quest_target = None
+        entity._quest_update_counter = 10
+        screen_key = f"{entity.screen_x},{entity.screen_y}"
+        self._assign_specific_quest_target(entity, screen_key)
+        print(f"[LoreEngine] Assigned {qt} quest to {entity.type}(id={eid}) at {screen_key}")
 
     def check_secret_entrances(self, screen_key):
         """~10 % chance: if a zone has 2+ house structures, secretly add a

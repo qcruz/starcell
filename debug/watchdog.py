@@ -33,7 +33,7 @@ from debug.fixes import fix_entity_subscreen_flag
 
 
 class Watchdog:
-    CATEGORIES = ['entities', 'cells', 'zones', 'player', 'structures', 'followers', 'npc_actions', 'keepers']
+    CATEGORIES = ['entities', 'cells', 'zones', 'player', 'structures', 'followers', 'npc_actions', 'keepers', 'npc_quests']
     SAMPLE_INTERVAL   = 300    # ticks between cycles (~5 s at 60 fps)
     MAX_ENTRIES_PER_SAMPLE = 200  # max JSON entries per category per cycle
     BACKUP1_INTERVAL  = 3600   # ~60 s at 60 fps
@@ -69,6 +69,7 @@ class Watchdog:
             'followers':  self._sample_followers,
             'npc_actions': self._sample_npc_actions,
             'keepers':    self._sample_keepers,
+            'npc_quests': self._sample_npc_quests,
         }
         _SAMPLERS[category](tick, game)
 
@@ -136,6 +137,8 @@ class Watchdog:
                 'sprite_base': entity.props.get('sprite_name', entity.type).lower(),
                 'faction': getattr(entity, 'faction', None),
                 'quest_focus': getattr(entity, 'quest_focus', None),
+                'quest_queue': [e.get('type') for e in getattr(entity, 'quest_queue', [])] or None,
+                'quest_target': getattr(entity, 'quest_target', None),
                 'keeper': getattr(entity, 'keeper', False),
                 'keeper_type': getattr(entity, 'keeper_type', None),
                 'keeper_target_type': getattr(entity, 'keeper_target', {}).get('type') if getattr(entity, 'keeper_target', None) else None,
@@ -455,6 +458,51 @@ class Watchdog:
                     'id': eid, 'type': entity.type,
                     'note': 'keeper=True but keeper_target is None — still searching or bug',
                 })
+
+    def _sample_npc_quests(self, tick: int, game) -> None:
+        """Log all NPCs that have an active quest queue or quest target.
+
+        Captures lore-assigned and player-assigned quest state: queue contents,
+        current target, focus type, progress toward completion, and whether the
+        NPC is keeper-anchored to the target.
+        """
+        from constants import NPC_BASE_QUEST
+        active = [
+            (eid, e) for eid, e in game.entities.items()
+            if e.type in NPC_BASE_QUEST
+            and (getattr(e, 'quest_queue', None) or getattr(e, 'quest_target', None))
+        ]
+        if not active:
+            self.bug_catcher.log({
+                'tick': tick, 'category': 'watchdog_npc_quests',
+                'note': 'no NPCs with active quest queues',
+            })
+            return
+        for eid, entity in active:
+            queue = getattr(entity, 'quest_queue', None)
+            qt = entity.quest_target
+            # Resolve target description
+            if isinstance(qt, int) and qt in game.entities:
+                t = game.entities[qt]
+                target_desc = f"{t.type}(id={qt}) HP:{int(t.health)}/{int(t.max_health)}"
+            elif isinstance(qt, tuple):
+                target_desc = str(qt)
+            else:
+                target_desc = str(qt) if qt is not None else None
+            self.bug_catcher.log({
+                'tick': tick,
+                'category': 'watchdog_npc_quests',
+                'id': eid,
+                'type': entity.type,
+                'zone': f"{entity.screen_x},{entity.screen_y}",
+                'grid': [entity.x, entity.y],
+                'quest_focus': getattr(entity, 'quest_focus', None),
+                'quest_queue': [{'type': e.get('type'), 'base': e.get('base')} for e in queue] if queue else None,
+                'quest_target': target_desc,
+                'ai_state': getattr(entity, 'ai_state', None),
+                'keeper': getattr(entity, 'keeper', False),
+                'keeper_type': getattr(entity, 'keeper_type', None),
+            })
 
     def _sample_spiders(self, tick: int, game) -> None:
         """Log full animation + AI state for every BLACK_SPIDER every cycle — no trimming."""

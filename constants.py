@@ -224,9 +224,18 @@ KEEPER_ASSIGNMENT_RATE = 0.02  # 2% chance per zone update to assign a vacant ke
 # NPC quest queue system
 NPC_QUEST_QUEUE_MAX = 3  # Max quests per NPC including base quest
 # Base quest per NPC type — permanent, never removed from queue.
-# Expand this dict when rolling out queue system to other NPC types.
+# All peaceful humanoids included. Later, quest assignment will be
+# gated by per-NPC favor score — for now all are assignable freely.
 NPC_BASE_QUEST = {
-    'FARMER': 'FARM',
+    'FARMER':     'FARM',
+    'LUMBERJACK': 'LUMBER',
+    'MINER':      'MINE',
+    'TRADER':     'EXPLORE',
+    'GUARD':      'COMBAT_HOSTILE',
+    'WARRIOR':    'COMBAT_HOSTILE',
+    'COMMANDER':  'COMBAT_ALL',
+    'BLACKSMITH': 'GATHER',
+    'WIZARD':     'SEARCH',
 }
 
 # Keeper patrol types and their movement radii (Manhattan distance from keeper_target_pos).
