@@ -731,6 +731,13 @@ class HudMixin:
                 quest_color = quest_info.get('color', (200, 200, 200))
                 if quest.status == 'active' and quest.target_info:
                     quest_display = f"Quest [{quest_name}]: {quest.target_info}"
+                    # Append live entity health + location for entity targets
+                    if quest.target_entity_id:
+                        t_ent = self.entities.get(quest.target_entity_id)
+                        if t_ent:
+                            hp_str = f"HP:{int(t_ent.health)}/{int(t_ent.max_health)}"
+                            loc_str = f"Zone:{t_ent.screen_x},{t_ent.screen_y} ({t_ent.x},{t_ent.y})"
+                            quest_display += f"  |  {hp_str}  {loc_str}"
                 elif quest.status == 'active':
                     quest_display = f"Quest [{quest_name}]: Tracking..."
                 elif quest.status == 'inactive':

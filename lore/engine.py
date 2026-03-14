@@ -567,15 +567,25 @@ class LoreEngineMixin:
                 if quest.cooldown_remaining == 0:
                     quest.status = 'inactive'
 
+        # Guard: entity-based quest types must never be active with a cell target
+        # or without an entity target. If detected, reset to inactive so
+        # loreEngine reassigns a proper entity target immediately.
+        _entity_quest_types = {'HUNT', 'SLAY', 'COMBAT_HOSTILE', 'COMBAT_ALL', 'RESCUE'}
+        for quest_type, quest in self.quests.items():
+            if (quest_type in _entity_quest_types and
+                    quest.status == 'active' and
+                    not quest.target_entity_id):
+                quest.status = 'inactive'
+
         # Live-track entity targets: refresh target_zone every tick.
-        # Only clear stale pointers when entity is fully gone from the world;
-        # dead entities are left for check_quest_completion to credit as kills.
+        # Dead entities stay in self.entities (health <= 0) until cleaned up —
+        # let check_quest_completion detect them and credit the kill.
         for quest in self.quests.values():
             if quest.status != 'active' or not quest.target_entity_id:
                 continue
             entity = self.entities.get(quest.target_entity_id)
             if entity is None:
-                # Entity removed from world — treat as killed in check_quest_completion
+                # Fully removed from world — check_quest_completion will complete
                 continue
             # Keep target_zone in sync with entity's actual current zone
             quest.target_zone = f"{entity.screen_x},{entity.screen_y}"
