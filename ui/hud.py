@@ -737,7 +737,12 @@ class HudMixin:
                         if t_ent:
                             hp_str = f"HP:{int(t_ent.health)}/{int(t_ent.max_health)}"
                             loc_str = f"Zone:{t_ent.screen_x},{t_ent.screen_y} ({t_ent.x},{t_ent.y})"
-                            cave_hint = " [CAVE]" if getattr(t_ent, 'in_subscreen', False) else ""
+                            if getattr(t_ent, 'in_structure', False):
+                                sk = getattr(t_ent, 'structure_key', None)
+                                depth = self.structures.get(sk, {}).get('depth', '?') if sk else '?'
+                                cave_hint = f" [CAVE D{depth}]"
+                            else:
+                                cave_hint = ""
                             quest_display += f"  |  {hp_str}  {loc_str}{cave_hint}"
                 elif quest.status == 'active':
                     quest_display = f"Quest [{quest_name}]: Tracking..."

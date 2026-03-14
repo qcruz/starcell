@@ -536,11 +536,11 @@ class MenusMixin:
         target_x, target_y = None, None
 
         if quest.target_entity_id:
-            # Find entity
+            # Find entity — if it's underground, point to the surface entrance
             if quest.target_entity_id in self.entities:
                 entity = self.entities[quest.target_entity_id]
-                target_screen_x, target_screen_y = entity.screen_x, entity.screen_y
-                target_x, target_y = entity.x, entity.y
+                target_screen_x, target_screen_y, target_x, target_y = \
+                    self.get_surface_pos_for_entity(entity)
         elif quest.target_location:
             target_screen_x, target_screen_y = quest.target_location
             target_x, target_y = GRID_WIDTH // 2, GRID_HEIGHT // 2  # Center of zone

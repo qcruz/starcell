@@ -558,6 +558,35 @@ class LoreEngineMixin:
             quest.complete()
             self.sound.on_quest_complete()
 
+    def get_surface_pos_for_entity(self, entity):
+        """Trace entity through parent structures until reaching an overworld zone.
+
+        Returns (screen_x, screen_y, cell_x, cell_y) of the surface entrance
+        cell.  For entities already on the overworld, returns their current
+        position.  Handles arbitrarily deep cave/dungeon chains.
+        """
+        if not getattr(entity, 'in_structure', False):
+            return entity.screen_x, entity.screen_y, entity.x, entity.y
+
+        structure_key = getattr(entity, 'structure_key', None)
+        for _ in range(20):  # cap at 20 levels deep to prevent infinite loops
+            if not structure_key or structure_key not in self.structures:
+                break
+            structure = self.structures[structure_key]
+            parent_screen = structure.get('parent_screen')
+            parent_cell = structure.get('parent_cell')
+            if not parent_screen or not parent_cell:
+                break
+            parent_sx, parent_sy = parent_screen
+            parent_key = f"{parent_sx},{parent_sy}"
+            if self.is_overworld_zone(parent_key):
+                return parent_sx, parent_sy, parent_cell[0], parent_cell[1]
+            # Parent is another structure — keep climbing
+            structure_key = parent_key
+
+        # Fallback — return entity's current coords as-is
+        return entity.screen_x, entity.screen_y, entity.x, entity.y
+
     def update_quests(self):
         """Update quest system — assign targets, check completion, run lore events."""
         # Update cooldowns
@@ -587,8 +616,10 @@ class LoreEngineMixin:
             if entity is None:
                 # Fully removed from world — check_quest_completion will complete
                 continue
-            # Keep target_zone in sync with entity's actual current zone
-            quest.target_zone = f"{entity.screen_x},{entity.screen_y}"
+            # Keep target_zone in sync — use surface overworld zone even when
+            # entity is inside a cave/structure so the arrow stays meaningful.
+            sx, sy, _, _ = self.get_surface_pos_for_entity(entity)
+            quest.target_zone = f"{sx},{sy}"
 
         # Check for quest completion
         self.check_quest_completion()
