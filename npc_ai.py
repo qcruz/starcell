@@ -2513,8 +2513,12 @@ class NpcAiMixin:
             return
         
         # GOBLIN/BANDIT BEHAVIOR (original code)
-        # PRIORITY 1: Pick up items from ground (goblins are looters)
-        if entity.type == 'GOBLIN' and screen_key in self.dropped_items and self.dropped_items[screen_key]:
+        # Inventory "full" threshold: 8 unique item types or 30 total items
+        _goblin_inv_full = (len(entity.inventory) >= 8 or
+                            sum(entity.inventory.values()) >= 30)
+
+        # PRIORITY 1: Pick up items from ground (goblins are looters) — skip if full
+        if entity.type == 'GOBLIN' and not _goblin_inv_full and screen_key in self.dropped_items and self.dropped_items[screen_key]:
             # Check for items at current position first
             for dy in range(-1, 2):
                 for dx in range(-1, 2):
@@ -2564,8 +2568,8 @@ class NpcAiMixin:
                 self.move_entity_towards(entity, closest_loot_x, closest_loot_y)
                 return  # Moving toward loot
         
-        # PRIORITY 2: Place chest with loot (goblins hoard treasure)
-        if entity.type == 'GOBLIN' and entity.inventory and random.random() < 0.005:  # 0.5% chance
+        # PRIORITY 2: Place chest with loot — only when inventory is too full
+        if entity.type == 'GOBLIN' and _goblin_inv_full and random.random() < 0.005:  # 0.5% chance
             # Find empty adjacent spot
             for dy in range(-1, 2):
                 for dx in range(-1, 2):
@@ -2635,6 +2639,9 @@ class NpcAiMixin:
                         entity.trigger_action_animation()
                         self.show_attack_animation(check_x, check_y, entity=entity)
                         screen['grid'][check_y][check_x] = 'GRASS'
+                        # Scatter wood debris so destruction looks visible
+                        for _ in range(random.randint(1, 3)):
+                            self.drop_item('wood', check_x, check_y)
                         name_str = entity.name if entity.name else entity.type
                         print(f"{name_str} destroyed a house at [{screen_key}]!")
                         return

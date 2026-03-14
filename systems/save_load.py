@@ -136,6 +136,8 @@ class SaveLoadMixin:
             'follower_items': {str(k): v for k, v in self.follower_items.items()},
             'structures': structures_serializable,
             'opened_chests': list(self.opened_chests),  # Convert set to list for JSON
+            'chest_contents': getattr(self, 'chest_contents', {}),
+            'chest_backgrounds': getattr(self, 'chest_backgrounds', {}),
             'next_structure_id': self.next_structure_id,
             # Zone priority system
             'zone_connections': zone_connections_serializable,
@@ -353,6 +355,8 @@ class SaveLoadMixin:
                 self.structures[structure_key] = deserialized_structure
 
             self.opened_chests = set(save_data.get('opened_chests', []))
+            self.chest_contents = save_data.get('chest_contents', {})
+            self.chest_backgrounds = save_data.get('chest_backgrounds', {})
             self.next_structure_id = save_data.get('next_structure_id', save_data.get('next_subscreen_id', 0))
 
             # Load zone priority system data
