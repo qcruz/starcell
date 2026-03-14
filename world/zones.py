@@ -143,8 +143,11 @@ class ZonesMixin:
 
         # === CELL UPDATES ===
         if self.is_raining:
+            # During time-pass all loaded zones need rain (no player-proximity limit);
+            # during normal play restrict to nearby zones for performance.
+            time_passing = getattr(self, 'time_pass_active', False)
             distance = abs(zone_x - self.player['screen_x']) + abs(zone_y - self.player['screen_y'])
-            if distance <= 2:
+            if time_passing or distance <= 2:
                 self.apply_rain(zone_x, zone_y)
 
         self.apply_cellular_automata(zone_x, zone_y, cell_coverage)
