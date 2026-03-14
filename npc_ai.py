@@ -308,7 +308,7 @@ class NpcAiMixin:
             
             elif entity.ai_state == 'wandering':
                 # Keeper type 1/2: return to anchor target if out of range
-                ktype = getattr(entity, 'keeper_type', 3)
+                ktype = getattr(entity, 'keeper_type', None) or 3
                 ktarget = getattr(entity, 'keeper_target_pos', None)
                 krange = KEEPER_RANGE.get(ktype)
                 if ktype < 3 and ktarget and krange is not None:
