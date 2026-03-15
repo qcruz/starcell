@@ -191,6 +191,13 @@ class ZonesMixin:
                         if old_cell == 'HOUSE':
                             self.process_house_destruction(x, y, zone_key)
 
+                elif cell == 'CHEST':
+                    chest_key = f"{zone_key}:{x},{y}"
+                    if not self.chest_contents.get(chest_key):  # empty chest
+                        if random.random() < min(1.0, 0.1 * _tp):
+                            bg = getattr(self, 'chest_backgrounds', {}).pop(chest_key, 'GRASS')
+                            self.set_grid_cell(screen, x, y, bg)
+
         # Desert rock/ore formation — SAND slowly solidifies into STONE;
         # existing STONE rarely yields IRON_ORE
         if screen.get('biome') == 'DESERT':
@@ -378,7 +385,7 @@ class ZonesMixin:
                                     for item_name, count in contents.items():
                                         entity.inventory[item_name] = entity.inventory.get(item_name, 0) + count
                                     self.chest_contents[chest_key] = {}
-                                    # Leave the chest cell — it still exists, just empty now
+                                    # Leave the chest cell — decay system will remove it quickly
                                 break
 
                     # Inventory overflow: place chest if >10 unique item types
@@ -626,6 +633,12 @@ class ZonesMixin:
                         self.set_grid_cell(screen, x, y, cell_info['grows_to'])
                     elif 'degrades_to' in cell_info and random.random() < cell_info.get('degrade_rate', 0):
                         self.set_grid_cell(screen, x, y, cell_info['degrades_to'])
+                    elif cell == 'CHEST':
+                        chest_key = f"{struct_zone_key}:{x},{y}"
+                        if not self.chest_contents.get(chest_key):  # empty chest
+                            if random.random() < 0.05:
+                                bg = getattr(self, 'chest_backgrounds', {}).pop(chest_key, 'GRASS')
+                                self.set_grid_cell(screen, x, y, bg)
 
         entity_list = self.screen_entities.get(struct_zone_key, [])
         if not entity_list:

@@ -962,29 +962,25 @@ class LoreEngineMixin:
                             return  # One raider per lore cycle
 
     def _lore_ensure_commander_factions(self):
-        """Ensure every living COMMANDER has a named faction. Called each lore cycle.
-        If a Commander has no faction, create one using their name or entity ID."""
-        px, py = self.player['screen_x'], self.player['screen_y']
-        for dx in range(-4, 5):
-            for dy in range(-4, 5):
-                key = f"{px + dx},{py + dy}"
-                for eid in self.screen_entities.get(key, []):
-                    entity = self.entities.get(eid)
-                    if entity is None or entity.health <= 0:
-                        continue
-                    if entity.type != 'COMMANDER':
-                        continue
-                    if getattr(entity, 'faction', None):
-                        continue  # Already in a faction
-                    faction_name = (getattr(entity, 'name', None)
-                                    or f"faction_{eid}")
-                    if faction_name not in self.factions:
-                        self.factions[faction_name] = {'warriors': [eid], 'zones': set(), 'hostile': False}
-                    else:
-                        if eid not in self.factions[faction_name]['warriors']:
-                            self.factions[faction_name]['warriors'].append(eid)
-                    entity.faction = faction_name
-                    print(f"[LoreEngine] Created faction '{faction_name}' for COMMANDER(id={eid})")
+        """Ensure every living COMMANDER has a named faction registered in self.factions.
+        Scans all loaded entities (not just nearby) so newly loaded zones are covered."""
+        for eid, entity in list(self.entities.items()):
+            if entity is None or entity.health <= 0:
+                continue
+            if entity.type != 'COMMANDER':
+                continue
+            efaction = getattr(entity, 'faction', None)
+            if efaction and efaction in self.factions:
+                continue  # Faction exists and is registered — nothing to do
+            # Either no faction or faction name not registered
+            faction_name = efaction or getattr(entity, 'name', None) or f"faction_{eid}"
+            if faction_name not in self.factions:
+                self.factions[faction_name] = {'warriors': [eid], 'zones': set(), 'hostile': False}
+            else:
+                if eid not in self.factions[faction_name]['warriors']:
+                    self.factions[faction_name]['warriors'].append(eid)
+            entity.faction = faction_name
+            print(f"[LoreEngine] Registered faction '{faction_name}' for COMMANDER(id={eid})")
 
     def _lore_hostile_entity_factions(self):
         """Level 2+ hostile entities have a per-lore-cycle chance to form a new faction.
