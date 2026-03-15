@@ -644,6 +644,11 @@ class NpcAiMixin:
             # Goblin/Bandit/Termite behavior - attack structures (no config needed)
             elif entity.type in ['GOBLIN', 'BANDIT', 'TERMITE']:
                 self.hostile_structure_behavior(entity)
+
+            # Peaceful humanoid NPCs: deposit excess inventory into nearby chests
+            if behavior_config and not entity.props.get('hostile', False):
+                screen_key_bc = f"{entity.screen_x},{entity.screen_y}"
+                self.try_npc_chest_deposit(entity, screen_key_bc)
             
             # Human NPCs may place camps
             if behavior_config and behavior_config.get('can_place_camp'):
@@ -1047,6 +1052,11 @@ class NpcAiMixin:
         idleness = entity.idleness
         flee_chance = getattr(entity, 'flee_chance', 0.50)
         combat_chance = getattr(entity, 'combat_chance', 0.50)
+
+        # Overburdened: heavier inventory → higher effective idle rate
+        inv_count = sum(entity.inventory.values()) if isinstance(entity.inventory, dict) else 0
+        if inv_count > 10:
+            idleness = min(0.9, idleness * (1.0 + min(2.0, inv_count / 20.0)))
         
         screen_key = f"{entity.screen_x},{entity.screen_y}"
         
@@ -2577,6 +2587,39 @@ class NpcAiMixin:
                 self.move_entity_towards(entity, closest_loot_x, closest_loot_y)
                 return  # Moving toward loot
         
+        # PRIORITY 1.5: Target richest nearby chest (goblin/bandit raid behavior)
+        if entity.type in ['GOBLIN', 'BANDIT']:
+            richest_cx, richest_cy, max_chest_items = None, None, 0
+            for cy in range(GRID_HEIGHT):
+                for cx in range(GRID_WIDTH):
+                    if screen['grid'][cy][cx] == 'CHEST':
+                        ck = f"{screen_key}:{cx},{cy}"
+                        total = sum(self.chest_contents.get(ck, {}).values())
+                        if total > max_chest_items:
+                            max_chest_items = total
+                            richest_cx, richest_cy = cx, cy
+            if richest_cx is not None and max_chest_items > 0:
+                # Chance scales with richness: 2% per 10 items, cap 40%
+                raid_chance = min(0.4, max_chest_items * 0.002)
+                if random.random() < raid_chance:
+                    dist = abs(richest_cx - entity.x) + abs(richest_cy - entity.y)
+                    if dist > 1:
+                        self.move_entity_towards(entity, richest_cx, richest_cy)
+                        return
+                    else:
+                        # Loot 1-5 items from chest into inventory
+                        ck = f"{screen_key}:{richest_cx},{richest_cy}"
+                        contents = self.chest_contents.get(ck, {})
+                        loot_items = list(contents.keys())
+                        random.shuffle(loot_items)
+                        for loot_item in loot_items[:random.randint(1, 5)]:
+                            amt = min(contents[loot_item], random.randint(1, 3))
+                            entity.inventory[loot_item] = entity.inventory.get(loot_item, 0) + amt
+                            contents[loot_item] -= amt
+                            if contents[loot_item] <= 0:
+                                del contents[loot_item]
+                        return
+
         # PRIORITY 2: Place chest with loot — only when inventory is too full
         if entity.type == 'GOBLIN' and _goblin_inv_full and random.random() < 0.0005:  # 0.05% chance
             # Find empty adjacent spot

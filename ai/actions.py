@@ -1092,3 +1092,67 @@ class NpcAiActionsMixin:
 
         # No trader nearby
         print("No trader nearby!")
+
+    # ------------------------------------------------------------------
+    # NPC chest deposit
+    # ------------------------------------------------------------------
+
+    def try_npc_chest_deposit(self, entity, screen_key):
+        """Try to deposit excess inventory into a nearby chest.
+
+        Triggers when NPC inventory exceeds threshold. Chance is boosted 3x at night
+        (most peaceful NPCs will be indoors). Entity moves to the chest first; deposits
+        1-3 random items when adjacent.
+
+        Returns True if any action was taken (moving toward or depositing into chest).
+        """
+        inv_count = sum(entity.inventory.values()) if entity.inventory else 0
+        if inv_count < 15:
+            return False
+
+        night_mult = 3.0 if getattr(self, 'is_night', False) else 1.0
+        if random.random() > 0.05 * night_mult:
+            return False
+
+        if screen_key not in self.screens:
+            return False
+
+        screen = self.screens[screen_key]
+
+        # Find nearest CHEST within 8 cells
+        best_chest = None
+        best_dist = 9999
+        for cy in range(max(0, entity.y - 8), min(GRID_HEIGHT, entity.y + 9)):
+            for cx in range(max(0, entity.x - 8), min(GRID_WIDTH, entity.x + 9)):
+                if screen['grid'][cy][cx] == 'CHEST':
+                    dist = abs(cx - entity.x) + abs(cy - entity.y)
+                    if dist < best_dist:
+                        best_dist = dist
+                        best_chest = (cx, cy)
+
+        if best_chest is None:
+            return False
+
+        tx, ty = best_chest
+
+        if best_dist > 1:
+            self.move_entity_towards(entity, tx, ty)
+            return True
+
+        # Adjacent — deposit 1-3 random items
+        chest_key = f"{screen_key}:{tx},{ty}"
+        if not hasattr(self, 'chest_contents'):
+            self.chest_contents = {}
+        if chest_key not in self.chest_contents:
+            self.chest_contents[chest_key] = {}
+
+        items = list(entity.inventory.keys())
+        random.shuffle(items)
+        for item in items[:random.randint(1, 3)]:
+            amount = min(entity.inventory[item], random.randint(1, 3))
+            self.chest_contents[chest_key][item] = self.chest_contents[chest_key].get(item, 0) + amount
+            entity.inventory[item] -= amount
+            if entity.inventory[item] <= 0:
+                del entity.inventory[item]
+
+        return True

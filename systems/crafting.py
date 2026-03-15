@@ -232,8 +232,14 @@ class CraftingMixin:
 
             # Process each item type at this position
             for item_name, item_count in list(items.items()):
-                # Check if this item type has decay config
+                # Blanket destruction: small chance to lose any non-unique dropped item
                 if item_name not in ITEM_DECAY_CONFIG:
+                    if random.random() < 0.002:
+                        items[item_name] -= 1
+                        if items[item_name] <= 0:
+                            del items[item_name]
+                        if not items:
+                            del self.dropped_items[screen_key][cell_pos]
                     continue
 
                 config = ITEM_DECAY_CONFIG[item_name]

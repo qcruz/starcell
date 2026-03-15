@@ -78,6 +78,24 @@ class DevScreenMixin:
         # screen_entities registrations (total refs, including dead)
         total_se_refs = sum(len(v) for v in self.screen_entities.values())
 
+        # Factions — alive member counts
+        faction_data = {}
+        for fname, fdata in getattr(self, 'factions', {}).items():
+            alive = sum(
+                1 for eid in fdata.get('warriors', [])
+                if eid in self.entities and self.entities[eid].health > 0
+            )
+            faction_data[fname] = {'count': alive, 'zones': len(fdata.get('zones', []))}
+
+        # Top items across all living NPC inventories
+        item_totals = {}
+        for entity in self.entities.values():
+            if entity.health <= 0:
+                continue
+            for iname, icount in getattr(entity, 'inventory', {}).items():
+                item_totals[iname] = item_totals.get(iname, 0) + icount
+        top_npc_items = sorted(item_totals.items(), key=lambda x: -x[1])[:12]
+
         return {
             'biome_counts':      dict(sorted(biome_counts.items())),
             'type_counts':       dict(sorted(type_counts.items(), key=lambda x: -x[1])),
@@ -96,6 +114,8 @@ class DevScreenMixin:
             'total_zones':       len(self.screens),
             'overworld_zones':   sum(1 for zk in self.screens if self.is_overworld_zone(zk)),
             'struct_zones':      len(self.structure_zones),
+            'faction_data':      faction_data,
+            'top_npc_items':     top_npc_items,
         }
 
     # ── Renderer ───────────────────────────────────────────────────────────────
@@ -173,6 +193,15 @@ class DevScreenMixin:
         else:
             cy = _t("  (none)", cx, cy)
 
+        cy += 8
+        cy = _h("FACTIONS", cx, cy)
+        if stats['faction_data']:
+            for fname, finfo in stats['faction_data'].items():
+                name_disp = fname[:14]
+                cy = _t(f"  {name_disp:<14} {finfo['count']:>3}m {finfo['zones']:>3}z", cx, cy)
+        else:
+            cy = _t("  (none)", cx, cy)
+
         # ══════════════════════════════════════════════════════════════════════
         # Column 2 — Entities                                          x=245
         # ══════════════════════════════════════════════════════════════════════
@@ -187,6 +216,15 @@ class DevScreenMixin:
         for lv, count in stats['level_counts'].items():
             bar = '█' * min(count, 18)
             cy = _t(f"  L{lv:<3} {count:>4}  {bar}", cx, cy)
+
+        cy += 8
+        cy = _h("TOP NPC INVENTORY ITEMS", cx, cy)
+        if stats['top_npc_items']:
+            for iname, icount in stats['top_npc_items']:
+                name_disp = iname[:18]
+                cy = _t(f"  {name_disp:<18} {icount:>6}", cx, cy)
+        else:
+            cy = _t("  (none)", cx, cy)
 
         # ══════════════════════════════════════════════════════════════════════
         # Column 3 — Quests & Bloat watch                              x=490
