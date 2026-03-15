@@ -43,7 +43,7 @@ class ZonesMixin:
             new_zone_key = f"{range_x},{range_y}"
             if new_zone_key not in self.screens:
                 dist = abs(range_x - _pox) + abs(range_y - _poy)
-                if random.random() < 1.0 / (1.0 + dist * 0.15):
+                if random.random() < 1.0 / (1.0 + dist * 0.25):
                     self.generate_screen(range_x, range_y)
                     self.instantiated_zones.add(new_zone_key)
 
