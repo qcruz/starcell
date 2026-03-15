@@ -809,25 +809,19 @@ class LoreEngineMixin:
         if random.random() >= 0.25:
             return
 
-        px, py = self.player['screen_x'], self.player['screen_y']
         candidates = []
-        for dx in range(-2, 3):
-            for dy in range(-2, 3):
-                key = f"{px + dx},{py + dy}"
-                for eid in self.screen_entities.get(key, []):
-                    entity = self.entities.get(eid)
-                    if entity is None:
-                        continue
-                    if entity.type not in NPC_BASE_QUEST:
-                        continue
-                    if getattr(entity, 'keeper', False):
-                        continue
-                    # Only target NPCs that are idle or wandering with no active target
-                    if entity.ai_state in ('targeting', 'combat'):
-                        continue
-                    if entity.quest_target is not None:
-                        continue
-                    candidates.append((eid, entity))
+        for eid, entity in self.entities.items():
+            if entity is None or entity.health <= 0:
+                continue
+            if entity.type not in NPC_BASE_QUEST:
+                continue
+            if getattr(entity, 'keeper', False):
+                continue
+            if entity.ai_state in ('targeting', 'combat'):
+                continue
+            if entity.quest_target is not None:
+                continue
+            candidates.append((eid, entity))
 
         if not candidates:
             return
@@ -864,22 +858,17 @@ class LoreEngineMixin:
         if random.random() > 0.15 * night_mult:
             return
 
-        px, py = self.player['screen_x'], self.player['screen_y']
         candidates = []
-        for dx in range(-3, 4):
-            for dy in range(-3, 4):
-                key = f"{px + dx},{py + dy}"
-                for eid in self.screen_entities.get(key, []):
-                    entity = self.entities.get(eid)
-                    if entity is None or entity.health <= 0:
-                        continue
-                    if entity.props.get('hostile', False) or getattr(entity, 'keeper', False):
-                        continue
-                    inv_count = sum(entity.inventory.values()) if entity.inventory else 0
-                    if any(q.get('type') == 'DELIVER_ITEMS'
-                           for q in getattr(entity, 'quest_queue', [])):
-                        continue
-                    candidates.append((eid, entity, inv_count))
+        for eid, entity in self.entities.items():
+            if entity is None or entity.health <= 0:
+                continue
+            if entity.props.get('hostile', False) or getattr(entity, 'keeper', False):
+                continue
+            inv_count = sum(entity.inventory.values()) if entity.inventory else 0
+            if any(q.get('type') == 'DELIVER_ITEMS'
+                   for q in getattr(entity, 'quest_queue', [])):
+                continue
+            candidates.append((eid, entity, inv_count))
 
         if not candidates:
             return
