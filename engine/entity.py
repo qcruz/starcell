@@ -365,10 +365,24 @@ class Entity:
         self.world_y = new_world_y
         self.is_moving = True
 
+    _HUMANOID_TYPES = {
+        'FARMER', 'GUARD', 'WARRIOR', 'COMMANDER', 'KING',
+        'TRADER', 'BLACKSMITH', 'WIZARD', 'LUMBERJACK', 'MINER',
+    }
+
     def decay_stats(self):
         """Decay hunger and thirst over time"""
-        self.hunger = max(0, self.hunger - HUNGER_DECAY_RATE)
-        self.thirst = max(0, self.thirst - THIRST_DECAY_RATE)
+        if self.type in self._HUMANOID_TYPES:
+            # Humanoids decay faster; higher level = more resilient (floors at 0.3×)
+            level_factor = max(0.3, 1.0 / (1.0 + self.level * 0.08))
+            hunger_rate = HUNGER_DECAY_RATE * 2.5 * level_factor
+            thirst_rate = THIRST_DECAY_RATE * 2.5 * level_factor
+        else:
+            hunger_rate = HUNGER_DECAY_RATE
+            thirst_rate = THIRST_DECAY_RATE
+
+        self.hunger = max(0, self.hunger - hunger_rate)
+        self.thirst = max(0, self.thirst - thirst_rate)
 
         # Take damage if starving or dehydrated
         if self.hunger <= 0:

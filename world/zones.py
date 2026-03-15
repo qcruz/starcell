@@ -339,7 +339,7 @@ class ZonesMixin:
                 entity.decay_stats()
 
                 # NPC item consumption: remove full stack of a random item
-                if random.random() < 0.02 and entity.inventory:
+                if random.random() < 0.05 and entity.inventory:
                     item = random.choice(list(entity.inventory.keys()))
                     count = entity.inventory.pop(item)
                     if item in ('meat', 'carrot', 'cooked_meat', 'stew', 'bones'):
@@ -1076,7 +1076,9 @@ class ZonesMixin:
 
         last_update = self.screen_last_update.get(zone_key, 0)
         staleness_ticks = self.tick - last_update
-        staleness_score = min(30.0, staleness_ticks / 60.0)
+        # Accrue 1 point per 30 ticks idle, cap at 60 so stale zones get
+        # meaningful priority boosts without fully dominating the queue
+        staleness_score = min(60.0, staleness_ticks / 30.0)
 
         connection_score = 0.0
         if zone_key in self.zone_connections:
