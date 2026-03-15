@@ -195,6 +195,7 @@ class GameCoreMixin:
         # Debug / bug-tracking
         self.bug_catcher = BugCatcher()
         self.watchdog = Watchdog(self.bug_catcher)
+        self.show_dev_screen = False  # Toggled by Shift+I
 
         # Audio
         self.sound = SoundManager()
@@ -1076,10 +1077,13 @@ class GameCoreMixin:
                         self.attempt_craft()
                         self.gain_xp(1)
                     elif event.key == pygame.K_i:
-                        _was_open = 'items' in self.inventory.open_menus
-                        self.inventory.toggle_menu('items')
-                        if not _was_open:
-                            self.sound.on_inventory_open()
+                        if pygame.key.get_mods() & pygame.KMOD_SHIFT:
+                            self.show_dev_screen = not self.show_dev_screen
+                        else:
+                            _was_open = 'items' in self.inventory.open_menus
+                            self.inventory.toggle_menu('items')
+                            if not _was_open:
+                                self.sound.on_inventory_open()
                     elif event.key == pygame.K_t:
                         if (pygame.key.get_mods() & pygame.KMOD_SHIFT) and self.inspected_npc:
                             self.open_npc_trade_window()
@@ -2758,6 +2762,7 @@ class GameCoreMixin:
 
                 self.tick += 1
                 self.draw_game()
+                self.draw_dev_screen()
             elif self.state == 'death':
                 self.update_death_screen()
                 self.draw_death_screen()
