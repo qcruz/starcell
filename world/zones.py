@@ -636,8 +636,8 @@ class ZonesMixin:
                         elif entity.type in ('GUARD', 'GUARD_double'):
                             guards.append((entity_id, entity))
 
-                missing_roles = not has_lumberjack or not has_miner
-                settlement_rate = ENHANCED_SETTLEMENT_RATE if missing_roles else 0.02
+                missing_roles = not has_farmer or not has_lumberjack or not has_miner
+                settlement_rate = ENHANCED_SETTLEMENT_RATE if missing_roles else 0.05
 
                 if random.random() < settlement_rate:
                     if len(traders) > 2:
@@ -654,11 +654,12 @@ class ZonesMixin:
                             g1.merge_with(g2)
                             del self.entities[g2_id]
 
-                    # Traders settle into LUMBERJACK or MINER only — never FARMER
                     if traders:
                         trader_id, trader = random.choice(traders)
                         new_trader_type = None
-                        if not has_lumberjack and random.random() < 0.5:
+                        if not has_farmer and random.random() < 0.5:
+                            new_trader_type = 'FARMER'
+                        elif not has_lumberjack and random.random() < 0.5:
                             new_trader_type = 'LUMBERJACK'
                         elif not has_miner:
                             new_trader_type = 'MINER'
@@ -670,19 +671,25 @@ class ZonesMixin:
                             trader.quest_focus = None
                             trader.quest_target = None
 
+                    if guards:
+                        guard_id, guard = random.choice(guards)
+                        new_guard_type = None
+                        if not has_farmer and random.random() < 0.5:
+                            new_guard_type = 'FARMER'
+                        elif not has_miner and random.random() < 0.5:
+                            new_guard_type = 'MINER'
+                        if new_guard_type:
+                            guard.type = new_guard_type
+                            guard.props = ENTITY_TYPES[new_guard_type]
+                            if hasattr(guard, 'quest_queue'):
+                                del guard.quest_queue
+                            guard.quest_focus = None
+                            guard.quest_target = None
+
             if self.tick % 600 == 0:
                 self.promote_to_commander(zone_key)
                 self.promote_to_king()
                 self.recruit_to_hostile_faction(zone_key)
-                # Guard → FARMER conversion: once per 10s, only if zone truly has no farmer
-                if zone_key in self.screen_entities and not has_farmer and guards and random.random() < 0.3:
-                    guard_id, guard = random.choice(guards)
-                    guard.type = 'FARMER'
-                    guard.props = ENTITY_TYPES['FARMER']
-                    if hasattr(guard, 'quest_queue'):
-                        del guard.quest_queue
-                    guard.quest_focus = None
-                    guard.quest_target = None
 
     def update_structure_zone(self, struct_zone_key, cell_coverage, entity_coverage):
         """Update a structure zone (cave/house interior) like a regular zone."""
