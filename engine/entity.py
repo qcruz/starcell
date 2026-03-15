@@ -375,8 +375,8 @@ class Entity:
         if self.type in self._HUMANOID_TYPES:
             # Humanoids decay faster; higher level = more resilient (floors at 0.3×)
             level_factor = max(0.3, 1.0 / (1.0 + self.level * 0.08))
-            hunger_rate = HUNGER_DECAY_RATE * 2.5 * level_factor
-            thirst_rate = THIRST_DECAY_RATE * 2.5 * level_factor
+            hunger_rate = HUNGER_DECAY_RATE * 4.0 * level_factor
+            thirst_rate = THIRST_DECAY_RATE * 4.0 * level_factor
         else:
             hunger_rate = HUNGER_DECAY_RATE
             thirst_rate = THIRST_DECAY_RATE
