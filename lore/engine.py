@@ -806,7 +806,7 @@ class LoreEngineMixin:
         This generates organic NPC activity independent of the player's quest system.
         Each lore cycle has a 5% chance to trigger; at most one NPC is assigned per cycle.
         """
-        if random.random() >= 0.15:
+        if random.random() >= 0.25:
             return
 
         px, py = self.player['screen_x'], self.player['screen_y']

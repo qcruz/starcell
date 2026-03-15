@@ -187,7 +187,7 @@ CELL_PICKUP = {
 # Item decay configuration - defines how dropped items decay over time
 ITEM_DECAY_CONFIG = {
     'bones': {
-        'decay_rate': 0.05,  # 5% chance per update cycle (per bone)
+        'decay_rate': 0.08,  # 8% chance per update cycle (was 5%)
         'decay_results': {
             # Cell type → [(result_cell, weight), ...]
             'DIRT': [('GRASS', 0.7), ('TREE1', 0.3)],
@@ -197,13 +197,13 @@ ITEM_DECAY_CONFIG = {
         }
     },
     'meat': {
-        'decay_rate': 0.10,  # 10% chance to decay (meat spoils faster)
+        'decay_rate': 0.15,  # 15% chance to decay (was 10%)
         'decay_results': {
             'default': [(None, 1.0)]  # Meat just disappears (eaten by animals)
         }
     },
     'carrot': {
-        'decay_rate': 0.03,  # 3% chance to decay
+        'decay_rate': 0.05,  # 5% chance to decay (was 3%)
         'decay_results': {
             'DIRT': [('CARROT1', 0.2), (None, 0.8)],  # Small chance to replant
             'SOIL': [('CARROT1', 0.5), (None, 0.5)],  # Better on soil

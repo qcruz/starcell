@@ -234,7 +234,7 @@ class CraftingMixin:
             for item_name, item_count in list(items.items()):
                 # Blanket destruction: small chance to lose any non-unique dropped item
                 if item_name not in ITEM_DECAY_CONFIG:
-                    if random.random() < 0.002:
+                    if random.random() < 0.005:
                         items[item_name] -= 1
                         if items[item_name] <= 0:
                             del items[item_name]
