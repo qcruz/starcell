@@ -234,7 +234,6 @@ ITEM_TO_CELL = {
     'camp': 'CAMP',
     'chest': 'CHEST',
     'wall': 'WALL',
-    'wood': 'WOOD',
     'meat': 'MEAT',
     'fur': 'FUR',
     'bones': 'BONES',

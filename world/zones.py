@@ -378,7 +378,7 @@ class ZonesMixin:
                                     for item_name, count in contents.items():
                                         entity.inventory[item_name] = entity.inventory.get(item_name, 0) + count
                                     self.chest_contents[chest_key] = {}
-                                    grid[cy][cx] = 'WOOD'
+                                    # Leave the chest cell — it still exists, just empty now
                                 break
 
                     # Inventory overflow: place chest if >10 unique item types
