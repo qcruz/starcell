@@ -165,6 +165,14 @@ class SaveLoadMixin:
             'opened_chests': list(self.opened_chests),  # Convert set to list for JSON
             'chest_contents': getattr(self, 'chest_contents', {}),
             'chest_backgrounds': getattr(self, 'chest_backgrounds', {}),
+            'factions': {
+                fname: {
+                    'warriors': list(fdata.get('warriors', [])),
+                    'zones': list(fdata.get('zones', [])),
+                    'hostile': fdata.get('hostile', False),
+                }
+                for fname, fdata in getattr(self, 'factions', {}).items()
+            },
             'next_structure_id': self.next_structure_id,
             # Zone priority system
             'zone_connections': zone_connections_serializable,
@@ -403,6 +411,16 @@ class SaveLoadMixin:
             self.opened_chests = set(save_data.get('opened_chests', []))
             self.chest_contents = save_data.get('chest_contents', {})
             self.chest_backgrounds = save_data.get('chest_backgrounds', {})
+            # Restore factions; zones serialized as list → convert back to set
+            raw_factions = save_data.get('factions', {})
+            self.factions = {
+                fname: {
+                    'warriors': list(fdata.get('warriors', [])),
+                    'zones': set(fdata.get('zones', [])),
+                    'hostile': fdata.get('hostile', False),
+                }
+                for fname, fdata in raw_factions.items()
+            }
             self.next_structure_id = save_data.get('next_structure_id', save_data.get('next_subscreen_id', 0))
 
             # Load zone priority system data
