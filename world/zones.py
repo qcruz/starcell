@@ -45,8 +45,8 @@ class ZonesMixin:
 
         if self.tick % 600 == 0:
             self.cleanup_screen_entities()
-            # Remove evicted zones — keep instantiated_zones in sync with self.screens
-            self.instantiated_zones &= set(self.screens.keys())
+            # Sync instantiated_zones exactly with self.screens (bidirectional)
+            self.instantiated_zones = set(self.screens.keys())
 
         self.ensure_nearby_zones_exist()
 
@@ -163,12 +163,22 @@ class ZonesMixin:
                            'MOUNTAINS': 'DIRT', 'TUNDRA': 'DIRT', 'SWAMP': 'DIRT'}
         base_cell = _biome_base_map.get(_biome, 'GRASS')
 
+        # Count caves for elevated decay when zone is over-caved
+        cave_count = sum(1 for row in screen['grid'] for c in row if c == 'CAVE')
+        cave_decay_rate = 0.01 if cave_count > 2 else 0.0
+
         for y in range(1, GRID_HEIGHT - 1):
             for x in range(1, GRID_WIDTH - 1):
                 if self.is_cell_enchanted(x, y, zone_key):
                     continue
 
                 cell = screen['grid'][y][x]
+
+                # Decay excess caves back to base cell
+                if cell == 'CAVE' and cave_decay_rate > 0 and random.random() < cave_decay_rate:
+                    screen['grid'][y][x] = base_cell
+                    continue
+
                 if cell in CELL_TYPES:
                     cell_info = CELL_TYPES[cell]
 
@@ -235,8 +245,8 @@ class ZonesMixin:
         native_cells = biome_native.get(biome, {'GRASS', 'DIRT'})
 
         protected_cells = {'HOUSE', 'CAVE', 'MINESHAFT', 'CAMP', 'CHEST', 'WALL',
-                           'COBBLESTONE', 'WATER', 'DEEP_WATER', 'WOOD', 'PLANKS',
-                           'FLOOR_WOOD', 'CAVE_FLOOR', 'CAVE_WALL', 'STAIRS_UP',
+                           'COBBLESTONE', 'WATER', 'DEEP_WATER',
+                           'CAVE_FLOOR', 'CAVE_WALL', 'STAIRS_UP',
                            'STAIRS_DOWN', 'HIDDEN_CAVE', 'SOIL', 'CARROT1', 'CARROT2', 'CARROT3',
                            'CLIFF', 'STONE_HOUSE'}
 
@@ -261,6 +271,11 @@ class ZonesMixin:
                     continue
 
                 if cell in revert_targets and random.random() < 0.003:
+                    screen['grid'][y][x] = base_cell
+                    continue
+
+                # Revert stray interior/placeable cells that shouldn't appear in overworld
+                if cell in ('WOOD', 'PLANKS', 'FLOOR_WOOD') and random.random() < 0.1:
                     screen['grid'][y][x] = base_cell
                     continue
 
@@ -322,6 +337,15 @@ class ZonesMixin:
                     entity.age += 1
 
                 entity.decay_stats()
+
+                # NPC item consumption: moderate chance to consume food items
+                if random.random() < 0.02 and entity.inventory:
+                    item = random.choice(list(entity.inventory.keys()))
+                    entity.inventory[item] -= 1
+                    if entity.inventory[item] <= 0:
+                        del entity.inventory[item]
+                    if item in ('meat', 'carrot', 'cooked_meat', 'stew', 'bones'):
+                        entity.health = min(entity.max_health, entity.health + 5)
 
                 # Skeletons burn in daylight
                 if entity.type == 'SKELETON' and not self.is_night:
@@ -395,8 +419,8 @@ class ZonesMixin:
                                     # Leave the chest cell — decay system will remove it quickly
                                 break
 
-                    # Inventory overflow: place chest if >10 unique item types
-                    if len(entity.inventory) > 10:
+                    # Inventory overflow: rarely place a chest (low probability to prevent spam)
+                    if len(entity.inventory) > 10 and random.random() < 0.05:
                         ground_cells = {'GRASS', 'DIRT', 'SAND', 'FLOOR_WOOD', 'CAVE_FLOOR', 'COBBLESTONE'}
                         for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
                             cx, cy = ex + dx, ey + dy

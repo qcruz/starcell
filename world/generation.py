@@ -402,6 +402,7 @@ class WorldGenerationMixin:
         # Register as a full zone (in both dicts for backward-compat metadata lookups)
         self.structures[zone_key] = structure_data
         self.screens[zone_key] = structure_data
+        self.instantiated_zones.add(zone_key)
         self.screen_last_update[zone_key] = self.tick
         if zone_key not in self.screen_entities:
             self.screen_entities[zone_key] = []
