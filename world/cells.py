@@ -384,6 +384,12 @@ class CellsMixin:
                 if cell == 'SAND' and not self.is_cell_enchanted(x, y, key):
                     if random.random() < 0.6:
                         screen['grid'][y][x] = 'WATER'
+            # Even in desert, rain quenches thirst (just rarer puddles)
+            for eid in self.screen_entities.get(key, []):
+                if eid in self.entities:
+                    e = self.entities[eid]
+                    if e.health > 0 and not getattr(e, 'in_subscreen', False):
+                        e.thirst = e.max_thirst
             return
 
         water_mult = 1.0
@@ -412,6 +418,13 @@ class CellsMixin:
             if cell == 'DIRT' and not self.is_cell_enchanted(x, y, key):
                 if random.random() < 0.4:
                     screen['grid'][y][x] = 'GRASS'
+
+        # Rain fills thirst for all living outdoor entities in this zone
+        for eid in self.screen_entities.get(key, []):
+            if eid in self.entities:
+                e = self.entities[eid]
+                if e.health > 0 and not getattr(e, 'in_subscreen', False):
+                    e.thirst = e.max_thirst
 
     # -------------------------------------------------------------------------
     # Weather

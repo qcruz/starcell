@@ -614,11 +614,24 @@ class Entity:
         self.world_y = new_world_y
         self.is_moving = True
     
+    _HUMANOID_DRAIN_TYPES = frozenset([
+        'FARMER', 'GUARD', 'WARRIOR', 'COMMANDER', 'KING',
+        'TRADER', 'BLACKSMITH', 'WIZARD', 'LUMBERJACK', 'MINER',
+    ])
+
     def decay_stats(self):
         """Decay hunger and thirst over time"""
-        self.hunger = max(0, self.hunger - HUNGER_DECAY_RATE)
-        self.thirst = max(0, self.thirst - THIRST_DECAY_RATE)
-        
+        if self.type in self._HUMANOID_DRAIN_TYPES:
+            level_factor = max(0.3, 1.0 / (1.0 + self.level * 0.08))
+            hunger_rate = HUNGER_DECAY_RATE * HUMANOID_DRAIN_MULTIPLIER * level_factor
+            thirst_rate = THIRST_DECAY_RATE * HUMANOID_DRAIN_MULTIPLIER * level_factor
+        else:
+            hunger_rate = HUNGER_DECAY_RATE
+            thirst_rate = THIRST_DECAY_RATE
+
+        self.hunger = max(0, self.hunger - hunger_rate)
+        self.thirst = max(0, self.thirst - thirst_rate)
+
         # Take damage if starving or dehydrated
         if self.hunger <= 0:
             self.health -= STARVATION_DAMAGE
@@ -664,15 +677,8 @@ class Entity:
         self.health = min(self.max_health, self.health + amount)
     
     def eat(self, food_value=30):
-        """Eat food to restore hunger
-        
-        Args:
-            food_value: Amount of hunger to restore (default 30)
-                       - Grass: 20
-                       - Crops (CARROT1/2/3): 40
-                       - Meat (predators): 50
-        """
-        self.hunger = min(self.max_hunger, self.hunger + food_value)
+        """Eat food to restore hunger — fills bar to max regardless of food_value."""
+        self.hunger = self.max_hunger
     
     def update_facing_toward(self, target_x, target_y):
         """Update facing direction based on target position"""
@@ -699,12 +705,8 @@ class Entity:
 
     
     def drink(self, water_value=40):
-        """Drink water to restore thirst
-        
-        Args:
-            water_value: Amount of thirst to restore (default 40)
-        """
-        self.thirst = min(self.max_thirst, self.thirst + water_value)
+        """Drink water to restore thirst — fills bar to max."""
+        self.thirst = self.max_thirst
     
     def level_up_from_activity(self, activity_type, game):
         """Chance to level up from completing activities
@@ -792,12 +794,8 @@ class Entity:
                     print(f"  {name_str} switched focus: {old_focus} → {self.quest_focus}")
     
     def drink(self, water_value=40):
-        """Drink water to restore thirst
-        
-        Args:
-            water_value: Amount of thirst to restore (default 40)
-        """
-        self.thirst = min(self.max_thirst, self.thirst + water_value)
+        """Drink water to restore thirst — fills bar to max."""
+        self.thirst = self.max_thirst
     
     def gain_xp(self, amount):
         self.xp += amount

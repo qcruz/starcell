@@ -127,10 +127,11 @@ GRASS_WATER_ABSORB_RATE = 0.02     # Grass adjacent to water floods during rain 
 DIRT_WATER_EXTRA_GRASS_RATE = 0.0002  # Dirt with even 1 water neighbor gets extra grass chance
 
 # Entity Survival
-HUNGER_DECAY_RATE = 0.02        # Hunger loss per tick (slowed down further)
-THIRST_DECAY_RATE = 0.015       # Thirst loss per tick (slowed down further)
-STARVATION_DAMAGE = 0.1         # HP loss per tick when starving (was 0.3)
-DEHYDRATION_DAMAGE = 0.15       # HP loss per tick when dehydrated (was 0.5)
+HUNGER_DECAY_RATE = 0.02        # Base hunger loss per decay call (humanoids get 6× this)
+THIRST_DECAY_RATE = 0.015       # Base thirst loss per decay call (humanoids get 6× this)
+HUMANOID_DRAIN_MULTIPLIER = 6.0 # How much faster humanoids burn food/water vs animals
+STARVATION_DAMAGE = 1.0         # HP loss per decay call when hunger==0
+DEHYDRATION_DAMAGE = 1.5        # HP loss per decay call when thirst==0
 BASE_HEALING_RATE = 1.5         # HP regen per tick when fed/hydrated
 CAMP_HEALING_MULTIPLIER = 2.0   # Healing boost near camps
 HOUSE_HEALING_MULTIPLIER = 3.0  # Healing boost near houses
