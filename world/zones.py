@@ -192,12 +192,12 @@ class ZonesMixin:
                         if old_cell == 'HOUSE':
                             self.process_house_destruction(x, y, zone_key)
 
-                elif cell == 'CHEST':
-                    chest_key = f"{zone_key}:{x},{y}"
-                    if not self.chest_contents.get(chest_key):  # empty chest
-                        if random.random() < min(1.0, 0.5 * _tp):
-                            bg = getattr(self, 'chest_backgrounds', {}).pop(chest_key, 'GRASS')
-                            self.set_grid_cell(screen, x, y, bg)
+                    elif cell == 'CHEST':
+                        chest_key = f"{zone_key}:{x},{y}"
+                        if not self.chest_contents.get(chest_key):  # empty chest
+                            if random.random() < min(1.0, 0.5 * _tp):
+                                bg = getattr(self, 'chest_backgrounds', {}).pop(chest_key, 'GRASS')
+                                self.set_grid_cell(screen, x, y, bg)
 
         # Desert rock/ore formation — SAND slowly solidifies into STONE;
         # existing STONE rarely yields IRON_ORE
