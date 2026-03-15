@@ -636,8 +636,8 @@ class NpcAiMixin:
         # accurately reflects whether a grid step happened in the current AI update.
         moved_this_cycle = getattr(entity, 'moved_this_update', False)
 
-        # Passive chest adjacency: deposit (peaceful) or loot (hostile) when standing next to chest
-        if self.tick % 20 == 0 and not is_follower:
+        # Passive chest adjacency: probabilistic per-tick check for all humanoid NPCs
+        if not is_follower and entity.props.get('behavior_config') is not None:
             self._check_adjacent_chest_behavior(entity, screen_key)
 
         if self.tick % 60 == 0 and not is_follower and not moved_this_cycle:
@@ -2495,14 +2495,29 @@ class NpcAiMixin:
     # Helper methods for specific actions
 
     def _check_adjacent_chest_behavior(self, entity, screen_key):
-        """Universal passive chest adjacency behavior (runs every ~20 ticks).
+        """Probabilistic per-tick chest adjacency behavior for all humanoid NPCs.
 
-        Non-hostile NPCs with a DELIVER_ITEMS quest deposit items when next to a chest.
-        Goblins/Bandits loot ALL contents from any adjacent chest.
+        Fires with moderate probability each tick. When overburdened (>20 items):
+        - Peaceful NPCs deposit 1-3 items into any adjacent chest.
+        - Goblins/Bandits loot all contents from any adjacent chest.
+        If overburdened and no chest is adjacent, small chance to place one.
         """
+        # Moderate base probability — feels organic, not instant
+        if random.random() > 0.12:
+            return
+
+        inv_count = sum(entity.inventory.values()) if entity.inventory else 0
+        is_hostile = entity.type in ('GOBLIN', 'BANDIT')
+
+        if not is_hostile and inv_count < 20:
+            return  # Peaceful NPCs only act when overburdened
+
         if screen_key not in self.screens:
             return
         screen = self.screens[screen_key]
+
+        # Check adjacent cells for a chest
+        found_chest = False
         for dy in range(-1, 2):
             for dx in range(-1, 2):
                 cx, cy = entity.x + dx, entity.y + dy
@@ -2511,21 +2526,20 @@ class NpcAiMixin:
                 if screen['grid'][cy][cx] != 'CHEST':
                     continue
                 ck = f"{screen_key}:{cx},{cy}"
+                found_chest = True
 
-                if entity.type in ('GOBLIN', 'BANDIT'):
-                    # Loot entire chest contents
+                if is_hostile:
+                    # Goblins/Bandits loot entire chest
                     contents = self.chest_contents.get(ck, {})
                     if contents:
                         for item, amt in list(contents.items()):
                             entity.inventory[item] = entity.inventory.get(item, 0) + amt
                         contents.clear()
                 else:
-                    # Peaceful NPC: deposit 1-3 random items when has DELIVER_ITEMS quest
-                    if getattr(entity, 'quest_focus', None) != 'DELIVER_ITEMS':
-                        continue
+                    # Peaceful NPC: deposit 1-3 random items
                     inv = entity.inventory
                     if not inv:
-                        continue
+                        break
                     if not hasattr(self, 'chest_contents'):
                         self.chest_contents = {}
                     if ck not in self.chest_contents:
@@ -2538,10 +2552,15 @@ class NpcAiMixin:
                         inv[item] -= amt
                         if inv[item] <= 0:
                             del inv[item]
-                    # Quest fulfilled — clear focus so LoreEngine can reassign
-                    entity.quest_focus = None
-                    entity.quest_target = None
-                return  # Only one chest per update
+                    # Clear delivery quest if carried one
+                    if getattr(entity, 'quest_focus', None) == 'DELIVER_ITEMS':
+                        entity.quest_focus = None
+                        entity.quest_target = None
+                break  # Only one chest per update
+
+        # If overburdened and no chest adjacent, small chance to place one
+        if not found_chest and not is_hostile and inv_count >= 20 and random.random() < 0.003:
+            self.try_place_npc_chest(entity, screen_key)
 
     def hostile_structure_behavior(self, entity):
         """Goblins and bandits attack camps and houses, pick up items, and place loot chests

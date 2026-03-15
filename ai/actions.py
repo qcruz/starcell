@@ -776,36 +776,57 @@ class NpcAiActionsMixin:
         # Remove from dropped items
         del self.dropped_items[screen_key][drop_key]
 
-    def process_entity_drop(self, entity, screen_key):
-        """Process item drops when entity dies"""
-        if 'drops' not in entity.props:
-            return
+    # Items with any of these flags are considered "unique" and survive NPC death intact
+    _UNIQUE_ITEM_FLAGS = ('is_tool', 'is_spell', 'is_follower', 'magic_damage', 'armor')
 
-        # Get drop position
+    def _is_unique_item(self, item_name):
+        """Return True if item should not be destroyed on NPC death."""
+        data = ITEMS.get(item_name, {})
+        return any(data.get(f) for f in self._UNIQUE_ITEM_FLAGS)
+
+    def process_entity_drop(self, entity, screen_key):
+        """Process item drops when entity dies.
+
+        Two drop sources:
+        1. Props drops table — unchanged (loot table rolls).
+        2. Entity inventory — unique items always drop; common items have a 40%
+           destruction chance per item (the rest drop normally at the death cell).
+        """
         drop_x, drop_y = entity.x, entity.y
+        drop_key = (drop_x, drop_y)
 
         # Spawn runestones (rare)
         if random.random() < 0.10:
-          self.spawn_runestones_for_screen(drop_x, drop_y)
+            self.spawn_runestones_for_screen(drop_x, drop_y)
 
-        # Process each potential drop
-        for drop in entity.props['drops']:
-            if random.random() < drop['chance']:
-                item_name = drop['item']
-                amount = drop['amount']
+        def _add_drop(item_name, amount):
+            if amount <= 0:
+                return
+            if screen_key not in self.dropped_items:
+                self.dropped_items[screen_key] = {}
+            if drop_key not in self.dropped_items[screen_key]:
+                self.dropped_items[screen_key][drop_key] = {}
+            self.dropped_items[screen_key][drop_key][item_name] = (
+                self.dropped_items[screen_key][drop_key].get(item_name, 0) + amount
+            )
 
-                # Add to dropped items on the screen
-                if screen_key not in self.dropped_items:
-                    self.dropped_items[screen_key] = {}
+        # ── Props drops table ─────────────────────────────────────────────────
+        if 'drops' in entity.props:
+            for drop in entity.props['drops']:
+                if random.random() < drop['chance']:
+                    _add_drop(drop['item'], drop['amount'])
 
-                drop_key = f"{drop_x},{drop_y}"
-                if drop_key not in self.dropped_items[screen_key]:
-                    self.dropped_items[screen_key][drop_key] = {}
-
-                if item_name in self.dropped_items[screen_key][drop_key]:
-                    self.dropped_items[screen_key][drop_key][item_name] += amount
-                else:
-                    self.dropped_items[screen_key][drop_key][item_name] = amount
+        # ── Inventory drops ───────────────────────────────────────────────────
+        # Unique items (tools, spells, named gear) always survive.
+        # Common resource items: 40% destruction chance per item, rest drop.
+        for item_name, amount in list(getattr(entity, 'inventory', {}).items()):
+            if amount <= 0:
+                continue
+            if self._is_unique_item(item_name):
+                _add_drop(item_name, amount)
+            else:
+                surviving = sum(1 for _ in range(amount) if random.random() > 0.40)
+                _add_drop(item_name, surviving)
 
     def npc_place_camp(self, entity):
         """NPC places a campsite if none exists in the zone"""
