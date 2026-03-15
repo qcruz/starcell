@@ -75,6 +75,16 @@ class DevScreenMixin:
             if isinstance(contents, dict):
                 total_chest_items += sum(contents.values())
 
+        # Buried items
+        total_buried = 0
+        zones_with_buried = 0
+        for cell_dict in getattr(self, 'buried_items', {}).values():
+            if cell_dict:
+                zones_with_buried += 1
+            for items in cell_dict.values():
+                if isinstance(items, dict):
+                    total_buried += sum(items.values())
+
         # screen_entities registrations (total refs, including dead)
         total_se_refs = sum(len(v) for v in self.screen_entities.values())
 
@@ -109,6 +119,8 @@ class DevScreenMixin:
             'total_dropped':     total_dropped,
             'zones_with_drops':  zones_with_drops,
             'total_chest_items': total_chest_items,
+            'total_buried':      total_buried,
+            'zones_with_buried': zones_with_buried,
             'total_se_refs':     total_se_refs,
             'priority_queue':    self.get_priority_sorted_zones(),
             'total_zones':       len(self.screens),
@@ -255,6 +267,9 @@ class DevScreenMixin:
         cy = _t(f"  Chest contents items  {stats['total_chest_items']:>6}", cx, cy, che_col)
         cy = _t(f"  Dropped items         {stats['total_dropped']:>6}", cx, cy, drp_col)
         cy = _t(f"    zones w/ drops      {stats['zones_with_drops']:>6}", cx, cy)
+        bur_col = _bloat_color(stats['total_buried'], 500, 1500)
+        cy = _t(f"  Buried items          {stats['total_buried']:>6}", cx, cy, bur_col)
+        cy = _t(f"    zones w/ buried     {stats['zones_with_buried']:>6}", cx, cy)
         cy = _t(f"  screen_entity refs    {stats['total_se_refs']:>6}", cx, cy, ser_col)
         cy = _t(f"  total entities dict   {stats['total_entities']:>6}", cx, cy, ent_col)
         cy = _t(f"  opened_chests set     {len(self.opened_chests):>6}", cx, cy, och_col)
