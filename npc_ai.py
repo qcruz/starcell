@@ -1112,12 +1112,12 @@ class NpcAiMixin:
         
         # === ATTACK RESPONSE - Instant state change when attacked ===
         if hasattr(entity, 'wants_counterattack') and entity.wants_counterattack:
-            # NPC promotion check (only for peaceful NPCs level 2+)
-            peaceful_npc_types = ['FARMER', 'TRADER', 'LUMBERJACK', 'MINER', 'WIZARD']
+            # NPC promotion check (all peaceful humanoid NPCs, level 2+)
+            peaceful_npc_types = ['FARMER', 'TRADER', 'LUMBERJACK', 'MINER', 'WIZARD', 'BLACKSMITH']
             if entity.type in peaceful_npc_types and entity.level >= 2 and entity.counterattack_target in self.entities:
                 attacker = self.entities[entity.counterattack_target]
                 if attacker.props.get('hostile', False):
-                    promotion_chance = 0.05  # 5% flat chance to become warrior when attacked
+                    promotion_chance = 0.01  # 1% flat chance to become warrior when attacked by hostile
                     if random.random() < promotion_chance:
                         old_name = entity.name
                         old_type = entity.type

@@ -796,15 +796,39 @@ class ZonesMixin:
                     hostile_count = random.randint(1, 2)
                     hostile_type = random.choice(['GOBLIN', 'BANDIT', 'WOLF'])
 
+                    # Build entrance positions: zone edges + adjacent to cave/mineshaft cells
+                    _cx = GRID_WIDTH // 2
+                    _cy = GRID_HEIGHT // 2
+                    _raid_positions = []
+                    if screen['exits'].get('top'):
+                        _raid_positions += [(x, 1) for x in range(_cx - 1, _cx + 2)]
+                    if screen['exits'].get('bottom'):
+                        _raid_positions += [(x, GRID_HEIGHT - 2) for x in range(_cx - 1, _cx + 2)]
+                    if screen['exits'].get('left'):
+                        _raid_positions += [(1, y) for y in range(_cy - 1, _cy + 2)]
+                    if screen['exits'].get('right'):
+                        _raid_positions += [(GRID_WIDTH - 2, y) for y in range(_cy - 1, _cy + 2)]
+                    # Also allow spawning adjacent to cave/mineshaft entrances
+                    for _gy in range(GRID_HEIGHT):
+                        for _gx in range(GRID_WIDTH):
+                            if screen['grid'][_gy][_gx] in ('CAVE', 'HIDDEN_CAVE', 'MINESHAFT'):
+                                for _dx, _dy in ((-1,0),(1,0),(0,-1),(0,1)):
+                                    _nx, _ny = _gx + _dx, _gy + _dy
+                                    if 0 < _nx < GRID_WIDTH - 1 and 0 < _ny < GRID_HEIGHT - 1:
+                                        _raid_positions.append((_nx, _ny))
+                    if not _raid_positions:
+                        _raid_positions = [(_cx, _cy)]
+
                     for _ in range(hostile_count):
-                        spawn_x = random.randint(3, GRID_WIDTH - 4)
-                        spawn_y = random.randint(3, GRID_HEIGHT - 4)
-                        if not CELL_TYPES[screen['grid'][spawn_y][spawn_x]].get('solid', False):
-                            entity = Entity(hostile_type, spawn_x, spawn_y, screen_x, screen_y, level=1)
-                            entity_id = self.next_entity_id
-                            self.next_entity_id += 1
-                            self.entities[entity_id] = entity
-                            self.screen_entities[screen_key].append(entity_id)
+                        for _attempt in range(15):
+                            spawn_x, spawn_y = random.choice(_raid_positions)
+                            if not CELL_TYPES[screen['grid'][spawn_y][spawn_x]].get('solid', False):
+                                entity = Entity(hostile_type, spawn_x, spawn_y, screen_x, screen_y, level=1)
+                                entity_id = self.next_entity_id
+                                self.next_entity_id += 1
+                                self.entities[entity_id] = entity
+                                self.screen_entities[screen_key].append(entity_id)
+                                break
 
                     # Kill a low-level NPC (simulate raid casualty)
                     lowest_entity = None
