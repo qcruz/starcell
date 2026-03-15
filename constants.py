@@ -424,6 +424,7 @@ CELL_TYPES = {
     'CAVE_FLOOR': {'color': (50, 50, 50), 'label': 'Cfl', 'solid': False},
     'CAVE_WALL': {'color': (30, 30, 30), 'label': 'Cw', 'solid': True},
     'CHEST': {'color': (139, 69, 19), 'label': 'Chst', 'solid': True, 'interactable': True},
+    'ITEM_BAG': {'color': (160, 120, 70), 'label': 'Bag', 'solid': False, 'interactable': True},
     'STAIRS_DOWN': {'color': (100, 80, 60), 'label': '↓', 'solid': False, 'goes_deeper': True},
     'STAIRS_UP': {'color': (120, 100, 80), 'label': '↑', 'solid': False, 'exits_structure': True},
     'IRON_ORE': {
@@ -1511,6 +1512,12 @@ NPC_TRANSFORMATION_CONFIG = {
             'need_farmer': {'FARMER': 0.8, 'LUMBERJACK': 0.2},
             'need_lumberjack': {'FARMER': 0.2, 'LUMBERJACK': 0.8}
         }
+    },
+    'WARRIOR': {
+        'transform_rate': 0.00025,  # ~1.5% per minute at 60 FPS — rare promotion
+        'transform_logic': 'promotion',
+        'possible_types': ['COMMANDER'],
+        'level_requirement': 5,
     }
 }
 

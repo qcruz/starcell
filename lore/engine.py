@@ -795,6 +795,7 @@ class LoreEngineMixin:
         # Overburdened NPC delivery and goblin chest raids
         self._lore_overburdened_delivery()
         self._lore_rich_chest_raid()
+        self._lore_ensure_commander_factions()
 
     def _lore_assign_random_npc_quest(self):
         """World-event: pick a random nearby peaceful NPC with no active quest target
@@ -803,7 +804,7 @@ class LoreEngineMixin:
         This generates organic NPC activity independent of the player's quest system.
         Each lore cycle has a 5% chance to trigger; at most one NPC is assigned per cycle.
         """
-        if random.random() >= 0.05:
+        if random.random() >= 0.15:
             return
 
         px, py = self.player['screen_x'], self.player['screen_y']
@@ -958,6 +959,34 @@ class LoreEngineMixin:
                             raider._quest_update_counter = 10
                             print(f"[LoreEngine] RAID_CHEST → {raider.type}(id={eid}) targeting {ck}")
                             return  # One raider per lore cycle
+
+    def _lore_ensure_commander_factions(self):
+        """Ensure every living COMMANDER has a named faction. Called each lore cycle.
+        If a Commander has no faction, create one using their name or entity ID."""
+        px, py = self.player['screen_x'], self.player['screen_y']
+        for dx in range(-4, 5):
+            for dy in range(-4, 5):
+                key = f"{px + dx},{py + dy}"
+                for eid in self.screen_entities.get(key, []):
+                    entity = self.entities.get(eid)
+                    if entity is None or entity.health <= 0:
+                        continue
+                    if entity.type != 'COMMANDER':
+                        continue
+                    if getattr(entity, 'faction', None):
+                        continue  # Already in a faction
+                    # Create a new faction for this Commander
+                    faction_name = (getattr(entity, 'name', None)
+                                    or f"faction_{eid}")
+                    if not hasattr(self, 'factions'):
+                        self.factions = {}
+                    if faction_name not in self.factions:
+                        self.factions[faction_name] = {'warriors': [eid], 'zones': [key]}
+                    else:
+                        if eid not in self.factions[faction_name]['warriors']:
+                            self.factions[faction_name]['warriors'].append(eid)
+                    entity.faction = faction_name
+                    print(f"[LoreEngine] Created faction '{faction_name}' for COMMANDER(id={eid})")
 
     def check_secret_entrances(self, screen_key):
         """~10 % chance: if a zone has 2+ house structures, secretly add a

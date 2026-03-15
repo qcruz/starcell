@@ -55,6 +55,21 @@ class NpcAiActionsMixin:
         Returns True if action was performed."""
         if screen_key not in self.screens:
             return False
+
+        # Farmers collect buried items from harvested adjacent cells
+        if actor != 'player' and getattr(actor, 'type', None) == 'FARMER':
+            buried = getattr(self, 'buried_items', {}).get(screen_key, {})
+            if buried:
+                for _dy in range(-1, 2):
+                    for _dx in range(-1, 2):
+                        if _dx == 0 and _dy == 0:
+                            continue
+                        bpos = (actor.x + _dx, actor.y + _dy)
+                        if bpos in buried:
+                            for item, amt in list(buried[bpos].items()):
+                                actor.inventory[item] = actor.inventory.get(item, 0) + amt
+                            del buried[bpos]
+
         screen = self.screens[screen_key]
         is_player = (actor == 'player')
         ax = self.player['x'] if is_player else actor.x

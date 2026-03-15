@@ -62,6 +62,9 @@ class GameCoreMixin:
         
         # Dropped items on cells: {screen_key: {(x,y): {item_name: count}}}
         self.dropped_items = {}
+
+        # Buried items (not visible; dug up by player shovel or farmed): {screen_key: {(x,y): {item: count}}}
+        self.buried_items = {}
         
         # Chest contents: {chest_key: {item_name: count}}
         self.chest_contents = {}
@@ -539,6 +542,10 @@ class GameCoreMixin:
                 self.bug_catcher.log_zone_cells(self.tick, screen_key, self.screens[screen_key]['grid'])
                 self.apply_cellular_automata(screen_x, screen_y)
                 self.decay_dropped_items(screen_x, screen_y)
+                self.decay_overworld_chests(screen_key)
+                self.decay_item_bags(screen_key)
+                self.decay_items_to_buried(screen_key)
+                self.decay_buried_items(screen_key)
 
         # Update nearby screens less frequently
         if self.tick % 180 == 0:  # Every 3 seconds
@@ -550,11 +557,15 @@ class GameCoreMixin:
                     screen_x = self.player['screen_x'] + dx
                     screen_y = self.player['screen_y'] + dy
                     screen_key = f"{screen_x},{screen_y}"
-                    
+
                     if screen_key in self.screens:
                         self.apply_cellular_automata(screen_x, screen_y)
                         self.decay_dropped_items(screen_x, screen_y)
-        
+                        self.decay_overworld_chests(screen_key)
+                        self.decay_item_bags(screen_key)
+                        self.decay_items_to_buried(screen_key)
+                        self.decay_buried_items(screen_key)
+
         # Update distant screens even less frequently
         if self.tick % 600 == 0:  # Every 10 seconds
             # Update screens at distance 2
@@ -570,6 +581,10 @@ class GameCoreMixin:
                     if screen_key in self.screens:
                         self.apply_cellular_automata(screen_x, screen_y)
                         self.decay_dropped_items(screen_x, screen_y)
+                        self.decay_overworld_chests(screen_key)
+                        self.decay_item_bags(screen_key)
+                        self.decay_items_to_buried(screen_key)
+                        self.decay_buried_items(screen_key)
             pass  # distance-2 update complete
 
     def update_entities(self):
@@ -716,13 +731,16 @@ class GameCoreMixin:
         if random.random() < 0.15:
             all_item_drops['magic_rune'] = all_item_drops.get('magic_rune', 0) + 1
 
-        # Entity inventory drops (skip spells and wood/planks)
+        # Entity inventory drops — unique items survive intact; common items 40% destruction per item
+        _UNIQUE_FLAGS = ('is_tool', 'is_spell', 'is_follower', 'magic_damage', 'armor')
         for item_name, count in entity.inventory.items():
-            if item_name in ITEMS and ITEMS[item_name].get('is_spell', False):
-                continue
-            if item_name in ('wood', 'planks'):
-                continue
-            all_item_drops[item_name] = all_item_drops.get(item_name, 0) + count
+            item_data = ITEMS.get(item_name, {})
+            if any(item_data.get(f) for f in _UNIQUE_FLAGS):
+                all_item_drops[item_name] = all_item_drops.get(item_name, 0) + count
+            else:
+                surviving = sum(1 for _ in range(count) if random.random() > 0.40)
+                if surviving > 0:
+                    all_item_drops[item_name] = all_item_drops.get(item_name, 0) + surviving
 
         if all_item_drops:
             if screen_key not in self.dropped_items:
@@ -2594,6 +2612,7 @@ class GameCoreMixin:
         self.inventory.add_item('tree_sapling', 3)
         self.inventory.add_item('magic_rune', 1)  # Testing sprite overlay
         self.dropped_items = {}
+        self.buried_items = {}
         self.enchanted_cells = {}
         self.enchanted_entities = {}
         self.followers = []

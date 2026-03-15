@@ -698,6 +698,12 @@ NPC_TRANSFORMATION_CONFIG = {
             'need_farmer': {'FARMER': 0.8, 'LUMBERJACK': 0.2},
             'need_lumberjack': {'FARMER': 0.2, 'LUMBERJACK': 0.8}
         }
+    },
+    'WARRIOR': {
+        'transform_rate': 0.00025,  # ~1.5% per minute at 60 FPS — rare promotion
+        'transform_logic': 'promotion',
+        'possible_types': ['COMMANDER'],
+        'level_requirement': 5,
     }
 }
 
