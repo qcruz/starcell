@@ -143,7 +143,6 @@ class DevScreenMixin:
         )
         self.screen.blit(title, (10, 5))
 
-        DIVIDER_Y = 415
         TOP = 28
 
         # ══════════════════════════════════════════════════════════════════════
@@ -229,41 +228,41 @@ class DevScreenMixin:
         cy = _t(f"  active quests (NPC)   {sum(stats['npc_quest_counts'].values()):>6}", cx, cy)
 
         # ══════════════════════════════════════════════════════════════════════
-        # Bottom panel — Zone priority queue
+        # Column 4 — Zone priority queue                               x=706
         # ══════════════════════════════════════════════════════════════════════
-        pygame.draw.line(self.screen, (60, 60, 100), (10, DIVIDER_Y), (SCREEN_WIDTH - 10, DIVIDER_Y))
-        cx, cy = 10, DIVIDER_Y + 4
+        pygame.draw.line(self.screen, (60, 60, 100), (702, TOP), (702, SCREEN_HEIGHT - 6))
+        cx, cy = 706, TOP
 
-        cy = _h(f"ZONE PRIORITY QUEUE  ({len(stats['priority_queue'])} zones total, top 18 shown)", cx, cy)
+        cy = _h(f"ZONE QUEUE  ({len(stats['priority_queue'])} total)", cx, cy)
 
-        # Header row
-        col_fmt = f"{'ZONE':<16}{'BIOME':<13}{'TYPE':<8}{'NPCS':>5}  {'STALE':>7}  {'PRIORITY':>9}"
+        # Header row — compact to fit ~250 px
+        col_fmt = f"{'ZONE':<12}{'BIOME':<9}{'N':>2}  {'STALE':>5}  {'PRI':>5}"
         cy = _t(col_fmt, cx, cy, HDR)
 
         player_zone = f"{self.player['screen_x']},{self.player['screen_y']}"
+        max_rows = (SCREEN_HEIGHT - cy - 8) // (tf.get_height() + 2)
         shown = 0
         for priority, zone_key in stats['priority_queue']:
-            if shown >= 18:
-                remaining = len(stats['priority_queue']) - 18
-                _t(f"  ... +{remaining} more zones", cx, cy, DAT)
+            if shown >= max_rows:
+                remaining = len(stats['priority_queue']) - shown
+                _t(f"  +{remaining} more", cx, cy, DAT)
                 break
 
             screen_data = self.screens.get(zone_key)
             if not screen_data:
                 continue
 
-            biome     = screen_data.get('biome', '?')[:12]
-            zone_type = 'struct' if not self.is_overworld_zone(zone_key) else 'world'
+            biome     = screen_data.get('biome', '?')[:8]
             npc_count = len([
                 e for e in self.screen_entities.get(zone_key, [])
                 if e in self.entities and self.entities[e].health > 0
             ])
             stale     = self.tick - self.screen_last_update.get(zone_key, 0)
-            zk_disp   = zone_key if len(zone_key) <= 15 else zone_key[:12] + '...'
+            zk_disp   = zone_key if len(zone_key) <= 11 else zone_key[:9] + '..'
             is_player = (zone_key == player_zone)
             row_col   = YEL if is_player else DAT
 
-            line = (f"{zk_disp:<16}{biome:<13}{zone_type:<8}"
-                    f"{npc_count:>5}  {stale:>6}t  {priority:>9.1f}")
+            line = (f"{zk_disp:<12}{biome:<9}{npc_count:>2}  "
+                    f"{stale:>5}t  {priority:>5.0f}")
             cy = _t(line, cx, cy, row_col)
             shown += 1
