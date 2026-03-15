@@ -4,6 +4,7 @@ from constants import (
     GRID_WIDTH, GRID_HEIGHT,
     CELL_TYPES, BIOMES,
     # Cellular automata rates
+    BASE_DECAY_RATE,
     DIRT_TO_GRASS_RATE, GRASS_TO_DIRT_RATE, DIRT_TO_SAND_RATE,
     TREE_GROWTH_RATE, TREE_DECAY_RATE, TREE_CROWD_DECAY_RATE,
     SAND_RECLAIM_RATE, CACTUS_DROUGHT_RATE, TREE_DROUGHT_RATE,
@@ -111,6 +112,18 @@ class CellsMixin:
         drought_severity = min(drought_ticks / 9000.0, 1.0)   # 0.0 = just rained, 1.0 = max drought
         _growth = max(0.1, 1.0 - drought_severity * 0.9) * _tp  # decays to 10% of base at max drought
         _decay  = (1.0 + drought_severity * 0.5) * _tp           # rises to 1.5x base at max drought
+
+        # ── Zone-wide water count for volume-based decay rule ─────────────────
+        # Count WATER (not DEEP_WATER) cells across the full zone grid once per cycle.
+        # Used to compute per-cell water decay rate: (count - 4) * BASE_DECAY_RATE.
+        # < 4 cells → rate = 0 (small pools are stable); larger bodies drain over time.
+        zone_water_count = sum(row.count('WATER') for row in screen['grid'])
+
+        # Biome base cell for water evaporation target (LAKE biome keeps water)
+        _water_decay_target = {
+            'FOREST': 'GRASS', 'PLAINS': 'GRASS', 'DESERT': 'SAND',
+            'MOUNTAINS': 'DIRT', 'TUNDRA': 'DIRT', 'SWAMP': 'DIRT',
+        }.get(biome)  # None for LAKE or unknown → rule skipped
 
         for y in range(GRID_HEIGHT):
             for x in range(GRID_WIDTH):
@@ -228,6 +241,13 @@ class CellsMixin:
                         new_grid[y][x] = 'DEEP_WATER'
                     elif total_water <= 1 and random.random() < min(1.0, WATER_TO_DIRT_RATE * _decay):
                         new_grid[y][x] = 'DIRT'
+                    elif _water_decay_target and zone_water_count > 4:
+                        # Volume-based decay: large water bodies drain toward biome base cell.
+                        # Rate = (zone_water_count - 4) * BASE_DECAY_RATE, scaled by drought.
+                        # Pools of ≤ 4 cells are fully stable (rate = 0).
+                        _wdr = (zone_water_count - 4) * BASE_DECAY_RATE
+                        if random.random() < min(1.0, _wdr * _decay):
+                            new_grid[y][x] = _water_decay_target
 
                 # Deep water evaporation — mirrors formation: requires all 4 cardinal
                 # neighbors to be water/deep_water to stay deep; decays quickly otherwise

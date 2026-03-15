@@ -98,6 +98,12 @@ NIGHT_OVERLAY_ALPHA = 40  # Darkness overlay opacity (0-255, subtle at 40)
 QUEST_COOLDOWN = 300      # Ticks before new quest target assigned after completion (5 seconds)
 QUEST_XP_MULTIPLIER = 10  # XP reward = target_level × this value
 
+# ── Global CA base rate ────────────────────────────────────────────────────────
+# Central reference for all growth/decay probabilities per tick.
+# Future rules should be expressed as multiples of this (e.g. 0.5 * BASE_DECAY_RATE).
+# Existing rates will be migrated to use this reference incrementally.
+BASE_DECAY_RATE = 0.001         # ~0.1% per tick baseline; tune this to shift all derived rules
+
 # Cell Growth & Decay Rates (probability per tick) - SLOWED for subtle changes
 GRASS_TO_DIRT_RATE = 0.00001    # Grass decays to dirt without water (was 0.0001)
 DIRT_TO_SAND_RATE = 0.000005    # Dirt becomes sand in severe drought (was 0.00005)
