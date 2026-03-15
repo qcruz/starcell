@@ -9,13 +9,6 @@
 
 Small additions using existing systems. No new entity types, structure types, or major UI systems. One commit per item, ordered smallest to largest.
 
-- [x]  give sand cells a slightly higher chance to
-change to water cells during rain. Whatever the rate is for dirt, it should be
-double.
-- [x] More Keeper types based on range - Keeper type 1 (guard) - stand directly next to keeper target, type 2 small area, type 3 full zone
-- [x] Add specific cells, items, and NPCs can be keeper target - keeper moves to keeper target when out of range
-- [x] Add NPC quest assignment - player can assign NPCs quests from their quest inventory.
-- [x] Add NPC level display in inspect panel
 - [ ] Skeleton doubles (and all doubles) need to process the same as their single counterparts (skeelton doubles should take constant damage during the day while outside)
 - [ ] Double entities should have a chance to split back in to singles every update tick if NPC population is low enough. Spit inventory, levels, quest, etc randomly for now.
 - [ ] Hard cap on total number of same entity in zone - if more than 15 of the same entity type in zone, single or double, singles get 'absorbed' into doubles automatically - double entity gets level increase. 

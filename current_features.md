@@ -480,8 +480,8 @@ giving every NPC in the world rich, autonomous behavior without special-case cod
   backup saves; integrity checks for entity/structure state anomalies
 - **AUTO_DEBUG mode** (`main.py`) — headless autopilot loop: randomly starts a new game
   or continues a save, runs for a randomised session duration (2–3 min), then saves and
-  quits; run counter persists in `debug/auto_debug_state.json`; live on the
-  `dev-observation` branch for ongoing automated QA
+  quits; run counter persists in `debug/auto_debug_state.json`; enabled locally via
+  `debug/auto_debug.cfg` (git-ignored)
 
 ---
 
@@ -653,4 +653,4 @@ NPCs have their own quest focus and target system, independent of the player's q
 - At each night-to-day transition, one of three `ambient_travel` tracks plays (random pick, 2 s fade)
 - SoundManager pre-buffers all music tracks in RAM at startup to avoid disk latency on transitions
 
-*Last updated: 2026-03-14*
+*Last updated: 2026-03-15*
