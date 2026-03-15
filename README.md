@@ -183,7 +183,7 @@ See [BOUNTIES.md](BOUNTIES.md) for a prioritized list of open features with esti
 | [CONTRIBUTING.md](contributing.md) | Contributor License Agreement and Reward Pool details |
 | [COMMERCIAL_USE.md](commercial_use.md) | Rules for indie monetization vs. CSP |
 | [Legal Disclosures](Legal%20Disclosures.md) | Full legal terms |
-| [current_features_and_planned.md](current_features_and_planned.md) | Full feature reference with all controls and config values |
+| [current_features.md](current_features.md) | Full feature reference with all controls and config values |
 
 ---
 
