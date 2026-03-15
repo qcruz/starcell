@@ -3,7 +3,7 @@ import random
 from constants import (
     GRID_WIDTH, GRID_HEIGHT,
     CELL_TYPES, ENTITY_TYPES,
-    RAID_CHECK_INTERVAL, RAID_CHANCE_BASE, RAID_POPULATION_THRESHOLD,
+    RAID_CHANCE_BASE, RAID_POPULATION_THRESHOLD,
     HIDDEN_CAVE_SPAWN_CHANCE,
     CAVE_HOSTILE_SPAWN_CHANCE,
     NIGHT_SKELETON_SPAWN_CHANCE,
@@ -313,13 +313,7 @@ class SpawningMixin:
     # -------------------------------------------------------------------------
 
     def check_raid_event(self, screen_key):
-        """Check if a raid event should occur in this zone"""
-        if screen_key in self.zone_last_raid_check:
-            if self.tick - self.zone_last_raid_check[screen_key] < RAID_CHECK_INTERVAL:
-                return
-
-        self.zone_last_raid_check[screen_key] = self.tick
-
+        """Flat percent chance per zone update for a raid to trigger."""
         if screen_key not in self.screen_entities:
             return
 
@@ -327,20 +321,15 @@ class SpawningMixin:
         human_count = 0
         for entity_id in self.screen_entities[screen_key]:
             if entity_id in self.entities:
-                entity = self.entities[entity_id]
-                base_type = entity.type.replace('_double', '')
+                base_type = self.entities[entity_id].type.replace('_double', '')
                 if base_type in human_npc_types:
                     human_count += 1
 
         if human_count < RAID_POPULATION_THRESHOLD:
             return
 
-        if self.zone_has_hostiles.get(screen_key, False):
-            return
-
         npcs_over_threshold = human_count - RAID_POPULATION_THRESHOLD
-        raid_chance = RAID_CHANCE_BASE + (npcs_over_threshold * 0.05)
-        raid_chance = min(raid_chance, 0.80)
+        raid_chance = min(RAID_CHANCE_BASE + npcs_over_threshold * 0.005, 0.10)
 
         if random.random() < raid_chance:
             self.trigger_raid(screen_key)

@@ -212,8 +212,7 @@ MOUNTAINS_BIOME_CHANCE = 0.15   # 15% of zones are mountains (generate_screen)
 DESERT_BIOME_CHANCE = 0.05      # 5% of zones are desert (generate_screen)
 
 # Raid Event System
-RAID_CHECK_INTERVAL = 600       # Ticks between raid checks (10 seconds at 60 FPS)
-RAID_CHANCE_BASE = 0.08         # 8% chance for raid when zone has 5+ entities
+RAID_CHANCE_BASE = 0.02         # 2% base chance per zone update (scales with population)
 RAID_POPULATION_THRESHOLD = 6   # Minimum entities in zone to trigger raid check
 HIDDEN_CAVE_SPAWN_CHANCE = 0.20 # 20% chance to spawn hidden cave during raid
 NATURAL_CAVE_ZONE_CHANCE = 0.08 # 8% chance a zone gets a natural cave on generation
