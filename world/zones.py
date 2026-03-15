@@ -34,14 +34,18 @@ class ZonesMixin:
         self.update_day_night_cycle()
         self.move_items_to_nearest_chest()
 
-        # Small chance to instantiate a new random zone
+        # Chance to instantiate a new random overworld zone, scaled down with distance from player
         if random.random() < NEW_ZONE_INSTANTIATE_CHANCE:
+            _pox = self.player['screen_x'] if self.is_overworld_zone(f"{self.player['screen_x']},{self.player['screen_y']}") else 0
+            _poy = self.player['screen_y'] if self.is_overworld_zone(f"{self.player['screen_x']},{self.player['screen_y']}") else 0
             range_x = random.randint(-20, 20)
             range_y = random.randint(-20, 20)
             new_zone_key = f"{range_x},{range_y}"
             if new_zone_key not in self.screens:
-                self.generate_screen(range_x, range_y)
-                self.instantiated_zones.add(new_zone_key)
+                dist = abs(range_x - _pox) + abs(range_y - _poy)
+                if random.random() < 1.0 / (1.0 + dist * 0.15):
+                    self.generate_screen(range_x, range_y)
+                    self.instantiated_zones.add(new_zone_key)
 
         if self.tick % 600 == 0:
             self.cleanup_screen_entities()
@@ -69,6 +73,28 @@ class ZonesMixin:
                 parent_cell = parent_screen['grid'][cy][cx]
                 if parent_cell not in ('HOUSE', 'STONE_HOUSE', 'CAVE', 'MINESHAFT'):
                     self.deinstantiate_structure_zone(struct_key)
+
+            # De-instantiate distant overworld zones that have been idle and empty
+            # Probability of removal increases with distance; nearby zones are protected
+            _px = self.player['screen_x']
+            _py = self.player['screen_y']
+            _idle_threshold = 18000  # ~5 min at 60fps
+            for _zk in list(self.instantiated_zones):
+                if not self.is_overworld_zone(_zk):
+                    continue
+                _zx, _zy = int(_zk.split(',')[0]), int(_zk.split(',')[1])
+                _dist = abs(_zx - _px) + abs(_zy - _py)
+                if _dist <= 4:
+                    continue  # always keep player-adjacent zones
+                if self.tick - self.screen_last_update.get(_zk, 0) < _idle_threshold:
+                    continue  # not idle long enough
+                if self.screen_entities.get(_zk):
+                    continue  # zone has entities — keep it
+                # Remove with probability proportional to distance
+                if random.random() < min(0.9, _dist * 0.04):
+                    self.screens.pop(_zk, None)
+                    self.instantiated_zones.discard(_zk)
+                    self.screen_last_update.pop(_zk, None)
 
         self.ensure_nearby_zones_exist()
 
@@ -361,7 +387,7 @@ class ZonesMixin:
                 entity.decay_stats()
 
                 # NPC item consumption: remove full stack of a random item
-                if random.random() < 0.05 and entity.inventory:
+                if random.random() < 0.10 and entity.inventory:
                     item = random.choice(list(entity.inventory.keys()))
                     count = entity.inventory.pop(item)
                     if item in ('meat', 'carrot', 'cooked_meat', 'stew', 'bones'):
@@ -703,13 +729,29 @@ class ZonesMixin:
                         e.idle_timer = 0
                         e.is_idle = False
 
+        _tp = getattr(self, 'time_pass_speed', 1.0)
+        _age_interval = max(1, int(600 / _tp))
+
         entities_to_remove = []
         for entity_id in list(entity_list):
             if entity_id not in self.entities:
                 continue
 
             entity = self.entities[entity_id]
+
+            # Age increment (mirrors overworld logic so structure entities age too)
+            if self.tick % _age_interval == 0 and entity.type != 'SKELETON':
+                entity.age += 1
+
             entity.decay_stats()
+
+            # Item consumption (same rate as overworld)
+            if random.random() < 0.10 and entity.inventory:
+                _item = random.choice(list(entity.inventory.keys()))
+                _count = entity.inventory.pop(_item)
+                if _item in ('meat', 'carrot', 'cooked_meat', 'stew', 'bones'):
+                    entity.health = min(entity.max_health, entity.health + 5 * min(_count, 10))
+
             entity.regenerate_health(1.0)
 
             if not entity.is_alive():

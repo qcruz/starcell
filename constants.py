@@ -202,7 +202,7 @@ EATING_CHANCE_CATCHUP = 0.6         # Chance to eat per cycle during catch-up (c
 DRINKING_CHANCE_CATCHUP = 0.6       # Chance to drink per cycle during catch-up (catch_up_entities)
 WATER_DECAY_ON_DRINK = 0.7          # Chance water becomes dirt when drunk (find_and_move_to_water)
 GRASS_DECAY_ON_EAT = 0.6            # Chance grass becomes dirt when eaten (find_and_move_to_food)
-OLD_AGE_DAMAGE = 0.05               # Health loss per tick when age exceeds max_age
+OLD_AGE_DAMAGE = 2.0                # Health loss per zone-update tick when age exceeds max_age
 
 # Entity Spawning
 SPAWN_CHANCE_MULTIPLIER = 1.0   # Global spawn rate multiplier (1.0 = normal) (spawn_entities_for_screen)

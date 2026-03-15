@@ -505,9 +505,11 @@ class Entity:
             self.health = self.max_health  # Full heal on level up
             self.strength = self.props['strength'] * self.level
 
-            # Reduce age by 10% (minimum 20)
+            # Reduce age by 10% and extend max_age by 20% (leveling extends lifespan)
             age_reduction = max(1, int(self.age * 0.1))
             self.age = max(20, self.age - age_reduction)
+            if hasattr(self, 'max_age'):
+                self.max_age = int(self.max_age * 1.2)
 
             # Log level up with name if available
             name_str = self.name if self.name else self.type
