@@ -1461,10 +1461,6 @@ class ZonesMixin:
             if eid in self.followers:
                 continue
 
-            # Wolves are managed by the wolf pack system instead
-            if entity.type in ('WOLF', 'WOLF_double'):
-                continue
-
             ktype = KEEPER_ENTITY_TYPE.get(entity.type)
             if not ktype:
                 continue  # TRADER, KING, etc. — never become keepers
@@ -1553,9 +1549,6 @@ class ZonesMixin:
         leader.keeper_target_pos = None
         leader._wolf_leader = True
         leader._wolf_follower = False
-
-        # Register leader in zone_keepers for tracking in dev overlay
-        self.zone_keepers.setdefault(zone_key, {})['wolf'] = leader_id
 
         # Followers: keepers that track the leader across zones
         for eid in wolf_ids:
