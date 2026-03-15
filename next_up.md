@@ -16,36 +16,40 @@ double.
 - [x] Add specific cells, items, and NPCs can be keeper target - keeper moves to keeper target when out of range
 - [x] Add NPC quest assignment - player can assign NPCs quests from their quest inventory.
 - [x] Add NPC level display in inspect panel
+- [ ] Skeleton doubles (and all doubles) need to process the same as their single counterparts (skeelton doubles should take constant damage during the day while outside)
+- [ ] Double entities should have a chance to split back in to singles every update tick if NPC population is low enough. Spit inventory, levels, quest, etc randomly for now.
+- [ ] Hard cap on total number of same entity in zone - if more than 15 of the same entity type in zone, single or double, singles get 'absorbed' into doubles automatically - double entity gets level increase. 
+- [ ] We need to make sure chest content are still picked up by the player on interaction (spacebar)
+- [ ] Add a few random items to barrels as well, picked up when interacted (same hadnling as chests, but lower quality loot tabel)
+- [ ] When plater drops items on a chest cell, they should move to the chest inventory
+- [ ] When butterflys fly over base cells - high chance to grow the cell to next level - sand>dirt>grass>plant (will be adding bush and flowers, ect)(doesn't grow trees)
 - [ ] Add item level display in inventory UI — show level badge on leveled items in all tabs
-- [ ] Add faction standing display when inspecting NPC — show favor score and faction label
-- [ ] Make actions default on spawn - 'attack', 'block' - allow player to collect resources without tools (low success chance)
-- [ ] Add cast_rain_spell() and cast_day_spell() toggle methods
+- [ ] Add NPC trait Favor: -100 to 100, default zero for peacful NPCs, default -50 for hostiles. Will increase or decrease for certain actions (we will discuss when implementing)
+- [ ] Add faction standing display when inspecting NPC — show NPC favor score and faction label
+- [ ] Make actions default on spawn - 'attack', 'block' - allow player to collect resources without tools (low success chance)(actions and spells not dropped on death)
 - [ ] Complete NPC combat creature sound mapping — verify WOLF, GOBLIN, BAT, SKELETON, BANDIT route through _ENTITY_SOUND
 - [ ] Add wolf/goblin ambient presence sounds — WOLF growl every ~300 ticks within 6 cells; GOBLIN every ~200 ticks
 - [ ] Add ambient rain sound during rain events — play rain_sound loop when is_raining; stop when false
 - [ ] Add do_shove() — push entity in facing direction one cell; blocked by solid cells
-- [ ] Add handle_npc_follow_interaction() — Shift+F on inspected NPC; 50% recruit chance
-- [ ] Add buried treasure — shovel digs soft cells; chance to uncover cached items; Detect spell reveals locations
-- [ ] Boost night-time hostile spawn rate — BAT, GOBLIN, SKELETON have higher spawn weight at night
+- [ ] Add handle_npc_follow_interaction() — Shift+F on inspected NPC; 50% recruit chance - maybe an action instead? We will discuss.
+- [ ] Add buried treasure — shovel digs soft cells; chance to uncover cached items; Detect spell reveals locations, dig action works as well (low success chance - takes multiple tries)
+- [ ] Boost night-time hostile spawn rate slightly — BAT, GOBLIN, SKELETON have higher spawn weight at night
 - [ ] Add spell energy cost — spells draw from energy pool; drain health if insufficient
 - [ ] Rain affects crop growth — active rain reduces crop decay rate; speeds grass/tree spread
 - [ ] Add poisoned status effect — HP drain per tick; cured by antidote or milk
 - [ ] Add burning status effect — HP drain per tick; spreads to adjacent flammable cells
 - [ ] Add cold status effect — immobile for duration; 
-- [ ] Add stunned status effect?
 - [ ] Remove dead debug prints outside autopilot.py and debug/
 - [ ] Add gift giving — player offers item to NPC to increase favor; 
 - [ ] Add per-NPC favor system — -100 to 100 favorability score; reduces follower energy cost
-- [ ] Add NPC preferred gift tables — each NPC type lists preferred items for favor bonus
-- [ ] Add energy cost for active followers — each follower reduces max energy by 30% of their max; recalculates on add/remove
+- [ ] Add energy cost for active followers — each follower reduces max energy by 30% of their max energy; recalculates on add/remove
 - [ ] Add named villains — LoreEngine occasionally designates a high-level hostile NPC with unique stat boost and artifact drop
 - [ ] Wire higher NPC level → reduced hostile raid chance in zone and reduced structure destruction probability
 - [ ] Port try_craft_recipe() to ai/actions.py — from autopilot; MINER and BLACKSMITH use it
-- [ ] Port follower NPC AI — followers use quest-targeting and obstacle-clearing loop; goal matches NPC archetype
-- [ ] Add zone development score (ekistic) — zones accumulate score from NPC and structure count; gates higher-tier upgrades
-- [ ] Add basic seasonal system — four seasons ~7 in-game days each; season flag used by crop and weather rules
+- [ ] Port Autopilot AI — keeper use quest-targeting and obstacle-clearing loop; goal matches NPC archetype
+- [ ] Add basic seasonal system — four seasons; season flag used by crop and weather rules
 - [ ] Audit monolith methods extracted to mixins — remove duplicates from game_core.py and npc_ai.py
-- [ ] Consolidate duplicate crafting and inventory logic — code cleanup pass
+- [ ] Consolidate functionality — code cleanup pass
 
 ---
 
