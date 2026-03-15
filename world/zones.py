@@ -196,7 +196,7 @@ class ZonesMixin:
                         chest_key = f"{zone_key}:{x},{y}"
                         if not self.chest_contents.get(chest_key):  # empty chest
                             if random.random() < min(1.0, 0.5 * _tp):
-                                bg = getattr(self, 'chest_backgrounds', {}).pop(chest_key, 'GRASS')
+                                bg = getattr(self, 'chest_backgrounds', {}).pop(chest_key, None) or base_cell
                                 self.set_grid_cell(screen, x, y, bg)
 
         # Desert rock/ore formation — SAND slowly solidifies into STONE;
@@ -638,7 +638,7 @@ class ZonesMixin:
                         chest_key = f"{struct_zone_key}:{x},{y}"
                         if not self.chest_contents.get(chest_key):  # empty chest
                             if random.random() < 0.5:
-                                bg = getattr(self, 'chest_backgrounds', {}).pop(chest_key, 'GRASS')
+                                bg = getattr(self, 'chest_backgrounds', {}).pop(chest_key, None) or 'FLOOR_WOOD'
                                 self.set_grid_cell(screen, x, y, bg)
 
         entity_list = self.screen_entities.get(struct_zone_key, [])
