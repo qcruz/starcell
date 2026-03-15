@@ -72,9 +72,9 @@ class SpawningMixin:
                 ('FARMER', 0.5, 0, 2),
                 ('LUMBERJACK', 0.6, 1, 2),
                 ('WIZARD', 0.25, 1, 2),
-                ('TRADER', 1.0, 1, 2),    # Always spawn
+                ('TRADER', 0.5, 1, 2),
                 ('BLACKSMITH', 0.5, 0, 1),
-                ('GUARD', 1.0, 1, 2),     # Always spawn
+                ('GUARD', 0.5, 1, 2),
                 ('BANDIT', 0.1, 0, 1),
                 ('GOBLIN', 0.15, 0, 2),
                 ('TERMITE', 0.4, 0, 2),   # Termites love forests (trees)
@@ -89,9 +89,9 @@ class SpawningMixin:
                 ('FARMER', 0.7, 1, 3),
                 ('LUMBERJACK', 0.3, 0, 1),
                 ('WIZARD', 0.25, 1, 2),
-                ('TRADER', 1.0, 1, 2),    # Always spawn
+                ('TRADER', 0.5, 1, 2),
                 ('BLACKSMITH', 0.5, 0, 1),
-                ('GUARD', 1.0, 1, 2),     # Always spawn
+                ('GUARD', 0.5, 1, 2),
                 ('BANDIT', 0.1, 0, 1),
                 ('GOBLIN', 0.1, 0, 1),
                 ('TERMITE', 0.2, 0, 1),   # Some termites in plains
@@ -109,9 +109,9 @@ class SpawningMixin:
                 ('FARMER', 0.3, 0, 1),
                 ('LUMBERJACK', 0.2, 0, 1),
                 ('MINER', 0.5, 0, 2),
-                ('TRADER', 1.0, 1, 2),    # Always spawn
+                ('TRADER', 0.5, 1, 2),
                 ('BLACKSMITH', 0.4, 0, 1),
-                ('GUARD', 1.0, 1, 2),     # Always spawn
+                ('GUARD', 0.5, 1, 2),
                 ('BLACK_SPIDER', 0.4, 0, 2),
             ],
             'MOUNTAINS': [
@@ -124,9 +124,9 @@ class SpawningMixin:
                 ('FARMER', 0.2, 0, 1),
                 ('LUMBERJACK', 0.4, 0, 2),
                 ('MINER', 0.7, 1, 3),
-                ('TRADER', 1.0, 1, 2),    # Always spawn
+                ('TRADER', 0.5, 1, 2),
                 ('BLACKSMITH', 0.6, 0, 1),
-                ('GUARD', 1.0, 1, 2),     # Always spawn
+                ('GUARD', 0.5, 1, 2),
                 ('BLACK_SPIDER', 0.5, 0, 2),
                 ('RED_BIRD', 0.3, 0, 1),
             ],
@@ -831,28 +831,28 @@ class SpawningMixin:
                 if roll < spawn_chance:
                     spawn_tables = {
                         'FOREST': [
-                            ('TRADER', 0.10), ('GUARD', 0.10),
+                            ('TRADER', 0.05), ('GUARD', 0.05),
                             ('LUMBERJACK', 0.20), ('FARMER', 0.18),
                             ('DEER', 0.15), ('WOLF', 0.10),
                             ('SHEEP', 0.08), ('GOBLIN', 0.03), ('BANDIT', 0.015),
                             ('RED_BIRD', 0.12), ('BUTTERFLY', 0.10), ('BLACK_SPIDER', 0.06)
                         ],
                         'PLAINS': [
-                            ('TRADER', 0.10), ('GUARD', 0.10),
+                            ('TRADER', 0.05), ('GUARD', 0.05),
                             ('FARMER', 0.25), ('SHEEP', 0.18),
                             ('DEER', 0.12), ('LUMBERJACK', 0.08),
                             ('WOLF', 0.08), ('GOBLIN', 0.03), ('BANDIT', 0.015),
                             ('CHICKEN', 0.14), ('RED_BIRD', 0.10), ('BUTTERFLY', 0.12)
                         ],
                         'DESERT': [
-                            ('TRADER', 0.10), ('GUARD', 0.10),
+                            ('TRADER', 0.05), ('GUARD', 0.05),
                             ('GOBLIN', 0.10), ('BANDIT', 0.075),
                             ('MINER', 0.18), ('FARMER', 0.10),
                             ('WOLF', 0.08), ('DEER', 0.06), ('SHEEP', 0.03),
                             ('BLACK_SPIDER', 0.08)
                         ],
                         'MOUNTAINS': [
-                            ('TRADER', 0.10), ('GUARD', 0.10),
+                            ('TRADER', 0.05), ('GUARD', 0.05),
                             ('MINER', 0.22), ('GOBLIN', 0.09),
                             ('WOLF', 0.15), ('LUMBERJACK', 0.10),
                             ('BANDIT', 0.04), ('DEER', 0.04), ('SHEEP', 0.03),
@@ -862,16 +862,7 @@ class SpawningMixin:
 
                     spawn_list = spawn_tables.get(biome, spawn_tables['FOREST'])
 
-                    # PRIORITY 1: Spawn missing essential types (TRADER, GUARD)
-                    essential_types = ['TRADER', 'GUARD']
-                    for essential_type in essential_types:
-                        if essential_type not in types_in_zone:
-                            success = self.spawn_single_entity_at_entrance(zone_x, zone_y, biome, force_type=essential_type)
-                            if success:
-                                spawns_this_cycle += 1
-                                return
-
-                    # PRIORITY 2: Pick weighted random type to spawn
+                    # Pick weighted random type to spawn
                     types = [t[0] for t in spawn_list]
                     weights = [t[1] for t in spawn_list]
                     entity_type = random.choices(types, weights=weights)[0]
@@ -893,14 +884,14 @@ class SpawningMixin:
             'FOREST': [
                 ('DEER', 0.18), ('WOLF', 0.10), ('SHEEP', 0.05),
                 ('FARMER', 0.12), ('LUMBERJACK', 0.15),
-                ('TRADER', 0.15), ('GUARD', 0.15),
+                ('TRADER', 0.075), ('GUARD', 0.075),
                 ('BANDIT', 0.025), ('GOBLIN', 0.025),
                 ('RED_BIRD', 0.12), ('BUTTERFLY', 0.10), ('BLACK_SPIDER', 0.06)
             ],
             'PLAINS': [
                 ('SHEEP', 0.20), ('DEER', 0.12), ('WOLF', 0.05),
                 ('FARMER', 0.18), ('LUMBERJACK', 0.05),
-                ('TRADER', 0.15), ('GUARD', 0.15),
+                ('TRADER', 0.075), ('GUARD', 0.075),
                 ('BANDIT', 0.025), ('GOBLIN', 0.025),
                 ('CHICKEN', 0.14), ('RED_BIRD', 0.10), ('BUTTERFLY', 0.12)
             ],
@@ -908,14 +899,14 @@ class SpawningMixin:
                 ('GOBLIN', 0.10), ('BANDIT', 0.07), ('MINER', 0.10),
                 ('SHEEP', 0.05), ('DEER', 0.05), ('WOLF', 0.05),
                 ('FARMER', 0.07), ('LUMBERJACK', 0.04),
-                ('TRADER', 0.18), ('GUARD', 0.12),
+                ('TRADER', 0.09), ('GUARD', 0.06),
                 ('BLACK_SPIDER', 0.08)
             ],
             'MOUNTAINS': [
                 ('WOLF', 0.18), ('GOBLIN', 0.08), ('MINER', 0.14),
                 ('BANDIT', 0.045), ('DEER', 0.07), ('SHEEP', 0.04),
                 ('FARMER', 0.03), ('LUMBERJACK', 0.09),
-                ('TRADER', 0.12), ('GUARD', 0.08),
+                ('TRADER', 0.06), ('GUARD', 0.04),
                 ('BLACK_SPIDER', 0.08), ('RED_BIRD', 0.06)
             ]
         }

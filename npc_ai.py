@@ -959,7 +959,11 @@ class NpcAiMixin:
                     # Transition rate: 30% for normal NPCs, 100% for autopilot proxy
                     is_proxy_entity = entity.props.get('is_autopilot_proxy', False)
                     travel_rate = 1.0 if is_proxy_entity else 0.3
-                    
+
+                    # Wolves are natural explorers — higher zone-crossing drive
+                    if entity.type in ('WOLF', 'WOLF_double'):
+                        travel_rate = max(travel_rate, 0.6)
+
                     # Entities in targeting state with cross-zone target also always cross
                     if entity.ai_state == 'targeting' and entity.current_target:
                         travel_rate = 1.0

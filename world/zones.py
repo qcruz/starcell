@@ -193,6 +193,9 @@ class ZonesMixin:
         self.consolidate_dropped_items(zone_key)
         self.consolidate_chests(zone_key)
         self.assign_zone_keepers(zone_key)
+        # Wolf pack check: ~0.5% per update or on the 600-tick sweep
+        if self.tick % 600 == 0 or random.random() < 0.005:
+            self.assign_wolf_pack_keepers(zone_key)
 
         # === CELL UPDATES ===
         if self.is_raining:
@@ -1458,6 +1461,10 @@ class ZonesMixin:
             if eid in self.followers:
                 continue
 
+            # Wolves are managed by the wolf pack system instead
+            if entity.type in ('WOLF', 'WOLF_double'):
+                continue
+
             ktype = KEEPER_ENTITY_TYPE.get(entity.type)
             if not ktype:
                 continue  # TRADER, KING, etc. — never become keepers
@@ -1500,3 +1507,69 @@ class ZonesMixin:
                         return (x, y)
         # Fallback: zone center
         return (GRID_WIDTH // 2, GRID_HEIGHT // 2)
+
+    _WOLF_TYPES = frozenset(('WOLF', 'WOLF_double'))
+
+    def assign_wolf_pack_keepers(self, zone_key):
+        """Form or refresh wolf pack hierarchy in zone_key.
+
+        The strongest wolf (highest level, oldest as tiebreak) becomes the pack
+        leader and roams freely.  All other wolves become keepers tracking the
+        leader so they follow it when it crosses zones.  Called occasionally
+        from the zone update loop (~0.5% per update or every 600 ticks).
+        """
+        wolf_ids = [
+            eid for eid in self.screen_entities.get(zone_key, [])
+            if eid in self.entities
+            and self.entities[eid].health > 0
+            and self.entities[eid].type in self._WOLF_TYPES
+            and eid not in self.followers
+        ]
+
+        if len(wolf_ids) < 2:
+            # Single wolf or empty — clear any stale follower flags
+            for eid in wolf_ids:
+                e = self.entities[eid]
+                if getattr(e, '_wolf_follower', False):
+                    e.keeper = False
+                    e.keeper_type = None
+                    e.keeper_target = None
+                    e.keeper_target_pos = None
+                    e._wolf_follower = False
+            return
+
+        # Pick leader: highest level, then oldest (highest age) as tiebreak
+        def _leader_key(eid):
+            e = self.entities[eid]
+            return (getattr(e, 'level', 1), getattr(e, 'age', 0))
+
+        leader_id = max(wolf_ids, key=_leader_key)
+        leader = self.entities[leader_id]
+
+        # Leader roams freely — not a keeper, can cross zones at high travel rate
+        leader.keeper = False
+        leader.keeper_type = None
+        leader.keeper_target = None
+        leader.keeper_target_pos = None
+        leader._wolf_leader = True
+        leader._wolf_follower = False
+
+        # Register leader in zone_keepers for tracking in dev overlay
+        self.zone_keepers.setdefault(zone_key, {})['wolf'] = leader_id
+
+        # Followers: keepers that track the leader across zones
+        for eid in wolf_ids:
+            if eid == leader_id:
+                continue
+            follower = self.entities[eid]
+            follower.keeper = True
+            follower._wolf_follower = True
+            follower._wolf_leader = False
+            follower.keeper_target = {
+                'type': 'entity',
+                'ref': leader_id,
+                'pos': (leader.x, leader.y),
+                'screen': (leader.screen_x, leader.screen_y),
+            }
+            follower.keeper_target_pos = (leader.x, leader.y)
+            follower.keeper_type = 2  # Within 5 cells of leader
