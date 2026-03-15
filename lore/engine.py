@@ -876,8 +876,6 @@ class LoreEngineMixin:
                     if entity.props.get('hostile', False) or getattr(entity, 'keeper', False):
                         continue
                     inv_count = sum(entity.inventory.values()) if entity.inventory else 0
-                    if inv_count < 20:
-                        continue
                     if any(q.get('type') == 'DELIVER_ITEMS'
                            for q in getattr(entity, 'quest_queue', [])):
                         continue

@@ -140,6 +140,8 @@ class ZonesMixin:
         self.check_night_skeleton_spawn(zone_key)
         self.check_termite_spawn(zone_key)
         self.decay_dropped_items(zone_x, zone_y)
+        self.decay_items_to_buried(zone_key)
+        self.decay_buried_items(zone_key)
         self.consolidate_dropped_items(zone_key)
         self.consolidate_chests(zone_key)
         self.assign_zone_keepers(zone_key)
