@@ -793,7 +793,7 @@ class ZonesMixin:
                 )
 
                 if random.random() < 0.20:
-                    hostile_count = random.randint(1, 2)
+                    hostile_count = random.randint(2, max(2, human_count))
                     hostile_type = random.choice(['GOBLIN', 'BANDIT', 'WOLF'])
 
                     # Build entrance positions: zone edges + adjacent to cave/mineshaft cells
