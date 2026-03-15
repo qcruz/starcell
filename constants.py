@@ -1543,7 +1543,6 @@ ITEM_TO_CELL = {
     'chest': 'CHEST',
     'wall': 'WALL',
     'wood': 'WOOD',
-    'planks': 'PLANKS',
     'meat': 'MEAT',
     'fur': 'FUR',
     'bones': 'BONES',
