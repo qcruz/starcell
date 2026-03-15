@@ -156,6 +156,10 @@ class ZonesMixin:
         self.apply_cellular_automata(zone_x, zone_y, cell_coverage)
 
         _tp = getattr(self, 'time_pass_speed', 1.0)
+        _biome = screen.get('biome', 'FOREST')
+        _biome_base_map = {'FOREST': 'GRASS', 'PLAINS': 'GRASS', 'DESERT': 'SAND',
+                           'MOUNTAINS': 'DIRT', 'TUNDRA': 'DIRT', 'SWAMP': 'DIRT'}
+        base_cell = _biome_base_map.get(_biome, 'GRASS')
 
         for y in range(1, GRID_HEIGHT - 1):
             for x in range(1, GRID_WIDTH - 1):
