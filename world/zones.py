@@ -338,14 +338,12 @@ class ZonesMixin:
 
                 entity.decay_stats()
 
-                # NPC item consumption: moderate chance to consume food items
+                # NPC item consumption: remove full stack of a random item
                 if random.random() < 0.02 and entity.inventory:
                     item = random.choice(list(entity.inventory.keys()))
-                    entity.inventory[item] -= 1
-                    if entity.inventory[item] <= 0:
-                        del entity.inventory[item]
+                    count = entity.inventory.pop(item)
                     if item in ('meat', 'carrot', 'cooked_meat', 'stew', 'bones'):
-                        entity.health = min(entity.max_health, entity.health + 5)
+                        entity.health = min(entity.max_health, entity.health + 5 * min(count, 10))
 
                 # Skeletons burn in daylight
                 if entity.type == 'SKELETON' and not self.is_night:

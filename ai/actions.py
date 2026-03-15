@@ -878,6 +878,8 @@ class NpcAiActionsMixin:
                     # Otherwise, chance to upgrade camp to house
                     elif random.random() < 0.02:  # 2% chance
                         screen['grid'][y][x] = 'HOUSE'
+                        entity.inventory.pop('wood', None)
+                        entity.inventory.pop('planks', None)
 
                         # Chance to level up from building
                         entity.level_up_from_activity('build', self)
@@ -895,6 +897,7 @@ class NpcAiActionsMixin:
                 cell = screen['grid'][place_y][place_x]
                 if cell in ['GRASS', 'DIRT', 'SAND']:
                     screen['grid'][place_y][place_x] = 'CAMP'
+                    entity.inventory.pop('wood', None)
                     return
 
     def miner_place_cave(self, entity):
@@ -939,6 +942,8 @@ class NpcAiActionsMixin:
                         # Can place cave on non-solid ground
                         if cell in ['GRASS', 'DIRT', 'SAND', 'STONE']:
                             screen['grid'][place_y][place_x] = 'CAVE'
+                            entity.inventory.pop('stone', None)
+                            entity.inventory.pop('iron_ore', None)
 
                             # Chance to level up from discovery
                             entity.level_up_from_activity('mine', self)

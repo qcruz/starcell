@@ -63,6 +63,12 @@ class SaveLoadMixin:
                 'keeper_type': getattr(entity, 'keeper_type', None),
                 'keeper_target': _serialize_keeper_target(getattr(entity, 'keeper_target', None)),
                 'keeper_target_pos': list(getattr(entity, 'keeper_target_pos', None) or []) or None,
+                # Quest state — quest_target persists; quest_queue regenerates on first tick
+                'quest_target': list(entity.quest_target) if isinstance(getattr(entity, 'quest_target', None), tuple) else getattr(entity, 'quest_target', None),
+                'quest_queue': [
+                    {k: v for k, v in q.items() if k != 'slot'}
+                    for q in getattr(entity, 'quest_queue', None) or []
+                ],
             }
 
         # Convert dropped_items tuple keys to strings for JSON serialization
@@ -260,6 +266,8 @@ class SaveLoadMixin:
                 self.player['_next_step'] = '1'
                 self.player['is_moving'] = False
             self.screens = save_data['screens']
+            # Sync instantiated_zones to match all loaded screens immediately
+            self.instantiated_zones = set(self.screens.keys())
             self.tick = save_data['tick']
             self.inventory.items = save_data.get('inventory_items', {})
             self.inventory.magic = save_data.get('inventory_magic', {})
@@ -359,6 +367,13 @@ class SaveLoadMixin:
                 entity.keeper_target = _deserialize_keeper_target(entity_data.get('keeper_target'))
                 ktp = entity_data.get('keeper_target_pos')
                 entity.keeper_target_pos = tuple(ktp) if ktp else None
+
+                # Restore quest state
+                qt = entity_data.get('quest_target')
+                entity.quest_target = tuple(qt) if isinstance(qt, list) else qt
+                saved_queue = entity_data.get('quest_queue')
+                if saved_queue:
+                    entity.quest_queue = saved_queue  # slot fields stripped; re-linked by lore engine
 
                 # Ensure wizards from old saves have spell and alignment
                 if entity.type == 'WIZARD':
