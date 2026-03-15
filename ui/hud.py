@@ -616,6 +616,15 @@ class HudMixin:
             # Draw attack animations
             self.draw_attack_animations()
 
+            # Draw zone/structure name at top center
+            zone_name = self.current_screen.get('name', '') if self.current_screen else ''
+            if zone_name:
+                shadow_surf = self.small_font.render(zone_name, True, (30, 30, 30))
+                name_surf = self.small_font.render(zone_name, True, (255, 255, 255))
+                name_x = SCREEN_WIDTH // 2 - name_surf.get_width() // 2
+                self.screen.blit(shadow_surf, (name_x + 1, 9))
+                self.screen.blit(name_surf, (name_x, 8))
+
             # Draw UI bar at bottom (80px tall)
             ui_y = GRID_HEIGHT * CELL_SIZE
             pygame.draw.rect(self.screen, COLORS['UI_BG'], (0, ui_y, SCREEN_WIDTH, 80))

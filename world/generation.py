@@ -12,6 +12,65 @@ class WorldGenerationMixin:
     """Handles procedural world generation: screens, structures, interiors,
     chest placement, zone connections, and exit management."""
 
+    _ZONE_ADJECTIVES = [
+        'Red', 'White', 'Black', 'Grey', 'Dark', 'Ancient', 'Twisted', 'Hollow',
+        'Silent', 'Crimson', 'Golden', 'Iron', 'Silver', 'Shadow', 'Frost',
+        'Ember', 'Verdant', 'Amber', 'Pale', 'Stone', 'Briar', 'Ashen',
+    ]
+    _ZONE_NOUNS = {
+        'FOREST':    ['Oak', 'Pine', 'Ash', 'Elm', 'Thorn', 'Willow', 'Birch', 'Cedar', 'Yew', 'Bramble'],
+        'DESERT':    ['Stone', 'Dune', 'Shard', 'Salt', 'Bone', 'Ash', 'Rock', 'Flint', 'Crag', 'Waste'],
+        'MOUNTAINS': ['Peak', 'Ridge', 'Crag', 'Summit', 'Shard', 'Spire', 'Tor', 'Boulder', 'Cliff', 'Fang'],
+        'PLAINS':    ['Field', 'Hollow', 'Dale', 'Vale', 'Heath', 'Moor', 'Glen', 'Lea', 'Fell', 'Mead'],
+        'TUNDRA':    ['Frost', 'Ice', 'Snow', 'Drift', 'Chill', 'Rime', 'Bleak', 'Pale', 'Void', 'Hallow'],
+        'SWAMP':     ['Fen', 'Mire', 'Bog', 'Marsh', 'Murk', 'Reed', 'Silt', 'Brine', 'Muck', 'Quag'],
+    }
+    _ZONE_BIOME_TYPES = {
+        'FOREST':    ['Forest', 'Wood', 'Grove', 'Thicket'],
+        'DESERT':    ['Desert', 'Wastes', 'Dunes', 'Barrens'],
+        'MOUNTAINS': ['Mountains', 'Peaks', 'Highlands', 'Crags'],
+        'PLAINS':    ['Plains', 'Fields', 'Vales', 'Downs'],
+        'TUNDRA':    ['Tundra', 'Wastes', 'Expanse', 'Flats'],
+        'SWAMP':     ['Swamp', 'Fens', 'Marshes', 'Mires'],
+    }
+    _CAVE_MODIFIERS = [
+        'Mysterious', 'Dark', 'Eerie', 'Overgrown', 'Treacherous',
+        'Forsaken', 'Ancient', 'Echoing', 'Shadowed', 'Hidden',
+    ]
+    _FALLBACK_HOUSE_NAMES = [
+        "Aldric's House", "Mira's House", "Theron's House", "Edda's House",
+        "Corvin's House", "Lena's House", "Bram's House", "Sable's House",
+    ]
+
+    def generate_zone_name(self, biome):
+        """Generate a procedural zone name for the given biome."""
+        adj = random.choice(self._ZONE_ADJECTIVES)
+        noun = random.choice(self._ZONE_NOUNS.get(biome, ['Stone']))
+        biome_type = random.choice(self._ZONE_BIOME_TYPES.get(biome, ['Land']))
+        return f"{adj} {noun} {biome_type}"
+
+    def generate_structure_name(self, structure_type, depth, parent_name, parent_screen_x, parent_screen_y):
+        """Generate a name for a structure zone."""
+        if structure_type == 'HOUSE_INTERIOR':
+            # Try to find an NPC in the parent zone with a name
+            parent_key = f"{parent_screen_x},{parent_screen_y}"
+            for eid in self.screen_entities.get(parent_key, []):
+                e = self.entities.get(eid)
+                if e and getattr(e, 'name', None):
+                    return f"{e.name}'s House"
+            return random.choice(self._FALLBACK_HOUSE_NAMES)
+        elif structure_type == 'CAVE':
+            if depth == 1:
+                modifier = random.choice(self._CAVE_MODIFIERS)
+                return f"{parent_name} {modifier} Cave"
+            else:
+                # Strip "Lvl N" suffix if present, then append new depth
+                base = parent_name
+                if ' Lvl ' in base:
+                    base = base.rsplit(' Lvl ', 1)[0]
+                return f"{base} Lvl {depth}"
+        return structure_type
+
     # -------------------------------------------------------------------------
     # Main screen generation
     # -------------------------------------------------------------------------
@@ -186,7 +245,8 @@ class WorldGenerationMixin:
             'grid': grid,
             'variant_grid': variant_grid,
             'exits': exits,
-            'biome': biome_name
+            'biome': biome_name,
+            'name': self.generate_zone_name(biome_name),
         }
 
         self.screens[key] = screen_data
@@ -384,6 +444,7 @@ class WorldGenerationMixin:
 
         entrance_pos = (GRID_WIDTH // 2, GRID_HEIGHT - 2)
 
+        parent_zone_name = self.screens.get(parent_key, {}).get('name', 'Unknown')
         structure_data = {
             'type': structure_type,
             'parent_screen': (parent_screen_x, parent_screen_y),
@@ -397,6 +458,10 @@ class WorldGenerationMixin:
             'chests': {},
             'entrances': [(cell_x, cell_y)],
             'entities': [],
+            'name': self.generate_structure_name(
+                structure_type, depth, parent_zone_name,
+                parent_screen_x, parent_screen_y
+            ),
         }
 
         # Register as a full zone (in both dicts for backward-compat metadata lookups)

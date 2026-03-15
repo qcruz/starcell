@@ -2293,11 +2293,22 @@ class GameCoreMixin:
         self.player['world_x'] = float(parent_cell_x)
         self.player['world_y'] = float(parent_cell_y)
 
-        # Clear structure state
-        self.player['in_structure'] = False
-        self.player['structure_key'] = None
-        self.player['structure_parent'] = None
-        
+        # If returning to another structure (e.g., house after exiting a cave inside it)
+        parent_key = f"{parent_screen_x},{parent_screen_y}"
+        if parent_key in self.structures:
+            parent_struct = self.structures[parent_key]
+            grand_parent = parent_struct.get('parent_screen')
+            grand_cell = parent_struct.get('parent_cell')
+            self.player['in_structure'] = True
+            self.player['structure_key'] = parent_key
+            self.player['structure_parent'] = (
+                grand_parent[0], grand_parent[1], grand_cell[0], grand_cell[1]
+            ) if grand_parent and grand_cell else None
+        else:
+            self.player['in_structure'] = False
+            self.player['structure_key'] = None
+            self.player['structure_parent'] = None
+
         print("Exited to outside!")
         self._teleport_followers_with_player()
 

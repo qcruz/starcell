@@ -47,6 +47,28 @@ class ZonesMixin:
             self.cleanup_screen_entities()
             # Sync instantiated_zones exactly with self.screens (bidirectional)
             self.instantiated_zones = set(self.screens.keys())
+            # Validate door_map: remove entries where either zone is missing
+            for door_key in list(getattr(self, 'door_map', {}).keys()):
+                src_zone = door_key[0]
+                dest = self.door_map[door_key]
+                dest_zone = dest[0]
+                if src_zone not in self.screens or dest_zone not in self.screens:
+                    del self.door_map[door_key]
+            # Clean up structure zones whose parent entrance cell has been destroyed
+            for struct_key in list(self.structure_zones.keys()):
+                sz = self.structure_zones[struct_key]
+                parent = sz.get('parent_zone')
+                cell_pos = sz.get('cell')
+                if not parent or not cell_pos:
+                    continue
+                if parent not in self.screens:
+                    self.deinstantiate_structure_zone(struct_key)
+                    continue
+                cx, cy = cell_pos
+                parent_screen = self.screens[parent]
+                parent_cell = parent_screen['grid'][cy][cx]
+                if parent_cell not in ('HOUSE', 'STONE_HOUSE', 'CAVE', 'MINESHAFT'):
+                    self.deinstantiate_structure_zone(struct_key)
 
         self.ensure_nearby_zones_exist()
 

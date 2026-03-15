@@ -1031,15 +1031,49 @@ class SpawningMixin:
         if evacuated_count > 0:
             pass  # evacuation complete
 
+    def deinstantiate_structure_zone(self, zone_key):
+        """Remove an orphaned structure zone from all registries."""
+        # Evict any entities in this zone to the parent overworld zone
+        parent_info = self.structure_zones.get(zone_key, {})
+        parent_key = parent_info.get('parent_zone')
+        if zone_key in self.screen_entities:
+            for eid in list(self.screen_entities[zone_key]):
+                if eid in self.entities:
+                    e = self.entities[eid]
+                    if parent_key and parent_key in self.screens:
+                        e.screen_x, e.screen_y = map(int, parent_key.split(','))
+                        e.in_structure = False
+                        e.structure_key = None
+                        if parent_key not in self.screen_entities:
+                            self.screen_entities[parent_key] = []
+                        if eid not in self.screen_entities[parent_key]:
+                            self.screen_entities[parent_key].append(eid)
+            del self.screen_entities[zone_key]
+        # Remove from all zone registries
+        self.screens.pop(zone_key, None)
+        self.structures.pop(zone_key, None)
+        self.instantiated_zones.discard(zone_key)
+        self.screen_last_update.pop(zone_key, None)
+        self.structure_zones.pop(zone_key, None)
+        if parent_key and zone_key in self.zone_structures.get(parent_key, []):
+            self.zone_structures[parent_key].remove(zone_key)
+        # Remove door_map entries that reference this zone
+        for dk in [k for k in self.door_map if k[0] == zone_key or self.door_map[k][0] == zone_key]:
+            self.door_map.pop(dk, None)
+        # Remove zone_connections entries
+        self.zone_connections.pop(zone_key, None)
+        if parent_key in self.zone_connections:
+            self.zone_connections[parent_key] = [
+                c for c in self.zone_connections[parent_key] if c[0] != zone_key
+            ]
+
     def process_house_destruction(self, x, y, screen_key):
-        """Handle house destruction with proper NPC/item evacuation"""
-        subscreen_key = f"{screen_key}_{x}_{y}_HOUSE_INTERIOR"
-
-        if subscreen_key in self.subscreens:
-            self.evacuate_subscreen(subscreen_key, screen_key, x, y)
-
-        if subscreen_key in self.subscreens:
-            del self.subscreens[subscreen_key]
-
-        if subscreen_key in self.screen_entities:
-            del self.screen_entities[subscreen_key]
+        """Handle house/structure destruction: evacuate entities and de-instantiate the zone."""
+        # Find structure zone linked to this cell
+        target_zone = None
+        for zone_key, sz_data in list(self.structure_zones.items()):
+            if sz_data.get('parent_zone') == screen_key and sz_data.get('cell') == (x, y):
+                target_zone = zone_key
+                break
+        if target_zone:
+            self.deinstantiate_structure_zone(target_zone)
