@@ -797,6 +797,7 @@ class LoreEngineMixin:
         self._lore_rich_chest_raid()
         self._lore_ensure_commander_factions()
         self._lore_hostile_entity_factions()
+        self._lore_sync_faction_registry()
 
     def _lore_assign_random_npc_quest(self):
         """World-event: pick a random nearby peaceful NPC with no active quest target
@@ -1003,6 +1004,27 @@ class LoreEngineMixin:
                     if random.random() < level * 0.001:
                         self.create_hostile_faction(entity, key)
                         print(f"[LoreEngine] {entity.type}(lv{level}) formed faction '{entity.faction}'")
+
+    def _lore_sync_faction_registry(self):
+        """Ensure self.factions is consistent with entity.faction attributes.
+        Registers any faction present on a live entity but missing from self.factions,
+        and ensures every such entity appears in its faction's warriors list.
+        Catches post-load gaps and any code path that sets entity.faction without
+        updating self.factions."""
+        for eid, entity in list(self.entities.items()):
+            if entity is None or entity.health <= 0:
+                continue
+            efaction = getattr(entity, 'faction', None)
+            if not efaction:
+                continue
+            if efaction not in self.factions:
+                self.factions[efaction] = {
+                    'warriors': [eid],
+                    'zones': set(),
+                    'hostile': entity.props.get('hostile', False),
+                }
+            elif eid not in self.factions[efaction]['warriors']:
+                self.factions[efaction]['warriors'].append(eid)
 
     def check_secret_entrances(self, screen_key):
         """~10 % chance: if a zone has 2+ house structures, secretly add a

@@ -350,6 +350,54 @@ class CraftingMixin:
                         del items[best_target]
                         changed = True
 
+    def consolidate_chests(self, zone_key):
+        """Merge nearby chest contents (within 5 cells) into the chest with most items.
+        Secondary chests are emptied so they decay quickly via the cell decay system."""
+        if zone_key not in self.screens:
+            return
+        screen = self.screens[zone_key]
+        grid = screen['grid']
+
+        chests = [
+            (x, y)
+            for y in range(GRID_HEIGHT)
+            for x in range(GRID_WIDTH)
+            if grid[y][x] == 'CHEST'
+        ]
+        if len(chests) < 2:
+            return
+
+        merged = set()
+        for i, (x1, y1) in enumerate(chests):
+            if (x1, y1) in merged:
+                continue
+            key1 = f"{zone_key}:{x1},{y1}"
+            contents1 = self.chest_contents.get(key1, {})
+            count1 = sum(contents1.values())
+
+            for x2, y2 in chests:
+                if (x2, y2) == (x1, y1) or (x2, y2) in merged:
+                    continue
+                if abs(x2 - x1) + abs(y2 - y1) > 5:
+                    continue
+                key2 = f"{zone_key}:{x2},{y2}"
+                contents2 = self.chest_contents.get(key2, {})
+                count2 = sum(contents2.values())
+
+                if count1 >= count2:
+                    for item, count in contents2.items():
+                        contents1[item] = contents1.get(item, 0) + count
+                    self.chest_contents[key1] = contents1
+                    self.chest_contents[key2] = {}
+                    merged.add((x2, y2))
+                else:
+                    for item, count in contents1.items():
+                        contents2[item] = contents2.get(item, 0) + count
+                    self.chest_contents[key2] = contents2
+                    self.chest_contents[key1] = {}
+                    merged.add((x1, y1))
+                    break  # x1,y1 is now empty; stop pairing it
+
     def decay_overworld_chests(self, screen_key):
         """Small chance for overworld CHEST cells to decay.
         Applies 40% destruction to chest contents; survivors fall into dropped_items
