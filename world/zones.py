@@ -45,6 +45,8 @@ class ZonesMixin:
 
         if self.tick % 600 == 0:
             self.cleanup_screen_entities()
+            # Remove evicted zones — keep instantiated_zones in sync with self.screens
+            self.instantiated_zones &= set(self.screens.keys())
 
         self.ensure_nearby_zones_exist()
 

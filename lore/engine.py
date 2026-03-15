@@ -796,6 +796,7 @@ class LoreEngineMixin:
         self._lore_overburdened_delivery()
         self._lore_rich_chest_raid()
         self._lore_ensure_commander_factions()
+        self._lore_hostile_entity_factions()
 
     def _lore_assign_random_npc_quest(self):
         """World-event: pick a random nearby peaceful NPC with no active quest target
@@ -975,18 +976,37 @@ class LoreEngineMixin:
                         continue
                     if getattr(entity, 'faction', None):
                         continue  # Already in a faction
-                    # Create a new faction for this Commander
                     faction_name = (getattr(entity, 'name', None)
                                     or f"faction_{eid}")
-                    if not hasattr(self, 'factions'):
-                        self.factions = {}
                     if faction_name not in self.factions:
-                        self.factions[faction_name] = {'warriors': [eid], 'zones': [key]}
+                        self.factions[faction_name] = {'warriors': [eid], 'zones': set(), 'hostile': False}
                     else:
                         if eid not in self.factions[faction_name]['warriors']:
                             self.factions[faction_name]['warriors'].append(eid)
                     entity.faction = faction_name
                     print(f"[LoreEngine] Created faction '{faction_name}' for COMMANDER(id={eid})")
+
+    def _lore_hostile_entity_factions(self):
+        """Level 2+ hostile entities have a per-lore-cycle chance to form a new faction.
+        Chance scales with level: level * 0.001 per cycle (level 2 = 0.2%, level 5 = 0.5%)."""
+        px, py = self.player['screen_x'], self.player['screen_y']
+        for dx in range(-4, 5):
+            for dy in range(-4, 5):
+                key = f"{px + dx},{py + dy}"
+                for eid in self.screen_entities.get(key, []):
+                    entity = self.entities.get(eid)
+                    if entity is None or entity.health <= 0:
+                        continue
+                    if not entity.props.get('hostile'):
+                        continue
+                    if getattr(entity, 'faction', None):
+                        continue
+                    level = getattr(entity, 'level', 1)
+                    if level < 2:
+                        continue
+                    if random.random() < level * 0.001:
+                        self.create_hostile_faction(entity, key)
+                        print(f"[LoreEngine] {entity.type}(lv{level}) formed faction '{entity.faction}'")
 
     def check_secret_entrances(self, screen_key):
         """~10 % chance: if a zone has 2+ house structures, secretly add a
