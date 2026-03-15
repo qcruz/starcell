@@ -635,6 +635,11 @@ class NpcAiMixin:
         # moved_this_update is cleared at the top of update_entity_ai each cycle so it
         # accurately reflects whether a grid step happened in the current AI update.
         moved_this_cycle = getattr(entity, 'moved_this_update', False)
+
+        # Passive chest adjacency: deposit (peaceful) or loot (hostile) when standing next to chest
+        if self.tick % 20 == 0 and not is_follower:
+            self._check_adjacent_chest_behavior(entity, screen_key)
+
         if self.tick % 60 == 0 and not is_follower and not moved_this_cycle:
             # Execute behavior based on entity's behavior_config
             behavior_config = entity.props.get('behavior_config')
@@ -645,11 +650,6 @@ class NpcAiMixin:
             elif entity.type in ['GOBLIN', 'BANDIT', 'TERMITE']:
                 self.hostile_structure_behavior(entity)
 
-            # Peaceful humanoid NPCs: deposit excess inventory into nearby chests
-            if behavior_config and not entity.props.get('hostile', False):
-                screen_key_bc = f"{entity.screen_x},{entity.screen_y}"
-                self.try_npc_chest_deposit(entity, screen_key_bc)
-            
             # Human NPCs may place camps
             if behavior_config and behavior_config.get('can_place_camp'):
                 if random.random() < NPC_CAMP_PLACE_RATE:
@@ -2215,6 +2215,43 @@ class NpcAiMixin:
                 ex, ey = random.choice(exits)
                 target = ('cell', ex, ey, 'EXIT')
 
+        elif focus == 'DELIVER_ITEMS':
+            # Find nearest chest in current zone to deposit inventory
+            if screen_key in self.screens:
+                grid = self.screens[screen_key]['grid']
+                best_pos, best_dist = None, 9999
+                for cy in range(GRID_HEIGHT):
+                    for cx in range(GRID_WIDTH):
+                        if grid[cy][cx] == 'CHEST':
+                            d = abs(cx - entity.x) + abs(cy - entity.y)
+                            if d < best_dist:
+                                best_dist, best_pos = d, (cx, cy)
+                if best_pos:
+                    target = ('cell', best_pos[0], best_pos[1], 'CHEST')
+
+        elif focus == 'RAID_CHEST':
+            # Keep existing chest target if still valid, else find richest
+            existing = getattr(entity, 'quest_target', None)
+            if (isinstance(existing, tuple) and len(existing) >= 3
+                    and existing[0] == 'cell' and screen_key in self.screens):
+                grid = self.screens[screen_key]['grid']
+                ex, ey = existing[1], existing[2]
+                if (0 <= ex < GRID_WIDTH and 0 <= ey < GRID_HEIGHT
+                        and grid[ey][ex] == 'CHEST'):
+                    target = existing  # chest still there, keep targeting it
+            if target is None and screen_key in self.screens:
+                grid = self.screens[screen_key]['grid']
+                richest, most_items = None, 0
+                for cy in range(GRID_HEIGHT):
+                    for cx in range(GRID_WIDTH):
+                        if grid[cy][cx] == 'CHEST':
+                            ck = f"{screen_key}:{cx},{cy}"
+                            total = sum(self.chest_contents.get(ck, {}).values())
+                            if total > most_items:
+                                most_items, richest = total, (cx, cy)
+                if richest:
+                    target = ('cell', richest[0], richest[1], 'CHEST')
+
         elif focus == 'SEARCH':
             # Item search: use the keeper_target item UID if already set
             kt = getattr(entity, 'keeper_target', None)
@@ -2456,6 +2493,56 @@ class NpcAiMixin:
                 self.wander_entity(entity)
     
     # Helper methods for specific actions
+
+    def _check_adjacent_chest_behavior(self, entity, screen_key):
+        """Universal passive chest adjacency behavior (runs every ~20 ticks).
+
+        Non-hostile NPCs with a DELIVER_ITEMS quest deposit items when next to a chest.
+        Goblins/Bandits loot ALL contents from any adjacent chest.
+        """
+        if screen_key not in self.screens:
+            return
+        screen = self.screens[screen_key]
+        for dy in range(-1, 2):
+            for dx in range(-1, 2):
+                cx, cy = entity.x + dx, entity.y + dy
+                if not (0 <= cx < GRID_WIDTH and 0 <= cy < GRID_HEIGHT):
+                    continue
+                if screen['grid'][cy][cx] != 'CHEST':
+                    continue
+                ck = f"{screen_key}:{cx},{cy}"
+
+                if entity.type in ('GOBLIN', 'BANDIT'):
+                    # Loot entire chest contents
+                    contents = self.chest_contents.get(ck, {})
+                    if contents:
+                        for item, amt in list(contents.items()):
+                            entity.inventory[item] = entity.inventory.get(item, 0) + amt
+                        contents.clear()
+                else:
+                    # Peaceful NPC: deposit 1-3 random items when has DELIVER_ITEMS quest
+                    if getattr(entity, 'quest_focus', None) != 'DELIVER_ITEMS':
+                        continue
+                    inv = entity.inventory
+                    if not inv:
+                        continue
+                    if not hasattr(self, 'chest_contents'):
+                        self.chest_contents = {}
+                    if ck not in self.chest_contents:
+                        self.chest_contents[ck] = {}
+                    items = list(inv.keys())
+                    random.shuffle(items)
+                    for item in items[:random.randint(1, 3)]:
+                        amt = min(inv[item], random.randint(1, 3))
+                        self.chest_contents[ck][item] = self.chest_contents[ck].get(item, 0) + amt
+                        inv[item] -= amt
+                        if inv[item] <= 0:
+                            del inv[item]
+                    # Quest fulfilled — clear focus so LoreEngine can reassign
+                    entity.quest_focus = None
+                    entity.quest_target = None
+                return  # Only one chest per update
+
     def hostile_structure_behavior(self, entity):
         """Goblins and bandits attack camps and houses, pick up items, and place loot chests
         Termites attack trees and structures"""
@@ -2587,39 +2674,6 @@ class NpcAiMixin:
                 self.move_entity_towards(entity, closest_loot_x, closest_loot_y)
                 return  # Moving toward loot
         
-        # PRIORITY 1.5: Target richest nearby chest (goblin/bandit raid behavior)
-        if entity.type in ['GOBLIN', 'BANDIT']:
-            richest_cx, richest_cy, max_chest_items = None, None, 0
-            for cy in range(GRID_HEIGHT):
-                for cx in range(GRID_WIDTH):
-                    if screen['grid'][cy][cx] == 'CHEST':
-                        ck = f"{screen_key}:{cx},{cy}"
-                        total = sum(self.chest_contents.get(ck, {}).values())
-                        if total > max_chest_items:
-                            max_chest_items = total
-                            richest_cx, richest_cy = cx, cy
-            if richest_cx is not None and max_chest_items > 0:
-                # Chance scales with richness: 2% per 10 items, cap 40%
-                raid_chance = min(0.4, max_chest_items * 0.002)
-                if random.random() < raid_chance:
-                    dist = abs(richest_cx - entity.x) + abs(richest_cy - entity.y)
-                    if dist > 1:
-                        self.move_entity_towards(entity, richest_cx, richest_cy)
-                        return
-                    else:
-                        # Loot 1-5 items from chest into inventory
-                        ck = f"{screen_key}:{richest_cx},{richest_cy}"
-                        contents = self.chest_contents.get(ck, {})
-                        loot_items = list(contents.keys())
-                        random.shuffle(loot_items)
-                        for loot_item in loot_items[:random.randint(1, 5)]:
-                            amt = min(contents[loot_item], random.randint(1, 3))
-                            entity.inventory[loot_item] = entity.inventory.get(loot_item, 0) + amt
-                            contents[loot_item] -= amt
-                            if contents[loot_item] <= 0:
-                                del contents[loot_item]
-                        return
-
         # PRIORITY 2: Place chest with loot — only when inventory is too full
         if entity.type == 'GOBLIN' and _goblin_inv_full and random.random() < 0.0005:  # 0.05% chance
             # Find empty adjacent spot

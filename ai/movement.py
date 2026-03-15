@@ -46,6 +46,11 @@ class NpcAiMovementMixin:
         # Formula: interval ≈ 1 / (0.034 * speed) ticks per cell.
         # speed=1.0 → ~29 ticks; speed=2.0 → ~15 ticks; speed=0.8 → ~37 ticks.
         _spd = entity.props.get('speed', 1.0)
+        # Overburdened NPCs move slower — up to 70% reduction at 40+ items
+        _inv = sum(entity.inventory.values()) if isinstance(getattr(entity, 'inventory', None), dict) else 0
+        if _inv > 20:
+            _burden = min(2.0, (_inv - 20) / 20.0)
+            _spd *= max(0.3, 1.0 - _burden * 0.35)
         _interval = max(5, round(1.0 / (0.034 * max(_spd, 0.1))))
         if not hasattr(entity, 'last_move_tick'):
             entity.last_move_tick = 0

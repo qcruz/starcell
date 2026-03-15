@@ -792,6 +792,10 @@ class LoreEngineMixin:
         # ~5% chance each lore cycle to assign a random quest to a nearby idle NPC
         self._lore_assign_random_npc_quest()
 
+        # Overburdened NPC delivery and goblin chest raids
+        self._lore_overburdened_delivery()
+        self._lore_rich_chest_raid()
+
     def _lore_assign_random_npc_quest(self):
         """World-event: pick a random nearby peaceful NPC with no active quest target
         and assign it a quest appropriate to its type.
@@ -846,6 +850,114 @@ class LoreEngineMixin:
         screen_key = f"{entity.screen_x},{entity.screen_y}"
         self._assign_specific_quest_target(entity, screen_key)
         print(f"[LoreEngine] Assigned {qt} quest to {entity.type}(id={eid}) at {screen_key}")
+
+    def _lore_overburdened_delivery(self):
+        """Scan nearby overburdened peaceful NPCs and assign DELIVER_ITEMS quest to
+        walk to the nearest chest. If no chest is reachable, the NPC places one.
+
+        Threshold: 20 total inventory items. Night boost: 3x likelihood (NPCs indoors).
+        """
+        night_mult = 3.0 if getattr(self, 'is_night', False) else 1.0
+        if random.random() > 0.15 * night_mult:
+            return
+
+        px, py = self.player['screen_x'], self.player['screen_y']
+        candidates = []
+        for dx in range(-3, 4):
+            for dy in range(-3, 4):
+                key = f"{px + dx},{py + dy}"
+                for eid in self.screen_entities.get(key, []):
+                    entity = self.entities.get(eid)
+                    if entity is None or entity.health <= 0:
+                        continue
+                    if entity.props.get('hostile', False) or getattr(entity, 'keeper', False):
+                        continue
+                    inv_count = sum(entity.inventory.values()) if entity.inventory else 0
+                    if inv_count < 20:
+                        continue
+                    if any(q.get('type') == 'DELIVER_ITEMS'
+                           for q in getattr(entity, 'quest_queue', [])):
+                        continue
+                    candidates.append((eid, entity, inv_count))
+
+        if not candidates:
+            return
+
+        # Pick most overburdened candidate
+        eid, entity, _ = max(candidates, key=lambda x: x[2])
+        screen_key = f"{entity.screen_x},{entity.screen_y}"
+        if screen_key not in self.screens:
+            return
+
+        grid = self.screens[screen_key]['grid']
+        best_chest, best_dist = None, 9999
+        for cy in range(GRID_HEIGHT):
+            for cx in range(GRID_WIDTH):
+                if grid[cy][cx] == 'CHEST':
+                    d = abs(cx - entity.x) + abs(cy - entity.y)
+                    if d < best_dist:
+                        best_dist, best_chest = d, (cx, cy)
+
+        if best_chest:
+            quest_entry = {'type': 'DELIVER_ITEMS', 'base': False, 'slot': None}
+            if not hasattr(entity, 'quest_queue') or entity.quest_queue is None:
+                entity.quest_queue = []
+            if len(entity.quest_queue) < NPC_QUEST_QUEUE_MAX:
+                entity.quest_queue.insert(0, quest_entry)
+            entity.quest_focus = 'DELIVER_ITEMS'
+            entity.quest_target = ('cell', best_chest[0], best_chest[1], 'CHEST')
+            entity._quest_update_counter = 10
+            print(f"[LoreEngine] DELIVER_ITEMS → {entity.type}(id={eid}) chest at {best_chest}")
+        else:
+            # No chest in zone — place one adjacent to NPC
+            self.try_place_npc_chest(entity, screen_key)
+            print(f"[LoreEngine] No chest found — {entity.type}(id={eid}) placed one")
+
+    def _lore_rich_chest_raid(self):
+        """Scan zones near player for overfull chests and assign RAID_CHEST quest
+        to a nearby goblin or bandit.
+
+        Chest threshold: 15+ total items. Raid chance scales with fullness.
+        At most one raider assigned per lore cycle.
+        """
+        px, py = self.player['screen_x'], self.player['screen_y']
+        for dx in range(-3, 4):
+            for dy in range(-3, 4):
+                key = f"{px + dx},{py + dy}"
+                if key not in self.screens:
+                    continue
+                grid = self.screens[key]['grid']
+                for cy in range(GRID_HEIGHT):
+                    for cx in range(GRID_WIDTH):
+                        if grid[cy][cx] != 'CHEST':
+                            continue
+                        ck = f"{key}:{cx},{cy}"
+                        total = sum(self.chest_contents.get(ck, {}).values())
+                        if total < 15:
+                            continue
+                        # Raid chance: 1% per item beyond threshold, cap 30%
+                        if random.random() > min(0.30, (total - 15) * 0.01):
+                            continue
+                        # Find a goblin/bandit in the same zone with no raid quest
+                        for eid in self.screen_entities.get(key, []):
+                            raider = self.entities.get(eid)
+                            if raider is None or raider.health <= 0:
+                                continue
+                            if raider.type not in ('GOBLIN', 'BANDIT'):
+                                continue
+                            if any(q.get('type') == 'RAID_CHEST'
+                                   for q in getattr(raider, 'quest_queue', [])):
+                                continue
+                            quest_entry = {'type': 'RAID_CHEST', 'base': False, 'slot': None}
+                            if not hasattr(raider, 'quest_queue') or raider.quest_queue is None:
+                                raider.quest_queue = []
+                            if len(raider.quest_queue) < NPC_QUEST_QUEUE_MAX:
+                                raider.quest_queue.insert(0, quest_entry)
+                            raider.quest_focus = 'RAID_CHEST'
+                            raider.quest_target = ('cell', cx, cy, 'CHEST')
+                            raider._quest_update_counter = 10
+                            print(f"[LoreEngine] RAID_CHEST → {raider.type}(id={eid}) targeting {ck}")
+                            return  # One raider per lore cycle
 
     def check_secret_entrances(self, screen_key):
         """~10 % chance: if a zone has 2+ house structures, secretly add a
