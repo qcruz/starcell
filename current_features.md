@@ -209,6 +209,7 @@ For planned and desired future features, see [`roadmap.md`](roadmap.md).
 - Starting inventory: all humanoid NPCs spawn with 0–30 wood, stone, and meat plus 0–2 random items from the full item/cell pool
 
 **AI States**: `idle` (60t), `wandering` (120t), `targeting` (180t), `combat` (120t), `fleeing` (120t)
+- Wandering NPCs always attempt to move each update; standing still only occurs in `idle` state (controlled by `idleness` prop + inventory scaling)
 
 **AI Parameters per type**: aggressiveness, passiveness, idleness, flee_chance, combat_chance, target_types
 
@@ -254,10 +255,16 @@ For planned and desired future features, see [`roadmap.md`](roadmap.md).
 - 10 colors (Red, Blue, Gold…) × 10 symbols (Lion, Dragon, Wolf…)
 - Warriors join factions, have leaders and commanders
 - Zone control tracking, max size enforced
+- Every COMMANDER is guaranteed a named faction (assigned/repaired each lore cycle)
 
 **Hostile Factions**
 - Goblins/Bandits form clans: Shadow/Black/Dark + Fang/Claw/Knife/Death names
 - Coordinate raids, recruit, expand territory
+- Level 2+ hostile entities have a per-lore-cycle chance to form a new named faction (chance scales with level)
+
+**Faction Registry Sync**
+- Each lore cycle (600 ticks), `_lore_sync_faction_registry()` scans all live entities and registers any faction present on `entity.faction` but missing from `self.factions` — catches post-load gaps and any code path that sets `entity.faction` without updating the registry
+- Faction data (warriors list, zones, hostile flag) persisted across save/load
 
 ---
 
@@ -397,6 +404,8 @@ simulation work identically inside and outside structures.
 | CAVE_DEEP_CHEST | Gold 50–200 (100%), Enchanted sword (40%), Leather armor (30%), Magic stone (20%) |
 
 **Chest Destruction**: Destroying a chest with contents scatters items on the ground; empty chests leave nothing (no plank drop — avoids chest-spawning feedback loop)
+
+**Chest Consolidation**: Each zone update, chests within 5 cells of each other merge their contents into the chest with the most items; secondaries are emptied and decay promptly (50% per zone update, biome-correct fallback cell)
 
 **Exit Mechanics**: NPCs exit structures (60% chance/update); Keepers never exit their assigned structure; items consolidate to chest on exit
 

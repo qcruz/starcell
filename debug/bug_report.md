@@ -5,6 +5,91 @@ Reviewed from `debug/bugcatcher.log` after each session.
 
 ---
 
+## Session 23 — 2026-03-15 (live player review — chest/faction/NPC behavior fixes)
+
+### FIXED — WOOD and PLANKS appearing as overworld grid cells
+
+**Root cause:** `ITEM_TO_CELL` in both `constants.py` and `data/cells.py` contained `'wood': 'WOOD'` and `'planks': 'PLANKS'`, causing `place_selected_item()` to stamp WOOD/PLANKS as permanent terrain cells.
+
+**Fix:** Removed `'wood'` and `'planks'` entries from `ITEM_TO_CELL` in both files. Wood and planks now only exist as inventory items — they drop as item overlays rather than grid cells.
+
+---
+
+### FIXED — WOOD cells appearing when NPC empties a chest (time-pass)
+
+**Root cause:** In `world/zones.py` time-pass entity loop, when an NPC picked up all items from a chest, the code set `grid[cy][cx] = 'WOOD'` instead of leaving the chest cell intact.
+
+**Fix:** Removed the erroneous cell assignment. The chest cell is left in place; the empty-chest decay system handles cleanup.
+
+---
+
+### FIXED — Empty chests not decaying (dead code — wrong `elif` level)
+
+**Root cause:** The `elif cell == 'CHEST':` branch in `update_zone_with_coverage()` was at the outer `if/elif` level rather than inside `if cell in CELL_TYPES:`. Since CHEST is in CELL_TYPES, the outer branch was never reached — the decay code was effectively dead.
+
+**Fix:** Moved `elif cell == 'CHEST':` inside the `if cell in CELL_TYPES:` block so it fires correctly each zone update.
+
+---
+
+### FIXED — Empty chests decaying to GRASS in desert/mountain biomes
+
+**Root cause 1:** Fallback cell hardcoded to `'GRASS'` instead of the zone's biome base cell.
+**Root cause 2:** `base_cell` variable referenced before it was defined (computed later in the biome reversion block), causing `UnboundLocalError`.
+
+**Fix:** Computed `base_cell` from a biome→cell map before the cell loop so it is available to the chest decay branch. Fallback now uses `base_cell` (SAND for desert, DIRT for mountains/tundra/swamp, GRASS otherwise). Structure zone chests fall back to `FLOOR_WOOD`.
+
+---
+
+### FIXED — Too many chests accumulating across zones
+
+**Root cause:** NPCs depositing items into nearby chests, then creating a new chest on inventory overflow, with no mechanism to merge nearby chests or remove empty ones quickly enough.
+
+**Fix (two parts):**
+1. `consolidate_chests(zone_key)` added to `systems/crafting.py`: each zone update, finds all CHEST cells, merges contents of chests within 5 cells of each other into the chest with the most items, leaves secondaries empty (for decay). Called alongside `consolidate_dropped_items()` in `update_zone_with_coverage()`.
+2. Empty chest decay rate increased to 50% per zone update (from 5–10%) in both overworld and structure zone loops.
+
+---
+
+### FIXED — Commander faction not appearing on dev info screen after save/load
+
+**Root cause:** `self.factions` was never serialized. Entities retained `entity.faction` through save/load, but `self.factions` was always empty after any reload — so the dev screen found no registered factions.
+
+**Fix:** Added factions to `systems/save_load.py` save/load: zones stored as lists (JSON-safe), restored as sets on load.
+
+---
+
+### FIXED — Faction name on entity not registered in `self.factions` (hostile factions)
+
+**Root cause:** Multiple code paths set `entity.faction` without guaranteeing the faction name appears in `self.factions` — particularly after save/load or when `create_hostile_faction()` reverse-lookup fails. The dev screen reads `self.factions`, so unregistered factions are invisible even when present on entities.
+
+**Fix:** Added `_lore_sync_faction_registry()` to `lore/engine.py`, called each lore cycle (600 ticks). Scans all live entities with `entity.faction` set; registers any faction name missing from `self.factions` and ensures the entity is in the warriors list.
+
+---
+
+### FIXED — `_lore_ensure_commander_factions` skipping already-factionless Commanders after reload
+
+**Root cause:** Skip condition was `if getattr(entity, 'faction', None): continue` — this skipped any Commander that had `entity.faction` set, even if that faction name was not in `self.factions`. It also only scanned a 9×9 radius around the player, missing Commanders in loaded but distant zones.
+
+**Fix:** Skip condition changed to require both `entity.faction` non-None AND the faction name present in `self.factions`. Now also scans all `self.entities` (not just the 9×9 radius).
+
+---
+
+### FIXED — NPCs standing still while in wandering state
+
+**Root cause:** The wandering state block had a hardcoded `if random.random() < 0.6: self.wander_entity(entity)` — meaning 40% of wandering ticks did nothing. Standing still is meant to be handled exclusively by the `idle` state.
+
+**Fix:** Removed the conditional; `wander_entity()` is always called in the wandering block. Transition to idle is controlled by the `idleness` prop and inventory scaling as intended.
+
+---
+
+### FIXED — Instantiated zones never shrinking (dead zone accumulation)
+
+**Root cause:** `self.instantiated_zones` is an append-only set. Evicted zones (removed from `self.screens` to free memory) were never removed from `instantiated_zones`, causing the count to grow unboundedly and inflating zone-wide loops.
+
+**Fix:** Added a 600-tick cleanup in `world/zones.py`: `self.instantiated_zones &= set(self.screens.keys())` — syncs the set against active screens each cleanup cycle.
+
+---
+
 ## Session 22 — 2026-03-14 (observation runs, quest/keeper focus)
 
 ### Run 1 — 270s, new game, tick 15130
