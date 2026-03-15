@@ -320,10 +320,9 @@ class NpcAiMixin:
                         self.wander_entity(entity)
                     # Type 1 (guard): hold position when at target
                 else:
-                    # Type 3 or no target: random movement with natural pauses
-                    # 60% move, 40% stand still for a beat
-                    if random.random() < 0.6:
-                        self.wander_entity(entity)
+                    # Type 3 or no target: always attempt to move
+                    # Standing still is handled by transitioning to idle state via idleness
+                    self.wander_entity(entity)
             
             elif entity.ai_state == 'idle':
                 # Stand still - NO MOVEMENT in idle state
