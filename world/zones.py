@@ -195,7 +195,7 @@ class ZonesMixin:
                 elif cell == 'CHEST':
                     chest_key = f"{zone_key}:{x},{y}"
                     if not self.chest_contents.get(chest_key):  # empty chest
-                        if random.random() < min(1.0, 0.1 * _tp):
+                        if random.random() < min(1.0, 0.5 * _tp):
                             bg = getattr(self, 'chest_backgrounds', {}).pop(chest_key, 'GRASS')
                             self.set_grid_cell(screen, x, y, bg)
 
@@ -637,7 +637,7 @@ class ZonesMixin:
                     elif cell == 'CHEST':
                         chest_key = f"{struct_zone_key}:{x},{y}"
                         if not self.chest_contents.get(chest_key):  # empty chest
-                            if random.random() < 0.05:
+                            if random.random() < 0.5:
                                 bg = getattr(self, 'chest_backgrounds', {}).pop(chest_key, 'GRASS')
                                 self.set_grid_cell(screen, x, y, bg)
 
