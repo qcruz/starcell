@@ -351,8 +351,9 @@ class CraftingMixin:
                         changed = True
 
     def decay_overworld_chests(self, screen_key):
-        """Small chance for overworld CHEST cells to collapse into ITEM_BAG.
-        Applies 40% destruction to chest contents; survivors go to dropped_items."""
+        """Small chance for overworld CHEST cells to decay.
+        Applies 40% destruction to chest contents; survivors fall into dropped_items
+        (rendered by the existing item-bag system) and the cell reverts to its background."""
         if not self.is_overworld_zone(screen_key):
             return
         if screen_key not in self.screens:
@@ -368,7 +369,7 @@ class CraftingMixin:
                     continue
                 ck = f"{screen_key}:{cx},{cy}"
                 contents = self.chest_contents.pop(ck, {})
-                self.chest_backgrounds.pop(ck, 'GRASS')
+                bg = self.chest_backgrounds.pop(ck, 'GRASS')
                 # Apply destruction check
                 survivors = {}
                 for item, amt in contents.items():
@@ -379,8 +380,8 @@ class CraftingMixin:
                         kept = sum(1 for _ in range(amt) if random.random() > 0.40)
                         if kept > 0:
                             survivors[item] = kept
-                # Convert cell to ITEM_BAG; store survivors in dropped_items
-                grid[cy][cx] = 'ITEM_BAG'
+                # Restore background cell; survivors land as dropped items
+                grid[cy][cx] = bg
                 if survivors:
                     if screen_key not in self.dropped_items:
                         self.dropped_items[screen_key] = {}
@@ -390,47 +391,6 @@ class CraftingMixin:
                     for item, amt in survivors.items():
                         self.dropped_items[screen_key][pos][item] = (
                             self.dropped_items[screen_key][pos].get(item, 0) + amt
-                        )
-
-    def decay_item_bags(self, screen_key):
-        """Small chance for ITEM_BAG cells to split open.
-        Applies 40% destruction to contents; survivors become dropped_items then ITEM_BAG cell → background."""
-        if screen_key not in self.screens:
-            return
-        screen = self.screens[screen_key]
-        grid = screen['grid']
-        _UNIQUE_FLAGS = ('is_tool', 'is_spell', 'is_follower', 'magic_damage', 'armor')
-        for cy in range(GRID_HEIGHT):
-            for cx in range(GRID_WIDTH):
-                if grid[cy][cx] != 'ITEM_BAG':
-                    continue
-                if random.random() > 0.001:  # 0.1% per update
-                    continue
-                pos = (cx, cy)
-                bag_items = (self.dropped_items.get(screen_key, {}).pop(pos, None) or {})
-                survivors = {}
-                for item, amt in bag_items.items():
-                    item_data = ITEMS.get(item, {})
-                    if any(item_data.get(f) for f in _UNIQUE_FLAGS):
-                        survivors[item] = amt
-                    else:
-                        kept = sum(1 for _ in range(amt) if random.random() > 0.40)
-                        if kept > 0:
-                            survivors[item] = kept
-                # Restore cell
-                grid[cy][cx] = 'GRASS'
-                # Surviving items scatter into dropped_items nearby
-                if survivors:
-                    if screen_key not in self.dropped_items:
-                        self.dropped_items[screen_key] = {}
-                    for item, amt in survivors.items():
-                        scatter_x = max(0, min(GRID_WIDTH - 1, cx + random.randint(-1, 1)))
-                        scatter_y = max(0, min(GRID_HEIGHT - 1, cy + random.randint(-1, 1)))
-                        spos = (scatter_x, scatter_y)
-                        if spos not in self.dropped_items[screen_key]:
-                            self.dropped_items[screen_key][spos] = {}
-                        self.dropped_items[screen_key][spos][item] = (
-                            self.dropped_items[screen_key][spos].get(item, 0) + amt
                         )
 
     def decay_items_to_buried(self, screen_key):

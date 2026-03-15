@@ -543,7 +543,6 @@ class GameCoreMixin:
                 self.apply_cellular_automata(screen_x, screen_y)
                 self.decay_dropped_items(screen_x, screen_y)
                 self.decay_overworld_chests(screen_key)
-                self.decay_item_bags(screen_key)
                 self.decay_items_to_buried(screen_key)
                 self.decay_buried_items(screen_key)
 
@@ -562,7 +561,6 @@ class GameCoreMixin:
                         self.apply_cellular_automata(screen_x, screen_y)
                         self.decay_dropped_items(screen_x, screen_y)
                         self.decay_overworld_chests(screen_key)
-                        self.decay_item_bags(screen_key)
                         self.decay_items_to_buried(screen_key)
                         self.decay_buried_items(screen_key)
 
@@ -582,7 +580,6 @@ class GameCoreMixin:
                         self.apply_cellular_automata(screen_x, screen_y)
                         self.decay_dropped_items(screen_x, screen_y)
                         self.decay_overworld_chests(screen_key)
-                        self.decay_item_bags(screen_key)
                         self.decay_items_to_buried(screen_key)
                         self.decay_buried_items(screen_key)
             pass  # distance-2 update complete
