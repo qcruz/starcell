@@ -1,6 +1,6 @@
 import random
 
-from constants import CELL_TYPES, ITEM_DECAY_CONFIG, ITEM_TO_CELL, ITEMS, RECIPES
+from constants import CELL_TYPES, ITEM_TO_CELL, ITEMS, RECIPES
 from constants import GRID_WIDTH, GRID_HEIGHT
 
 
@@ -215,67 +215,22 @@ class CraftingMixin:
                     self.current_screen['grid'][y][x] = drop['cell']
                 break
 
-    def decay_dropped_items(self, screen_x, screen_y):
-        """General function to decay dropped items based on item decay configuration"""
-        screen_key = f"{screen_x},{screen_y}"
+    ITEM_DECAY_RATE = 0.01  # 1% chance per item per zone update
 
+    def decay_dropped_items(self, screen_x, screen_y):
+        """Decay all dropped items at a flat rate."""
+        screen_key = f"{screen_x},{screen_y}"
         if screen_key not in self.dropped_items or screen_key not in self.screens:
             return
 
-        screen = self.screens[screen_key]
-        cells_to_update = []
-
-        # Check each position with dropped items
         for cell_pos, items in list(self.dropped_items[screen_key].items()):
-            x, y = cell_pos
-            current_cell = screen['grid'][y][x]
-
-            # Process each item type at this position
             for item_name, item_count in list(items.items()):
-                # Blanket destruction: small chance to lose any non-unique dropped item
-                if item_name not in ITEM_DECAY_CONFIG:
-                    if random.random() < 0.005:
-                        items[item_name] -= 1
-                        if items[item_name] <= 0:
-                            del items[item_name]
-                        if not items:
-                            del self.dropped_items[screen_key][cell_pos]
-                    continue
-
-                config = ITEM_DECAY_CONFIG[item_name]
-
-                # Calculate decay chance (base rate * item count)
-                decay_chance = config['decay_rate'] * item_count
-
-                if random.random() < decay_chance:
-                    # Decay one item
+                if random.random() < self.ITEM_DECAY_RATE * item_count:
                     items[item_name] -= 1
                     if items[item_name] <= 0:
                         del items[item_name]
-
-                    # Remove empty items dict
-                    if not items:
-                        del self.dropped_items[screen_key][cell_pos]
-
-                    # Determine decay result based on current cell type
-                    decay_results = config['decay_results']
-
-                    # Get results for this cell type, or default
-                    results = decay_results.get(current_cell, decay_results.get('default', [(None, 1.0)]))
-
-                    # Weighted random selection of result
-                    roll = random.random()
-                    cumulative = 0.0
-                    for result_cell, weight in results:
-                        cumulative += weight
-                        if roll < cumulative:
-                            if result_cell is not None:
-                                cells_to_update.append((x, y, result_cell))
-                            break
-
-        # Apply cell updates
-        for x, y, new_cell in cells_to_update:
-            self.set_grid_cell(screen, x, y, new_cell)
+            if not items:
+                del self.dropped_items[screen_key][cell_pos]
 
     def consolidate_dropped_items(self, screen_key):
         """Merge ALL dropped items within 3-cell range into the largest nearby pile.
