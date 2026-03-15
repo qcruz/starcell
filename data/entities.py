@@ -7,7 +7,7 @@ ENTITY_TYPES = {
     'SHEEP': {
         'color': (230, 230, 230),
         'symbol': 'S',
-        'max_health': 20,
+        'max_health': 16,
         'max_hunger': 100,
         'max_thirst': 100,
         'strength': 6,
@@ -35,7 +35,7 @@ ENTITY_TYPES = {
         'max_health': 30,
         'max_hunger': 100,
         'max_thirst': 100,
-        'strength': 15,
+        'strength': 17,
         'speed': 1.5,
         'food_sources': ['SHEEP', 'DEER'],
         'water_sources': ['WATER'],
@@ -58,7 +58,7 @@ ENTITY_TYPES = {
     'DEER': {
         'color': (139, 90, 43),
         'symbol': 'D',
-        'max_health': 30,
+        'max_health': 24,
         'max_hunger': 100,
         'max_thirst': 100,
         'strength': 9,
@@ -84,7 +84,7 @@ ENTITY_TYPES = {
     'FARMER': {
         'color': (139, 69, 19),
         'symbol': 'F',
-        'max_health': 80,
+        'max_health': 64,
         'max_hunger': 100,
         'max_thirst': 100,
         'strength': 13,
@@ -115,7 +115,7 @@ ENTITY_TYPES = {
     'GUARD': {
         'color': (100, 100, 150),
         'symbol': 'G',
-        'max_health': 130,
+        'max_health': 104,
         'max_hunger': 100,
         'max_thirst': 100,
         'strength': 31,
@@ -146,7 +146,7 @@ ENTITY_TYPES = {
     'WARRIOR': {
         'color': (150, 50, 50),
         'symbol': 'W',
-        'max_health': 100,
+        'max_health': 80,
         'max_hunger': 100,
         'max_thirst': 100,
         'strength': 26,
@@ -177,7 +177,7 @@ ENTITY_TYPES = {
     'COMMANDER': {
         'color': (180, 50, 50),
         'symbol': 'C',
-        'max_health': 120,
+        'max_health': 96,
         'max_hunger': 100,
         'max_thirst': 100,
         'strength': 31,
@@ -209,7 +209,7 @@ ENTITY_TYPES = {
     'KING': {
         'color': (220, 180, 50),
         'symbol': 'K',
-        'max_health': 150,
+        'max_health': 120,
         'max_hunger': 100,
         'max_thirst': 100,
         'strength': 41,
@@ -241,7 +241,7 @@ ENTITY_TYPES = {
     'TRADER': {
         'color': (218, 165, 32),
         'symbol': 'T',
-        'max_health': 70,
+        'max_health': 56,
         'max_hunger': 100,
         'max_thirst': 100,
         'strength': 11,
@@ -272,7 +272,7 @@ ENTITY_TYPES = {
     'BLACKSMITH': {
         'color': (105, 105, 105),  # Dark gray
         'symbol': 'S',
-        'max_health': 90,
+        'max_health': 72,
         'max_hunger': 100,
         'max_thirst': 100,
         'strength': 25,
@@ -302,7 +302,7 @@ ENTITY_TYPES = {
     'WIZARD': {
         'color': (138, 43, 226),  # Blue-violet
         'symbol': 'Z',
-        'max_health': 60,
+        'max_health': 48,
         'max_hunger': 100,
         'max_thirst': 100,
         'strength': 13,
@@ -334,7 +334,7 @@ ENTITY_TYPES = {
     'LUMBERJACK': {
         'color': (139, 90, 43),
         'symbol': 'L',
-        'max_health': 100,
+        'max_health': 80,
         'max_hunger': 100,
         'max_thirst': 100,
         'strength': 19,
@@ -366,7 +366,7 @@ ENTITY_TYPES = {
     'MINER': {
         'color': (105, 105, 105),
         'symbol': 'M',
-        'max_health': 110,
+        'max_health': 88,
         'max_hunger': 100,
         'max_thirst': 100,
         'strength': 21,
@@ -402,7 +402,7 @@ ENTITY_TYPES = {
         'max_health': 50,
         'max_hunger': 100,
         'max_thirst': 100,
-        'strength': 20,
+        'strength': 22,
         'speed': 1.3,
         'food_sources': [],
         'water_sources': ['WATER'],
@@ -429,7 +429,7 @@ ENTITY_TYPES = {
         'max_health': 35,
         'max_hunger': 100,
         'max_thirst': 100,
-        'strength': 12,
+        'strength': 13,
         'speed': 1.1,
         'food_sources': [],
         'water_sources': ['WATER'],
@@ -457,7 +457,7 @@ ENTITY_TYPES = {
         'max_health': 35,
         'max_hunger': 50,
         'max_thirst': 50,
-        'strength': 12,
+        'strength': 13,
         'speed': 1.0,
         'food_sources': [],
         'water_sources': [],
@@ -484,7 +484,7 @@ ENTITY_TYPES = {
         'max_health': 25,
         'max_hunger': 100,
         'max_thirst': 100,
-        'strength': 3,
+        'strength': 4,
         'speed': 1.1,
         'food_sources': ['TREE1', 'TREE2'],  # Eats trees
         'water_sources': ['WATER'],
@@ -518,7 +518,7 @@ ENTITY_TYPES = {
         'max_health': 10,
         'max_hunger': 80,
         'max_thirst': 80,
-        'strength': 4,       # Very low damage per hit
+        'strength': 5,       # Very low damage per hit
         'speed': 1.6,        # Fast flyers
         'food_sources': [],
         'water_sources': ['WATER'],
@@ -544,7 +544,7 @@ ENTITY_TYPES = {
         'color': (200, 60, 40),
         'symbol': 'r',
         'sprite_name': 'red bird',
-        'max_health': 8,
+        'max_health': 6,
         'max_hunger': 60,
         'max_thirst': 60,
         'strength': 2,
@@ -571,7 +571,7 @@ ENTITY_TYPES = {
         'color': (180, 120, 220),
         'symbol': 'u',
         'sprite_name': 'butterfly',
-        'max_health': 4,
+        'max_health': 3,
         'max_hunger': 40,
         'max_thirst': 40,
         'strength': 1,
@@ -595,7 +595,7 @@ ENTITY_TYPES = {
         'color': (240, 220, 160),
         'symbol': 'c',
         'sprite_name': 'chicken',
-        'max_health': 15,
+        'max_health': 12,
         'max_hunger': 80,
         'max_thirst': 80,
         'strength': 3,
@@ -624,7 +624,7 @@ ENTITY_TYPES = {
         'max_health': 30,
         'max_hunger': 100,
         'max_thirst': 100,
-        'strength': 15,
+        'strength': 17,
         'speed': 1.5,
         'food_sources': ['SHEEP', 'DEER', 'CHICKEN'],
         'water_sources': ['WATER'],
