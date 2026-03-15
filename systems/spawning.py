@@ -351,9 +351,12 @@ class SpawningMixin:
             return
 
         raid_types = [
-            ('GOBLIN', 2),
-            ('BANDIT', 2),
-            ('WOLF', 3)
+            ('GOBLIN',      2),
+            ('BANDIT',      2),
+            ('WOLF',        3),
+            ('BLACK_SPIDER', 3),
+            ('SKELETON',    2),
+            ('TERMITE',     4),
         ]
         raid_type, raid_count = random.choice(raid_types)
 
@@ -399,8 +402,27 @@ class SpawningMixin:
         if cave_pos:
             center_x, center_y = cave_pos
         else:
-            center_x = random.randint(4, GRID_WIDTH - 5)
-            center_y = random.randint(4, GRID_HEIGHT - 5)
+            # Pick an entrance position (zone edge or adjacent to cave cell)
+            screen = self.screens[screen_key]
+            _cx = GRID_WIDTH // 2
+            _cy = GRID_HEIGHT // 2
+            _positions = []
+            exits = screen.get('exits', {})
+            if exits.get('top'):    _positions += [(x, 1)              for x in range(_cx - 1, _cx + 2)]
+            if exits.get('bottom'): _positions += [(x, GRID_HEIGHT - 2) for x in range(_cx - 1, _cx + 2)]
+            if exits.get('left'):   _positions += [(1, y)              for y in range(_cy - 1, _cy + 2)]
+            if exits.get('right'):  _positions += [(GRID_WIDTH - 2, y) for y in range(_cy - 1, _cy + 2)]
+            for _gy in range(GRID_HEIGHT):
+                for _gx in range(GRID_WIDTH):
+                    if screen['grid'][_gy][_gx] in ('CAVE', 'HIDDEN_CAVE', 'MINESHAFT'):
+                        for _ddx, _ddy in ((-1,0),(1,0),(0,-1),(0,1)):
+                            _nx, _ny = _gx + _ddx, _gy + _ddy
+                            if 0 < _nx < GRID_WIDTH - 1 and 0 < _ny < GRID_HEIGHT - 1:
+                                _positions.append((_nx, _ny))
+            if _positions:
+                center_x, center_y = random.choice(_positions)
+            else:
+                center_x, center_y = _cx, _cy
 
         spawned = 0
         attempts = 0

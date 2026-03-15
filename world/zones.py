@@ -717,6 +717,8 @@ class ZonesMixin:
                                 bg = getattr(self, 'chest_backgrounds', {}).pop(chest_key, None) or 'FLOOR_WOOD'
                                 self.set_grid_cell(screen, x, y, bg)
 
+        self.check_raid_event(struct_zone_key)
+
         entity_list = self.screen_entities.get(struct_zone_key, [])
         if not entity_list:
             entity_list = self.screen_entities.get(struct_zone_key, [])
@@ -794,7 +796,7 @@ class ZonesMixin:
 
                 if random.random() < 0.20:
                     hostile_count = random.randint(2, max(2, human_count))
-                    hostile_type = random.choice(['GOBLIN', 'BANDIT', 'WOLF'])
+                    hostile_type = random.choice(['GOBLIN', 'BANDIT', 'WOLF', 'BLACK_SPIDER', 'SKELETON', 'TERMITE'])
 
                     # Build entrance positions: zone edges + adjacent to cave/mineshaft cells
                     _cx = GRID_WIDTH // 2
@@ -843,9 +845,7 @@ class ZonesMixin:
                         self.remove_entity(lowest_entity)
 
                     if not has_cave:
-                        cave_x = random.randint(2, GRID_WIDTH - 3)
-                        cave_y = random.randint(2, GRID_HEIGHT - 3)
-                        screen['grid'][cave_y][cave_x] = 'CAVE'
+                        self.spawn_hidden_cave(screen_key)
 
 
         # Faction simulation for warriors during catch-up
