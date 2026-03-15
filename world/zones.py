@@ -1041,12 +1041,16 @@ class ZonesMixin:
     # -------------------------------------------------------------------------
 
     def calculate_zone_priority(self, zone_key):
-        """Calculate priority score for a zone. Higher = update sooner."""
+        """Calculate priority score for a zone. Higher = update sooner.
+
+        All positional scores are expressed as fractions of total_zones so
+        the current zone always tops the queue regardless of world size.
+        Staleness is uncapped so every zone eventually gets updated.
+        """
         player_x = self.player['screen_x']
         player_y = self.player['screen_y']
         player_zone = f"{player_x},{player_y}"
-
-        # player screen_x/y already reflects virtual coords in structure zones — no special case needed
+        total_zones = max(1, len(self.screens))
 
         if self.is_overworld_zone(zone_key):
             parts = zone_key.split(',')
@@ -1061,47 +1065,43 @@ class ZonesMixin:
             else:
                 distance = 50
 
+        # Distance score as % of total_zones: current zone = 100%, falls off with distance
         if zone_key == player_zone:
-            distance_score = 100.0
+            distance_score = total_zones * 1.0
         elif distance == 0:
-            distance_score = 90.0
-        elif distance <= 1:
-            distance_score = 50.0
-        elif distance <= 2:
-            distance_score = 25.0
-        elif distance <= 3:
-            distance_score = 10.0
+            distance_score = total_zones * 0.9   # same-coord structure zone
         else:
-            distance_score = max(1.0, 5.0 / distance)
+            distance_score = total_zones * (0.5 / distance)
 
+        # Uncapped staleness — zones that haven't been updated keep climbing
+        # until they get processed, guaranteeing rotation across all zones
         last_update = self.screen_last_update.get(zone_key, 0)
-        staleness_ticks = self.tick - last_update
-        # Accrue 1 point per 30 ticks idle, cap at 60 so stale zones get
-        # meaningful priority boosts without fully dominating the queue
-        staleness_score = min(60.0, staleness_ticks / 30.0)
+        staleness_score = (self.tick - last_update) / 30.0
 
+        # Connection score as % of total_zones
         connection_score = 0.0
         if zone_key in self.zone_connections:
             for connected_key, conn_type, *_ in self.zone_connections[zone_key]:
                 if connected_key == player_zone:
-                    connection_score = 40.0
+                    connection_score = total_zones * 0.4
                     break
                 if self.is_overworld_zone(connected_key):
                     cp = connected_key.split(',')
                     cd = abs(int(cp[0]) - player_x) + abs(int(cp[1]) - player_y)
                     if cd <= 1:
-                        connection_score = max(connection_score, 20.0)
+                        connection_score = max(connection_score, total_zones * 0.2)
 
+        # Structure and quest scores as % of total_zones
         structure_score = 0.0
         if zone_key in self.structure_zones:
-            structure_score = 15.0
+            structure_score = total_zones * 0.15
         elif zone_key in self.zone_structures:
-            structure_score = 5.0
+            structure_score = total_zones * 0.05
 
         quest_score = 0.0
         for quest_type, quest in self.quests.items():
             if hasattr(quest, 'target_zone') and quest.target_zone == zone_key:
-                quest_score = 20.0
+                quest_score = total_zones * 0.2
                 break
 
         return distance_score + staleness_score + connection_score + structure_score + quest_score
