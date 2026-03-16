@@ -591,7 +591,7 @@ class ZonesMixin:
                                 break
 
                     # Fill a nearby existing chest when any item stack exceeds 100
-                    _inv_overflow = any(c > 100 for c in entity.inventory.values())
+                    _inv_overflow = any(c > 20 for c in entity.inventory.values())
                     if _inv_overflow and random.random() < 0.70:
                         for dx, dy in [(0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)]:
                             cx, cy = ex + dx, ey + dy
@@ -608,7 +608,7 @@ class ZonesMixin:
                                     break
 
                     # Place a new chest when any item stack exceeds 100 and no adjacent chest found
-                    _inv_overflow = any(c > 100 for c in entity.inventory.values())
+                    _inv_overflow = any(c > 20 for c in entity.inventory.values())
                     if _inv_overflow and random.random() < 0.60:
                         ground_cells = {'GRASS', 'DIRT', 'SAND', 'FLOOR_WOOD', 'CAVE_FLOOR', 'COBBLESTONE'}
                         for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
