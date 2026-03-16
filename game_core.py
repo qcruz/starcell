@@ -622,9 +622,7 @@ class GameCoreMixin:
                     if self.try_split_double_entity(entity_id, entity, entity_screen_key):
                         continue  # Entity was split — re-evaluate next tick
 
-                sheltered = (entity_screen_key in self.structure_zones
-                             or getattr(entity, 'in_subscreen', False))
-                entity.decay_stats(sheltered=sheltered)
+                entity.decay_stats()
 
                 heal_boost = 1.0
                 if not entity.props.get('hostile', False):

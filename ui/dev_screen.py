@@ -288,9 +288,14 @@ class DevScreenMixin:
 
         cy = _h(f"ZONE QUEUE  ({len(stats['priority_queue'])} total)", cx, cy)
 
-        # Header row — compact to fit ~250 px
-        col_fmt = f"{'ZONE':<12}{'BIOME':<9}{'N':>2}  {'STALE':>5}  {'PRI':>5}"
+        # Header row
+        col_fmt = f"{'ZONE':<12}{'BIOME':<8}{'N':>2} {'POP':>9}  {'STALE':>5}  {'PRI':>5}"
         cy = _t(col_fmt, cx, cy, HDR)
+
+        _FARMER_TYPES  = {'FARMER'}
+        _COMBAT_TYPES  = {'GUARD', 'WARRIOR', 'COMMANDER', 'KING'}
+        _HOSTILE_TYPES = {'GOBLIN', 'BANDIT', 'WOLF', 'SKELETON', 'TERMITE',
+                          'BAT', 'BLACK_SPIDER'}
 
         player_zone = f"{self.player['screen_x']},{self.player['screen_y']}"
         max_rows = (SCREEN_HEIGHT - cy - 8) // (tf.get_height() + 2)
@@ -305,17 +310,29 @@ class DevScreenMixin:
             if not screen_data:
                 continue
 
-            biome     = screen_data.get('biome', '?')[:8]
-            npc_count = len([
-                e for e in self.screen_entities.get(zone_key, [])
-                if e in self.entities and self.entities[e].health > 0
-            ])
-            stale     = self.tick - self.screen_last_update.get(zone_key, 0)
-            zk_disp   = zone_key if len(zone_key) <= 11 else zone_key[:9] + '..'
+            biome = screen_data.get('biome', '?')[:7]
+            n_farm = n_comb = n_host = n_other = 0
+            for eid in self.screen_entities.get(zone_key, []):
+                if eid not in self.entities or self.entities[eid].health <= 0:
+                    continue
+                bt = self.entities[eid].type.replace('_double', '')
+                if bt in _FARMER_TYPES:
+                    n_farm += 1
+                elif bt in _COMBAT_TYPES:
+                    n_comb += 1
+                elif bt in _HOSTILE_TYPES:
+                    n_host += 1
+                else:
+                    n_other += 1
+            npc_count = n_farm + n_comb + n_host + n_other
+            pop_str   = f"F{n_farm}C{n_comb}H{n_host}O{n_other}"
+
+            stale   = self.tick - self.screen_last_update.get(zone_key, 0)
+            zk_disp = zone_key if len(zone_key) <= 11 else zone_key[:9] + '..'
             is_player = (zone_key == player_zone)
             row_col   = YEL if is_player else DAT
 
-            line = (f"{zk_disp:<12}{biome:<9}{npc_count:>2}  "
+            line = (f"{zk_disp:<12}{biome:<8}{npc_count:>2} {pop_str:>9}  "
                     f"{stale:>5}t  {priority:>5.0f}")
             cy = _t(line, cx, cy, row_col)
             shown += 1

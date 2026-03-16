@@ -387,9 +387,7 @@ class ZonesMixin:
                 if self.tick % age_interval == 0 and entity.type != 'SKELETON':
                     entity.age += 1
 
-                _sheltered = (zone_key in self.structure_zones
-                              or getattr(entity, 'in_subscreen', False))
-                entity.decay_stats(sheltered=_sheltered)
+                entity.decay_stats()
 
                 # NPC item consumption: remove full stack of a random item
                 if random.random() < 0.10 and entity.inventory:
@@ -750,7 +748,7 @@ class ZonesMixin:
             if self.tick % _age_interval == 0 and entity.type != 'SKELETON':
                 entity.age += 1
 
-            entity.decay_stats(sheltered=True)  # Structure zone — thirst exempt
+            entity.decay_stats()
 
             # Item consumption (same rate as overworld)
             if random.random() < 0.10 and entity.inventory:
