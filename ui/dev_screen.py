@@ -142,6 +142,7 @@ class DevScreenMixin:
             'total_zones':       len(self.screens),
             'overworld_zones':   sum(1 for zk in self.screens if self.is_overworld_zone(zk)),
             'struct_zones':      len(self.structure_zones),
+            'zones_deleted':     getattr(self, 'zones_deleted', 0),
             'faction_data':      faction_data,
             'top_npc_items':     top_npc_items,
         }
@@ -203,6 +204,7 @@ class DevScreenMixin:
         cy = _t(f"Overworld:        {stats['overworld_zones']}", cx, cy)
         cy = _t(f"Structure zones:  {stats['struct_zones']}", cx, cy)
         cy = _t(f"Instantiated:     {len(self.instantiated_zones)}", cx, cy)
+        cy = _t(f"Deleted (session):{stats['zones_deleted']:>4}", cx, cy)
         cy += 4
         for biome, count in stats['biome_counts'].items():
             cy = _t(f"  {biome:<12} {count}", cx, cy)

@@ -109,6 +109,7 @@ class ZonesMixin:
                     self.screen_last_update.pop(_zk, None)
                     if hasattr(self, 'zone_rain'):
                         self.zone_rain.pop(_zk, None)
+                    self.zones_deleted = getattr(self, 'zones_deleted', 0) + 1
 
         self.ensure_nearby_zones_exist()
 
@@ -794,6 +795,7 @@ class ZonesMixin:
                         self.screen_last_update.pop(zone_key, None)
                         if hasattr(self, 'zone_rain'):
                             self.zone_rain.pop(zone_key, None)
+                        self.zones_deleted = getattr(self, 'zones_deleted', 0) + 1
 
     def update_structure_zone(self, struct_zone_key, cell_coverage, entity_coverage):
         """Update a structure zone (cave/house interior) like a regular zone."""
