@@ -88,6 +88,20 @@ class DevScreenMixin:
         # screen_entities registrations (total refs, including dead)
         total_se_refs = sum(len(v) for v in self.screen_entities.values())
 
+        # screen_entities alive count + ghost detection
+        # Ghost = entity alive in self.entities but not registered in any screen_entities list
+        se_entity_ids = set()
+        for id_list in self.screen_entities.values():
+            se_entity_ids.update(id_list)
+        se_alive_count = sum(
+            1 for eid in se_entity_ids
+            if eid in self.entities and self.entities[eid].health > 0
+        )
+        ghost_count = sum(
+            1 for eid, e in self.entities.items()
+            if e.health > 0 and eid not in se_entity_ids
+        )
+
         # Factions — alive member counts
         faction_data = {}
         for fname, fdata in getattr(self, 'factions', {}).items():
@@ -111,6 +125,8 @@ class DevScreenMixin:
             'type_counts':       dict(sorted(type_counts.items(), key=lambda x: -x[1])),
             'level_counts':      dict(sorted(level_counts.items())),
             'alive_count':       alive_count,
+            'se_alive_count':    se_alive_count,
+            'ghost_count':       ghost_count,
             'total_entities':    len(self.entities),
             'total_npc_items':   total_npc_items,
             'struct_counts':     struct_counts,
@@ -219,7 +235,7 @@ class DevScreenMixin:
         # ══════════════════════════════════════════════════════════════════════
         cx, cy = 245, TOP
 
-        cy = _h(f"ENTITIES  alive {stats['alive_count']} / total {stats['total_entities']}", cx, cy)
+        cy = _h(f"ENTITIES [GLOBAL]  alive {stats['alive_count']} / se {stats['se_alive_count']}", cx, cy)
         for etype, count in stats['type_counts'].items():
             cy = _t(f"  {etype:<18} {count}", cx, cy)
 
@@ -262,6 +278,7 @@ class DevScreenMixin:
         ser_col = _bloat_color(stats['total_se_refs'],      500,  800)
         ent_col = _bloat_color(stats['total_entities'],     600,  900)
         och_col = _bloat_color(len(self.opened_chests),     200,  500)
+        gho_col = _bloat_color(stats['ghost_count'],         50,  150)
 
         cy = _t(f"  NPC inventory items   {stats['total_npc_items']:>6}", cx, cy, npc_col)
         cy = _t(f"  Chest contents items  {stats['total_chest_items']:>6}", cx, cy, che_col)
@@ -272,6 +289,7 @@ class DevScreenMixin:
         cy = _t(f"    zones w/ buried     {stats['zones_with_buried']:>6}", cx, cy)
         cy = _t(f"  screen_entity refs    {stats['total_se_refs']:>6}", cx, cy, ser_col)
         cy = _t(f"  total entities dict   {stats['total_entities']:>6}", cx, cy, ent_col)
+        cy = _t(f"  ghost entities        {stats['ghost_count']:>6}", cx, cy, gho_col)
         cy = _t(f"  opened_chests set     {len(self.opened_chests):>6}", cx, cy, och_col)
         cy = _t(f"  chest_contents keys   {len(self.chest_contents):>6}", cx, cy)
         cy = _t(f"  enchanted cells       {len(self.enchanted_cells):>6}", cx, cy)
