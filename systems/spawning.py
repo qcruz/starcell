@@ -137,7 +137,7 @@ class SpawningMixin:
 
         # Distance-based spawn rate reduction: -3% per zone of distance, floor 15%
         _dist = abs(screen_x - self.player['screen_x']) + abs(screen_y - self.player['screen_y'])
-        _spawn_factor = max(0.15, 1.0 - _dist * 0.03)
+        _spawn_factor = max(0.0, 1.0 - _dist * 0.03)
 
         # Get actual entrance positions - only spawn AT entrances
         entrance_positions = []
@@ -886,7 +886,7 @@ class SpawningMixin:
 
         # Distance-based spawn rate reduction: -3% per zone of distance, floor 15%
         _dist = abs(screen_x - self.player['screen_x']) + abs(screen_y - self.player['screen_y'])
-        _spawn_factor = max(0.15, 1.0 - _dist * 0.03)
+        _spawn_factor = max(0.0, 1.0 - _dist * 0.03)
         if random.random() > _spawn_factor:
             return None
 

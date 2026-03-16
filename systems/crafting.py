@@ -217,15 +217,15 @@ class CraftingMixin:
 
     ITEM_DECAY_RATE = 0.01  # 1% chance per item per zone update
 
-    def decay_dropped_items(self, screen_x, screen_y):
-        """Decay all dropped items at a flat rate."""
+    def decay_dropped_items(self, screen_x, screen_y, decay_factor=1.0):
+        """Decay all dropped items at a flat rate, scaled by decay_factor for distant zones."""
         screen_key = f"{screen_x},{screen_y}"
         if screen_key not in self.dropped_items or screen_key not in self.screens:
             return
 
         for cell_pos, items in list(self.dropped_items[screen_key].items()):
             for item_name, item_count in list(items.items()):
-                if random.random() < self.ITEM_DECAY_RATE * item_count:
+                if random.random() < self.ITEM_DECAY_RATE * item_count * decay_factor:
                     items[item_name] -= 1
                     if items[item_name] <= 0:
                         del items[item_name]
@@ -396,7 +396,7 @@ class CraftingMixin:
                             self.dropped_items[screen_key][pos].get(item, 0) + amt
                         )
 
-    def decay_items_to_buried(self, screen_key):
+    def decay_items_to_buried(self, screen_key, decay_factor=1.0):
         """Dropped items on ground have a small chance per update to become buried.
         Applies 40% destruction first; survivors go into self.buried_items."""
         if screen_key not in self.dropped_items:
@@ -404,7 +404,7 @@ class CraftingMixin:
         _UNIQUE_FLAGS = ('is_tool', 'is_spell', 'is_follower', 'magic_damage', 'armor')
         for pos, items in list(self.dropped_items[screen_key].items()):
             for item_name in list(items.keys()):
-                if random.random() > 0.0003:  # 0.03% per item per update
+                if random.random() > 0.0003 * decay_factor:  # 0.03% per item per update, scaled by distance
                     continue
                 amt = items.pop(item_name, 0)
                 if not items:
@@ -428,14 +428,14 @@ class CraftingMixin:
                     self.buried_items[screen_key][pos].get(item_name, 0) + surviving
                 )
 
-    def decay_buried_items(self, screen_key):
+    def decay_buried_items(self, screen_key, decay_factor=1.0):
         """Buried items have a very small chance per update to be permanently destroyed."""
         if not hasattr(self, 'buried_items') or screen_key not in self.buried_items:
             return
         _UNIQUE_FLAGS = ('is_tool', 'is_spell', 'is_follower', 'magic_damage', 'armor')
         for pos, items in list(self.buried_items[screen_key].items()):
             for item_name in list(items.keys()):
-                if random.random() > 0.0001:  # 0.01% per update — very slow
+                if random.random() > 0.0001 * decay_factor:  # 0.01% per update, scaled by distance
                     continue
                 item_data = ITEMS.get(item_name, {})
                 if any(item_data.get(f) for f in _UNIQUE_FLAGS):

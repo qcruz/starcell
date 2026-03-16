@@ -187,15 +187,19 @@ class ZonesMixin:
         screen = self.screens[zone_key]
         self.screen_last_update[zone_key] = self.tick
 
+        # Distance-based decay multiplier: structures and items decay faster in distant zones
+        _dist_from_player = abs(zone_x - self.player['screen_x']) + abs(zone_y - self.player['screen_y'])
+        _decay_factor = 1.0 + _dist_from_player * 0.02  # +2% per zone, no cap
+
         # === ZONE-LEVEL UPDATES ===
         self.check_zone_threats(zone_key)
         self.check_raid_event(zone_key)
         self.check_cave_spawn_hostile(zone_key)
         self.check_night_skeleton_spawn(zone_key)
         self.check_termite_spawn(zone_key)
-        self.decay_dropped_items(zone_x, zone_y)
-        self.decay_items_to_buried(zone_key)
-        self.decay_buried_items(zone_key)
+        self.decay_dropped_items(zone_x, zone_y, _decay_factor)
+        self.decay_items_to_buried(zone_key, _decay_factor)
+        self.decay_buried_items(zone_key, _decay_factor)
         self.consolidate_dropped_items(zone_key)
         self.consolidate_chests(zone_key)
         self.assign_zone_keepers(zone_key)
@@ -241,7 +245,7 @@ class ZonesMixin:
 
                     if 'grows_to' in cell_info and random.random() < min(1.0, cell_info.get('growth_rate', 0) * _tp):
                         self.set_grid_cell(screen, x, y, cell_info['grows_to'])
-                    elif 'degrades_to' in cell_info and random.random() < min(1.0, cell_info.get('degrade_rate', 0) * _tp):
+                    elif 'degrades_to' in cell_info and random.random() < min(1.0, cell_info.get('degrade_rate', 0) * _tp * _decay_factor):
                         if cell == 'COBBLESTONE':
                             center_x = GRID_WIDTH // 2
                             center_y = GRID_HEIGHT // 2
@@ -614,9 +618,9 @@ class ZonesMixin:
             else:
                 spawn_chance = 0.05
 
-            # Reduce spawn rate for distant zones: -3% per zone of distance, floor 15%
+            # Reduce spawn rate for distant zones: -3% per zone of distance, floor 0
             _spawn_dist = abs(zone_x - self.player['screen_x']) + abs(zone_y - self.player['screen_y'])
-            spawn_chance *= max(0.15, 1.0 - _spawn_dist * 0.03)
+            spawn_chance *= max(0.0, 1.0 - _spawn_dist * 0.03)
 
             if random.random() < spawn_chance:
                 biome = screen.get('biome', 'FOREST')
@@ -705,8 +709,7 @@ class ZonesMixin:
                 self.recruit_to_hostile_faction(zone_key)
 
         # Prune empty distant zones: no entities, no structures, no items → delete immediately.
-        _zone_dist = abs(zone_x - self.player['screen_x']) + abs(zone_y - self.player['screen_y'])
-        if _zone_dist > 4 and not self.screen_entities.get(zone_key):
+        if _dist_from_player > 4 and not self.screen_entities.get(zone_key):
             _struct_cells = {'HOUSE', 'STONE_HOUSE', 'CAVE', 'MINESHAFT',
                              'CHEST', 'BARREL', 'CAMP', 'WELL', 'FORGE'}
             _has_structures = any(
