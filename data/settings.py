@@ -37,10 +37,10 @@ AI_TIMER_BASE = 10  # Base unit for all AI timers
 # ============================================================================
 
 # Weather System
-RAIN_FREQUENCY_MIN = 30  # Minimum ticks between rain (1 minute at 60 FPS)
-RAIN_FREQUENCY_MAX = 250  # Maximum ticks between rain (2 minutes at 60 FPS)
-RAIN_DURATION_MIN = 10    # Minimum rain duration (5 seconds)
-RAIN_DURATION_MAX = 60    # Maximum rain duration (15 seconds)
+RAIN_FREQUENCY_MIN = 120  # Minimum zone updates between rains (per zone)
+RAIN_FREQUENCY_MAX = 2000 # Maximum zone updates between rains — long drought periods possible
+RAIN_DURATION_MIN = 30    # Minimum rain duration in zone updates
+RAIN_DURATION_MAX = 180   # Maximum rain duration in zone updates
 RAIN_WATER_SPAWNS = 5      # Water cells created per rain tick per screen
 RAIN_GRASS_SPAWNS = 8      # Dirt→Grass conversions per rain tick
 

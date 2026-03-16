@@ -12,6 +12,8 @@ from constants import (
     KEEPER_ENTITY_TYPE, KEEPER_ASSIGNMENT_RATE,
     KEEPER_TYPE_BY_ENTITY, KEEPER_RANGE,
     DESERT_ROCK_FORMATION_RATE, DESERT_ORE_FORMATION_RATE,
+    RAIN_FREQUENCY_MIN, RAIN_FREQUENCY_MAX,
+    RAIN_DURATION_MIN, RAIN_DURATION_MAX,
 )
 from entity import Entity
 
@@ -30,7 +32,6 @@ class ZonesMixin:
         if not getattr(self, 'time_pass_active', False) and self.tick % UPDATE_FREQUENCY != 0:
             return
 
-        self.update_weather()
         self.update_day_night_cycle()
         self.move_items_to_nearest_chest()
 
@@ -84,7 +85,7 @@ class ZonesMixin:
             # Probability of removal increases with distance; nearby zones are protected
             _px = self.player['screen_x']
             _py = self.player['screen_y']
-            _idle_threshold = 18000  # ~5 min at 60fps
+            _idle_threshold = 3600  # ~1 min at 60fps
             for _zk in list(self.instantiated_zones):
                 if not self.is_overworld_zone(_zk):
                     continue
@@ -94,13 +95,20 @@ class ZonesMixin:
                     continue  # always keep player-adjacent zones
                 if self.tick - self.screen_last_update.get(_zk, 0) < _idle_threshold:
                     continue  # not idle long enough
-                if self.screen_entities.get(_zk):
-                    continue  # zone has entities — keep it
+                # Keep zone only if it has ALIVE entities (dead IDs in screen_entities don't count)
+                _has_alive = any(
+                    eid in self.entities and self.entities[eid].health > 0
+                    for eid in self.screen_entities.get(_zk, [])
+                )
+                if _has_alive:
+                    continue
                 # Remove with probability proportional to distance
                 if random.random() < min(0.9, _dist * 0.04):
                     self.screens.pop(_zk, None)
                     self.instantiated_zones.discard(_zk)
                     self.screen_last_update.pop(_zk, None)
+                    if hasattr(self, 'zone_rain'):
+                        self.zone_rain.pop(_zk, None)
 
         self.ensure_nearby_zones_exist()
 
@@ -172,6 +180,11 @@ class ZonesMixin:
             total_entities_updated += int(ent_count * entity_coverage)
             total_cells_updated += int(GRID_WIDTH * GRID_HEIGHT * cell_coverage)
 
+        # Sync global is_raining to the player zone's per-zone rain state (for UI/sounds)
+        _pzk = f"{self.player['screen_x']},{self.player['screen_y']}"
+        if hasattr(self, 'zone_rain') and _pzk in self.zone_rain:
+            self.is_raining = self.zone_rain[_pzk]['is_raining']
+
 
     # -------------------------------------------------------------------------
     # Per-zone update methods
@@ -207,16 +220,43 @@ class ZonesMixin:
         if self.tick % 600 == 0 or random.random() < 0.005:
             self.assign_wolf_pack_keepers(zone_key)
 
+        # === PER-ZONE RAIN ===
+        if not hasattr(self, 'zone_rain'):
+            self.zone_rain = {}
+        if zone_key not in self.zone_rain:
+            self.zone_rain[zone_key] = {
+                'is_raining': False,
+                'weather_timer': random.randint(0, RAIN_FREQUENCY_MAX),
+                'weather_cycle': random.randint(RAIN_FREQUENCY_MIN, RAIN_FREQUENCY_MAX),
+                'rain_timer': 0,
+                'rain_duration': 0,
+            }
+        _zr = self.zone_rain[zone_key]
+        _zr['weather_timer'] += 1
+        if _zr['weather_timer'] >= _zr['weather_cycle']:
+            _zr['weather_timer'] = 0
+            _zr['weather_cycle'] = random.randint(RAIN_FREQUENCY_MIN, RAIN_FREQUENCY_MAX)
+            _zr['is_raining'] = True
+            _zr['rain_duration'] = random.randint(RAIN_DURATION_MIN, RAIN_DURATION_MAX)
+            _zr['rain_timer'] = 0
+        if _zr['is_raining']:
+            _zr['rain_timer'] += 1
+            if _zr['rain_timer'] >= _zr['rain_duration']:
+                _zr['is_raining'] = False
+                _zr['rain_timer'] = 0
+        _zone_is_raining = _zr['is_raining']
+
         # === CELL UPDATES ===
-        if self.is_raining:
-            # During time-pass all loaded zones need rain (no player-proximity limit);
-            # during normal play restrict to nearby zones for performance.
+        if _zone_is_raining:
             time_passing = getattr(self, 'time_pass_active', False)
-            distance = abs(zone_x - self.player['screen_x']) + abs(zone_y - self.player['screen_y'])
-            if time_passing or distance <= 2:
+            if time_passing or _dist_from_player <= 2:
                 self.apply_rain(zone_x, zone_y)
 
+        # apply_cellular_automata reads self.is_raining; use this zone's rain state
+        _saved_is_raining = self.is_raining
+        self.is_raining = _zone_is_raining
         self.apply_cellular_automata(zone_x, zone_y, cell_coverage)
+        self.is_raining = _saved_is_raining
 
         _tp = getattr(self, 'time_pass_speed', 1.0)
         _biome = screen.get('biome', 'FOREST')
@@ -358,6 +398,9 @@ class ZonesMixin:
                         e.is_idle = False
             self.inspected_npc = None
 
+        # Extra decay passes for distant zones: 1 extra per 4 zones beyond dist 8, cap 4
+        _extra_decay = max(0, min(4, (_dist_from_player - 8) // 4)) if _dist_from_player > 8 else 0
+
         if zone_key in self.screen_entities:
             entities_to_remove = []
 
@@ -398,6 +441,8 @@ class ZonesMixin:
                     entity.age += 1
 
                 entity.decay_stats()
+                for _ in range(_extra_decay):
+                    entity.decay_stats()
 
                 # NPC item consumption: remove full stack of a random item
                 if random.random() < 0.10 and entity.inventory:
@@ -478,8 +523,26 @@ class ZonesMixin:
                                     # Leave the chest cell — decay system will remove it quickly
                                 break
 
-                    # Inventory overflow: rarely place a chest (low probability to prevent spam)
-                    if len(entity.inventory) > 10 and random.random() < 0.05:
+                    # Fill a nearby existing chest from overflow inventory
+                    if len(entity.inventory) > 6 and random.random() < 0.25:
+                        for dx, dy in [(0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)]:
+                            cx, cy = ex + dx, ey + dy
+                            if 0 <= cx < GRID_WIDTH and 0 <= cy < GRID_HEIGHT:
+                                if grid[cy][cx] == 'CHEST':
+                                    chest_key = f"{zone_key}:{cx},{cy}"
+                                    if chest_key not in self.chest_contents:
+                                        self.chest_contents[chest_key] = {}
+                                    items_list = list(entity.inventory.items())
+                                    half = max(1, len(items_list) // 2)
+                                    for item_name, count in items_list[:half]:
+                                        self.chest_contents[chest_key][item_name] = (
+                                            self.chest_contents[chest_key].get(item_name, 0) + count
+                                        )
+                                        del entity.inventory[item_name]
+                                    break
+
+                    # Inventory overflow: place a new chest
+                    if len(entity.inventory) > 8 and random.random() < 0.20:
                         ground_cells = {'GRASS', 'DIRT', 'SAND', 'FLOOR_WOOD', 'CAVE_FLOOR', 'COBBLESTONE'}
                         for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
                             cx, cy = ex + dx, ey + dy
@@ -708,22 +771,29 @@ class ZonesMixin:
                 self.promote_to_king()
                 self.recruit_to_hostile_faction(zone_key)
 
-        # Prune empty distant zones: no entities, no structures, no items → delete immediately.
-        if _dist_from_player > 4 and not self.screen_entities.get(zone_key):
-            _struct_cells = {'HOUSE', 'STONE_HOUSE', 'CAVE', 'MINESHAFT',
-                             'CHEST', 'BARREL', 'CAMP', 'WELL', 'FORGE'}
-            _has_structures = any(
-                cell in _struct_cells
-                for row in screen['grid']
-                for cell in row
+        # Prune empty distant zones: no alive entities, no structures, no items → delete.
+        if _dist_from_player > 4:
+            _has_alive = any(
+                eid in self.entities and self.entities[eid].health > 0
+                for eid in self.screen_entities.get(zone_key, [])
             )
-            if not _has_structures:
-                _has_drops = any(self.dropped_items.get(zone_key, {}).values())
-                _has_buried = any(getattr(self, 'buried_items', {}).get(zone_key, {}).values())
-                if not _has_drops and not _has_buried:
-                    self.screens.pop(zone_key, None)
-                    self.instantiated_zones.discard(zone_key)
-                    self.screen_last_update.pop(zone_key, None)
+            if not _has_alive:
+                _struct_cells = {'HOUSE', 'STONE_HOUSE', 'CAVE', 'MINESHAFT',
+                                 'CHEST', 'BARREL', 'CAMP', 'WELL', 'FORGE'}
+                _has_structures = any(
+                    cell in _struct_cells
+                    for row in screen['grid']
+                    for cell in row
+                )
+                if not _has_structures:
+                    _has_drops = any(self.dropped_items.get(zone_key, {}).values())
+                    _has_buried = any(getattr(self, 'buried_items', {}).get(zone_key, {}).values())
+                    if not _has_drops and not _has_buried:
+                        self.screens.pop(zone_key, None)
+                        self.instantiated_zones.discard(zone_key)
+                        self.screen_last_update.pop(zone_key, None)
+                        if hasattr(self, 'zone_rain'):
+                            self.zone_rain.pop(zone_key, None)
 
     def update_structure_zone(self, struct_zone_key, cell_coverage, entity_coverage):
         """Update a structure zone (cave/house interior) like a regular zone."""
