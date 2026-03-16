@@ -512,7 +512,7 @@ class ZonesMixin:
                     entity.decay_stats()
 
                 # NPC item consumption: remove full stack of a random item
-                if random.random() < 0.10 and entity.inventory:
+                if random.random() < 0.25 and entity.inventory:
                     item = random.choice(list(entity.inventory.keys()))
                     count = entity.inventory.pop(item)
                     if item in ('meat', 'carrot', 'cooked_meat', 'stew', 'bones'):
@@ -590,7 +590,7 @@ class ZonesMixin:
                                     # Leave the chest cell — decay system will remove it quickly
                                 break
 
-                    # Fill a nearby existing chest from overflow inventory
+                    # Fill a nearby existing chest from overflow inventory (full dump)
                     if len(entity.inventory) > 6 and random.random() < 0.25:
                         for dx, dy in [(0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)]:
                             cx, cy = ex + dx, ey + dy
@@ -599,16 +599,14 @@ class ZonesMixin:
                                     chest_key = f"{zone_key}:{cx},{cy}"
                                     if chest_key not in self.chest_contents:
                                         self.chest_contents[chest_key] = {}
-                                    items_list = list(entity.inventory.items())
-                                    half = max(1, len(items_list) // 2)
-                                    for item_name, count in items_list[:half]:
+                                    for item_name, count in list(entity.inventory.items()):
                                         self.chest_contents[chest_key][item_name] = (
                                             self.chest_contents[chest_key].get(item_name, 0) + count
                                         )
-                                        del entity.inventory[item_name]
+                                    entity.inventory.clear()
                                     break
 
-                    # Inventory overflow: place a new chest
+                    # Inventory overflow: place a new chest and dump full inventory
                     if len(entity.inventory) > 8 and random.random() < 0.20:
                         ground_cells = {'GRASS', 'DIRT', 'SAND', 'FLOOR_WOOD', 'CAVE_FLOOR', 'COBBLESTONE'}
                         for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
@@ -618,12 +616,8 @@ class ZonesMixin:
                                 if cell in ground_cells:
                                     grid[cy][cx] = 'CHEST'
                                     chest_key = f"{zone_key}:{cx},{cy}"
-                                    items_list = list(entity.inventory.items())
-                                    half = len(items_list) // 2
-                                    chest_items = {n: c for n, c in items_list[:half]}
-                                    self.chest_contents[chest_key] = chest_items
-                                    for item_name in chest_items:
-                                        del entity.inventory[item_name]
+                                    self.chest_contents[chest_key] = dict(entity.inventory)
+                                    entity.inventory.clear()
                                     break
 
         # Entity consolidation: when >2 of same base type, merge pairs into _double
