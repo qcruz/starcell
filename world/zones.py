@@ -73,8 +73,6 @@ class ZonesMixin:
         self.screen_last_update.pop(zone_key, None)
         if hasattr(self, 'zone_rain'):
             self.zone_rain.pop(zone_key, None)
-        if hasattr(self, 'zone_stale_ticks'):
-            self.zone_stale_ticks.pop(zone_key, None)
 
         self.zones_deleted = getattr(self, 'zones_deleted', 0) + 1
 
@@ -162,19 +160,18 @@ class ZonesMixin:
                 if random.random() < min(0.9, _dist * 0.04):
                     self._purge_zone(_zk)
 
-        # --- Staleness hard trim: zones skipped by the update loop for >20k cumulative ticks
-        # get deleted regardless of content. Chance = stale_ticks / 100_000 per cycle. ---
+        # --- Staleness hard trim: zones not updated in >20k ticks get deleted
+        # regardless of content. Chance = ticks_since_update / 100_000 per cycle. ---
         _px = self.player['screen_x']
         _py = self.player['screen_y']
-        _zone_stale = getattr(self, 'zone_stale_ticks', {})
         for _zk in list(self.instantiated_zones):
             if not self.is_overworld_zone(_zk):
                 continue
             _zx, _zy = int(_zk.split(',')[0]), int(_zk.split(',')[1])
             if abs(_zx - _px) + abs(_zy - _py) <= 4:
                 continue  # always protect player-adjacent zones
-            _stale = _zone_stale.get(_zk, 0)
-            if _stale < 20000:
+            _stale = self.tick - self.screen_last_update.get(_zk, 0)
+            if _stale < 3000:
                 continue
             _delete_chance = min(1.0, _stale / 100000)
             if random.random() < _delete_chance:
@@ -187,7 +184,6 @@ class ZonesMixin:
         zones_updated = 0
         total_entities_updated = 0
         total_cells_updated = 0
-        _updated_this_cycle = set()
 
         # Always update the player's zone first at full coverage
         # player screen_x/y reflects virtual coords when in structure zone — no special case needed
@@ -215,7 +211,6 @@ class ZonesMixin:
                 self.update_zone_with_coverage(int(parts[0]), int(parts[1]), 0.5, 1.0)
             else:
                 continue
-            _updated_this_cycle.add(mz_key)
             zones_updated += 1
             ent_count = len(self.screen_entities.get(mz_key, []))
             total_entities_updated += ent_count
@@ -247,7 +242,6 @@ class ZonesMixin:
             else:
                 continue
 
-            _updated_this_cycle.add(zone_key)
             zones_updated += 1
             ent_count = len(self.screen_entities.get(zone_key, []))
             total_entities_updated += int(ent_count * entity_coverage)
@@ -257,15 +251,6 @@ class ZonesMixin:
         _pzk = f"{self.player['screen_x']},{self.player['screen_y']}"
         if hasattr(self, 'zone_rain') and _pzk in self.zone_rain:
             self.is_raining = self.zone_rain[_pzk]['is_raining']
-
-        # Accumulate per-zone stale ticks: zones not updated this cycle drift further from player attention
-        if not hasattr(self, 'zone_stale_ticks'):
-            self.zone_stale_ticks = {}
-        for _zk in self.instantiated_zones:
-            if _zk in _updated_this_cycle:
-                self.zone_stale_ticks[_zk] = 0
-            else:
-                self.zone_stale_ticks[_zk] = self.zone_stale_ticks.get(_zk, 0) + UPDATE_FREQUENCY
 
 
     # -------------------------------------------------------------------------
