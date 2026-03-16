@@ -590,8 +590,9 @@ class ZonesMixin:
                                     # Leave the chest cell — decay system will remove it quickly
                                 break
 
-                    # Fill a nearby existing chest from overflow inventory (full dump)
-                    if len(entity.inventory) > 2 and random.random() < 0.70:
+                    # Fill a nearby existing chest when any item stack exceeds 100
+                    _inv_overflow = any(c > 100 for c in entity.inventory.values())
+                    if _inv_overflow and random.random() < 0.70:
                         for dx, dy in [(0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)]:
                             cx, cy = ex + dx, ey + dy
                             if 0 <= cx < GRID_WIDTH and 0 <= cy < GRID_HEIGHT:
@@ -606,8 +607,9 @@ class ZonesMixin:
                                     entity.inventory.clear()
                                     break
 
-                    # Inventory overflow: place a new chest and dump full inventory
-                    if len(entity.inventory) > 3 and random.random() < 0.60:
+                    # Place a new chest when any item stack exceeds 100 and no adjacent chest found
+                    _inv_overflow = any(c > 100 for c in entity.inventory.values())
+                    if _inv_overflow and random.random() < 0.60:
                         ground_cells = {'GRASS', 'DIRT', 'SAND', 'FLOOR_WOOD', 'CAVE_FLOOR', 'COBBLESTONE'}
                         for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
                             cx, cy = ex + dx, ey + dy
