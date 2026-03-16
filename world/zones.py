@@ -23,6 +23,60 @@ class ZonesMixin:
     biome shifts, and entity lifecycle across zones."""
 
     # -------------------------------------------------------------------------
+    # Zone purge helper
+    # -------------------------------------------------------------------------
+
+    def _purge_zone(self, zone_key):
+        """Thoroughly remove a zone and all associated data from every game structure.
+
+        Covers: screens, instantiated_zones, screen_last_update, zone_rain,
+        screen_entities (+ entity deletion), dropped_items, buried_items,
+        chest_contents, opened_chests, door_map, enchanted_cells, zone_keepers,
+        enchanted_entities (entity-keyed, so checked by zone membership).
+        """
+        zone_prefix = zone_key + ':'
+
+        # --- Entities in this zone ---
+        for eid in list(self.screen_entities.get(zone_key, [])):
+            self.followers = [f for f in self.followers if f != eid]
+            if hasattr(self, 'follower_items'):
+                self.follower_items.pop(eid, None)
+            self.entities.pop(eid, None)
+        self.screen_entities.pop(zone_key, None)
+
+        # --- Keeper slots ---
+        self.zone_keepers.pop(zone_key, None)
+
+        # --- Items ---
+        self.dropped_items.pop(zone_key, None)
+        if hasattr(self, 'buried_items'):
+            self.buried_items.pop(zone_key, None)
+
+        # --- Chest contents (keyed "zone_key:x,y") ---
+        for ck in [k for k in self.chest_contents if k.startswith(zone_prefix)]:
+            del self.chest_contents[ck]
+        for ok in [k for k in self.opened_chests if k.startswith(zone_prefix)]:
+            self.opened_chests.discard(ok)
+
+        # --- Door map (tuple keys: (zone_key, x, y) → (dest_zone, dx, dy)) ---
+        for dk in [k for k in self.door_map
+                   if k[0] == zone_key or self.door_map[k][0] == zone_key]:
+            self.door_map.pop(dk, None)
+
+        # --- Enchanted cells (keyed {zone_key: {(x,y): level}}) ---
+        if hasattr(self, 'enchanted_cells'):
+            self.enchanted_cells.pop(zone_key, None)
+
+        # --- Zone world data ---
+        self.screens.pop(zone_key, None)
+        self.instantiated_zones.discard(zone_key)
+        self.screen_last_update.pop(zone_key, None)
+        if hasattr(self, 'zone_rain'):
+            self.zone_rain.pop(zone_key, None)
+
+        self.zones_deleted = getattr(self, 'zones_deleted', 0) + 1
+
+    # -------------------------------------------------------------------------
     # Main update loop
     # -------------------------------------------------------------------------
 
@@ -104,12 +158,22 @@ class ZonesMixin:
                     continue
                 # Remove with probability proportional to distance
                 if random.random() < min(0.9, _dist * 0.04):
-                    self.screens.pop(_zk, None)
-                    self.instantiated_zones.discard(_zk)
-                    self.screen_last_update.pop(_zk, None)
-                    if hasattr(self, 'zone_rain'):
-                        self.zone_rain.pop(_zk, None)
-                    self.zones_deleted = getattr(self, 'zones_deleted', 0) + 1
+                    self._purge_zone(_zk)
+
+        # --- Staleness hard trim: zones untouched >30k ticks get deleted
+        # regardless of content. Chance = ticks_stale / 100_000 per sweep. ---
+        for _zk in list(self.instantiated_zones):
+            if not self.is_overworld_zone(_zk):
+                continue
+            _zx, _zy = int(_zk.split(',')[0]), int(_zk.split(',')[1])
+            if abs(_zx - _px) + abs(_zy - _py) <= 4:
+                continue  # always protect player-adjacent zones
+            _stale = self.tick - self.screen_last_update.get(_zk, 0)
+            if _stale < 30000:
+                continue
+            _delete_chance = min(1.0, _stale / 100000)
+            if random.random() < _delete_chance:
+                self._purge_zone(_zk)
 
         self.ensure_nearby_zones_exist()
 
@@ -790,12 +854,7 @@ class ZonesMixin:
                     _has_drops = any(self.dropped_items.get(zone_key, {}).values())
                     _has_buried = any(getattr(self, 'buried_items', {}).get(zone_key, {}).values())
                     if not _has_drops and not _has_buried:
-                        self.screens.pop(zone_key, None)
-                        self.instantiated_zones.discard(zone_key)
-                        self.screen_last_update.pop(zone_key, None)
-                        if hasattr(self, 'zone_rain'):
-                            self.zone_rain.pop(zone_key, None)
-                        self.zones_deleted = getattr(self, 'zones_deleted', 0) + 1
+                        self._purge_zone(zone_key)
 
     def update_structure_zone(self, struct_zone_key, cell_coverage, entity_coverage):
         """Update a structure zone (cave/house interior) like a regular zone."""
