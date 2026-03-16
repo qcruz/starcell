@@ -70,8 +70,9 @@ FLOODING_RATE = 0.015           # Water spreads to dirt (apply_cellular_automata
 
 # Entity Survival
 HUNGER_DECAY_RATE = 0.02        # Base hunger loss per decay call (humanoids get 6× this)
-THIRST_DECAY_RATE = 0.015       # Base thirst loss per decay call (humanoids get 6× this)
-HUMANOID_DRAIN_MULTIPLIER = 6.0 # How much faster humanoids burn food/water vs animals
+THIRST_DECAY_RATE = 0.5         # Base thirst loss per decay call — drains in ~200 calls (~half max rain gap)
+HUMANOID_DRAIN_MULTIPLIER = 6.0 # Humanoid hunger multiplier
+HUMANOID_THIRST_MULTIPLIER = 2.0 # Humanoid thirst multiplier (2× base — drain in ~100 calls)
 STARVATION_DAMAGE = 1.0         # HP loss per decay call when hunger==0
 DEHYDRATION_DAMAGE = 1.5        # HP loss per decay call when thirst==0
 BASE_HEALING_RATE = 1.5         # HP regen per tick when fed/hydrated

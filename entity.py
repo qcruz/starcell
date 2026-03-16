@@ -619,23 +619,30 @@ class Entity:
         'TRADER', 'BLACKSMITH', 'WIZARD', 'LUMBERJACK', 'MINER',
     ])
 
-    def decay_stats(self):
-        """Decay hunger and thirst over time"""
+    def decay_stats(self, sheltered=False):
+        """Decay hunger and thirst over time.
+
+        Args:
+            sheltered: If True, skip thirst drain and dehydration damage —
+                       entity is inside a structure with implied water access.
+        """
         if self.type in self._HUMANOID_DRAIN_TYPES:
             level_factor = max(0.3, 1.0 / (1.0 + self.level * 0.08))
             hunger_rate = HUNGER_DECAY_RATE * HUMANOID_DRAIN_MULTIPLIER * level_factor
-            thirst_rate = THIRST_DECAY_RATE * HUMANOID_DRAIN_MULTIPLIER * level_factor
+            thirst_rate = THIRST_DECAY_RATE * HUMANOID_THIRST_MULTIPLIER * level_factor
         else:
             hunger_rate = HUNGER_DECAY_RATE
             thirst_rate = THIRST_DECAY_RATE
 
         self.hunger = max(0, self.hunger - hunger_rate)
-        self.thirst = max(0, self.thirst - thirst_rate)
+
+        if not sheltered:
+            self.thirst = max(0, self.thirst - thirst_rate)
 
         # Take damage if starving or dehydrated
         if self.hunger <= 0:
             self.health -= STARVATION_DAMAGE
-        if self.thirst <= 0:
+        if not sheltered and self.thirst <= 0:
             self.health -= DEHYDRATION_DAMAGE
         
         # Take damage from old age
