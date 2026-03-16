@@ -162,6 +162,8 @@ class ZonesMixin:
 
         # --- Staleness hard trim: zones untouched >30k ticks get deleted
         # regardless of content. Chance = ticks_stale / 100_000 per sweep. ---
+        _px = self.player['screen_x']
+        _py = self.player['screen_y']
         for _zk in list(self.instantiated_zones):
             if not self.is_overworld_zone(_zk):
                 continue
