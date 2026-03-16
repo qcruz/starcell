@@ -135,6 +135,10 @@ class SpawningMixin:
 
         spawn_list = spawn_tables.get(biome_name, [])
 
+        # Distance-based spawn rate reduction: -3% per zone of distance, floor 15%
+        _dist = abs(screen_x - self.player['screen_x']) + abs(screen_y - self.player['screen_y'])
+        _spawn_factor = max(0.15, 1.0 - _dist * 0.03)
+
         # Get actual entrance positions - only spawn AT entrances
         entrance_positions = []
         screen = self.screens[screen_key]
@@ -163,7 +167,7 @@ class SpawningMixin:
         # Spawn ONE entity per zone update based on spawn chances
         eligible_types = []
         for entity_type, spawn_chance, min_count, max_count in spawn_list:
-            adjusted_chance = min(1.0, spawn_chance * 1.5)
+            adjusted_chance = min(1.0, spawn_chance * 1.5) * _spawn_factor
             if random.random() < adjusted_chance:
                 eligible_types.append(entity_type)
 
@@ -879,6 +883,12 @@ class SpawningMixin:
             force_type: If provided, spawn this specific entity type instead of choosing randomly
         """
         screen_key = f"{screen_x},{screen_y}"
+
+        # Distance-based spawn rate reduction: -3% per zone of distance, floor 15%
+        _dist = abs(screen_x - self.player['screen_x']) + abs(screen_y - self.player['screen_y'])
+        _spawn_factor = max(0.15, 1.0 - _dist * 0.03)
+        if random.random() > _spawn_factor:
+            return None
 
         spawn_tables = {
             'FOREST': [

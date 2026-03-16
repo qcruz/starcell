@@ -191,6 +191,7 @@ DISTANCE_2_ENTITY_COVERAGE = 0.8    # Update 80% of entities at distance 2
 DISTANCE_3_CELL_COVERAGE = 0.6      # Update 60% of cells at distance 3+
 DISTANCE_3_ENTITY_COVERAGE = 0.6    # Update 60% of entities at distance 3+
 NEW_ZONE_INSTANTIATE_CHANCE = 0.05  # 5% chance to instantiate a new random zone per update cycle
+ZONE_SOFT_CAP = 200                 # Overworld zone count above which new instantiation drops sharply
 
 # ============================================================================
 # END GAME BALANCE CONFIGURATION

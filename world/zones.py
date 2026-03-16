@@ -5,7 +5,7 @@ from constants import (
     CELL_TYPES, ENTITY_TYPES,
     MAX_CATCHUP_PER_FRAME, MAX_CYCLES_TO_SIMULATE,
     UPDATE_FREQUENCY, MAX_ZONES_PER_UPDATE,
-    NEW_ZONE_INSTANTIATE_CHANCE,
+    NEW_ZONE_INSTANTIATE_CHANCE, ZONE_SOFT_CAP,
     SKELETON_DAYLIGHT_DAMAGE,
     CAMP_HEALING_MULTIPLIER, HOUSE_HEALING_MULTIPLIER,
     NPC_CAMP_PLACE_RATE, ENHANCED_SETTLEMENT_RATE,
@@ -34,8 +34,14 @@ class ZonesMixin:
         self.update_day_night_cycle()
         self.move_items_to_nearest_chest()
 
-        # Chance to instantiate a new random overworld zone, scaled down with distance from player
-        if random.random() < NEW_ZONE_INSTANTIATE_CHANCE:
+        # Chance to instantiate a new random overworld zone, scaled down with distance from player.
+        # Soft cap: above ZONE_SOFT_CAP overworld zones the chance drops sharply.
+        _overworld_count = sum(1 for zk in self.screens if self.is_overworld_zone(zk))
+        _inst_chance = NEW_ZONE_INSTANTIATE_CHANCE
+        if _overworld_count >= ZONE_SOFT_CAP:
+            _excess = _overworld_count - ZONE_SOFT_CAP
+            _inst_chance *= max(0.02, 1.0 / (1.0 + _excess * 0.15))
+        if random.random() < _inst_chance:
             _pox = self.player['screen_x'] if self.is_overworld_zone(f"{self.player['screen_x']},{self.player['screen_y']}") else 0
             _poy = self.player['screen_y'] if self.is_overworld_zone(f"{self.player['screen_x']},{self.player['screen_y']}") else 0
             range_x = random.randint(-20, 20)
@@ -608,6 +614,10 @@ class ZonesMixin:
             else:
                 spawn_chance = 0.05
 
+            # Reduce spawn rate for distant zones: -3% per zone of distance, floor 15%
+            _spawn_dist = abs(zone_x - self.player['screen_x']) + abs(zone_y - self.player['screen_y'])
+            spawn_chance *= max(0.15, 1.0 - _spawn_dist * 0.03)
+
             if random.random() < spawn_chance:
                 biome = screen.get('biome', 'FOREST')
                 spawned = False
@@ -693,6 +703,24 @@ class ZonesMixin:
                 self.promote_to_commander(zone_key)
                 self.promote_to_king()
                 self.recruit_to_hostile_faction(zone_key)
+
+        # Prune empty distant zones: no entities, no structures, no items → delete immediately.
+        _zone_dist = abs(zone_x - self.player['screen_x']) + abs(zone_y - self.player['screen_y'])
+        if _zone_dist > 4 and not self.screen_entities.get(zone_key):
+            _struct_cells = {'HOUSE', 'STONE_HOUSE', 'CAVE', 'MINESHAFT',
+                             'CHEST', 'BARREL', 'CAMP', 'WELL', 'FORGE'}
+            _has_structures = any(
+                cell in _struct_cells
+                for row in screen['grid']
+                for cell in row
+            )
+            if not _has_structures:
+                _has_drops = any(self.dropped_items.get(zone_key, {}).values())
+                _has_buried = any(getattr(self, 'buried_items', {}).get(zone_key, {}).values())
+                if not _has_drops and not _has_buried:
+                    self.screens.pop(zone_key, None)
+                    self.instantiated_zones.discard(zone_key)
+                    self.screen_last_update.pop(zone_key, None)
 
     def update_structure_zone(self, struct_zone_key, cell_coverage, entity_coverage):
         """Update a structure zone (cave/house interior) like a regular zone."""
