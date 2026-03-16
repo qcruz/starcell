@@ -171,7 +171,7 @@ class ZonesMixin:
             if abs(_zx - _px) + abs(_zy - _py) <= 4:
                 continue  # always protect player-adjacent zones
             _stale = self.tick - self.screen_last_update.get(_zk, 0)
-            if _stale < 3000:
+            if _stale < 20000:
                 continue
             _delete_chance = min(1.0, _stale / 100000)
             if random.random() < _delete_chance:
