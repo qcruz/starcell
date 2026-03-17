@@ -10,8 +10,6 @@
 Small additions using existing systems and minimal changes to code.
 
 - [ ] Action inventory, equipment inventory, and favor system — one session
-- [ ] Village and dungeon biome — required sprites: fence, stairs up/down
-- [ ] More sprites, cells, NPCs, and biomes
 - [ ] Add actions inventory tab (R key) — shove and other contextual action items. Start with Attack, Block, Sneak, Dig, and Talk placeholders. Actions not dropped on death, will be starting options for game actions before player has tools.
 - [ ] Make actions default on spawn - 'attack', 'block' - allow player to collect resources without tools (low success chance)(actions and spells not dropped on death)
 - [ ] Add NPC trait Favor: -100 to 100, default zero for peacful NPCs, default -50 for hostiles. Will increase or decrease for certain actions (we will discuss when implementing)
@@ -20,6 +18,16 @@ Small additions using existing systems and minimal changes to code.
 - [ ] Add gift giving — player offers item to NPC to increase favor;
 - [ ] Add energy cost for active followers — each follower reduces max energy by 30% of their max energy; recalculates on add/remove
 - [ ] Add item level display in inventory UI — show level badge on leveled items in all tabs
+- [ ] Add equipment panel UI — Weapon, Off-hand, Armor, Ring ×2, Amulet slots; passive stat bonuses
+
+- [ ] Village and dungeon biome — required sprites: fence, stairs up/down
+- [ ] Create village biome — VILLAGE zone type; rare spawn; clustered housing with fence cells enclosing plots, market stall, well; higher NPC density (FARMER, GUARD, BLACKSMITH, TRADER, COMMANDER, KING); guard keepers protect zone perimeter. Required sprites: fence.
+- [ ] Create dungeon biome — multilevel underground structure; offshoot cave corridors in crucible layout; STAIRS_DOWN/STAIRS_UP cells connect floors; NPC difficulty and loot quality scale with depth; boss room at deepest level. Required sprites: stairs_up, stairs_down.
+- [ ] Add multi-floor structures — dungeons and towers with staircase-connected floors; each floor separate structure
+- [ ] Connect STAIRS_DOWN/STAIRS_UP cells between structure floors — entry/exit routing via stair cells
+
+- [ ] More sprites, cells, NPCs, and biomes
+
 - [ ] Skeleton doubles (and all doubles) need to process the same as their single counterparts (skeelton doubles should take constant damage during the day while outside)
 - [ ] Double entities should have a chance to split back in to singles every update tick if NPC population is low enough. Split inventory, levels, quest, etc randomly for now.
 - [ ] Hard cap on total number of same entity in zone - if more than 15 of the same entity type in zone, single or double, singles get 'absorbed' into doubles automatically - double entity gets level increase.
@@ -58,8 +66,6 @@ Post the item in chat before starting. Wait for a clear "go ahead." These introd
 
 
 ### New Structure Types
-- [ ] Create village biome — VILLAGE zone type; rare spawn; clustered housing with fence cells enclosing plots, market stall, well; higher NPC density (FARMER, GUARD, BLACKSMITH, TRADER, COMMANDER, KING); guard keepers protect zone perimeter. Required sprites: fence.
-- [ ] Create dungeon biome — multilevel underground structure; offshoot cave corridors in crucible layout; STAIRS_DOWN/STAIRS_UP cells connect floors; NPC difficulty and loot quality scale with depth; boss room at deepest level. Required sprites: stairs_up, stairs_down.
 - [ ] chance for stone house to become fort or belltower - fort spawns traveling soldiers (agressive) of the local faction, belltower spawns guards (relaxed, protect zone)
 - [ ] Add Tavern structure — NPC gathering point; rest/time-skip; Tavernkeeper quests, spawn 1-2 'adventurer NPCs (start off with hogh player favorability, will follow player from level 1, low follower energy cost (~30 energy reduction while following)).
 - [ ] Add Blacksmith structure — dedicated smithing building; forge enables higher level weapons and echanted weapons.
@@ -72,7 +78,6 @@ Post the item in chat before starting. Wait for a clear "go ahead." These introd
 - [ ] Add barn/pen structure — houses livestock; prevents animal wandering
 
 ### New UI Systems
-- [ ] Add equipment panel UI — Weapon, Off-hand, Armor, Ring ×2, Amulet slots; passive stat bonuses
 - [ ] Add world map view — zoomed-out explored zone overlay with names and faction colors
 - [ ] Add achievement system — milestone tracking; HUD notification on unlock
 
@@ -92,8 +97,6 @@ Post the item in chat before starting. Wait for a clear "go ahead." These introd
 - [ ] Add item value system - items automatically valued based on inverse total count in game? Distance from next instance?
 - [ ] Add hostile/peaceful reputation score — -100 to 100 global score; updated by actions; affects faction reactions
 - [ ] Add event witness system — NPCs near player events gain/lose favor; spreads via proximity
-- [ ] Add multi-floor structures — dungeons and towers with staircase-connected floors; each floor separate structure
-- [ ] Connect STAIRS_DOWN/STAIRS_UP cells between structure floors — entry/exit routing via stair cells
 - [ ] Add house upgrade chain — lumberjack+miner → stone house; stone house+blacksmith → fort
 - [ ] Add fort → castle progression — castle generates interior guards and King NPC
 - [ ] Add expand keeper system — level-based range and behavior: level 1=guard, 2=patrol, 5=ranged follower, 9=zone keeper
