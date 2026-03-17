@@ -58,7 +58,7 @@ These aren't classes or locked modes — they're emergent roles the world makes 
 - **Smallest change, biggest impact.** Before adding a new system, ask whether an existing system can be extended with a single parameter or data entry.
 - **Emergent over scripted.** NPC behavior, world events, and quests should arise from system interactions, not hand-authored scripts.
 - **Hackable by design.** Any subsystem should be replaceable without cascading rewrites. Data lives in data files. Logic lives in thin, composable mixins.
-- **Depth at scale.** Procedural generation expands the world; system design gives it meaning. These goals are not in tension — they reinforce each other.
+- **Depth at scale.** Procedural generation expands the world; the creative challenge is to fill that world with meaningful experiences.
 - **No mandatory paths.** No content should require a specific prior action unless it makes physical sense in the world.
 
 ---
