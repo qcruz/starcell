@@ -13,7 +13,7 @@ Depth and complexity emerge from a small number of highly adaptable, interacting
 Players decide how they engage. The world supports radically different playstyles without forcing any of them. Farming, crafting, cell placement, and the Star/Enchant spell give players genuine authorship over the world — shaping vegetation, building structures, attracting or repelling NPCs, triggering events and quests. The same systems that let a player build a cozy protected village also let another player wander as a lone explorer stumbling into political conflicts. Neither path is privileged.
 
 **3. Testbed**
-StarCell is intentionally hackable. Core systems — NPC behavior, zone generation, cellular automata rules, combat, loot, leveling, actions, spells — are thin and configurable by design. Sprites, audio, and data files are swappable without touching game logic. A developer who wants to prototype a Stardew Valley-style farming sim, a Zelda-style dungeon crawler, a JRPG, or a Minecraft-style survival sandbox should be able to do it in a few days by modifying a handful of files. The architecture is a gift to builders as much as it is to players.
+StarCell is intentionally hackable. Core systems — NPC behavior, zone generation, cellular automata rules, combat, loot, leveling, actions, spells — are thin and configurable by design. Sprites, audio, and data files are swappable without touching game logic. A developer who wants to prototype a Stardew Valley-style farming sim, a Zelda-style dungeon crawler, a JRPG, or a Minecraft-style survival sandbox should be able to do it in a few days by modifying a handful of files. The architecture is meant for builders as much as it is for players.
 
 ---
 
