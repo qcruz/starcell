@@ -575,16 +575,47 @@ class NpcAiMovementMixin:
         if entity.in_structure:
             return
 
-        # Keepers are anchored to their zone — UNLESS chasing an entity target cross-zone
+        # Keeper movement restrictions by type
         if getattr(entity, 'keeper', False):
+            keeper_type = getattr(entity, 'keeper_type', 3)
             kt = getattr(entity, 'keeper_target', None)
-            if kt and kt.get('type') == 'entity':
-                target_screen = kt.get('screen')
-                my_screen = (entity.screen_x, entity.screen_y)
-                if not (target_screen and target_screen != my_screen):
-                    return  # Target in same zone — hold
+
+            if keeper_type == 4:
+                # Domain keeper — may cross zone boundaries within their home domain only
+                home_domain = getattr(entity, 'home_domain', None)
+                if home_domain is None:
+                    return  # No domain assigned — treat as zone keeper
+                current_key = f"{entity.screen_x},{entity.screen_y}"
+                # Determine destination zone key from new_x/new_y crossing direction
+                # (destination computed from which edge is being crossed; we check
+                #  all 4 neighbors and see which contains the landing position)
+                dest_key = None
+                for nx, ny in [(entity.screen_x, entity.screen_y - 1),
+                               (entity.screen_x, entity.screen_y + 1),
+                               (entity.screen_x - 1, entity.screen_y),
+                               (entity.screen_x + 1, entity.screen_y)]:
+                    candidate = f"{nx},{ny}"
+                    if candidate in self.screens:
+                        dest_key = candidate
+                        break
+                if dest_key and hasattr(self, 'is_same_domain'):
+                    if not self.is_same_domain(current_key, dest_key):
+                        return  # Destination outside domain — block
+                elif dest_key:
+                    # Fallback: check domain dict directly
+                    domain = self.domains.get(home_domain, {})
+                    if dest_key not in domain.get('zones', set()):
+                        return
+
             else:
-                return  # Cell/item/no target — stay in zone
+                # Types 1–3: zone-anchored — UNLESS chasing an entity cross-zone
+                if kt and kt.get('type') == 'entity':
+                    target_screen = kt.get('screen')
+                    my_screen = (entity.screen_x, entity.screen_y)
+                    if not (target_screen and target_screen != my_screen):
+                        return  # Target in same zone — hold
+                else:
+                    return  # Cell/item/no target — stay in zone
 
         # Anti-bounce: prevent an immediate return trip
         if self.tick - getattr(entity, 'last_zone_change_tick', -9999) < NPC_SEAMLESS_CROSS_COOLDOWN:

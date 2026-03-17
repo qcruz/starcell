@@ -252,6 +252,10 @@ NPC_BASE_QUEST = {
 KEEPER_RANGE = {1: 1, 2: 5, 3: None}
 
 # Maps entity type → keeper patrol type.  Defaults to 3 for anything not listed.
+# Type 1: cell guard — stays within 1 tile of anchor
+# Type 2: patrol    — stays within 5 tiles of anchor
+# Type 3: zone      — stays within home zone (assigned on first zone entry for a faction)
+# Type 4: domain    — stays within home domain (crosses zone boundaries within domain)
 KEEPER_TYPE_BY_ENTITY = {
     'GUARD':      1,
     'WARRIOR':    1,

@@ -110,6 +110,10 @@ class ZonesMixin:
 
         if self.tick % 600 == 0:
             self.cleanup_screen_entities()
+            # Recompute faction control for all overworld zones and update domains
+            for zk in list(self.screens.keys()):
+                if self.is_overworld_zone(zk):
+                    self.update_zone_faction_control(zk)
             # Sync instantiated_zones exactly with self.screens (bidirectional)
             self.instantiated_zones = set(self.screens.keys())
             # Validate door_map: remove entries where either zone is missing
@@ -1476,6 +1480,242 @@ class ZonesMixin:
 
         if new_biome != current_biome:
             screen['biome'] = new_biome
+            screen['biome_domain_id'] = None  # Removed from old domain; will be reassigned
+            self.update_biome_domain(key)
+
+    # -------------------------------------------------------------------------
+    # Domain management
+    # -------------------------------------------------------------------------
+
+    def _new_domain_id(self):
+        self._domain_counter += 1
+        return self._domain_counter
+
+    def update_biome_domain(self, zone_key):
+        """Assign or merge biome domain for zone_key after a biome change.
+
+        Called when a zone's biome shifts. Removes the zone from any prior biome
+        domain, checks cardinal neighbors for same-biome zones, and merges or
+        creates domains accordingly. Triggers contiguity split check on any domain
+        the zone just left.
+        """
+        if zone_key not in self.screens:
+            return
+
+        screen = self.screens[zone_key]
+        biome = screen.get('biome')
+
+        # --- Leave old domain ---
+        old_domain_id = screen.get('biome_domain_id')
+        if old_domain_id and old_domain_id in self.domains:
+            old_domain = self.domains[old_domain_id]
+            old_domain['zones'].discard(zone_key)
+            if len(old_domain['zones']) == 0:
+                del self.domains[old_domain_id]
+            elif len(old_domain['zones']) == 1:
+                # Shrank to one zone — re-roll its name
+                remaining_key = next(iter(old_domain['zones']))
+                if remaining_key in self.screens:
+                    new_name = self.generate_zone_name(self.screens[remaining_key].get('biome', 'FOREST'))
+                    old_domain['name'] = new_name
+                    self.screens[remaining_key]['name'] = new_name
+            else:
+                self._check_biome_domain_contiguity(old_domain_id)
+        screen['biome_domain_id'] = None
+
+        # --- Find adjacent same-biome zones ---
+        sx, sy = map(int, zone_key.split(','))
+        neighbor_domain_ids = set()
+        for nx, ny in [(sx, sy-1), (sx, sy+1), (sx-1, sy), (sx+1, sy)]:
+            nkey = f"{nx},{ny}"
+            if nkey in self.screens:
+                nbr = self.screens[nkey]
+                if nbr.get('biome') == biome and nbr.get('biome_domain_id'):
+                    neighbor_domain_ids.add(nbr['biome_domain_id'])
+
+        if not neighbor_domain_ids:
+            # Isolated zone — single-zone domains don't persist
+            return
+
+        # --- Merge all touching domains into one ---
+        # Keep the largest domain (most zones); tie-break random
+        surviving_id = max(
+            neighbor_domain_ids,
+            key=lambda d: (len(self.domains[d]['zones']), random.random()) if d in self.domains else (0, 0)
+        )
+        surviving_domain = self.domains[surviving_id]
+
+        for other_id in neighbor_domain_ids:
+            if other_id == surviving_id or other_id not in self.domains:
+                continue
+            other_domain = self.domains[other_id]
+            for zk in list(other_domain['zones']):
+                surviving_domain['zones'].add(zk)
+                if zk in self.screens:
+                    self.screens[zk]['biome_domain_id'] = surviving_id
+            del self.domains[other_id]
+
+        # Add this zone to the surviving domain
+        surviving_domain['zones'].add(zone_key)
+        screen['biome_domain_id'] = surviving_id
+        # Zone inherits the domain name
+        screen['name'] = surviving_domain['name']
+
+    def _check_biome_domain_contiguity(self, domain_id):
+        """BFS check: if a domain has split into disconnected fragments, split it.
+
+        Assigns directional modifiers (North/South/East/West) to fragments based
+        on their centroid position relative to each other.
+        """
+        if domain_id not in self.domains:
+            return
+        domain = self.domains[domain_id]
+        all_zones = set(domain['zones'])
+        if len(all_zones) <= 1:
+            return
+
+        # BFS to find connected fragments
+        visited = set()
+        fragments = []
+        for start in list(all_zones):
+            if start in visited:
+                continue
+            fragment = set()
+            queue = [start]
+            while queue:
+                zk = queue.pop()
+                if zk in visited:
+                    continue
+                visited.add(zk)
+                if zk not in all_zones:
+                    continue
+                fragment.add(zk)
+                sx, sy = map(int, zk.split(','))
+                for nx, ny in [(sx, sy-1), (sx, sy+1), (sx-1, sy), (sx+1, sy)]:
+                    nk = f"{nx},{ny}"
+                    if nk in all_zones and nk not in visited:
+                        queue.append(nk)
+            fragments.append(fragment)
+
+        if len(fragments) <= 1:
+            return  # Still contiguous
+
+        base_name = domain['name']
+        DIRECTION_MODIFIERS = ['North', 'South', 'East', 'West', 'Old', 'New', 'Inner', 'Outer']
+
+        # Sort fragments by centroid (north-to-south then west-to-east)
+        def centroid(frag):
+            coords = [list(map(int, k.split(','))) for k in frag]
+            return (sum(c[1] for c in coords) / len(coords), sum(c[0] for c in coords) / len(coords))
+
+        fragments.sort(key=centroid)
+
+        for i, fragment in enumerate(fragments):
+            if i == 0:
+                # Largest/primary fragment keeps the domain id
+                domain['zones'] = fragment
+                for zk in fragment:
+                    if zk in self.screens:
+                        self.screens[zk]['biome_domain_id'] = domain_id
+            else:
+                # New domain for each additional fragment
+                modifier = DIRECTION_MODIFIERS[i] if i < len(DIRECTION_MODIFIERS) else str(i)
+                new_id = self._new_domain_id()
+                new_name = f"{modifier} {base_name}"
+                self.domains[new_id] = {
+                    'name': new_name,
+                    'type': 'biome',
+                    'biome': domain['biome'],
+                    'faction': None,
+                    'zones': fragment,
+                }
+                for zk in fragment:
+                    if zk in self.screens:
+                        self.screens[zk]['biome_domain_id'] = new_id
+                        self.screens[zk]['name'] = new_name
+
+    def update_faction_domain(self, faction_name):
+        """Rebuild the faction domain for faction_name from scratch.
+
+        Called when a zone changes faction control. Finds all zones controlled
+        by this faction, groups them into contiguous sets, and creates/updates
+        faction domains accordingly. Faction domain name = faction_name + first zone name.
+        """
+        # Collect all zones controlled by this faction
+        controlled = set()
+        for zk, screen in self.screens.items():
+            if screen.get('controlling_faction') == faction_name:
+                controlled.add(zk)
+
+        # Remove old faction domain entries for this faction
+        old_ids = [did for did, d in self.domains.items()
+                   if d['type'] == 'faction' and d['faction'] == faction_name]
+        for old_id in old_ids:
+            for zk in self.domains[old_id]['zones']:
+                if zk in self.screens:
+                    self.screens[zk]['faction_domain_id'] = None
+            del self.domains[old_id]
+
+        if not controlled:
+            return
+
+        # BFS to find contiguous groups
+        visited = set()
+        fragments = []
+        for start in list(controlled):
+            if start in visited:
+                continue
+            fragment = set()
+            queue = [start]
+            while queue:
+                zk = queue.pop()
+                if zk in visited:
+                    continue
+                visited.add(zk)
+                if zk not in controlled:
+                    continue
+                fragment.add(zk)
+                sx, sy = map(int, zk.split(','))
+                for nx, ny in [(sx, sy-1), (sx, sy+1), (sx-1, sy), (sx+1, sy)]:
+                    nk = f"{nx},{ny}"
+                    if nk in controlled and nk not in visited:
+                        queue.append(nk)
+            fragments.append(fragment)
+
+        for fragment in fragments:
+            new_id = self._new_domain_id()
+            # Use the name of the first zone in the fragment as the domain root name
+            sample_key = next(iter(fragment))
+            zone_name = self.screens[sample_key].get('name', sample_key) if sample_key in self.screens else sample_key
+            domain_name = f"{faction_name} {zone_name}"
+            self.domains[new_id] = {
+                'name': domain_name,
+                'type': 'faction',
+                'biome': None,
+                'faction': faction_name,
+                'zones': fragment,
+            }
+            for zk in fragment:
+                if zk in self.screens:
+                    self.screens[zk]['faction_domain_id'] = new_id
+
+    def get_zone_domain_id(self, zone_key, domain_type='biome'):
+        """Return the domain ID for a zone. domain_type: 'biome' or 'faction'."""
+        if zone_key not in self.screens:
+            return None
+        field = 'biome_domain_id' if domain_type == 'biome' else 'faction_domain_id'
+        return self.screens[zone_key].get(field)
+
+    def is_same_domain(self, zone_key_a, zone_key_b):
+        """True if both zones share any domain (biome or faction)."""
+        if zone_key_a == zone_key_b:
+            return True
+        for field in ('biome_domain_id', 'faction_domain_id'):
+            da = self.screens.get(zone_key_a, {}).get(field)
+            db = self.screens.get(zone_key_b, {}).get(field)
+            if da and da == db:
+                return True
+        return False
 
     def is_near_structure(self, x, y, screen_key):
         """Check if cell is near HOUSE/CAMP (within 2 cells)"""

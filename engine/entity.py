@@ -84,8 +84,12 @@ class Entity:
         self.in_subscreen = False  # True when entity is in a house/cave subscreen
         self.subscreen_key = None  # Key of subscreen entity is in
 
-        # Keeper state — keepers are permanently anchored to their current zone/subscreen
+        # Keeper state
+        # keeper_type: 0=none, 1=cell guard (1-tile radius), 2=patrol (5-tile radius),
+        #              3=zone keeper (home zone only), 4=domain keeper (home domain only)
         self.keeper = False
+        self.keeper_type = 0
+        self.home_domain = None  # Domain ID for domain keepers (type 4)
 
         # Unified AI Behavior State System
         # Set initial state based on entity type

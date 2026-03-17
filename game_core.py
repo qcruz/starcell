@@ -104,6 +104,8 @@ class GameCoreMixin:
         self.rain_timer = 0  # Separate timer for tracking rain duration
         self.zone_last_rain = {}  # {screen_key: tick} - track last rain per zone for crop decay
         self.zone_keepers = {}   # {zone_key: {keeper_type: entity_id}} — one keeper per slot per zone
+        self.domains = {}        # {domain_id: {'name': str, 'type': 'biome'|'faction', 'biome': str|None, 'faction': str|None, 'zones': set()}}
+        self._domain_counter = 0 # Auto-increment domain ID
         
         # Day/Night cycle
         self.day_night_timer = 0  # Cycles from 0 to DAY_NIGHT_CYCLE_LENGTH
@@ -2628,6 +2630,8 @@ class GameCoreMixin:
         self.npc_quests = []
         self.active_npc_quest_npc_id = None
         self.zone_keepers = {}
+        self.domains = {}
+        self._domain_counter = 0
         self.structures = {}
         self.opened_chests = set()
         self.next_structure_id = 0

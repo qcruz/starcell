@@ -247,6 +247,9 @@ class WorldGenerationMixin:
             'exits': exits,
             'biome': biome_name,
             'name': self.generate_zone_name(biome_name),
+            'controlling_faction': None,   # Faction name that controls this zone; persists until displaced
+            'biome_domain_id': None,       # ID into self.domains for biome-based domain membership
+            'faction_domain_id': None,     # ID into self.domains for faction-based domain membership
         }
 
         self.screens[key] = screen_data
