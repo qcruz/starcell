@@ -2,25 +2,31 @@
 
 > Two tiers. Claude works Tier 1 top-to-bottom without asking. Tier 2 items require explicit user sign-off before any code is written — post the item in chat, wait for a clear "go ahead."
 > @qcruz manages additions and order.
->Always start by reviewing committ history for recent updates and changes from others. Reconcile project documentation (implemented features, bug report, roadmap, etc) at the begining and end of each session. 
+>Always start by reviewing committ history for recent updates and changes from others. Reconcile project documentation (implemented features, bug report, roadmap, etc) at the begining and end of each session.
 ---
 
 ## Tier 1 — Autonomous
 
 Small additions using existing systems and minimal changes to code.
 
+### Phase 1 — Action Inventory + Favor System
 - [ ] Add actions inventory tab (R key) — shove and other contextual action items. Start with Attack, Block, Sneak, Dig, and Talk placeholders. Actions not dropped on death, will be starting options for game actions before player has tools.
+- [ ] Make actions default on spawn - 'attack', 'block' - allow player to collect resources without tools (low success chance)(actions and spells not dropped on death)
+- [ ] Add NPC trait Favor: -100 to 100, default zero for peacful NPCs, default -50 for hostiles. Will increase or decrease for certain actions (we will discuss when implementing)
+- [ ] Add faction standing display when inspecting NPC — show NPC favor score and faction label
+- [ ] Add per-NPC favor system — -100 to 100 favorability score; reduces follower energy cost
+- [ ] Add gift giving — player offers item to NPC to increase favor;
+- [ ] Add energy cost for active followers — each follower reduces max energy by 30% of their max energy; recalculates on add/remove
+- [ ] Add item level display in inventory UI — show level badge on leveled items in all tabs
+
+### Remaining Tier 1
 - [ ] Skeleton doubles (and all doubles) need to process the same as their single counterparts (skeelton doubles should take constant damage during the day while outside)
 - [ ] Double entities should have a chance to split back in to singles every update tick if NPC population is low enough. Split inventory, levels, quest, etc randomly for now.
-- [ ] Hard cap on total number of same entity in zone - if more than 15 of the same entity type in zone, single or double, singles get 'absorbed' into doubles automatically - double entity gets level increase. 
+- [ ] Hard cap on total number of same entity in zone - if more than 15 of the same entity type in zone, single or double, singles get 'absorbed' into doubles automatically - double entity gets level increase.
 - [ ] We need to make sure chest content are still picked up by the player on interaction (spacebar)
 - [ ] Add a few random items to barrels as well, picked up when interacted (same hadnling as chests, but lower quality loot table)
 - [ ] When player drops items on a chest cell, they should move to the chest inventory
 - [ ] When butterflys fly over base cells - high chance to grow the cell to next level - sand>dirt>grass>plant (will be adding bush and flowers, ect)(doesn't grow trees)
-- [ ] Add item level display in inventory UI — show level badge on leveled items in all tabs
-- [ ] Add NPC trait Favor: -100 to 100, default zero for peacful NPCs, default -50 for hostiles. Will increase or decrease for certain actions (we will discuss when implementing)
-- [ ] Add faction standing display when inspecting NPC — show NPC favor score and faction label
-- [ ] Make actions default on spawn - 'attack', 'block' - allow player to collect resources without tools (low success chance)(actions and spells not dropped on death)
 - [ ] Complete NPC combat creature sound mapping — verify WOLF, GOBLIN, BAT, SKELETON, BANDIT route through _ENTITY_SOUND
 - [ ] Add wolf/goblin ambient presence sounds — WOLF growl every ~300 ticks within 6 cells; GOBLIN every ~200 ticks
 - [ ] Add ambient rain sound during rain events — play rain_sound loop when is_raining; stop when false
@@ -32,11 +38,8 @@ Small additions using existing systems and minimal changes to code.
 - [ ] Rain affects crop growth — active rain reduces crop decay rate; speeds grass/tree spread
 - [ ] Add poisoned status effect — HP drain per tick; cured by antidote or milk
 - [ ] Add burning status effect — HP drain per tick; spreads to adjacent flammable cells
-- [ ] Add cold status effect — immobile for duration; 
+- [ ] Add cold status effect — immobile for duration;
 - [ ] Remove dead debug prints outside autopilot.py and debug/
-- [ ] Add gift giving — player offers item to NPC to increase favor; 
-- [ ] Add per-NPC favor system — -100 to 100 favorability score; reduces follower energy cost
-- [ ] Add energy cost for active followers — each follower reduces max energy by 30% of their max energy; recalculates on add/remove
 - [ ] Add named villains — LoreEngine occasionally designates a high-level hostile NPC with unique stat boost and artifact drop
 - [ ] Wire higher NPC level → reduced hostile raid chance in zone and reduced structure destruction probability
 - [ ] Port try_craft_recipe() to ai/actions.py — from autopilot; MINER and BLACKSMITH use it
@@ -51,12 +54,17 @@ Small additions using existing systems and minimal changes to code.
 
 Post the item in chat before starting. Wait for a clear "go ahead." These introduce new entity types, structure types, UI systems, or world generation systems that require design decisions.
 
-### New Entity Types
+### Phase 2 — Equipment Panel + Village & Dungeon Biomes
 
+**New UI Systems**
+- [ ] Add equipment panel UI — Weapon, Off-hand, Armor, Ring ×2, Amulet slots; passive stat bonuses
+- [ ] Add world map view — zoomed-out explored zone overlay with names and faction colors
+- [ ] Add achievement system — milestone tracking; HUD notification on unlock
 
-### New Structure Types
-- [ ] Create basic village biome — VILLAGE zone type; clustered housing, higher NPC density, market stall structure
-- [ ] chance for stone house to become fort or belltower - fort spawns traveling soldiers (agressive) of the local faction, belltower spawns guards (relaxed, protect zone) 
+**New Structure Types**
+- [ ] Create village biome — VILLAGE zone type; rare spawn; clustered housing with fence cells enclosing plots, market stall, well; higher NPC density (FARMER, GUARD, BLACKSMITH, TRADER, COMMANDER, KING); guard keepers protect zone perimeter. Required sprites: fence. Tests faction balance, NPC society systems, and LoreEngine events at scale.
+- [ ] Create dungeon biome — multilevel underground structure; offshoot cave corridors in crucible layout; STAIRS_DOWN/STAIRS_UP cells connect floors; NPC difficulty and loot quality scale with depth; boss room at deepest level. Consolidates multi-floor structure + stair routing + crypt design. Required sprites: stairs_up, stairs_down.
+- [ ] chance for stone house to become fort or belltower - fort spawns traveling soldiers (agressive) of the local faction, belltower spawns guards (relaxed, protect zone)
 - [ ] Add Tavern structure — NPC gathering point; rest/time-skip; Tavernkeeper quests, spawn 1-2 'adventurer NPCs (start off with hogh player favorability, will follow player from level 1, low follower energy cost (~30 energy reduction while following)).
 - [ ] Add Blacksmith structure — dedicated smithing building; forge enables higher level weapons and echanted weapons.
 - [ ] Add Crypt structure — sealed underground zone; undead spawns; Vampire or Lich boss room at depth
@@ -67,10 +75,12 @@ Post the item in chat before starting. Wait for a clear "go ahead." These introd
 - [ ] Add waypoint stone structure — player teleports between owned waypoints; significant time passes on use
 - [ ] Add barn/pen structure — houses livestock; prevents animal wandering
 
-### New UI Systems
-- [ ] Add equipment panel UI — Weapon, Off-hand, Armor, Ring ×2, Amulet slots; passive stat bonuses
-- [ ] Add world map view — zoomed-out explored zone overlay with names and faction colors
-- [ ] Add achievement system — milestone tracking; HUD notification on unlock
+### Phase 3 — World Expansion (sprites, cells, NPCs, biomes)
+
+New sprites, cell types, NPC types, and additional biomes to increase world diversity and test game balance at breadth. Specific items to be added here as Phase 2 completes and design decisions are made.
+
+### New Entity Types
+
 
 ### New World and Game Systems
 - [ ] Expand Keeper system - keeper types include different distance ranges and ties to cell, NPC, or item.
@@ -88,8 +98,6 @@ Post the item in chat before starting. Wait for a clear "go ahead." These introd
 - [ ] Add item value system - items automatically valued based on inverse total count in game? Distance from next instance?
 - [ ] Add hostile/peaceful reputation score — -100 to 100 global score; updated by actions; affects faction reactions
 - [ ] Add event witness system — NPCs near player events gain/lose favor; spreads via proximity
-- [ ] Add multi-floor structures — dungeons and towers with staircase-connected floors; each floor separate structure
-- [ ] Connect STAIRS_DOWN/STAIRS_UP cells between structure floors — entry/exit routing via stair cells
 - [ ] Add house upgrade chain — lumberjack+miner → stone house; stone house+blacksmith → fort
 - [ ] Add fort → castle progression — castle generates interior guards and King NPC
 - [ ] Add expand keeper system — level-based range and behavior: level 1=guard, 2=patrol, 5=ranged follower, 9=zone keeper
