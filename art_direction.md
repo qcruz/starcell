@@ -1,6 +1,6 @@
 # StarCell — Art Direction
 
-StarCell uses lo-fi pixel art as a deliberate aesthetic choice. Small sprites, readable tiles, and a minimal UI keep the game legible at a glance and the engine adaptable. Art direction should serve the world-building tone: old, inhabited, consequential — classic high fantasy without being ornate or overwrought.
+StarCell targets a 16-bit / GBA-era sprite art style — detailed, readable, and grounded in classic high fantasy. The primary reference is Legend of Zelda: The Minish Cap, alongside Golden Sun, Fire Emblem GBA, and Final Fantasy Tactics Advance. Art direction should serve the world-building tone: old, inhabited, consequential — rich and detailed without being ornate or cartoonish.
 
 > **Note:** This document is a working reference for future collaborators. Sections marked with placeholder language will be developed with input from art contributors.
 
@@ -8,9 +8,11 @@ StarCell uses lo-fi pixel art as a deliberate aesthetic choice. Small sprites, r
 
 ## Style & Aesthetic
 
-Classic high fantasy pixel art. Primary references: early Legend of Zelda (top-down tile clarity), RPG Maker 2000-era character sprites (readable at small scale), and dark fantasy palettes from games like Dark Souls. The world should feel lived-in — weathered stone, overgrown ruins, worn wood. Bright colors are reserved for important interactables: loot, spells, status effects. Environmental tiles should read clearly and not compete visually with entities or UI.
+GBA-era JRPG sprite art. Characters and tiles are detailed with clean outlines, expressive shading, and a warm fantasy color palette. Not lo-fi or intentionally crude — sprites should feel polished and characterful at their native resolution. The aesthetic sits between realistic and fantastical: grounded enough to feel weighty, stylized enough to feel like a world apart.
 
-Sprites are intentionally simple. A clear silhouette at small scale is more important than detail. Players should be able to identify entity type, threat level, and movement direction at a glance.
+Primary references: *The Legend of Zelda: The Minish Cap* (tile clarity, character expressiveness), *Golden Sun* (environmental richness, color palette), *Final Fantasy Tactics Advance* (NPC variety, structure art). The world should feel lived-in — weathered stone, overgrown ruins, worn wood. Bright saturated colors are reserved for important interactables: loot, spells, status effects. Environmental tiles should be detailed but not compete visually with entities or UI.
+
+Players should be able to identify entity type, threat level, and movement direction at a glance. Readability is never sacrificed for detail.
 
 ---
 

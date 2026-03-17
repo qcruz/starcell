@@ -37,7 +37,7 @@ The goal is a world that rewards long-term investment and punishes carelessness 
 
 StarCell draws from classic high fantasy: Tolkien's deep-world mythology, the puzzle-adventure spirit of Legend of Zelda, the tabletop flexibility of D&D, the weight and mystery of Dark Souls and Elden Ring, and the political texture of Game of Thrones. The world feels old, inhabited, and consequential — not a playground dressed up as fantasy, but a place with history, factions, ruins, and stakes.
 
-The aesthetic is deliberately lo-fi pixel art: small sprites, tile-based world, minimal UI. This is a feature, not a limitation. It keeps the game legible and the engine adaptable, while letting imagination fill in the gaps — the same way a dungeon master's sparse description creates a vivid scene.
+The aesthetic is GBA-era pixel art in the tradition of The Legend of Zelda: The Minish Cap, Golden Sun, and Fire Emblem GBA — detailed sprites, rich shading, and a warm fantasy color palette. Not lo-fi or intentionally crude; the art should feel polished and characterful. The tile-based world and minimal UI keep the game legible and the engine adaptable, while the visual language carries the warmth of classic JRPG fantasy.
 
 ---
 
