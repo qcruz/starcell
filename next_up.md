@@ -9,6 +9,9 @@
 
 Small additions using existing systems and minimal changes to code.
 
+- [ ] Action inventory, equipment inventory, and favor system — one session
+- [ ] Village and dungeon biome — required sprites: fence, stairs up/down
+- [ ] More sprites, cells, NPCs, and biomes
 - [ ] Add actions inventory tab (R key) — shove and other contextual action items. Start with Attack, Block, Sneak, Dig, and Talk placeholders. Actions not dropped on death, will be starting options for game actions before player has tools.
 - [ ] Make actions default on spawn - 'attack', 'block' - allow player to collect resources without tools (low success chance)(actions and spells not dropped on death)
 - [ ] Add NPC trait Favor: -100 to 100, default zero for peacful NPCs, default -50 for hostiles. Will increase or decrease for certain actions (we will discuss when implementing)
