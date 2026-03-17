@@ -7,14 +7,15 @@
 
 ## Tier 1 — Autonomous
 
-Small additions using existing systems. No new entity types, structure types, or major UI systems. One commit per item, ordered smallest to largest.
+Small additions using existing systems and minimal changes to code.
 
+- [ ] Add actions inventory tab (R key) — shove and other contextual action items. Start with Attack, Block, Sneak, Dig, and Talk placeholders. Actions not dropped on death, will be starting options for game actions before player has tools.
 - [ ] Skeleton doubles (and all doubles) need to process the same as their single counterparts (skeelton doubles should take constant damage during the day while outside)
-- [ ] Double entities should have a chance to split back in to singles every update tick if NPC population is low enough. Spit inventory, levels, quest, etc randomly for now.
+- [ ] Double entities should have a chance to split back in to singles every update tick if NPC population is low enough. Split inventory, levels, quest, etc randomly for now.
 - [ ] Hard cap on total number of same entity in zone - if more than 15 of the same entity type in zone, single or double, singles get 'absorbed' into doubles automatically - double entity gets level increase. 
 - [ ] We need to make sure chest content are still picked up by the player on interaction (spacebar)
-- [ ] Add a few random items to barrels as well, picked up when interacted (same hadnling as chests, but lower quality loot tabel)
-- [ ] When plater drops items on a chest cell, they should move to the chest inventory
+- [ ] Add a few random items to barrels as well, picked up when interacted (same hadnling as chests, but lower quality loot table)
+- [ ] When player drops items on a chest cell, they should move to the chest inventory
 - [ ] When butterflys fly over base cells - high chance to grow the cell to next level - sand>dirt>grass>plant (will be adding bush and flowers, ect)(doesn't grow trees)
 - [ ] Add item level display in inventory UI — show level badge on leveled items in all tabs
 - [ ] Add NPC trait Favor: -100 to 100, default zero for peacful NPCs, default -50 for hostiles. Will increase or decrease for certain actions (we will discuss when implementing)
@@ -51,36 +52,22 @@ Small additions using existing systems. No new entity types, structure types, or
 Post the item in chat before starting. Wait for a clear "go ahead." These introduce new entity types, structure types, UI systems, or world generation systems that require design decisions.
 
 ### New Entity Types
-- [ ] Add bird/bat item pickup — flying entities grab loose ground items; drop after 10–30 ticks at random adjacent cell
-- [ ] Add SNAKE entity type — desert biome hostile; poison on hit; first concrete use of poisoned status effect
-- [ ] Add SPIDER entity type — cave biome hostile; web cell slows movement; poison on bite
-- [ ] Add Troll entity type — health regen; weak to fire; forest and cave spawns
-- [ ] Add Werewolf entity type — human NPC by day; transforms at night; weak to silver; bitten NPC may turn
-- [ ] Add Ghost entity type — passes through walls; immune to physical; weak to holy
-- [ ] Add Golem entity type — slow, very high defense, attacks only when attacked; guards ruins and dungeon entries
-- [ ] Add horse/mount entity — tameable via favor; 2× movement speed; low follower energy cost; stabled at barn
-- [ ] Add cat entity — tameable via favor; hunts small creatures; reduces pest spawns in zone
-- [ ] Add dog entity — tameable; barks when hostiles enter zone; assists in combat
-- [ ] Add Lich entity type — immune to hunger/thirst; commands skeleton thralls; requires Phylactery destruction to permanently kill
-- [ ] Add Vampire entity type — life drain on hit; retreats to coffin at daylight; transforms to bat when fleeing
-- [ ] Add Banshee entity type — wailing spirit; AoE scream stuns nearby entities; immune to physical; night-only
-- [ ] Add Basilisk entity type — petrifying gaze applies frozen status
+
 
 ### New Structure Types
 - [ ] Create basic village biome — VILLAGE zone type; clustered housing, higher NPC density, market stall structure
 - [ ] chance for stone house to become fort or belltower - fort spawns traveling soldiers (agressive) of the local faction, belltower spawns guards (relaxed, protect zone) 
-- [ ] Add Tavern structure — NPC gathering point; rest/time-skip; Tavernkeeper quests
-- [ ] Add Blacksmith structure — dedicated smithing building; forge enables iron and steel recipes
+- [ ] Add Tavern structure — NPC gathering point; rest/time-skip; Tavernkeeper quests, spawn 1-2 'adventurer NPCs (start off with hogh player favorability, will follow player from level 1, low follower energy cost (~30 energy reduction while following)).
+- [ ] Add Blacksmith structure — dedicated smithing building; forge enables higher level weapons and echanted weapons.
 - [ ] Add Crypt structure — sealed underground zone; undead spawns; Vampire or Lich boss room at depth
 - [ ] Add Temple/Shrine structure — visit grants buff; Identify curse; unique quest giver
-- [ ] Add Ancient Ruins structure type — crumbling zone; Golem and Mechanica guardians; lore-note drops
+- [ ] Add Ancient Ruins structure type — crumbling zone; Golem and Mechanica guardians;
 - [ ] Add Library/Archive structure — Wizard Keeper; Tome items teach rare spells; ghost scholar guards
 - [ ] Add oasis structure to desert zones — water source cell cluster in desert; NPCs and animals seek it
 - [ ] Add waypoint stone structure — player teleports between owned waypoints; significant time passes on use
 - [ ] Add barn/pen structure — houses livestock; prevents animal wandering
 
 ### New UI Systems
-- [ ] Add actions inventory tab (R key) — shove and other contextual action items
 - [ ] Add equipment panel UI — Weapon, Off-hand, Armor, Ring ×2, Amulet slots; passive stat bonuses
 - [ ] Add world map view — zoomed-out explored zone overlay with names and faction colors
 - [ ] Add achievement system — milestone tracking; HUD notification on unlock
