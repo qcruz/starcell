@@ -2,7 +2,7 @@
 
 > Two tiers. Claude works Tier 1 top-to-bottom without asking. Tier 2 items require explicit user sign-off before any code is written — post the item in chat, wait for a clear "go ahead."
 > @qcruz manages additions and order.
-
+>Always start by reviewing committ history for recent updates and changes from others. Reconcile project documentation (implemented features, bug report, roadmap, etc) at the begining and end of each session. 
 ---
 
 ## Tier 1 — Autonomous
