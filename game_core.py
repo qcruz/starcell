@@ -645,7 +645,8 @@ class GameCoreMixin:
                                         break
                             if heal_boost > 1.0:
                                 break
-                entity.regenerate_health(heal_boost)
+                if (self.tick - getattr(entity, 'last_attacked_tick', 0)) > 120:
+                    entity.regenerate_health(heal_boost)
 
             # ── AI update: on-screen every tick, off-screen throttled ──────
             if screen_distance == 0:

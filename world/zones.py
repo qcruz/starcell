@@ -540,7 +540,16 @@ class ZonesMixin:
                         if heal_boost > 1.0:
                             break
 
-                entity.regenerate_health(heal_boost)
+                # Regen health only if not recently attacked (120 ticks = ~2s)
+                if (self.tick - getattr(entity, 'last_attacked_tick', 0)) > 120:
+                    entity.regenerate_health(heal_boost)
+
+                # Energy regen: idle = +2/tick, not moving = +1/tick
+                if hasattr(entity, 'energy') and entity.energy < entity.max_energy:
+                    if entity.ai_state == 'idle':
+                        entity.energy = min(entity.max_energy, entity.energy + 2)
+                    elif not entity.is_moving:
+                        entity.energy = min(entity.max_energy, entity.energy + 1)
 
                 if not entity.is_alive():
                     entities_to_remove.append(entity_id)
@@ -907,7 +916,8 @@ class ZonesMixin:
                 if _item in ('meat', 'carrot', 'cooked_meat', 'stew', 'bones'):
                     entity.health = min(entity.max_health, entity.health + 5 * min(_count, 10))
 
-            entity.regenerate_health(1.0)
+            if (self.tick - getattr(entity, 'last_attacked_tick', 0)) > 120:
+                entity.regenerate_health(1.0)
 
             if not entity.is_alive():
                 entities_to_remove.append(entity_id)
@@ -1120,7 +1130,8 @@ class ZonesMixin:
                         if heal_boost > 1.0:
                             break
 
-                entity.regenerate_health(heal_boost)
+                if (self.tick - getattr(entity, 'last_attacked_tick', 0)) > 120:
+                    entity.regenerate_health(heal_boost)
 
                 if entity.hunger <= 0:
                     entity.health -= 1

@@ -140,6 +140,7 @@ class NpcAiMovementMixin:
             entity.stuck_counter = 0
             entity.moved_this_update = True  # Tell behavior system entity is in motion
             entity.last_move_tick = self.tick  # Rate limiter: record when this move happened
+            entity.energy = max(0, getattr(entity, 'energy', 1) - 1)
             # Update facing
             if dx > 0:
                 entity.facing = 'right'
@@ -301,6 +302,7 @@ class NpcAiMovementMixin:
             entity.target_x = new_x
             entity.target_y = new_y
             entity.is_moving = True
+            entity.energy = max(0, getattr(entity, 'energy', 1) - 1)
             if move_x > 0: entity.facing = 'right'
             elif move_x < 0: entity.facing = 'left'
             elif move_y > 0: entity.facing = 'down'

@@ -79,6 +79,11 @@ class Entity:
         self.counterattack_target = None  # entity_id to counterattack
         self.last_home_return_check = 0  # Tick of last home zone check
         self.was_trading = False  # Track if entity was recently trading
+        self.last_attacked_tick = 0  # Game tick when last took damage (gates health regen + flee exit)
+
+        # Stamina
+        self.max_energy = 100
+        self.energy = self.max_energy
 
         # Subscreen state
         self.in_subscreen = False  # True when entity is in a house/cave subscreen

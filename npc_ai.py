@@ -33,6 +33,12 @@ class NpcAiMixin:
             return  # Already updated this tick
         entity.last_ai_tick = self.tick
 
+        # Energy exhaustion: force idle until recovered
+        if getattr(entity, 'energy', 1) <= 0:
+            entity.ai_state = 'idle'
+            entity.ai_state_timer = 2
+            return
+
         # Reset per-update movement flag so behavior guard is accurate this cycle
         entity.moved_this_update = False
 
@@ -210,32 +216,39 @@ class NpcAiMixin:
                         entity.ai_state_timer = 2
             
             elif entity.ai_state == 'flee':
-                # Fleeing - move away from threat, probabilistic based on entity speed
-                if random.random() < entity.props.get('speed', 1.0) / 20:
-                    threat_x, threat_y = None, None
-                    if entity.flee_target == 'player':
-                        if self._same_context_as_player(entity):
-                            threat_x, threat_y = self.player['x'], self.player['y']
-                    elif entity.flee_target and isinstance(entity.flee_target, int):
-                        if entity.flee_target in self.entities:
-                            threat = self.entities[entity.flee_target]
-                            threat_x, threat_y = threat.x, threat.y
+                # Fleeing — move away from threat every tick (continuous flight)
+                threat_x, threat_y = None, None
+                if entity.flee_target == 'player':
+                    if self._same_context_as_player(entity):
+                        threat_x, threat_y = self.player['x'], self.player['y']
+                elif entity.flee_target and isinstance(entity.flee_target, int):
+                    if entity.flee_target in self.entities:
+                        threat = self.entities[entity.flee_target]
+                        threat_x, threat_y = threat.x, threat.y
 
-                    if threat_x is not None:
-                        dx = entity.x - threat_x
-                        dy = entity.y - threat_y
-                        if abs(dx) > abs(dy):
-                            move_x = 1 if dx > 0 else -1
-                            move_y = 0
-                        else:
-                            move_x = 0
-                            move_y = 1 if dy > 0 else -1
-                        new_x = entity.x + move_x
-                        new_y = entity.y + move_y
-                        self.move_toward_position(entity, new_x, new_y, screen_key)
-                        # Allow non-keeper fleeing entities to cross zone boundaries
-                        if not getattr(entity, 'keeper', False):
-                            self._try_targeting_zone_cross(entity, entity_id)
+                if threat_x is not None:
+                    dx = entity.x - threat_x
+                    dy = entity.y - threat_y
+                    if abs(dx) > abs(dy):
+                        move_x = 1 if dx > 0 else -1
+                        move_y = 0
+                    else:
+                        move_x = 0
+                        move_y = 1 if dy > 0 else -1
+                    new_x = entity.x + move_x
+                    new_y = entity.y + move_y
+                    self.move_toward_position(entity, new_x, new_y, screen_key)
+                    # Allow non-keeper fleeing entities to cross zone boundaries
+                    if not getattr(entity, 'keeper', False):
+                        self._try_targeting_zone_cross(entity, entity_id)
+
+                # Exit flee once safe: 120 ticks (~2s) since last hit with no nearby threat
+                ticks_since_hit = self.tick - getattr(entity, 'last_attacked_tick', 0)
+                if ticks_since_hit > 120:
+                    entity.ai_state = 'wandering'
+                    entity.flee_target = None
+                    entity.is_fleeing = False
+                    entity.ai_state_timer = 2
 
             elif entity.ai_state == 'exit':
                 if getattr(entity, 'keeper', False):
@@ -1469,10 +1482,8 @@ class NpcAiMixin:
                 entity.ai_state_timer = 2  # Keep wandering
         
         elif entity.ai_state == 'flee':
-            # Done fleeing — wander
-            entity.ai_state = 'wandering'
-            entity.flee_target = None
-            entity.ai_state_timer = 2
+            # Flee exit is handled inside the flee state block (last_attacked_tick check)
+            entity.ai_state_timer = 2  # Keep refreshing timer so state stays active
     
     def evaluate_entity_priorities(self, entity, entity_id):
         """Evaluate all possible actions and choose best based on weights and distance"""
@@ -1746,9 +1757,11 @@ class NpcAiMixin:
 
     def find_and_attack_enemy(self, entity_id, entity):
         """Find enemies and attack them"""
-        # Only skip combat if actively fleeing
+        # Only skip combat if actively fleeing or out of energy
         if hasattr(entity, 'ai_state') and entity.ai_state in ('fleeing', 'flee'):
             return  # Fleeing entities don't attack
+        if getattr(entity, 'energy', 1) <= 0:
+            return  # Exhausted entities can't attack
         
         # Unified zone system: screen_x/y always reflects current zone (incl. structure virtual coords)
         screen_key = f"{entity.screen_x},{entity.screen_y}"
@@ -1880,6 +1893,8 @@ class NpcAiMixin:
                         if closest_enemy.combat_state == 'blocking':
                             damage *= (1 - closest_enemy.block_reduction)
                         closest_enemy.take_damage(damage, entity_id)
+                        closest_enemy.last_attacked_tick = self.tick
+                        entity.energy = max(0, getattr(entity, 'energy', 1) - 1)
                         self.show_attack_animation(closest_enemy.x, closest_enemy.y, entity=entity, target_entity=closest_enemy, magic_type=magic_type)
                 return
             
@@ -1941,6 +1956,7 @@ class NpcAiMixin:
 
                         self.player_take_damage(damage)
                         self.show_attack_animation(self.player['x'], self.player['y'], entity=entity, magic_type=magic_type)
+                        entity.energy = max(0, getattr(entity, 'energy', 1) - 1)
                     else:
                         damage = entity.strength
 
@@ -1962,6 +1978,8 @@ class NpcAiMixin:
                         if closest_enemy.combat_state == 'blocking':
                             damage *= (1 - closest_enemy.block_reduction)
                         closest_enemy.take_damage(damage, entity_id)
+                        closest_enemy.last_attacked_tick = self.tick
+                        entity.energy = max(0, getattr(entity, 'energy', 1) - 1)
                         self.show_attack_animation(closest_enemy.x, closest_enemy.y, entity=entity, target_entity=closest_enemy, magic_type=magic_type)
 
                         # Grant XP from hit: only target's level (scaled by time pass speed)
