@@ -33,11 +33,13 @@ class NpcAiMixin:
             return  # Already updated this tick
         entity.last_ai_tick = self.tick
 
-        # Energy exhaustion: force idle for a significant rest period
-        if getattr(entity, 'energy', 1) <= 0:
-            entity.ai_state = 'idle'
-            entity.ai_state_timer = random.randint(20, 30)
-            return
+        # Energy idle gate: probabilistic, scales from 100% at 0 energy to 0% at full
+        # Flee bypasses this so survival instincts still work
+        if entity.ai_state != 'flee':
+            _energy_pct = getattr(entity, 'energy', 100) / max(1, getattr(entity, 'max_energy', 100))
+            if random.random() > _energy_pct:
+                entity.ai_state = 'idle'
+                return
 
         # Reset per-update movement flag so behavior guard is accurate this cycle
         entity.moved_this_update = False
@@ -1469,14 +1471,6 @@ class NpcAiMixin:
         if entity.ai_state_timer > 0:
             return
         
-        # Low energy: strong bias to stay idle (applies to wandering and idle; never overrides flee/combat)
-        if entity.ai_state not in ('flee', 'combat', 'targeting'):
-            energy_pct = getattr(entity, 'energy', 100) / max(1, getattr(entity, 'max_energy', 100))
-            if energy_pct < 0.3 and random.random() < 0.8:
-                entity.ai_state = 'idle'
-                entity.ai_state_timer = random.randint(3, 6)
-                return
-
         if entity.ai_state == 'idle':
             roll = random.random()
             if roll < aggressiveness:
