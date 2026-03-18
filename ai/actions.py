@@ -1140,10 +1140,16 @@ class NpcAiActionsMixin:
 
     def try_place_npc_chest(self, entity, screen_key):
         """Place a chest adjacent to an overburdened NPC and transfer some inventory.
-        Called by LoreEngine when an overburdened NPC has no chest within reach."""
+        Only places if no chest exists within 8 cells — enforced here regardless of caller."""
         if screen_key not in self.screens:
             return False
         screen = self.screens[screen_key]
+        # Refuse if any chest already exists within 8 cells
+        grid = screen['grid']
+        for gy in range(max(0, entity.y - 8), min(GRID_HEIGHT, entity.y + 9)):
+            for gx in range(max(0, entity.x - 8), min(GRID_WIDTH, entity.x + 9)):
+                if grid[gy][gx] == 'CHEST':
+                    return False
         valid_floors = ('GRASS', 'DIRT', 'SAND', 'FLOOR_WOOD', 'CAVE_FLOOR')
         for dy in range(-1, 2):
             for dx in range(-1, 2):
