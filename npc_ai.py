@@ -42,6 +42,17 @@ class NpcAiMixin:
         # Reset per-update movement flag so behavior guard is accurate this cycle
         entity.moved_this_update = False
 
+        # Recently attacked → non-combat entities enter flee immediately
+        _is_combat = (entity.props.get('hostile', False) or entity.props.get('attacks_hostile', False)
+                      or entity.type in ('WARRIOR', 'COMMANDER', 'KING', 'GUARD'))
+        if (not _is_combat and entity.ai_state not in ('flee', 'fleeing')
+                and (self.tick - getattr(entity, 'last_attacked_tick', 0)) < 5
+                and entity.counterattack_target is not None):
+            entity.ai_state = 'flee'
+            entity.flee_target = entity.counterattack_target
+            entity.is_fleeing = True
+            entity.ai_state_timer = 2
+
         # Periodic ambient creature sounds (wolves growl, bats flap, etc.)
         if hasattr(self, '_npc_action_sound') and hasattr(self, 'sound'):
             _ambient_snd = getattr(self, '_ENTITY_SOUND', {}).get(entity.type)
@@ -216,35 +227,51 @@ class NpcAiMixin:
                         entity.ai_state_timer = 2
             
             elif entity.ai_state == 'flee':
-                # Fleeing — move away from threat every tick (continuous flight)
-                threat_x, threat_y = None, None
-                if entity.flee_target == 'player':
-                    if self._same_context_as_player(entity):
-                        threat_x, threat_y = self.player['x'], self.player['y']
-                elif entity.flee_target and isinstance(entity.flee_target, int):
-                    if entity.flee_target in self.entities:
-                        threat = self.entities[entity.flee_target]
-                        threat_x, threat_y = threat.x, threat.y
+                # Fleeing — probabilistic movement away from threat
+                if random.random() < entity.props.get('speed', 1.0) / 20:
+                    threat_x, threat_y = None, None
+                    if entity.flee_target == 'player':
+                        if self._same_context_as_player(entity):
+                            threat_x, threat_y = self.player['x'], self.player['y']
+                    elif entity.flee_target and isinstance(entity.flee_target, int):
+                        if entity.flee_target in self.entities:
+                            threat = self.entities[entity.flee_target]
+                            threat_x, threat_y = threat.x, threat.y
 
-                if threat_x is not None:
-                    dx = entity.x - threat_x
-                    dy = entity.y - threat_y
-                    if abs(dx) > abs(dy):
-                        move_x = 1 if dx > 0 else -1
-                        move_y = 0
-                    else:
-                        move_x = 0
-                        move_y = 1 if dy > 0 else -1
-                    new_x = entity.x + move_x
-                    new_y = entity.y + move_y
-                    self.move_toward_position(entity, new_x, new_y, screen_key)
-                    # Allow non-keeper fleeing entities to cross zone boundaries
-                    if not getattr(entity, 'keeper', False):
-                        self._try_targeting_zone_cross(entity, entity_id)
+                    if threat_x is not None:
+                        dx = entity.x - threat_x
+                        dy = entity.y - threat_y
+                        if abs(dx) > abs(dy):
+                            move_x = 1 if dx > 0 else -1
+                            move_y = 0
+                        else:
+                            move_x = 0
+                            move_y = 1 if dy > 0 else -1
+                        new_x = entity.x + move_x
+                        new_y = entity.y + move_y
+                        self.move_toward_position(entity, new_x, new_y, screen_key)
+                        if not getattr(entity, 'keeper', False):
+                            self._try_targeting_zone_cross(entity, entity_id)
 
-                # Exit flee once safe: 120 ticks (~2s) since last hit with no nearby threat
-                ticks_since_hit = self.tick - getattr(entity, 'last_attacked_tick', 0)
-                if ticks_since_hit > 120:
+                # Stay in flee while any enemy is nearby or recently attacked
+                recently_attacked = (self.tick - getattr(entity, 'last_attacked_tick', 0)) < 60
+                enemy_nearby = False
+                if not recently_attacked:
+                    for _oid in self.screen_entities.get(screen_key, []):
+                        if _oid not in self.entities:
+                            continue
+                        _o = self.entities[_oid]
+                        if abs(_o.x - entity.x) + abs(_o.y - entity.y) > 8:
+                            continue
+                        _hostile = _o.props.get('hostile', False)
+                        _peaceful = not entity.props.get('hostile', False)
+                        if _hostile and _peaceful:
+                            enemy_nearby = True
+                            break
+                        if entity.flee_target == _oid:
+                            enemy_nearby = True
+                            break
+                if not recently_attacked and not enemy_nearby:
                     entity.ai_state = 'wandering'
                     entity.flee_target = None
                     entity.is_fleeing = False
@@ -1482,8 +1509,8 @@ class NpcAiMixin:
                 entity.ai_state_timer = 2  # Keep wandering
         
         elif entity.ai_state == 'flee':
-            # Flee exit is handled inside the flee state block (last_attacked_tick check)
-            entity.ai_state_timer = 2  # Keep refreshing timer so state stays active
+            # Exit is handled inside the flee state block (proximity + recently_attacked check)
+            entity.ai_state_timer = 2
     
     def evaluate_entity_priorities(self, entity, entity_id):
         """Evaluate all possible actions and choose best based on weights and distance"""
