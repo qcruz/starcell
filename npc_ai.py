@@ -33,10 +33,10 @@ class NpcAiMixin:
             return  # Already updated this tick
         entity.last_ai_tick = self.tick
 
-        # Energy exhaustion: force idle until recovered
+        # Energy exhaustion: force idle for a significant rest period
         if getattr(entity, 'energy', 1) <= 0:
             entity.ai_state = 'idle'
-            entity.ai_state_timer = 2
+            entity.ai_state_timer = random.randint(20, 30)
             return
 
         # Reset per-update movement flag so behavior guard is accurate this cycle
