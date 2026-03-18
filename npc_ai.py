@@ -1975,11 +1975,9 @@ class NpcAiMixin:
                             low_health = entity.health < entity.max_health * 0.5
                             low_hunger = entity.hunger < entity.max_hunger * 0.3
 
-                            if (low_health or low_hunger) and 'meat' in entity.inventory and entity.inventory['meat'] > 0:
-                                # Consume meat: heal 25% max health and restore hunger
+                            if low_hunger and 'meat' in entity.inventory and entity.inventory['meat'] > 0:
+                                # Consume meat to restore hunger only (health regens naturally when full)
                                 entity.inventory['meat'] -= 1
-                                heal_amount = entity.max_health * 0.25
-                                entity.health = min(entity.max_health, entity.health + heal_amount)
                                 entity.hunger = min(entity.max_hunger, entity.hunger + 50)
 
                         # Check if enemy died and handle king promotion

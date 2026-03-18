@@ -703,6 +703,11 @@ class HudMixin:
                 controlling_faction = self.get_zone_controlling_faction(screen_key)
                 if controlling_faction:
                     info_text += f" | {controlling_faction}"
+                zone_data = self.screens.get(screen_key)
+                if zone_data:
+                    domain_id = zone_data.get('faction_domain_id') or zone_data.get('biome_domain_id')
+                    if domain_id and domain_id in self.domains:
+                        info_text += f" | {self.domains[domain_id]['name']}"
 
             if self.player['blocking']:
                 info_text += " | [BLOCKING]"

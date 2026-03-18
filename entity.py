@@ -691,8 +691,8 @@ class Entity:
         self.health = min(self.max_health, self.health + amount)
     
     def eat(self, food_value=30):
-        """Eat food to restore hunger — fills bar to max regardless of food_value."""
-        self.hunger = self.max_hunger
+        """Eat food to restore hunger by food_value amount."""
+        self.hunger = min(self.max_hunger, self.hunger + food_value)
     
     def update_facing_toward(self, target_x, target_y):
         """Update facing direction based on target position"""
