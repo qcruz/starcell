@@ -2530,38 +2530,55 @@ class NpcAiMixin:
                 found_chest = True
 
                 if is_hostile:
-                    # Goblins/Bandits loot entire chest
+                    # Goblins/Bandits: loot one item stack at a time, only if below inventory limit
                     contents = self.chest_contents.get(ck, {})
-                    if contents:
-                        for item, amt in list(contents.items()):
-                            entity.inventory[item] = entity.inventory.get(item, 0) + amt
-                        contents.clear()
+                    if contents and inv_count < 20:
+                        item = random.choice(list(contents.keys()))
+                        amt = contents.pop(item)
+                        entity.inventory[item] = entity.inventory.get(item, 0) + amt
                 else:
-                    # Peaceful NPC: deposit 1-3 random items
                     inv = entity.inventory
-                    if not inv:
-                        break
                     if not hasattr(self, 'chest_contents'):
                         self.chest_contents = {}
                     if ck not in self.chest_contents:
                         self.chest_contents[ck] = {}
-                    items = list(inv.keys())
-                    random.shuffle(items)
-                    for item in items[:random.randint(1, 3)]:
-                        amt = min(inv[item], random.randint(1, 3))
-                        self.chest_contents[ck][item] = self.chest_contents[ck].get(item, 0) + amt
-                        inv[item] -= amt
-                        if inv[item] <= 0:
-                            del inv[item]
-                    # Clear delivery quest if carried one
-                    if getattr(entity, 'quest_focus', None) == 'DELIVER_ITEMS':
-                        entity.quest_focus = None
-                        entity.quest_target = None
+                    if inv_count >= 20:
+                        # Overburdened: deposit 1-3 random items
+                        items = list(inv.keys())
+                        random.shuffle(items)
+                        for item in items[:random.randint(1, 3)]:
+                            amt = min(inv[item], random.randint(1, 3))
+                            self.chest_contents[ck][item] = self.chest_contents[ck].get(item, 0) + amt
+                            inv[item] -= amt
+                            if inv[item] <= 0:
+                                del inv[item]
+                        # Clear delivery quest if carried one
+                        if getattr(entity, 'quest_focus', None) == 'DELIVER_ITEMS':
+                            entity.quest_focus = None
+                            entity.quest_target = None
+                    elif inv_count < 20 and self.chest_contents.get(ck):
+                        # Below limit: withdraw one item stack from chest
+                        chest_inv = self.chest_contents[ck]
+                        item = random.choice(list(chest_inv.keys()))
+                        amt = chest_inv.pop(item)
+                        entity.inventory[item] = entity.inventory.get(item, 0) + amt
                 break  # Only one chest per update
 
-        # If overburdened and no chest adjacent, small chance to place one
+        # If overburdened and no chest within 8 cells, small chance to place one
         if not found_chest and not is_hostile and inv_count >= 20 and random.random() < 0.003:
-            self.try_place_npc_chest(entity, screen_key)
+            # Scan wider radius before placing — don't place if one already exists nearby
+            nearby_chest = False
+            if screen_key in self.screens:
+                g = self.screens[screen_key]['grid']
+                for sy in range(max(0, entity.y - 8), min(GRID_HEIGHT, entity.y + 9)):
+                    for sx in range(max(0, entity.x - 8), min(GRID_WIDTH, entity.x + 9)):
+                        if g[sy][sx] == 'CHEST':
+                            nearby_chest = True
+                            break
+                    if nearby_chest:
+                        break
+            if not nearby_chest:
+                self.try_place_npc_chest(entity, screen_key)
 
     def hostile_structure_behavior(self, entity):
         """Goblins and bandits attack camps and houses, pick up items, and place loot chests

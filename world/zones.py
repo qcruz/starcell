@@ -380,13 +380,6 @@ class ZonesMixin:
                         if old_cell == 'HOUSE':
                             self.process_house_destruction(x, y, zone_key)
 
-                    elif cell == 'CHEST':
-                        chest_key = f"{zone_key}:{x},{y}"
-                        if not self.chest_contents.get(chest_key):  # empty chest
-                            if random.random() < min(1.0, 0.5 * _tp):
-                                bg = getattr(self, 'chest_backgrounds', {}).pop(chest_key, None) or base_cell
-                                self.set_grid_cell(screen, x, y, bg)
-
         # Desert rock/ore formation — SAND slowly solidifies into STONE;
         # existing STONE rarely yields IRON_ORE
         if screen.get('biome') == 'DESERT':
@@ -877,13 +870,6 @@ class ZonesMixin:
                         self.set_grid_cell(screen, x, y, cell_info['grows_to'])
                     elif 'degrades_to' in cell_info and random.random() < cell_info.get('degrade_rate', 0):
                         self.set_grid_cell(screen, x, y, cell_info['degrades_to'])
-                    elif cell == 'CHEST':
-                        chest_key = f"{struct_zone_key}:{x},{y}"
-                        if not self.chest_contents.get(chest_key):  # empty chest
-                            if random.random() < 0.5:
-                                bg = getattr(self, 'chest_backgrounds', {}).pop(chest_key, None) or 'FLOOR_WOOD'
-                                self.set_grid_cell(screen, x, y, bg)
-
         self.check_raid_event(struct_zone_key)
 
         entity_list = self.screen_entities.get(struct_zone_key, [])

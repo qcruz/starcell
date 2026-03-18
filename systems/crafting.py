@@ -368,7 +368,7 @@ class CraftingMixin:
             for cx in range(GRID_WIDTH):
                 if grid[cy][cx] != 'CHEST':
                     continue
-                if random.random() > 0.0002:  # 0.02% per update
+                if random.random() > 0.001:  # 0.1% per update (5× faster decay)
                     continue
                 ck = f"{screen_key}:{cx},{cy}"
                 contents = self.chest_contents.pop(ck, {})

@@ -147,6 +147,7 @@ class DevScreenMixin:
         top_npc_items = sorted(item_totals.items(), key=lambda x: -x[1])[:12]
 
         return {
+            'total_domains':     len(getattr(self, 'domains', {})),
             'biome_counts':      dict(sorted(biome_counts.items())),
             'type_counts':       dict(sorted(type_counts.items(), key=lambda x: -x[1])),
             'level_counts':      dict(sorted(level_counts.items())),
@@ -228,6 +229,7 @@ class DevScreenMixin:
 
         cy = _h("WORLD", cx, cy)
         cy = _t(f"Total zones:      {stats['total_zones']}", cx, cy)
+        cy = _t(f"Total domains:    {stats['total_domains']}", cx, cy)
         cy = _t(f"Overworld:        {stats['overworld_zones']}", cx, cy)
         cy = _t(f"Structure zones:  {stats['struct_zones']}", cx, cy)
         cy = _t(f"Instantiated:     {len(self.instantiated_zones)}", cx, cy)
@@ -262,7 +264,7 @@ class DevScreenMixin:
         cy += 8
         cy = _h("DOMAINS", cx, cy)
         if stats['domain_data']:
-            for did, dinfo in stats['domain_data'].items():
+            for did, dinfo in sorted(stats['domain_data'].items(), key=lambda x: -x[1]['zones']):
                 name_disp = dinfo['name'][:16]
                 dtype = 'F' if dinfo['type'] == 'faction' else 'B'
                 cy = _t(f"  [{dtype}] {name_disp:<16} {dinfo['zones']:>2}z {dinfo['keepers']:>2}k", cx, cy)
