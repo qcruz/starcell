@@ -2530,12 +2530,12 @@ class NpcAiMixin:
                 found_chest = True
 
                 if is_hostile:
-                    # Goblins/Bandits: loot one item stack at a time, only if below inventory limit
-                    contents = self.chest_contents.get(ck, {})
-                    if contents and inv_count < 20:
-                        item = random.choice(list(contents.keys()))
-                        amt = contents.pop(item)
+                    # Goblins/Bandits: loot full chest contents and destroy the chest
+                    contents = self.chest_contents.pop(ck, {})
+                    for item, amt in contents.items():
                         entity.inventory[item] = entity.inventory.get(item, 0) + amt
+                    bg = getattr(self, 'chest_backgrounds', {}).pop(ck, None) or 'GRASS'
+                    screen['grid'][cy][cx] = bg
                 else:
                     inv = entity.inventory
                     if not hasattr(self, 'chest_contents'):
@@ -2711,52 +2711,7 @@ class NpcAiMixin:
                 self.move_entity_towards(entity, closest_loot_x, closest_loot_y)
                 return  # Moving toward loot
         
-        # PRIORITY 2: Place chest with loot — only when inventory is too full
-        if entity.type == 'GOBLIN' and _goblin_inv_full and random.random() < 0.0005:  # 0.05% chance
-            # Find empty adjacent spot
-            for dy in range(-1, 2):
-                for dx in range(-1, 2):
-                    if dx == 0 and dy == 0:
-                        continue
-                    check_x = entity.x + dx
-                    check_y = entity.y + dy
-                    if 0 <= check_x < GRID_WIDTH and 0 <= check_y < GRID_HEIGHT:
-                        cell = screen['grid'][check_y][check_x]
-                        # Check if valid placement location (ground/floor cells)
-                        if cell in ['GRASS', 'DIRT', 'SAND', 'FLOOR_WOOD', 'CAVE_FLOOR']:
-                            # Store the background cell before placing chest
-                            background_cell = cell
-                            
-                            # Place chest
-                            screen['grid'][check_y][check_x] = 'CHEST'
-                            chest_key = f"{screen_key}:{check_x},{check_y}"
-                            
-                            # Add goblin's inventory to chest
-                            chest_loot = dict(entity.inventory)
-                            
-                            # Add some default treasure
-                            chest_loot['gold'] = chest_loot.get('gold', 0) + random.randint(5, 15)
-                            if random.random() < 0.3:
-                                chest_loot['wood'] = chest_loot.get('wood', 0) + random.randint(2, 5)
-                            if random.random() < 0.2:
-                                chest_loot['stone'] = chest_loot.get('stone', 0) + random.randint(1, 3)
-                            
-                            # Store in chest system with background cell info
-                            if not hasattr(self, 'chest_contents'):
-                                self.chest_contents = {}
-                            if not hasattr(self, 'chest_backgrounds'):
-                                self.chest_backgrounds = {}
-                            
-                            self.chest_contents[chest_key] = chest_loot
-                            self.chest_backgrounds[chest_key] = background_cell  # Store background for rendering
-                            
-                            # Clear goblin inventory
-                            entity.inventory.clear()
-                            
-                            print(f"Goblin placed a treasure chest at [{screen_key}]")
-                            return
-        
-        # PRIORITY 3: Attack adjacent structures
+        # PRIORITY 2: Attack adjacent structures
         for dx in [-1, 0, 1]:
             for dy in [-1, 0, 1]:
                 check_x = entity.x + dx
