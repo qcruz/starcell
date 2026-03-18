@@ -1469,6 +1469,14 @@ class NpcAiMixin:
         if entity.ai_state_timer > 0:
             return
         
+        # Low energy: strong bias to stay idle (applies to wandering and idle; never overrides flee/combat)
+        if entity.ai_state not in ('flee', 'combat', 'targeting'):
+            energy_pct = getattr(entity, 'energy', 100) / max(1, getattr(entity, 'max_energy', 100))
+            if energy_pct < 0.3 and random.random() < 0.8:
+                entity.ai_state = 'idle'
+                entity.ai_state_timer = random.randint(3, 6)
+                return
+
         if entity.ai_state == 'idle':
             roll = random.random()
             if roll < aggressiveness:
@@ -1922,7 +1930,7 @@ class NpcAiMixin:
                             damage *= (1 - closest_enemy.block_reduction)
                         closest_enemy.take_damage(damage, entity_id)
                         closest_enemy.last_attacked_tick = self.tick
-                        entity.energy = max(0, getattr(entity, 'energy', 1) - 1)
+                        entity.energy = max(0, getattr(entity, 'energy', 1) - 4)
                         self.show_attack_animation(closest_enemy.x, closest_enemy.y, entity=entity, target_entity=closest_enemy, magic_type=magic_type)
                 return
             
@@ -1984,7 +1992,7 @@ class NpcAiMixin:
 
                         self.player_take_damage(damage)
                         self.show_attack_animation(self.player['x'], self.player['y'], entity=entity, magic_type=magic_type)
-                        entity.energy = max(0, getattr(entity, 'energy', 1) - 1)
+                        entity.energy = max(0, getattr(entity, 'energy', 1) - 4)
                     else:
                         damage = entity.strength
 
@@ -2007,7 +2015,7 @@ class NpcAiMixin:
                             damage *= (1 - closest_enemy.block_reduction)
                         closest_enemy.take_damage(damage, entity_id)
                         closest_enemy.last_attacked_tick = self.tick
-                        entity.energy = max(0, getattr(entity, 'energy', 1) - 1)
+                        entity.energy = max(0, getattr(entity, 'energy', 1) - 4)
                         self.show_attack_animation(closest_enemy.x, closest_enemy.y, entity=entity, target_entity=closest_enemy, magic_type=magic_type)
 
                         # Grant XP from hit: only target's level (scaled by time pass speed)
