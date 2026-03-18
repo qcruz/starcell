@@ -1565,13 +1565,17 @@ class ZonesMixin:
             return
 
         # --- Pick or create the surviving domain ---
+        surviving_id = None
         if neighbor_domain_ids:
-            surviving_id = max(
+            candidate = max(
                 neighbor_domain_ids,
                 key=lambda d: (len(self.domains[d]['zones']), random.random()) if d in self.domains else (0, 0)
             )
-        else:
-            # No existing domains nearby — create one named after this zone
+            if candidate in self.domains:
+                surviving_id = candidate
+
+        if surviving_id is None:
+            # No valid existing domain — create one named after this zone
             surviving_id = self._new_domain_id()
             self.domains[surviving_id] = {
                 'name': screen.get('name', self.generate_zone_name(biome)),

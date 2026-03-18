@@ -1924,7 +1924,7 @@ class NpcAiMixin:
                             damage *= (1 - closest_enemy.block_reduction)
                         closest_enemy.take_damage(damage, entity_id)
                         closest_enemy.last_attacked_tick = self.tick
-                        entity.energy = max(0, getattr(entity, 'energy', 1) - 4)
+                        entity.energy = max(0, getattr(entity, 'energy', 1) - 2)
                         self.show_attack_animation(closest_enemy.x, closest_enemy.y, entity=entity, target_entity=closest_enemy, magic_type=magic_type)
                 return
             
@@ -1986,7 +1986,7 @@ class NpcAiMixin:
 
                         self.player_take_damage(damage)
                         self.show_attack_animation(self.player['x'], self.player['y'], entity=entity, magic_type=magic_type)
-                        entity.energy = max(0, getattr(entity, 'energy', 1) - 4)
+                        entity.energy = max(0, getattr(entity, 'energy', 1) - 2)
                     else:
                         damage = entity.strength
 
@@ -2009,7 +2009,7 @@ class NpcAiMixin:
                             damage *= (1 - closest_enemy.block_reduction)
                         closest_enemy.take_damage(damage, entity_id)
                         closest_enemy.last_attacked_tick = self.tick
-                        entity.energy = max(0, getattr(entity, 'energy', 1) - 4)
+                        entity.energy = max(0, getattr(entity, 'energy', 1) - 2)
                         self.show_attack_animation(closest_enemy.x, closest_enemy.y, entity=entity, target_entity=closest_enemy, magic_type=magic_type)
 
                         # Grant XP from hit: only target's level (scaled by time pass speed)
