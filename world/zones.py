@@ -1523,20 +1523,34 @@ class ZonesMixin:
                 self._check_biome_domain_contiguity(old_domain_id)
         screen['biome_domain_id'] = None
 
-        # --- Find adjacent same-biome zones (with or without a domain yet) ---
+        # --- Find adjacent same-biome zones connected by a shared exit ---
+        # exit_pairs: (dx, dy, my_exit_key, their_exit_key)
+        exit_pairs = [
+            (-1,  0, 'left',   'right'),
+            ( 1,  0, 'right',  'left'),
+            ( 0, -1, 'top',    'bottom'),
+            ( 0,  1, 'bottom', 'top'),
+        ]
         sx, sy = map(int, zone_key.split(','))
+        my_exits = screen.get('exits', {})
         neighbor_domain_ids = set()
         domainless_neighbors = []  # same-biome neighbors not yet in any domain
-        for nx, ny in [(sx, sy-1), (sx, sy+1), (sx-1, sy), (sx+1, sy)]:
-            nkey = f"{nx},{ny}"
-            if nkey in self.screens:
-                nbr = self.screens[nkey]
-                if nbr.get('biome') == biome:
-                    did = nbr.get('biome_domain_id')
-                    if did:
-                        neighbor_domain_ids.add(did)
-                    else:
-                        domainless_neighbors.append(nkey)
+        for dx, dy, my_exit, their_exit in exit_pairs:
+            nkey = f"{sx+dx},{sy+dy}"
+            if nkey not in self.screens:
+                continue
+            # Only merge zones connected by an actual open exit in both directions
+            if not my_exits.get(my_exit):
+                continue
+            nbr = self.screens[nkey]
+            if not nbr.get('exits', {}).get(their_exit):
+                continue
+            if nbr.get('biome') == biome:
+                did = nbr.get('biome_domain_id')
+                if did:
+                    neighbor_domain_ids.add(did)
+                else:
+                    domainless_neighbors.append(nkey)
 
         if not neighbor_domain_ids and not domainless_neighbors:
             # Truly isolated — create a single-zone domain so future neighbors can find it
@@ -1624,10 +1638,24 @@ class ZonesMixin:
                     continue
                 fragment.add(zk)
                 sx, sy = map(int, zk.split(','))
-                for nx, ny in [(sx, sy-1), (sx, sy+1), (sx-1, sy), (sx+1, sy)]:
-                    nk = f"{nx},{ny}"
-                    if nk in all_zones and nk not in visited:
-                        queue.append(nk)
+                zdata = self.screens.get(zk, {})
+                z_exits = zdata.get('exits', {})
+                exit_pairs = [
+                    (-1,  0, 'left',   'right'),
+                    ( 1,  0, 'right',  'left'),
+                    ( 0, -1, 'top',    'bottom'),
+                    ( 0,  1, 'bottom', 'top'),
+                ]
+                for dx, dy, my_exit, their_exit in exit_pairs:
+                    nk = f"{sx+dx},{sy+dy}"
+                    if nk not in all_zones or nk in visited:
+                        continue
+                    if not z_exits.get(my_exit):
+                        continue
+                    nbr_exits = self.screens.get(nk, {}).get('exits', {})
+                    if not nbr_exits.get(their_exit):
+                        continue
+                    queue.append(nk)
             fragments.append(fragment)
 
         if len(fragments) <= 1:
