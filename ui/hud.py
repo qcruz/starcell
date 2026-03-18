@@ -416,6 +416,15 @@ class HudMixin:
                     pygame.draw.rect(self.screen, (0, 255, 0),
                                    (bar_x, bar_y, health_width, bar_height))
 
+                    # Energy bar (below health bar)
+                    if hasattr(entity, 'energy') and hasattr(entity, 'max_energy') and entity.max_energy > 0:
+                        ebar_y = bar_y + bar_height + 1
+                        pygame.draw.rect(self.screen, COLORS['BLACK'],
+                                       (bar_x, ebar_y, bar_width, bar_height))
+                        energy_width = int((entity.energy / entity.max_energy) * bar_width)
+                        pygame.draw.rect(self.screen, (80, 160, 255),
+                                       (bar_x, ebar_y, energy_width, bar_height))
+
                     # Draw level if > 1
                     if entity.level > 1:
                         level_text = self.tiny_font.render(f"L{entity.level}", True, COLORS['YELLOW'])

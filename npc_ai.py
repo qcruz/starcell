@@ -276,6 +276,7 @@ class NpcAiMixin:
                     entity.flee_target = None
                     entity.is_fleeing = False
                     entity.ai_state_timer = 2
+                return  # No actions while fleeing
 
             elif entity.ai_state == 'exit':
                 if getattr(entity, 'keeper', False):
