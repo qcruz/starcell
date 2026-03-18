@@ -111,6 +111,32 @@ class DevScreenMixin:
             )
             faction_data[fname] = {'count': alive, 'zones': len(fdata.get('zones', []))}
 
+        # Domains — zone counts, biome breakdown, domain keeper count
+        domain_data = {}
+        for domain_id, dinfo in getattr(self, 'domains', {}).items():
+            domain_data[domain_id] = {
+                'name':    dinfo.get('name', '?'),
+                'type':    dinfo.get('type', '?'),
+                'zones':   0,
+                'biomes':  {},
+                'keepers': 0,
+            }
+        for zk, zdata in self.screens.items():
+            for did_key in ('faction_domain_id', 'biome_domain_id'):
+                did = zdata.get(did_key)
+                if did and did in domain_data:
+                    domain_data[did]['zones'] += 1
+                    b = zdata.get('biome', 'UNKNOWN')
+                    domain_data[did]['biomes'][b] = domain_data[did]['biomes'].get(b, 0) + 1
+                    break  # count zone once (faction domain preferred)
+        for entity in self.entities.values():
+            if entity.health <= 0:
+                continue
+            if getattr(entity, 'keeper_type', 0) == 4:
+                hd = getattr(entity, 'home_domain', None)
+                if hd and hd in domain_data:
+                    domain_data[hd]['keepers'] += 1
+
         # Top items across all living NPC inventories
         item_totals = {}
         for entity in self.entities.values():
@@ -144,6 +170,7 @@ class DevScreenMixin:
             'struct_zones':      len(self.structure_zones),
             'zones_deleted':     getattr(self, 'zones_deleted', 0),
             'faction_data':      faction_data,
+            'domain_data':       domain_data,
             'top_npc_items':     top_npc_items,
         }
 
@@ -229,6 +256,19 @@ class DevScreenMixin:
             for fname, finfo in stats['faction_data'].items():
                 name_disp = fname[:14]
                 cy = _t(f"  {name_disp:<14} {finfo['count']:>3}m {finfo['zones']:>3}z", cx, cy)
+        else:
+            cy = _t("  (none)", cx, cy)
+
+        cy += 8
+        cy = _h("DOMAINS", cx, cy)
+        if stats['domain_data']:
+            for did, dinfo in stats['domain_data'].items():
+                name_disp = dinfo['name'][:16]
+                dtype = 'F' if dinfo['type'] == 'faction' else 'B'
+                cy = _t(f"  [{dtype}] {name_disp:<16} {dinfo['zones']:>2}z {dinfo['keepers']:>2}k", cx, cy)
+                biome_str = ' '.join(f"{b[:4]}:{c}" for b, c in sorted(dinfo['biomes'].items()))
+                if biome_str:
+                    cy = _t(f"       {biome_str}", cx, cy)
         else:
             cy = _t("  (none)", cx, cy)
 
