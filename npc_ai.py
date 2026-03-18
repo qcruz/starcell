@@ -227,8 +227,8 @@ class NpcAiMixin:
                         entity.ai_state_timer = 2
             
             elif entity.ai_state == 'flee':
-                # Fleeing — probabilistic movement away from threat
-                if random.random() < entity.props.get('speed', 1.0) / 20:
+                # Fleeing — high-probability movement away from threat
+                if random.random() < min(0.7, entity.props.get('speed', 1.0) / 3):
                     threat_x, threat_y = None, None
                     if entity.flee_target == 'player':
                         if self._same_context_as_player(entity):

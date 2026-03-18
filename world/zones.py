@@ -513,7 +513,8 @@ class ZonesMixin:
                     item = random.choice(list(entity.inventory.keys()))
                     count = entity.inventory.pop(item)
                     if item in ('meat', 'carrot', 'cooked_meat', 'stew', 'bones'):
-                        entity.health = min(entity.max_health, entity.health + 5 * min(count, 10))
+                        if (self.tick - getattr(entity, 'last_attacked_tick', 0)) > 120:
+                            entity.health = min(entity.max_health, entity.health + 5 * min(count, 10))
 
                 # Skeletons burn in daylight
                 if entity.type == 'SKELETON' and not self.is_night:
@@ -911,7 +912,8 @@ class ZonesMixin:
                 _item = random.choice(list(entity.inventory.keys()))
                 _count = entity.inventory.pop(_item)
                 if _item in ('meat', 'carrot', 'cooked_meat', 'stew', 'bones'):
-                    entity.health = min(entity.max_health, entity.health + 5 * min(_count, 10))
+                    if (self.tick - getattr(entity, 'last_attacked_tick', 0)) > 120:
+                        entity.health = min(entity.max_health, entity.health + 5 * min(_count, 10))
 
             if (self.tick - getattr(entity, 'last_attacked_tick', 0)) > 120:
                 entity.regenerate_health(1.0)
