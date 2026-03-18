@@ -1523,28 +1523,54 @@ class ZonesMixin:
                 self._check_biome_domain_contiguity(old_domain_id)
         screen['biome_domain_id'] = None
 
-        # --- Find adjacent same-biome zones ---
+        # --- Find adjacent same-biome zones (with or without a domain yet) ---
         sx, sy = map(int, zone_key.split(','))
         neighbor_domain_ids = set()
+        domainless_neighbors = []  # same-biome neighbors not yet in any domain
         for nx, ny in [(sx, sy-1), (sx, sy+1), (sx-1, sy), (sx+1, sy)]:
             nkey = f"{nx},{ny}"
             if nkey in self.screens:
                 nbr = self.screens[nkey]
-                if nbr.get('biome') == biome and nbr.get('biome_domain_id'):
-                    neighbor_domain_ids.add(nbr['biome_domain_id'])
+                if nbr.get('biome') == biome:
+                    did = nbr.get('biome_domain_id')
+                    if did:
+                        neighbor_domain_ids.add(did)
+                    else:
+                        domainless_neighbors.append(nkey)
 
-        if not neighbor_domain_ids:
-            # Isolated zone — single-zone domains don't persist
+        if not neighbor_domain_ids and not domainless_neighbors:
+            # Truly isolated — create a single-zone domain so future neighbors can find it
+            new_id = self._new_domain_id()
+            self.domains[new_id] = {
+                'name': screen.get('name', self.generate_zone_name(biome)),
+                'type': 'biome',
+                'biome': biome,
+                'faction': None,
+                'zones': {zone_key},
+            }
+            screen['biome_domain_id'] = new_id
             return
 
-        # --- Merge all touching domains into one ---
-        # Keep the largest domain (most zones); tie-break random
-        surviving_id = max(
-            neighbor_domain_ids,
-            key=lambda d: (len(self.domains[d]['zones']), random.random()) if d in self.domains else (0, 0)
-        )
+        # --- Pick or create the surviving domain ---
+        if neighbor_domain_ids:
+            surviving_id = max(
+                neighbor_domain_ids,
+                key=lambda d: (len(self.domains[d]['zones']), random.random()) if d in self.domains else (0, 0)
+            )
+        else:
+            # No existing domains nearby — create one named after this zone
+            surviving_id = self._new_domain_id()
+            self.domains[surviving_id] = {
+                'name': screen.get('name', self.generate_zone_name(biome)),
+                'type': 'biome',
+                'biome': biome,
+                'faction': None,
+                'zones': set(),
+            }
+
         surviving_domain = self.domains[surviving_id]
 
+        # Absorb all other touching domains
         for other_id in neighbor_domain_ids:
             if other_id == surviving_id or other_id not in self.domains:
                 continue
@@ -1553,12 +1579,19 @@ class ZonesMixin:
                 surviving_domain['zones'].add(zk)
                 if zk in self.screens:
                     self.screens[zk]['biome_domain_id'] = surviving_id
+                    self.screens[zk]['name'] = surviving_domain['name']
             del self.domains[other_id]
+
+        # Pull in domainless same-biome neighbors
+        for nkey in domainless_neighbors:
+            surviving_domain['zones'].add(nkey)
+            if nkey in self.screens:
+                self.screens[nkey]['biome_domain_id'] = surviving_id
+                self.screens[nkey]['name'] = surviving_domain['name']
 
         # Add this zone to the surviving domain
         surviving_domain['zones'].add(zone_key)
         screen['biome_domain_id'] = surviving_id
-        # Zone inherits the domain name
         screen['name'] = surviving_domain['name']
 
     def _check_biome_domain_contiguity(self, domain_id):

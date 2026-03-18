@@ -257,6 +257,9 @@ class WorldGenerationMixin:
 
         self.screen_last_update[key] = self.tick
 
+        # Assign biome domain — merge with adjacent same-biome zones on generation
+        self.update_biome_domain(key)
+
         # Spawn entities in new screen
         if key not in self.screen_entities:
             self.spawn_entities_for_screen(sx, sy, biome_name)
