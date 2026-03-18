@@ -545,9 +545,12 @@ class ZonesMixin:
                 if (self.tick - getattr(entity, 'last_attacked_tick', 0)) > 120:
                     entity.regenerate_health(heal_boost)
 
-                # Energy regen: always +1/tick (continuous so fleeing entities can keep moving)
+                # Energy regen: idle = +2/tick, stationary = +1/tick, moving = no regen
                 if hasattr(entity, 'energy') and entity.energy < entity.max_energy:
-                    entity.energy = min(entity.max_energy, entity.energy + 1)
+                    if entity.ai_state == 'idle':
+                        entity.energy = min(entity.max_energy, entity.energy + 2)
+                    elif not entity.is_moving:
+                        entity.energy = min(entity.max_energy, entity.energy + 1)
 
                 if not entity.is_alive():
                     entities_to_remove.append(entity_id)
