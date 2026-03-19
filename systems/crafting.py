@@ -586,6 +586,9 @@ class CraftingMixin:
             'FORGE': 'forge',
             'BUSH': 'bush',
             'EMPTY_CRATE': 'chest',
+            'FLOWER_PATTERN1': 'flower',
+            'FLOWER_PATTERN2': 'flower',
+            'FLOWER_PATTERN3': 'flower',
         }
 
         if cell_type in exact_pickup_map:

@@ -413,9 +413,10 @@ class ZonesMixin:
         }
         base_cell = biome_base_map.get(biome, 'GRASS')
 
+        _flower_patterns = {'FLOWER_PATTERN1', 'FLOWER_PATTERN2', 'FLOWER_PATTERN3'}
         biome_native = {
-            'FOREST': {'GRASS', 'DIRT', 'TREE1', 'TREE2', 'FLOWER', 'BUSH'},
-            'PLAINS': {'GRASS', 'DIRT', 'FLOWER', 'BUSH'},
+            'FOREST': {'GRASS', 'DIRT', 'TREE1', 'TREE2', 'FLOWER', 'BUSH'} | _flower_patterns,
+            'PLAINS': {'GRASS', 'DIRT', 'FLOWER', 'BUSH'} | _flower_patterns,
             'DESERT': {'SAND', 'DIRT', 'BUSH'},
             'MOUNTAINS': {'DIRT', 'STONE', 'GRASS'},
             'TUNDRA': {'DIRT', 'STONE'},
@@ -477,6 +478,14 @@ class ZonesMixin:
                 for x in range(1, GRID_WIDTH - 1):
                     if screen['grid'][y][x] == 'SAND' and random.random() < min(1.0, 0.0000008 * _tp):
                         self.set_grid_cell(screen, x, y, 'BUSH')
+
+        # Rare flower pattern growth from grass (forest/plains only)
+        if biome in ('FOREST', 'PLAINS'):
+            _fp_variants = ('FLOWER_PATTERN1', 'FLOWER_PATTERN2', 'FLOWER_PATTERN3')
+            for y in range(1, GRID_HEIGHT - 1):
+                for x in range(1, GRID_WIDTH - 1):
+                    if screen['grid'][y][x] == 'GRASS' and random.random() < min(1.0, 0.000008 * _tp):
+                        self.set_grid_cell(screen, x, y, random.choice(_fp_variants))
 
         # === ENTITY UPDATES ===
         if getattr(self, 'autopilot', False) and zone_key in self.screen_entities:
