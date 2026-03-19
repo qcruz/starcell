@@ -1257,11 +1257,17 @@ class GameCoreMixin:
             
             if not items:
                 continue
-            
-            # Draw horizontally
+
+            # Match wrap-around layout from draw_inventory_panels
+            slots_per_row = max(1, (SCREEN_WIDTH - 20) // (slot_size + 2))
+            total_rows = max(1, (len(items) + slots_per_row - 1) // slots_per_row)
+
+            # Draw horizontally with row wrapping
             for i, (item_name, count) in enumerate(items):
-                slot_x = start_x + i * (slot_size + 2)
-                slot_y = start_y - y_offset
+                row = i // slots_per_row
+                col = i % slots_per_row
+                slot_x = start_x + col * (slot_size + 2)
+                slot_y = (start_y - y_offset) - row * (slot_size + 15)
 
                 # Check if click is in this slot
                 if (slot_x <= pos[0] <= slot_x + slot_size and
@@ -1298,7 +1304,7 @@ class GameCoreMixin:
                             self.sound.on_inventory_select()
                         return
 
-            y_offset += slot_size + 15  # Stack next category above
+            y_offset += total_rows * (slot_size + 15)  # Stack next category above
     
     def handle_quest_ui_click(self, pos):
         """Handle clicking on quest UI to select active quest"""

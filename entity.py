@@ -250,10 +250,18 @@ class SpriteManager:
         for npc_type, type_data in entity_types.items():
             color = type_data.get('color', (150, 150, 150))
             key = npc_type.lower()
+            # Use the NPC's down_still sprite as base if available
+            base_sprite = self.sprites.get(f'{key}_down_still')
             for prefix, letter in (('summon', 'S'), ('transform', 'T')):
-                surf = pygame.Surface((self.cell_size, self.cell_size))
-                surf.fill(color)
+                if base_sprite is not None:
+                    surf = base_sprite.copy()
+                else:
+                    surf = pygame.Surface((self.cell_size, self.cell_size))
+                    surf.fill(color)
+                # Shadow + letter overlay for readability on any background
+                shadow = font.render(letter, True, (0, 0, 0))
                 lbl = font.render(letter, True, (255, 255, 255))
+                surf.blit(shadow, (3, 3))
                 surf.blit(lbl, (2, 2))
                 pygame.draw.rect(surf, (0, 0, 0), (0, 0, self.cell_size, self.cell_size), 1)
                 self.sprites[f'{prefix}_{key}'] = surf
