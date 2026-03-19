@@ -351,6 +351,16 @@ class ZonesMixin:
                     screen['grid'][y][x] = base_cell
                     continue
 
+                # Empty chest decay: chests with no contents revert to base cell
+                if cell == 'CHEST':
+                    chest_key = f"{zone_key}:{x},{y}"
+                    contents = self.chest_contents.get(chest_key, {})
+                    if not any(v > 0 for v in contents.values()):
+                        if random.random() < min(1.0, 0.003 * _tp):
+                            screen['grid'][y][x] = base_cell
+                            self.chest_contents.pop(chest_key, None)
+                    continue
+
                 if cell in CELL_TYPES:
                     cell_info = CELL_TYPES[cell]
 
