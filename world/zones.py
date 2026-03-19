@@ -452,16 +452,16 @@ class ZonesMixin:
                         if neighbor not in protected_cells and neighbor not in native_cells:
                             screen['grid'][ny][nx] = cell
 
-        # Sparse bush growth from grass (forest/plains/swamp only); rare scrub in desert
+        # Very sparse bush growth; rarer than trees, rarest in desert scrub
         if biome in ('FOREST', 'PLAINS', 'SWAMP'):
             for y in range(1, GRID_HEIGHT - 1):
                 for x in range(1, GRID_WIDTH - 1):
-                    if screen['grid'][y][x] == 'GRASS' and random.random() < min(1.0, 0.00003 * _tp):
+                    if screen['grid'][y][x] == 'GRASS' and random.random() < min(1.0, 0.000005 * _tp):
                         self.set_grid_cell(screen, x, y, 'BUSH')
         elif biome == 'DESERT':
             for y in range(1, GRID_HEIGHT - 1):
                 for x in range(1, GRID_WIDTH - 1):
-                    if screen['grid'][y][x] == 'SAND' and random.random() < min(1.0, 0.000005 * _tp):
+                    if screen['grid'][y][x] == 'SAND' and random.random() < min(1.0, 0.0000008 * _tp):
                         self.set_grid_cell(screen, x, y, 'BUSH')
 
         # === ENTITY UPDATES ===

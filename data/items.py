@@ -150,6 +150,7 @@ ITEMS.update({
     'pickaxe': {'color': (100, 100, 120), 'name': 'Pickaxe', 'is_tool': True},
     'bucket': {'color': (180, 180, 180), 'name': 'Bucket', 'is_tool': True},
     'tree_sapling': {'color': COLORS['TREE1'], 'name': 'Tree Sapling'},
+    'bush': {'color': (34, 100, 34), 'name': 'Bush'},
     'tree1': {'color': COLORS['TREE1'], 'name': 'Tree 1'},
     'tree2': {'color': COLORS['TREE2'], 'name': 'Tree 2'},
     'carrot': {'color': COLORS['CARROT1'], 'name': 'Carrot'},
