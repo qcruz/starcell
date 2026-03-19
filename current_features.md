@@ -148,6 +148,7 @@ For planned and desired future features, see [`roadmap.md`](roadmap.md).
 | Ore | IRON_ORE (cave cell, drops iron_ore item) |
 | Interior | FLOOR_WOOD, CAVE_FLOOR, CAVE_WALL, CHEST, STAIRS_UP, STAIRS_DOWN |
 | Decorative | BARREL, RUINED_SANDSTONE_COLUMN |
+| Vegetation | BUSH (solid; grows sparsely from GRASS in forest/plains/swamp; very rare scrub in desert; drops wood or reverts to GRASS; pickable as `bush` item, replantable) |
 
 **Cell Growth/Decay Rates** (base rates; scaled by drought `_growth`/`_decay` multipliers each update)
 - Tree growth: 0.0001 / Tree decay: 0.0005 / Tree crowding decay (adjacent tree): 0.001
@@ -159,6 +160,8 @@ For planned and desired future features, see [`roadmap.md`](roadmap.md).
 - Flooding (rain only, 3+ water): 0.08 / Grass→Water absorption (rain only): 0.02
 - House decay: 0.0001 / Water evaporation (isolated, ≤1 water neighbor): 0.02
 - Deep water evaporation (any cardinal side exposed): 0.3 — mirrors formation requirement
+- Bush growth: 0.000005 (forest/plains/swamp) / 0.0000008 (desert scrub)
+- Empty chest decay: 0.003 per zone update — empty chests revert to biome base cell
 
 ---
 
@@ -407,6 +410,10 @@ simulation work identically inside and outside structures.
 
 **Chest Consolidation**: Each zone update, chests within 5 cells of each other merge their contents into the chest with the most items; secondaries are emptied and decay promptly (50% per zone update, biome-correct fallback cell)
 
+**NPC Chest Placement Guard**: NPCs only place a new chest if no existing chest is within 5 cells — prevents chest clustering and runaway chest spawning
+
+**Empty Chest Decay**: Chests with no contents have a 0.3% chance per zone update to revert to the biome base cell; chest_contents entry is cleaned up on removal
+
 **Exit Mechanics**: NPCs exit structures (60% chance/update); Keepers never exit their assigned structure; items consolidate to chest on exit
 
 ---
@@ -604,6 +611,18 @@ NPCs have their own quest focus and target system, independent of the player's q
 - Entity enchantment: slows/immobilizes target
 - Legendary item creation: enchanted tools get generated names
 - Runestones add magic damage types (lightning/fire/ice/poison/shadow, 3 dmg each)
+
+**Dev Spells** (new game starts only; not dropped on death)
+- `summon_X` — spawns one NPC of type X adjacent to player (22 NPC types supported)
+- `transform_X` — swaps player sprite to NPC type X; recast same spell to revert
+- Sprites generated at startup via `create_dev_spell_sprites()` in `entity.py` SpriteManager
+- Casting: spell item selected in magic tab → L key; summon/transform detected by `startswith` prefix
+
+---
+
+### E-Key Pickup System
+
+`pickup_cell_or_items()` in `systems/crafting.py` uses a **hardcoded `exact_pickup_map` dict** — it does NOT read from `CELL_PICKUP`. Any new pickable cell type must be added to **both** `CELL_PICKUP` (in `constants.py` and `data/cells.py`) and the `exact_pickup_map` in `crafting.py:570`. Omitting either makes the E-key silently do nothing on that cell.
 
 ---
 
