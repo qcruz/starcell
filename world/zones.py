@@ -626,20 +626,26 @@ class ZonesMixin:
                                     entity.inventory.clear()
                                     break
 
-                    # Place a new chest when any item stack exceeds 100 and no adjacent chest found
+                    # Place a new chest only if no chest within 5 cells
                     _inv_overflow = any(c > 20 for c in entity.inventory.values())
                     if _inv_overflow and random.random() < 0.60:
-                        ground_cells = {'GRASS', 'DIRT', 'SAND', 'FLOOR_WOOD', 'CAVE_FLOOR', 'COBBLESTONE'}
-                        for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
-                            cx, cy = ex + dx, ey + dy
-                            if 0 <= cx < GRID_WIDTH and 0 <= cy < GRID_HEIGHT:
-                                cell = grid[cy][cx]
-                                if cell in ground_cells:
-                                    grid[cy][cx] = 'CHEST'
-                                    chest_key = f"{zone_key}:{cx},{cy}"
-                                    self.chest_contents[chest_key] = dict(entity.inventory)
-                                    entity.inventory.clear()
-                                    break
+                        _chest_nearby = any(
+                            grid[ny][nx] == 'CHEST'
+                            for nx in range(max(0, ex - 5), min(GRID_WIDTH, ex + 6))
+                            for ny in range(max(0, ey - 5), min(GRID_HEIGHT, ey + 6))
+                        )
+                        if not _chest_nearby:
+                            ground_cells = {'GRASS', 'DIRT', 'SAND', 'FLOOR_WOOD', 'CAVE_FLOOR', 'COBBLESTONE'}
+                            for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
+                                cx, cy = ex + dx, ey + dy
+                                if 0 <= cx < GRID_WIDTH and 0 <= cy < GRID_HEIGHT:
+                                    cell = grid[cy][cx]
+                                    if cell in ground_cells:
+                                        grid[cy][cx] = 'CHEST'
+                                        chest_key = f"{zone_key}:{cx},{cy}"
+                                        self.chest_contents[chest_key] = dict(entity.inventory)
+                                        entity.inventory.clear()
+                                        break
 
         # Entity consolidation: when >2 of same base type, merge pairs into _double
         if zone_key in self.screen_entities and self.tick % 300 == 0:

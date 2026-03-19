@@ -584,6 +584,7 @@ class CraftingMixin:
             'STONE_HOUSE': 'stone_house',
             'RUINED_SANDSTONE_COLUMN': 'ruined_sandstone_column',
             'FORGE': 'forge',
+            'BUSH': 'bush',
         }
 
         if cell_type in exact_pickup_map:
