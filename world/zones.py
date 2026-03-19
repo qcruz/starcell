@@ -400,12 +400,12 @@ class ZonesMixin:
         base_cell = biome_base_map.get(biome, 'GRASS')
 
         biome_native = {
-            'FOREST': {'GRASS', 'DIRT', 'TREE1', 'TREE2', 'FLOWER'},
-            'PLAINS': {'GRASS', 'DIRT', 'FLOWER'},
+            'FOREST': {'GRASS', 'DIRT', 'TREE1', 'TREE2', 'FLOWER', 'BUSH'},
+            'PLAINS': {'GRASS', 'DIRT', 'FLOWER', 'BUSH'},
             'DESERT': {'SAND', 'DIRT'},
             'MOUNTAINS': {'DIRT', 'STONE', 'GRASS'},
             'TUNDRA': {'DIRT', 'STONE'},
-            'SWAMP': {'DIRT', 'WATER', 'GRASS'},
+            'SWAMP': {'DIRT', 'WATER', 'GRASS', 'BUSH'},
         }
         native_cells = biome_native.get(biome, {'GRASS', 'DIRT'})
 
@@ -413,7 +413,7 @@ class ZonesMixin:
                            'COBBLESTONE', 'WATER', 'DEEP_WATER',
                            'CAVE_FLOOR', 'CAVE_WALL', 'STAIRS_UP',
                            'STAIRS_DOWN', 'HIDDEN_CAVE', 'SOIL', 'CARROT1', 'CARROT2', 'CARROT3',
-                           'CLIFF', 'STONE_HOUSE'}
+                           'CLIFF', 'STONE_HOUSE', 'BUSH'}
 
         foreign_revert = {
             'DESERT': {'GRASS', 'TREE1', 'TREE2', 'FLOWER', 'DIRT'},
@@ -451,6 +451,13 @@ class ZonesMixin:
                         neighbor = screen['grid'][ny][nx]
                         if neighbor not in protected_cells and neighbor not in native_cells:
                             screen['grid'][ny][nx] = cell
+
+        # Sparse bush growth from grass (forest/plains/swamp only)
+        if biome in ('FOREST', 'PLAINS', 'SWAMP'):
+            for y in range(1, GRID_HEIGHT - 1):
+                for x in range(1, GRID_WIDTH - 1):
+                    if screen['grid'][y][x] == 'GRASS' and random.random() < min(1.0, 0.00003 * _tp):
+                        self.set_grid_cell(screen, x, y, 'BUSH')
 
         # === ENTITY UPDATES ===
         if getattr(self, 'autopilot', False) and zone_key in self.screen_entities:

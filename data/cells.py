@@ -35,6 +35,7 @@ COLORS = {
     'IRON_ORE': (139, 90, 43),
     'WELL': (100, 80, 60),
     'CLIFF': (90, 80, 75),
+    'BUSH': (34, 100, 34),
     'CACTUS': (50, 120, 50),
     'BARREL': (120, 80, 40),
     'STONE_HOUSE': (110, 110, 120),
@@ -152,6 +153,13 @@ CELL_TYPES = {
         'color': (90, 80, 75),
         'label': 'Clf',
         'solid': True,
+    },
+    'BUSH': {
+        'color': (34, 100, 34),
+        'label': 'Bush',
+        'solid': True,
+        'drops': [{'item': 'wood', 'amount': 1, 'chance': 0.6},
+                  {'cell': 'GRASS', 'chance': 0.4}],
     },
 }
 

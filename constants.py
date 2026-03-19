@@ -365,6 +365,7 @@ COLORS = {
     'STONE_HOUSE': (110, 110, 120),
     'RUINED_SANDSTONE_COLUMN': (200, 160, 90),
     'CLIFF': (90, 80, 75),
+    'BUSH': (34, 100, 34),
 }
 
 # Cell type properties with drop probabilities
@@ -473,6 +474,13 @@ CELL_TYPES = {
         'color': COLORS['CLIFF'],
         'label': 'Clf',
         'solid': True,
+    },
+    'BUSH': {
+        'color': COLORS['BUSH'],
+        'label': 'Bush',
+        'solid': True,
+        'drops': [{'item': 'wood', 'amount': 1, 'chance': 0.6},
+                  {'cell': 'GRASS', 'chance': 0.4}],
     },
 }
 

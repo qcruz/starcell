@@ -262,7 +262,7 @@ class GameCoreMixin:
                           'WALL', 'CAVE', 'MINESHAFT', 'SOIL', 'MEAT', 'FUR', 'BONES',
                           'FLOOR_WOOD', 'CAVE_FLOOR', 'CAVE_WALL', 'CHEST',
                           'STAIRS_DOWN', 'STAIRS_UP',
-                          'CACTUS', 'BARREL', 'RUINED_SANDSTONE_COLUMN']:
+                          'CACTUS', 'BARREL', 'RUINED_SANDSTONE_COLUMN', 'BUSH']:
             
             # Skip if already loaded
             if cell_type in self.sprite_manager.sprites:
@@ -457,6 +457,7 @@ class GameCoreMixin:
             'STONE_HOUSE':           'stone_house.png',
             'CACTUS':                'cactus.png',
             'BARREL':                'barrel.png',
+            'BUSH':                  'bush.png',
         }
         for sprite_key, filename_base in _explicit_sprites.items():
             if sprite_key in self.sprite_manager.sprites:
