@@ -258,8 +258,9 @@ class SpriteManager:
             color = type_data.get('color', (150, 150, 150))
             key = npc_type.lower()
             sprite_key = _sprite_key_overrides.get(key, key)
-            # Use the NPC's down_still sprite as base if available
-            base_sprite = self.sprites.get(f'{sprite_key}_down_still')
+            # Use the NPC's down_still sprite as base; fall back to down_1 frame
+            base_sprite = (self.sprites.get(f'{sprite_key}_down_still') or
+                           self.sprites.get(f'{sprite_key}_down_1'))
             for prefix, letter in (('summon', 'S'), ('transform', 'T')):
                 if base_sprite is not None:
                     surf = base_sprite.copy()
