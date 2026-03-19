@@ -593,6 +593,18 @@ class ZonesMixin:
 
                 self.update_entity_ai(entity_id, entity)
 
+                # Butterfly grows flowers as it passes over grass/dirt
+                if entity.type == 'BUTTERFLY' and random.random() < 0.04:
+                    bx, by = entity.x, entity.y
+                    if 0 <= bx < GRID_WIDTH and 0 <= by < GRID_HEIGHT:
+                        _btfly_cell = screen['grid'][by][bx]
+                        if _btfly_cell == 'GRASS':
+                            screen['grid'][by][bx] = random.choice(
+                                ('FLOWER', 'FLOWER_PATTERN1', 'FLOWER_PATTERN2', 'FLOWER_PATTERN3'))
+                        elif _btfly_cell == 'DIRT':
+                            screen['grid'][by][bx] = random.choice(
+                                ('GRASS', 'FLOWER', 'FLOWER_PATTERN1'))
+
             for entity_id in entities_to_remove:
                 self.remove_entity(entity_id)
 
