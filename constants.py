@@ -366,6 +366,7 @@ COLORS = {
     'RUINED_SANDSTONE_COLUMN': (200, 160, 90),
     'CLIFF': (90, 80, 75),
     'BUSH': (34, 100, 34),
+    'EMPTY_CRATE': (100, 65, 25),
 }
 
 # Cell type properties with drop probabilities
@@ -464,6 +465,12 @@ CELL_TYPES = {
         'solid': True,
         'enterable': True,
         'interior_type': 'HOUSE_INTERIOR',
+    },
+    'EMPTY_CRATE': {
+        'color': COLORS['EMPTY_CRATE'],
+        'label': 'ECrt',
+        'solid': True,
+        'interactable': True,
     },
     'RUINED_SANDSTONE_COLUMN': {
         'color': COLORS['RUINED_SANDSTONE_COLUMN'],

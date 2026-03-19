@@ -262,7 +262,7 @@ class GameCoreMixin:
                           'WALL', 'CAVE', 'MINESHAFT', 'SOIL', 'MEAT', 'FUR', 'BONES',
                           'FLOOR_WOOD', 'CAVE_FLOOR', 'CAVE_WALL', 'CHEST',
                           'STAIRS_DOWN', 'STAIRS_UP',
-                          'CACTUS', 'BARREL', 'RUINED_SANDSTONE_COLUMN', 'BUSH']:
+                          'CACTUS', 'BARREL', 'RUINED_SANDSTONE_COLUMN', 'BUSH', 'EMPTY_CRATE']:
             
             # Skip if already loaded
             if cell_type in self.sprite_manager.sprites:
@@ -458,6 +458,7 @@ class GameCoreMixin:
             'CACTUS':                'cactus.png',
             'BARREL':                'barrel.png',
             'BUSH':                  'bush.png',
+            'EMPTY_CRATE':           'empty_crate.png',
         }
         for sprite_key, filename_base in _explicit_sprites.items():
             if sprite_key in self.sprite_manager.sprites:
@@ -2072,8 +2073,8 @@ class GameCoreMixin:
             self.descend_cave()
             return
         
-        # Check for chest interaction
-        if cell == 'CHEST':
+        # Check for chest interaction (CHEST or EMPTY_CRATE — same handler)
+        if cell in ('CHEST', 'EMPTY_CRATE'):
             self.interact_with_chest(check_x, check_y)
             return
         

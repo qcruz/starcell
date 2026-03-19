@@ -144,6 +144,12 @@ CELL_TYPES = {
         'enterable': True,
         'interior_type': 'HOUSE_INTERIOR',
     },
+    'EMPTY_CRATE': {
+        'color': (100, 65, 25),
+        'label': 'ECrt',
+        'solid': True,
+        'interactable': True,
+    },
     'RUINED_SANDSTONE_COLUMN': {
         'color': (200, 160, 90),
         'label': 'RSC',

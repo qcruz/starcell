@@ -9,7 +9,7 @@
 
 Small additions using existing systems and minimal changes to code.
 
-- [ ] Add EMPTY_CRATE cell — visual state for empty chests; zones.py swaps CHEST↔EMPTY_CRATE each update based on chest_contents; player can interact with either
+- [x] Add EMPTY_CRATE cell — visual state for empty chests; zones.py swaps CHEST↔EMPTY_CRATE each update based on chest_contents; player can interact with either
 - [ ] Add FLOWER_PATTERN cells (3 variants) — non-solid walkable cells that rarely grow from grass in forest/plains; degrade back to grass over time; harvestable; placeable
 - [ ] Butterfly flower growth — when butterfly moves over GRASS/DIRT, small chance to grow it to FLOWER or FLOWER_PATTERN; doesn't grow trees
 - [ ] Keeper-status spell — new spell type: cast on inspected NPC to assign them as keeper for a target cell or item; uses existing keeper system

@@ -351,14 +351,18 @@ class ZonesMixin:
                     screen['grid'][y][x] = base_cell
                     continue
 
-                # Empty chest decay: chests with no contents revert to base cell
+                # Chest ↔ EMPTY_CRATE swap based on contents
                 if cell == 'CHEST':
                     chest_key = f"{zone_key}:{x},{y}"
                     contents = self.chest_contents.get(chest_key, {})
                     if not any(v > 0 for v in contents.values()):
-                        if random.random() < min(1.0, 0.003 * _tp):
-                            screen['grid'][y][x] = base_cell
-                            self.chest_contents.pop(chest_key, None)
+                        screen['grid'][y][x] = 'EMPTY_CRATE'
+                    continue
+                if cell == 'EMPTY_CRATE':
+                    chest_key = f"{zone_key}:{x},{y}"
+                    contents = self.chest_contents.get(chest_key, {})
+                    if any(v > 0 for v in contents.values()):
+                        screen['grid'][y][x] = 'CHEST'
                     continue
 
                 if cell in CELL_TYPES:
@@ -419,7 +423,7 @@ class ZonesMixin:
         }
         native_cells = biome_native.get(biome, {'GRASS', 'DIRT'})
 
-        protected_cells = {'HOUSE', 'CAVE', 'MINESHAFT', 'CAMP', 'CHEST', 'WALL',
+        protected_cells = {'HOUSE', 'CAVE', 'MINESHAFT', 'CAMP', 'CHEST', 'EMPTY_CRATE', 'WALL',
                            'COBBLESTONE', 'WATER', 'DEEP_WATER',
                            'CAVE_FLOOR', 'CAVE_WALL', 'STAIRS_UP',
                            'STAIRS_DOWN', 'HIDDEN_CAVE', 'SOIL', 'CARROT1', 'CARROT2', 'CARROT3',
