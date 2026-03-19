@@ -278,3 +278,34 @@ class EnchantmentMixin:
         else:
             self.player['transform'] = npc_type
             print(f"[Transform] Now appearing as {npc_type}")
+
+    def cast_keeper_spell(self):
+        """Assign the inspected NPC as a keeper anchored to the player's current cell."""
+        from constants import KEEPER_ENTITY_TYPE, KEEPER_TYPE_BY_ENTITY
+        npc_id = self.inspected_npc
+        if not npc_id or npc_id not in self.entities:
+            print("[Keeper] No NPC inspected.")
+            return
+        entity = self.entities[npc_id]
+        npc_name = entity.name if entity.name else entity.type
+
+        if getattr(entity, 'keeper', False):
+            print(f"[Keeper] {npc_name} is already a keeper.")
+            return
+
+        if npc_id in self.followers:
+            print(f"[Keeper] {npc_name} is a follower — release them first.")
+            return
+
+        zone_key = f"{entity.screen_x},{entity.screen_y}"
+        ktype = KEEPER_ENTITY_TYPE.get(entity.type, 'humanoid')
+
+        if zone_key not in self.zone_keepers:
+            self.zone_keepers[zone_key] = {}
+
+        entity.keeper = True
+        entity.keeper_type = KEEPER_TYPE_BY_ENTITY.get(entity.type, 2)
+        entity.keeper_target_pos = (self.player['x'], self.player['y'])
+        self.zone_keepers[zone_key][ktype] = npc_id
+        print(f"[Keeper] {npc_name} assigned as keeper (type {entity.keeper_type}) at "
+              f"({self.player['x']},{self.player['y']}).")

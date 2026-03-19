@@ -12,7 +12,7 @@ Small additions using existing systems and minimal changes to code.
 - [x] Add EMPTY_CRATE cell — visual state for empty chests; zones.py swaps CHEST↔EMPTY_CRATE each update based on chest_contents; player can interact with either
 - [x] Add FLOWER_PATTERN cells (3 variants) — non-solid walkable cells that rarely grow from grass in forest/plains; degrade back to grass over time; harvestable; placeable
 - [x] Butterfly flower growth — when butterfly moves over GRASS/DIRT, small chance to grow it to FLOWER or FLOWER_PATTERN; doesn't grow trees
-- [ ] Keeper-status spell — new spell type: cast on inspected NPC to assign them as keeper for a target cell or item; uses existing keeper system
+- [x] Keeper-status spell — new spell type: cast on inspected NPC to assign them as keeper for a target cell or item; uses existing keeper system
 - [ ] NPC infection system: vampirism and lycanthropy — hostile bats can infect humanoid NPCs with vampirism (transforms to BAT at night, reverts at dawn); hostile wolves can infect with lycanthropy (transforms to WOLF at night, reverts at dawn); silver weapons prevent/cure infection
 - [ ] Action inventory, equipment inventory, and favor system — one session
 - [ ] Add actions inventory tab (R key) — shove and other contextual action items. Start with Attack, Block, Sneak, Dig, and Talk placeholders. Actions not dropped on death, will be starting options for game actions before player has tools.

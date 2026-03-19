@@ -530,6 +530,8 @@ ITEMS = {
                    'description': 'Toggles rain on and off'},
     'day_spell':  {'color': (255, 230, 100), 'name': 'Day Spell',  'is_spell': True,
                    'description': 'Toggles day and night'},
+    'keeper_spell': {'color': (100, 220, 180), 'name': 'Keeper Spell', 'is_spell': True,
+                     'spell_type': 'keeper', 'description': 'Assigns inspected NPC as zone keeper'},
     'magic_stone': {'color': (138, 43, 226), 'name': 'Magic Stone', 'is_spell': True, 'damage': 12},
     'magic_wand': {'color': (255, 140, 255), 'name': 'Magic Wand', 'is_spell': True, 'damage': 10},
 

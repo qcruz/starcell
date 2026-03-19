@@ -1065,6 +1065,8 @@ class GameCoreMixin:
                             self.cast_rain_spell()
                         elif selected == 'day_spell':
                             self.cast_day_spell()
+                        elif selected == 'keeper_spell':
+                            self.cast_keeper_spell()
                         elif selected and selected.startswith('summon_'):
                             self.cast_summon_spell()
                         elif selected and selected.startswith('transform_'):
@@ -2656,6 +2658,7 @@ class GameCoreMixin:
         self.inventory.add_magic('star_spell', 1)
         self.inventory.add_item('rain_spell', 1)
         self.inventory.add_item('day_spell', 1)
+        self.inventory.add_item('keeper_spell', 1)
         # Dev spells: summon + transform for every NPC type
         _dev_npc_types = ['sheep','wolf','deer','farmer','guard','warrior','commander','king',
                           'trader','blacksmith','wizard','lumberjack','miner','bandit','goblin',
