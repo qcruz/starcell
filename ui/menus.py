@@ -84,6 +84,10 @@ class MenusMixin:
         overlay.fill(COLORS['BLACK'])
         self.screen.blit(overlay, (0, 0))
 
+        # Inventory panels remain accessible while paused (crafting execution is blocked)
+        self.draw_inventory_panels()
+        self.draw_quest_ui()
+
         # Pause menu
         title = self.font.render("PAUSED", True, COLORS['YELLOW'])
         self.screen.blit(title, (SCREEN_WIDTH // 2 - title.get_width() // 2, 180))

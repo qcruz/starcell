@@ -598,24 +598,45 @@ class HudMixin:
                 px = int(self.player['world_x'] * CELL_SIZE)
                 py = int(self.player['world_y'] * CELL_SIZE)
 
-            # Sprite lookup (same logic as entity draw loop)
-            if self.use_sprites and hasattr(self, 'sprite_manager'):
-                sprite_name = f"wizard_{facing}_{anim_frame}"
-                if sprite_name in self.sprite_manager.sprites:
-                    player_sprite = self.sprite_manager.get_sprite(sprite_name)
+            # Check transform state — use NPC sprite/color instead of player sprite
+            _transform = self.player.get('transform')
+            if _transform:
+                # Try walking sprite for the NPC type first, fall back to still, then color block
+                if self.use_sprites and hasattr(self, 'sprite_manager'):
+                    for _sname in (f"{_transform.lower()}_{facing}_{anim_frame}",
+                                   f"{_transform.lower()}_{facing}_still",
+                                   f"{_transform.lower()}_down_still"):
+                        _sp = self.sprite_manager.sprites.get(_sname)
+                        if _sp:
+                            player_sprite = _sp
+                            break
+                if player_sprite:
+                    self.screen.blit(player_sprite, (px, py))
                 else:
-                    sprite_name_fallback = f"wizard_{facing}_still"
-                    if sprite_name_fallback in self.sprite_manager.sprites:
-                        player_sprite = self.sprite_manager.get_sprite(sprite_name_fallback)
-
-            if player_sprite:
-                self.screen.blit(player_sprite, (px, py))
+                    from data.entities import ENTITY_TYPES
+                    _c = ENTITY_TYPES.get(_transform, {}).get('color', (200, 200, 200))
+                    pygame.draw.rect(self.screen, _c, (px, py, CELL_SIZE, CELL_SIZE))
+                    _lbl = self.tiny_font.render(_transform[:3], True, (255, 255, 255))
+                    self.screen.blit(_lbl, (px + 2, py + CELL_SIZE // 2 - 4))
             else:
-                # Fallback to yellow @ symbol
-                pygame.draw.rect(self.screen, COLORS['YELLOW'], (px, py, CELL_SIZE, CELL_SIZE))
-                player_text = self.font.render('@', True, COLORS['BLACK'])
-                player_rect = player_text.get_rect(center=(px + CELL_SIZE // 2, py + CELL_SIZE // 2))
-                self.screen.blit(player_text, player_rect)
+                # Sprite lookup (same logic as entity draw loop)
+                if self.use_sprites and hasattr(self, 'sprite_manager'):
+                    sprite_name = f"wizard_{facing}_{anim_frame}"
+                    if sprite_name in self.sprite_manager.sprites:
+                        player_sprite = self.sprite_manager.get_sprite(sprite_name)
+                    else:
+                        sprite_name_fallback = f"wizard_{facing}_still"
+                        if sprite_name_fallback in self.sprite_manager.sprites:
+                            player_sprite = self.sprite_manager.get_sprite(sprite_name_fallback)
+
+                if player_sprite:
+                    self.screen.blit(player_sprite, (px, py))
+                else:
+                    # Fallback to yellow @ symbol
+                    pygame.draw.rect(self.screen, COLORS['YELLOW'], (px, py, CELL_SIZE, CELL_SIZE))
+                    player_text = self.font.render('@', True, COLORS['BLACK'])
+                    player_rect = player_text.get_rect(center=(px + CELL_SIZE // 2, py + CELL_SIZE // 2))
+                    self.screen.blit(player_text, player_rect)
 
             # Draw autopilot indicator
             if self.autopilot:

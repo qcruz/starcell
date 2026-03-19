@@ -490,6 +490,10 @@ class GameCoreMixin:
             # Don't generate structure sprites - only use actual sprite files
             # This ensures cells without sprites show as colored rectangles with labels
             
+            # Generate dev spell sprites (summon/transform for all NPC types)
+            from data.entities import ENTITY_TYPES
+            self.sprite_manager.create_dev_spell_sprites(ENTITY_TYPES)
+
             loaded_sprites = self.sprite_manager.get_all_sprite_names()
             print(f"✓ Total sprites available: {len(loaded_sprites)}")
             
@@ -1058,6 +1062,10 @@ class GameCoreMixin:
                             self.cast_rain_spell()
                         elif selected == 'day_spell':
                             self.cast_day_spell()
+                        elif selected and selected.startswith('summon_'):
+                            self.cast_summon_spell()
+                        elif selected and selected.startswith('transform_'):
+                            self.cast_transform_spell()
                         else:
                             self.cast_star_spell()
                         self.gain_xp(1)
@@ -1178,6 +1186,28 @@ class GameCoreMixin:
                         self.save_game()
                     elif event.key == pygame.K_m:
                         self.state = 'menu'
+                    # Inventory panels accessible while paused (crafting execution blocked)
+                    elif event.key == pygame.K_i:
+                        self.inventory.toggle_menu('items')
+                    elif event.key == pygame.K_t:
+                        self.inventory.toggle_menu('tools')
+                    elif event.key == pygame.K_r:
+                        self.inventory.toggle_menu('actions')
+                    elif event.key == pygame.K_f:
+                        self.inventory.toggle_menu('followers')
+                    elif event.key == pygame.K_c:
+                        self.inventory.toggle_menu('crafting')
+                    elif event.key == pygame.K_q:
+                        self.quest_ui_open = not self.quest_ui_open
+                    elif event.key == pygame.K_LEFT and (pygame.key.get_mods() & pygame.KMOD_SHIFT):
+                        self.cycle_inventory_slot(-1)
+                    elif event.key == pygame.K_RIGHT and (pygame.key.get_mods() & pygame.KMOD_SHIFT):
+                        self.cycle_inventory_slot(1)
+                    elif event.key in [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4,
+                                       pygame.K_5, pygame.K_6, pygame.K_7, pygame.K_8,
+                                       pygame.K_9, pygame.K_0]:
+                        slot = (event.key - pygame.K_1) if event.key != pygame.K_0 else 9
+                        self.select_inventory_slot(slot)
         
         # Handle direction changes and close inventory on movement
         if self.state == 'playing':
@@ -2617,6 +2647,13 @@ class GameCoreMixin:
         self.inventory.add_magic('star_spell', 1)
         self.inventory.add_item('rain_spell', 1)
         self.inventory.add_item('day_spell', 1)
+        # Dev spells: summon + transform for every NPC type
+        _dev_npc_types = ['sheep','wolf','deer','farmer','guard','warrior','commander','king',
+                          'trader','blacksmith','wizard','lumberjack','miner','bandit','goblin',
+                          'skeleton','termite','bat','red_bird','butterfly','chicken','black_spider']
+        for _t in _dev_npc_types:
+            self.inventory.add_item(f'summon_{_t}', 1)
+            self.inventory.add_item(f'transform_{_t}', 1)
         self.inventory.add_item('shove', 1)
         self.inventory.add_item('bone_sword', 1)
         self.inventory.add_item('carrot', 5)

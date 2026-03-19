@@ -2,7 +2,7 @@ import pygame
 
 from constants import (
     COLORS, ITEMS, CELL_TYPES, QUEST_TYPES,
-    CELL_SIZE, SCREEN_HEIGHT, FPS,
+    CELL_SIZE, SCREEN_WIDTH, SCREEN_HEIGHT, FPS,
 )
 
 
@@ -69,14 +69,21 @@ class InventoryUIMixin:
                 y_offset += 25
                 continue
 
-            # Category label
-            label_text = self.small_font.render(category.upper(), True, category_colors[category])
-            self.screen.blit(label_text, (start_x, start_y - y_offset - 15))
+            # Wrap-around layout: when slots would exceed screen width, start a new row above
+            slots_per_row = max(1, (SCREEN_WIDTH - 20) // (slot_size + 2))
+            total_rows = max(1, (len(items) + slots_per_row - 1) // slots_per_row)
 
-            # Draw items horizontally
+            # Category label above the topmost row
+            label_text = self.small_font.render(category.upper(), True, category_colors[category])
+            label_y = (start_y - y_offset) - (total_rows - 1) * (slot_size + 15) - 15
+            self.screen.blit(label_text, (start_x, label_y))
+
+            # Draw items with row wrapping
             for i, (item_name, count) in enumerate(items):
-                slot_x = start_x + i * (slot_size + 2)
-                slot_y = start_y - y_offset
+                row = i // slots_per_row
+                col = i % slots_per_row
+                slot_x = start_x + col * (slot_size + 2)
+                slot_y = (start_y - y_offset) - row * (slot_size + 15)
 
                 # Background
                 pygame.draw.rect(self.screen, COLORS['BLACK'],
@@ -170,7 +177,7 @@ class InventoryUIMixin:
                 self.screen.blit(name_surf, (slot_x + 1, slot_y + slot_size - name_h),
                                  area=pygame.Rect(0, 0, name_w, name_h))
 
-            y_offset += slot_size + 15
+            y_offset += total_rows * (slot_size + 15)
 
     # -------------------------------------------------------------------------
     # Quest selection UI
