@@ -402,7 +402,7 @@ class ZonesMixin:
         biome_native = {
             'FOREST': {'GRASS', 'DIRT', 'TREE1', 'TREE2', 'FLOWER', 'BUSH'},
             'PLAINS': {'GRASS', 'DIRT', 'FLOWER', 'BUSH'},
-            'DESERT': {'SAND', 'DIRT'},
+            'DESERT': {'SAND', 'DIRT', 'BUSH'},
             'MOUNTAINS': {'DIRT', 'STONE', 'GRASS'},
             'TUNDRA': {'DIRT', 'STONE'},
             'SWAMP': {'DIRT', 'WATER', 'GRASS', 'BUSH'},
@@ -452,11 +452,16 @@ class ZonesMixin:
                         if neighbor not in protected_cells and neighbor not in native_cells:
                             screen['grid'][ny][nx] = cell
 
-        # Sparse bush growth from grass (forest/plains/swamp only)
+        # Sparse bush growth from grass (forest/plains/swamp only); rare scrub in desert
         if biome in ('FOREST', 'PLAINS', 'SWAMP'):
             for y in range(1, GRID_HEIGHT - 1):
                 for x in range(1, GRID_WIDTH - 1):
                     if screen['grid'][y][x] == 'GRASS' and random.random() < min(1.0, 0.00003 * _tp):
+                        self.set_grid_cell(screen, x, y, 'BUSH')
+        elif biome == 'DESERT':
+            for y in range(1, GRID_HEIGHT - 1):
+                for x in range(1, GRID_WIDTH - 1):
+                    if screen['grid'][y][x] == 'SAND' and random.random() < min(1.0, 0.000005 * _tp):
                         self.set_grid_cell(screen, x, y, 'BUSH')
 
         # === ENTITY UPDATES ===
