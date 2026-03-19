@@ -33,8 +33,8 @@ Game ← HudMixin, InventoryUIMixin, MenusMixin, DevScreenMixin
 | `systems/combat.py` | CombatMixin — attack, death, reconcile_screen_entities |
 | `systems/enchantment.py` | EnchantmentMixin — star spell, dev spells, follower release |
 | `systems/spawning.py` | SpawningMixin — zone spawning checks |
-| `systems/factions.py` | FactionsMixin — faction registration, control, domains |
-| `world/zones.py` | ZonesMixin — probabilistic_zone_updates, cell CA, entity AI dispatch, chest logic |
+| `systems/factions.py` | FactionsMixin — faction registration, zone control, triggers faction domain rebuild |
+| `world/zones.py` | ZonesMixin — probabilistic_zone_updates, cell CA, entity AI dispatch, chest logic, biome/faction domain management |
 | `world/generation.py` | WorldGenerationMixin — screen + cave generation |
 | `ai/actions.py` | NpcAiActionsMixin — harvest, build, plant, mine, footstep sounds |
 | `ai/movement.py` | NpcAiMovementMixin — wander_entity, move_toward_position, zone crossing |
@@ -70,7 +70,6 @@ Game ← HudMixin, InventoryUIMixin, MenusMixin, DevScreenMixin
 | Hunger | 100 | Decays 0.02/tick; humanoids 6× faster; starvation deals 1 HP/tick |
 | Thirst | 100 | Decays 0.015/tick; humanoids 2× faster; dehydration deals 1.5 HP/tick |
 | Energy | 100 | Drains 2/step; regens 1/tick stationary, 2/tick idle |
-| Magic pool | 10 | |
 
 **Starting Inventory (new_game)**
 - Tools: axe, hoe, shovel, pickaxe, bucket
@@ -457,21 +456,23 @@ State transitions: `update_entity_ai_state()` rolls probability table (aggressiv
 
 ## Crafting
 
-**All Recipes (2-item, order-independent)**
+**All Recipes (2-item, order-independent) — 28 total**
 
 | Input A | Input B | Output |
 |---|---|---|
 | wood | stone | stone_pickaxe |
-| wood | wood | hoe |
+| wood | wood | planks |
 | stone | stone | shovel |
-| hoe | wood | hilt |
+| wood | hoe | hilt |
 | hilt | bones | bone_sword |
+| hilt | bone | bone_sword (alt — `bone` also accepted) |
 | hilt | stone | stone_axe |
 | hilt | fur | club |
 | axe | wood | planks |
 | planks | planks | chest |
 | wood | bucket | watering_can |
 | carrot | carrot | seeds |
+| grass | grass | rope |
 | star_spell | stone | magic_stone |
 | star_spell | wood | magic_wand |
 | star_spell | bone_sword | enchanted_sword |
@@ -486,6 +487,7 @@ State transitions: `update_entity_ai_state()` rolls probability table (aggressiv
 | wood | sand | sandstone |
 | iron_ore | iron_ore | iron_ingot |
 | iron_ingot | hilt | iron_sword |
+| iron_ingot | iron_ingot | iron_sword (alt) |
 
 ---
 
@@ -538,6 +540,33 @@ State transitions: `update_entity_ai_state()` rolls probability table (aggressiv
 **Persistence**
 - `self.factions`: {faction_key → {name, warriors[], zones[], hostile_flag}}
 - Saved/loaded; post-load sync scans all entities to re-register any gaps
+
+---
+
+## Domain System
+
+Zones are grouped into two overlapping types of domains: **biome domains** and **faction domains**. Both use BFS-based contiguity detection.
+
+**Biome Domains**
+- Contiguous zones sharing the same biome type are merged into a single biome domain
+- Each domain has a generated name (e.g. "Iron Hills", "Thornwood") shared by all its member zones
+- Managed by `update_biome_domain(zone_key)` in `world/zones.py`; called whenever a zone's biome shifts
+- When a zone leaves a domain: remaining zones are contiguity-checked; isolated fragments become new domains with fresh names
+- When same-biome neighbors exist: zones merge into the largest neighbor domain (or form a new one)
+- Single-zone domains get re-rolled names when they shrink to one member
+- Per-zone tracking: `screen['biome_domain_id']`
+
+**Faction Domains**
+- Contiguous zones under the same `controlling_faction` are grouped into faction domains
+- Domain name = faction name + first zone name in group
+- Rebuilt from scratch on any zone faction-control change via `update_faction_domain(faction_name)` in `world/zones.py`; triggered by `systems/factions.py`
+- BFS groups all controlled zones into contiguous fragments; each fragment becomes a separate faction domain
+- Per-zone tracking: `screen['faction_domain_id']`
+
+**Data Structure**
+- `self.domains[domain_id] = {'name', 'type' ('biome'|'faction'), 'zones' (set of zone keys), 'biome'/'faction'}`
+- Saved/loaded via `systems/save_load.py`
+- Visible in dev overlay (Shift+I)
 
 ---
 
@@ -695,7 +724,7 @@ State transitions: `update_entity_ai_state()` rolls probability table (aggressiv
 - Output: `debug/bug_catcher.log`
 
 **Watchdog** (`debug/watchdog.py`)
-- Rotates across 7 sample categories per 300-tick cycle: entities, cells, zones, player, structures, followers, npc_actions
+- Rotates across 9 sample categories per 300-tick cycle: entities, cells, zones, player, structures, followers, npc_actions, keepers, npc_quests
 - Integrity checks for anomalies (frozen entities, ghost IDs, etc.)
 - Rolling 60s/120s backup auto-saves
 
