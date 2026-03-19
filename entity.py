@@ -244,6 +244,20 @@ class SpriteManager:
         
         print("  ✓ Generated all structure and special cell sprites")
     
+    def create_dev_spell_sprites(self, entity_types):
+        """Generate summon/transform spell sprites for each NPC type."""
+        font = pygame.font.Font(None, self.cell_size // 2)
+        for npc_type, type_data in entity_types.items():
+            color = type_data.get('color', (150, 150, 150))
+            key = npc_type.lower()
+            for prefix, letter in (('summon', 'S'), ('transform', 'T')):
+                surf = pygame.Surface((self.cell_size, self.cell_size))
+                surf.fill(color)
+                lbl = font.render(letter, True, (255, 255, 255))
+                surf.blit(lbl, (2, 2))
+                pygame.draw.rect(surf, (0, 0, 0), (0, 0, self.cell_size, self.cell_size), 1)
+                self.sprites[f'{prefix}_{key}'] = surf
+
     def get_all_sprite_names(self):
         """Return list of all loaded sprite names"""
         return list(self.sprites.keys())
