@@ -246,12 +246,20 @@ class SpriteManager:
     
     def create_dev_spell_sprites(self, entity_types):
         """Generate summon/transform spell sprites for each NPC type."""
+        # Sprite keys use different naming than ENTITY_TYPES keys for some NPCs
+        _sprite_key_overrides = {
+            'termite':     'yellow termite',
+            'bat':         'black bat',
+            'black_spider': 'blackspider',
+            'red_bird':    'red bird',
+        }
         font = pygame.font.Font(None, self.cell_size // 2)
         for npc_type, type_data in entity_types.items():
             color = type_data.get('color', (150, 150, 150))
             key = npc_type.lower()
+            sprite_key = _sprite_key_overrides.get(key, key)
             # Use the NPC's down_still sprite as base if available
-            base_sprite = self.sprites.get(f'{key}_down_still')
+            base_sprite = self.sprites.get(f'{sprite_key}_down_still')
             for prefix, letter in (('summon', 'S'), ('transform', 'T')):
                 if base_sprite is not None:
                     surf = base_sprite.copy()
