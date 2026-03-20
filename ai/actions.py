@@ -406,8 +406,19 @@ class NpcAiActionsMixin:
 
         chop_rate = min(chop_rate, 0.8)  # Cap at 80% (increased to allow level scaling)
 
+        # If quest_nav_target points at an adjacent choppable cell, check it first
+        _chop_dirs = [(0, -1), (0, 1), (-1, 0), (1, 0)]
+        _qnav = getattr(entity, 'quest_nav_target', None)
+        if _qnav:
+            _, _, _qx, _qy = _qnav
+            _qdx, _qdy = _qx - entity.x, _qy - entity.y
+            if abs(_qdx) + abs(_qdy) == 1 and (_qdx, _qdy) in _chop_dirs:
+                if (0 <= _qx < GRID_WIDTH and 0 <= _qy < GRID_HEIGHT
+                        and screen['grid'][_qy][_qx] in ['TREE1', 'TREE2', 'CACTUS', 'BUSH']):
+                    _chop_dirs = [(_qdx, _qdy)] + [d for d in _chop_dirs if d != (_qdx, _qdy)]
+
         # Try to chop adjacent tree (cardinal directions only)
-        for dx, dy in [(0, -1), (0, 1), (-1, 0), (1, 0)]:
+        for dx, dy in _chop_dirs:
             check_x = entity.x + dx
             check_y = entity.y + dy
             if 0 <= check_x < GRID_WIDTH and 0 <= check_y < GRID_HEIGHT:
@@ -457,8 +468,19 @@ class NpcAiActionsMixin:
         mine_rate = LUMBERJACK_BASE_CHOP_RATE + (nearby_rocks * LUMBERJACK_DENSITY_BONUS)
         mine_rate = min(mine_rate, 0.85)  # Cap at 85%
 
+        # If quest_nav_target points at an adjacent mineable cell, check it first
+        _mine_dirs = [(0, -1), (0, 1), (-1, 0), (1, 0)]
+        _qnav = getattr(entity, 'quest_nav_target', None)
+        if _qnav:
+            _, _, _qx, _qy = _qnav
+            _qdx, _qdy = _qx - entity.x, _qy - entity.y
+            if abs(_qdx) + abs(_qdy) == 1 and (_qdx, _qdy) in _mine_dirs:
+                if (0 <= _qx < GRID_WIDTH and 0 <= _qy < GRID_HEIGHT
+                        and screen['grid'][_qy][_qx] in ('STONE', 'IRON_ORE')):
+                    _mine_dirs = [(_qdx, _qdy)] + [d for d in _mine_dirs if d != (_qdx, _qdy)]
+
         # Try to mine adjacent rock (cardinal directions only — mirrors try_chop_tree)
-        for dx, dy in [(0, -1), (0, 1), (-1, 0), (1, 0)]:
+        for dx, dy in _mine_dirs:
             check_x = entity.x + dx
             check_y = entity.y + dy
             if 0 <= check_x < GRID_WIDTH and 0 <= check_y < GRID_HEIGHT:
