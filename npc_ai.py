@@ -697,11 +697,11 @@ class NpcAiMixin:
                 if random.random() < NPC_CAMP_PLACE_RATE:
                     self.npc_place_camp(entity)
             
-            # Miners mine existing caves first, then create new ones
+            # Miners mine existing caves first, then excavate new mineshafts
             if entity.type == 'MINER':
                 if not self.miner_mine_cave(entity):
                     if random.random() < NPC_CAMP_PLACE_RATE:
-                        self.miner_place_cave(entity)
+                        self.miner_place_mineshaft(entity)
             
             # All humanoid NPCs (peaceful and hostile) can clear trees
             # Lumberjacks do this via their normal behavior and collect wood

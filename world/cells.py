@@ -9,8 +9,9 @@ from constants import (
     TREE_GROWTH_RATE, TREE_DECAY_RATE, TREE_CROWD_DECAY_RATE,
     SAND_RECLAIM_RATE, CACTUS_DROUGHT_RATE, TREE_DROUGHT_RATE,
     FLOWER_SPREAD_RATE, FLOWER_DECAY_RATE,
-    DEEP_WATER_FORM_RATE, DEEP_WATER_EVAPORATE_RATE,
-    WATER_TO_DIRT_RATE, FLOODING_RATE,
+    DEEP_WATER_FORM_RATE, DEEP_WATER_EVAPORATE_RATE, DEEP_WATER_COBBLE_RATE,
+    WATER_TO_DIRT_RATE, WATER_EDGE_ROCK_RATE, FLOODING_RATE,
+    SAND_ROCK_TO_DIRT_RATE,
     BIOME_SPREAD_RATE,
     GRASS_SAND_DECAY_RATE, DIRT_SAND_SPREAD_RATE,
     GRASS_WATER_ABSORB_RATE, DIRT_WATER_EXTRA_GRASS_RATE,
@@ -194,6 +195,14 @@ class CellsMixin:
                     if random.random() < min(1.0, DIRT_WATER_EXTRA_GRASS_RATE * _growth):
                         new_grid[y][x] = 'GRASS'
 
+                # Dirt → Stone (at water's edge touching a non-dirt/water cell — forms rocky rim)
+                # Produces natural grottos: sand→dirt near water, then dirt at sand interface hardens
+                elif cell == 'DIRT' and total_water >= 1:
+                    _non_dirt_land = sum(1 for n in neighbors
+                                         if n not in ('DIRT', 'WATER', 'DEEP_WATER'))
+                    if _non_dirt_land >= 1 and random.random() < min(1.0, WATER_EDGE_ROCK_RATE * _growth):
+                        new_grid[y][x] = 'STONE'
+
                 # Dirt → Sand (any sand neighbor, no water — desertification spread)
                 elif cell == 'DIRT' and total_water == 0 and sand_count >= 1:
                     if random.random() < min(1.0, DIRT_SAND_SPREAD_RATE * _decay):
@@ -230,6 +239,16 @@ class CellsMixin:
                     if random.random() < min(1.0, SAND_RECLAIM_RATE * 0.05 * _growth):
                         new_grid[y][x] = 'DIRT'
 
+                # Sand → Dirt (touching stone/cobblestone — rock weathers adjacent sand)
+                elif cell == 'SAND' and cobblestone_count >= 1:
+                    if random.random() < min(1.0, SAND_ROCK_TO_DIRT_RATE * _growth):
+                        new_grid[y][x] = 'DIRT'
+
+                elif cell == 'SAND':
+                    _stone_adj = sum(1 for n in neighbors if n == 'STONE')
+                    if _stone_adj >= 1 and random.random() < min(1.0, SAND_ROCK_TO_DIRT_RATE * _growth):
+                        new_grid[y][x] = 'DIRT'
+
                 # Deep water formation: all 4 cardinal neighbors must be water/deepwater
                 elif cell == 'WATER':
                     cardinal_water = sum(
@@ -237,27 +256,36 @@ class CellsMixin:
                         if 0 <= x + cdx < GRID_WIDTH and 0 <= y + cdy < GRID_HEIGHT
                         and screen['grid'][y + cdy][x + cdx] in ('WATER', 'DEEP_WATER')
                     )
+                    # Stone/cobblestone neighbors slow evaporation (natural grotto walls)
+                    _stone_shield = max(0.1, 1.0 - 0.2 * sum(
+                        1 for cdx, cdy in ((0, -1), (0, 1), (-1, 0), (1, 0))
+                        if 0 <= x + cdx < GRID_WIDTH and 0 <= y + cdy < GRID_HEIGHT
+                        and screen['grid'][y + cdy][x + cdx] in ('STONE', 'COBBLESTONE')
+                    ))
                     if cardinal_water == 4 and random.random() < min(1.0, DEEP_WATER_FORM_RATE * _tp):
                         new_grid[y][x] = 'DEEP_WATER'
-                    elif total_water <= 1 and random.random() < min(1.0, WATER_TO_DIRT_RATE * _decay):
+                    elif total_water <= 1 and random.random() < min(1.0, WATER_TO_DIRT_RATE * _decay * _stone_shield):
                         new_grid[y][x] = 'DIRT'
                     elif _water_decay_target and zone_water_count > 4:
                         # Volume-based decay: large water bodies drain toward biome base cell.
                         # Rate = (zone_water_count - 4) * BASE_DECAY_RATE, scaled by drought.
                         # Pools of ≤ 4 cells are fully stable (rate = 0).
-                        _wdr = (zone_water_count - 4) * BASE_DECAY_RATE
+                        _wdr = (zone_water_count - 4) * BASE_DECAY_RATE * _stone_shield
                         if random.random() < min(1.0, _wdr * _decay):
                             new_grid[y][x] = _water_decay_target
 
                 # Deep water evaporation — mirrors formation: requires all 4 cardinal
-                # neighbors to be water/deep_water to stay deep; decays quickly otherwise
+                # neighbors to be water/deep_water to stay deep; decays quickly otherwise.
+                # Stable deep water mineralises to cobblestone (mineral deposits).
                 elif cell == 'DEEP_WATER':
                     cardinal_water_dw = sum(
                         1 for cdx, cdy in ((0, -1), (0, 1), (-1, 0), (1, 0))
                         if 0 <= x + cdx < GRID_WIDTH and 0 <= y + cdy < GRID_HEIGHT
                         and screen['grid'][y + cdy][x + cdx] in ('WATER', 'DEEP_WATER')
                     )
-                    if cardinal_water_dw < 4 and random.random() < min(1.0, DEEP_WATER_EVAPORATE_RATE * _decay):
+                    if cardinal_water_dw == 4 and random.random() < min(1.0, DEEP_WATER_COBBLE_RATE * _tp):
+                        new_grid[y][x] = 'COBBLESTONE'
+                    elif cardinal_water_dw < 4 and random.random() < min(1.0, DEEP_WATER_EVAPORATE_RATE * _decay):
                         new_grid[y][x] = 'WATER'
 
                 # Flower spread

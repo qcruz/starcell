@@ -1152,9 +1152,9 @@ class ZonesMixin:
                     if entity.type == 'MINER':
                         # Higher priority: mine existing caves into mineshafts
                         if not self.miner_mine_cave(entity):
-                            # No cave to mine — create a new one
+                            # No cave to mine — excavate a new mineshaft
                             if random.random() < NPC_CAMP_PLACE_RATE:
-                                self.miner_place_cave(entity)
+                                self.miner_place_mineshaft(entity)
 
                 if entity.hunger < 80 and has_food:
                     if random.random() < 0.6:

@@ -977,23 +977,22 @@ class NpcAiActionsMixin:
         entity.nav_target = nearest_cave
         return True
 
-    def miner_place_cave(self, entity):
-        """Miner creates a cave at zone corners"""
+    def miner_place_mineshaft(self, entity):
+        """Miner excavates a new mineshaft at a zone corner"""
         screen_key = entity.screen_key
         if screen_key not in self.screens:
             return
 
         screen = self.screens[screen_key]
 
-        # Count existing caves in zone
-        cave_count = 0
-        for row in screen['grid']:
-            for cell in row:
-                if cell in ['CAVE', 'HIDDEN_CAVE']:
-                    cave_count += 1
+        # Count existing mineshafts in zone
+        shaft_count = sum(
+            1 for row in screen['grid'] for cell in row
+            if cell == 'MINESHAFT'
+        )
 
-        # Don't create more than 2 caves per zone
-        if cave_count >= 2:
+        # Don't create more than 2 mineshafts per zone
+        if shaft_count >= 2:
             return
 
         # Try to place cave at a corner location
@@ -1018,15 +1017,15 @@ class NpcAiActionsMixin:
                         cell = screen['grid'][place_y][place_x]
                         # Can place cave on non-solid ground
                         if cell in ['GRASS', 'DIRT', 'SAND', 'STONE']:
-                            screen['grid'][place_y][place_x] = 'CAVE'
+                            screen['grid'][place_y][place_x] = 'MINESHAFT'
                             entity.inventory.pop('stone', None)
                             entity.inventory.pop('iron_ore', None)
 
-                            # Chance to level up from discovery
+                            # Chance to level up from mining
                             entity.level_up_from_activity('mine', self)
 
                             name_str = entity.name if entity.name else entity.type
-                            print(f"{name_str} discovered a cave at corner ({place_x}, {place_y}) in [{screen_key}]!")
+                            print(f"{name_str} excavated a mineshaft at corner ({place_x}, {place_y}) in [{screen_key}]!")
                             return
 
     def try_npc_trade(self, entity, screen_key):
