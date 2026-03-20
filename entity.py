@@ -948,7 +948,9 @@ class Inventory:
         return result
         
     def add_item(self, item_name, amount=1, category=None):
-        """Add item to appropriate category"""
+        """Add item to appropriate category.
+        Tools are stored in self.items and auto-referenced in the first empty tool_slot.
+        Tool slots are reference pointers only — items live in their category dicts."""
         if item_name in ITEMS:
             # Determine category
             if category is None:
@@ -964,7 +966,11 @@ class Inventory:
                     category = 'items'
 
             if category == 'tools':
-                # Fill into next empty slot(s)
+                # Store in items dict (tools live in items, tool_slots are references)
+                self.items[item_name] = self.items.get(item_name, 0) + amount
+                if self.selected['items'] is None:
+                    self.selected['items'] = item_name
+                # Auto-reference in first empty tool slot(s)
                 for _ in range(amount):
                     for i, slot in enumerate(self.tool_slots):
                         if slot is None:
@@ -983,23 +989,8 @@ class Inventory:
         return False
     
     def remove_item(self, item_name, amount=1):
-        """Remove item from any storage (tool slots first, then dict categories)."""
-        # Check tool slots first (each slot holds exactly 1 item)
-        for i, slot in enumerate(self.tool_slots):
-            if slot == item_name:
-                self.tool_slots[i] = None
-                if self.selected_tool_slot_idx == i:
-                    for j, s in enumerate(self.tool_slots):
-                        if s is not None:
-                            self.selected_tool_slot_idx = j
-                            self.selected['tools'] = s
-                            break
-                    else:
-                        self.selected_tool_slot_idx = None
-                        self.selected['tools'] = None
-                return True
-
-        # Check dict categories
+        """Remove item from dict categories. When count reaches 0, clears dangling
+        tool_slot and equipment_slot references automatically."""
         for category in ['items', 'magic', 'actions', 'followers']:
             inv = getattr(self, category)
             if item_name in inv and inv[item_name] >= amount:
@@ -1019,32 +1010,40 @@ class Inventory:
                         if not found_replacement:
                             self.selected['crafting'] = None
                     del inv[item_name]
+                    # Clear dangling tool_slot references
+                    for i, slot in enumerate(self.tool_slots):
+                        if slot == item_name:
+                            self.tool_slots[i] = None
+                            if self.selected_tool_slot_idx == i:
+                                for j, s in enumerate(self.tool_slots):
+                                    if s is not None:
+                                        self.selected_tool_slot_idx = j
+                                        self.selected['tools'] = s
+                                        break
+                                else:
+                                    self.selected_tool_slot_idx = None
+                                    self.selected['tools'] = None
+                    # Clear dangling equipment_slot references
+                    for slot_name, slot_item in list(self.equipment_slots.items()):
+                        if slot_item == item_name:
+                            self.equipment_slots[slot_name] = None
                 return True
         return False
 
     def has_item(self, item_name, amount=1):
-        """Check if item exists in any storage."""
-        total = sum(1 for s in self.tool_slots if s == item_name)
+        """Check if item exists in any dict category (tool_slots are references, not counted)."""
+        total = 0
         for category in ['items', 'magic', 'actions', 'followers']:
             total += getattr(self, category).get(item_name, 0)
         return total >= amount
 
     def equip_to_slot(self, slot_idx, item_name, source_category):
-        """Move item from source_category dict into a tool slot."""
-        # Unequip whatever is in the slot first
-        if self.tool_slots[slot_idx] is not None:
-            self.unequip_slot(slot_idx)
-        # Remove from source
+        """Set a tool slot to reference an item (reference-only, item stays in source dict)."""
+        # Verify item exists in source
         src_inv = getattr(self, source_category, None)
         if src_inv is None or src_inv.get(item_name, 0) <= 0:
             return False
-        src_inv[item_name] -= 1
-        if src_inv[item_name] <= 0:
-            del src_inv[item_name]
-            if self.selected.get(source_category) == item_name:
-                remaining = list(src_inv.keys())
-                self.selected[source_category] = remaining[0] if remaining else None
-        # Place in slot
+        # Place reference in slot
         self.tool_slots[slot_idx] = item_name
         self.selected_tool_slot_idx = slot_idx
         self.selected['tools'] = item_name
@@ -1052,23 +1051,9 @@ class Inventory:
         return True
 
     def unequip_slot(self, slot_idx):
-        """Remove item from tool slot and return it to its natural inventory."""
-        item = self.tool_slots[slot_idx]
-        if item is None:
+        """Clear a tool slot reference (item stays in its source dict)."""
+        if self.tool_slots[slot_idx] is None:
             return False
-        # Determine destination based on item flags
-        item_def = ITEMS.get(item, {})
-        if item_def.get('is_spell'):
-            dest_inv, dest_cat = self.magic, 'magic'
-        elif item_def.get('is_action'):
-            dest_inv, dest_cat = self.actions, 'actions'
-        elif item_def.get('is_follower'):
-            dest_inv, dest_cat = self.followers, 'followers'
-        else:
-            dest_inv, dest_cat = self.items, 'items'
-        dest_inv[item] = dest_inv.get(item, 0) + 1
-        if self.selected.get(dest_cat) is None:
-            self.selected[dest_cat] = item
         self.tool_slots[slot_idx] = None
         # Update tool selection
         if self.selected_tool_slot_idx == slot_idx:
@@ -1118,34 +1103,21 @@ class Inventory:
         return None
     
     def equip_to_equipment_slot(self, slot_name, item_name, source_category):
-        """Move item from source_category into a named equipment slot."""
+        """Set an equipment slot to reference an item (reference-only, item stays in source dict)."""
         if slot_name not in self.equipment_slots:
             return False
-        # Unequip whatever is in the slot first
-        if self.equipment_slots[slot_name] is not None:
-            self.unequip_equipment_slot(slot_name)
-        # Remove from source
+        # Verify item exists in source
         src_inv = getattr(self, source_category, None)
         if src_inv is None or src_inv.get(item_name, 0) <= 0:
             return False
-        src_inv[item_name] -= 1
-        if src_inv[item_name] <= 0:
-            del src_inv[item_name]
-            if self.selected.get(source_category) == item_name:
-                remaining = list(src_inv.keys())
-                self.selected[source_category] = remaining[0] if remaining else None
         self.equipment_slots[slot_name] = item_name
         self.pending_equip_equipment_slot = None
         return True
 
     def unequip_equipment_slot(self, slot_name):
-        """Remove item from equipment slot and return it to items inventory."""
-        item = self.equipment_slots.get(slot_name)
-        if item is None:
+        """Clear an equipment slot reference (item stays in its source dict)."""
+        if self.equipment_slots.get(slot_name) is None:
             return False
-        self.items[item] = self.items.get(item, 0) + 1
-        if self.selected.get('items') is None:
-            self.selected['items'] = item
         self.equipment_slots[slot_name] = None
         return True
 
@@ -1199,13 +1171,10 @@ class Inventory:
         return self.selected.get('crafting')
     
     def get_all_craftable_items(self):
-        """Get combined list of items, tool slots, and magic for crafting screen."""
+        """Get combined list of items and magic for crafting screen."""
         all_items = {}
         all_items.update(self.items)
         all_items.update(self.magic)
-        for name in self.tool_slots:
-            if name is not None:
-                all_items[name] = all_items.get(name, 0) + 1
         return list(all_items.items())
 
     def get_craftable_recipes(self):
@@ -1223,8 +1192,8 @@ class Inventory:
             # Compute how many times this recipe can be crafted
             times = None
             for ing, count in needed.items():
-                # Total player has across all categories
-                total = sum(1 for s in self.tool_slots if s == ing)
+                # Total player has across all categories (tool_slots are references, not counted)
+                total = 0
                 for cat in ['items', 'magic', 'actions', 'followers']:
                     total += getattr(self, cat).get(ing, 0)
                 can = total // count

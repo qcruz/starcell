@@ -309,6 +309,13 @@ class SaveLoadMixin:
                 self.inventory.equipment_slots[slot_name] = saved_equip.get(slot_name)
             self.inventory.selected.setdefault('crafting', None)
             self.inventory.selected['tools'] = slot_item
+            # Migration: ensure any tool_slot items also exist in items dict
+            # (old saves stored tools only in tool_slots, new architecture requires items dict)
+            for slot_item_name in self.inventory.tool_slots:
+                if slot_item_name is not None:
+                    item_def = ITEMS.get(slot_item_name, {})
+                    if item_def.get('is_tool') and slot_item_name not in self.inventory.items:
+                        self.inventory.items[slot_item_name] = self.inventory.items.get(slot_item_name, 0) + 1
 
             # Convert dropped_items string keys back to tuples
             dropped_items_loaded = save_data.get('dropped_items', {})

@@ -1193,12 +1193,32 @@ class GameCoreMixin:
                             self.gain_xp(1)
                         else:
                             self.toggle_autopilot()
-                    # Number keys to select inventory slots (no XP)
+                    # Number keys: tool slot select/use when no menus open; assign when tools open
                     elif event.key in [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4,
                                       pygame.K_5, pygame.K_6, pygame.K_7, pygame.K_8,
                                       pygame.K_9, pygame.K_0]:
                         slot = (event.key - pygame.K_1) if event.key != pygame.K_0 else 9
-                        self.select_inventory_slot(slot)
+                        mods = pygame.key.get_mods()
+                        if 'tools' in self.inventory.open_menus:
+                            # Tools panel open: clear slot and mark pending for reassignment
+                            self.inventory.unequip_slot(slot)
+                            self.inventory.selected_tool_slot_idx = slot
+                            self.inventory.selected['tools'] = None
+                            self.inventory.pending_equip_slot = slot
+                            self.inventory.pending_equip_equipment_slot = None
+                        elif not self.inventory.open_menus:
+                            # No menus open: hotkey activates the tool slot
+                            if slot < len(self.inventory.tool_slots):
+                                self.inventory.selected_tool_slot_idx = slot
+                                self.inventory.selected['tools'] = self.inventory.tool_slots[slot]
+                                if mods & pygame.KMOD_SHIFT:
+                                    self.place_selected_item()
+                                    self.gain_xp(1)
+                                else:
+                                    self.interact()
+                                    self.gain_xp(1)
+                        else:
+                            self.select_inventory_slot(slot)
                 
                 elif self.state == 'paused':
                     if event.key == pygame.K_ESCAPE or event.key == pygame.K_p:
@@ -1228,7 +1248,14 @@ class GameCoreMixin:
                                        pygame.K_5, pygame.K_6, pygame.K_7, pygame.K_8,
                                        pygame.K_9, pygame.K_0]:
                         slot = (event.key - pygame.K_1) if event.key != pygame.K_0 else 9
-                        self.select_inventory_slot(slot)
+                        if 'tools' in self.inventory.open_menus:
+                            self.inventory.unequip_slot(slot)
+                            self.inventory.selected_tool_slot_idx = slot
+                            self.inventory.selected['tools'] = None
+                            self.inventory.pending_equip_slot = slot
+                            self.inventory.pending_equip_equipment_slot = None
+                        else:
+                            self.select_inventory_slot(slot)
         
         # Handle direction changes and close inventory on movement
         if self.state == 'playing':
@@ -1295,9 +1322,10 @@ class GameCoreMixin:
                         slot_y <= pos[1] <= slot_y + slot_size):
 
                     if category == 'tools':
-                        # --- Tool bar slot clicked: select and mark as pending ---
+                        # --- Tool bar slot clicked: clear slot, then mark as pending ---
+                        self.inventory.unequip_slot(i)
                         self.inventory.selected_tool_slot_idx = i
-                        self.inventory.selected['tools'] = item_name
+                        self.inventory.selected['tools'] = None
                         self.inventory.pending_equip_slot = i
                         self.inventory.pending_equip_equipment_slot = None
                         self.sound.on_inventory_select()
