@@ -5,6 +5,34 @@ Reviewed from `debug/bugcatcher.log` after each session.
 
 ---
 
+## Session 51 — 2026-03-20 (quest timeout removed + proxy re-spawn fix)
+
+**Fixes applied before this run:**
+- Removed `QUEST_MAX_TICKS` / quest timeout entirely — quests run until natural completion
+- Proxy re-spawn fix applied after session (see confirmed bug below)
+
+**Run stats:** Tick ~15231 (~4.2 min). Quest sequence: FARM → HUNT (proxy died mid-HUNT, autopilot froze)
+
+- **FARM**: ✅ Completed naturally between tick 4728–8028 — first FARM completion observed
+- **HUNT**: Proxy (id=312) died between tick 4728 and 8028; `_autopilot_disengage()` set `autopilot=False` but left `autopilot_locked=True`; player stuck at (21,7) for ~7000 ticks taking passive damage
+- **LUMBER/MINE/etc.**: Never reached — session spent in frozen state
+
+### CONFIRMED FIX — FARM completed naturally
+
+With timeout removed, FARM completed between ticks 4728 and 8028 (~55 seconds). Previous sessions it was timing out at the 60s cap. Quest is achievable; it just needs time.
+
+### CONFIRMED BUG — Proxy death freezes player (autopilot_locked desync)
+
+**Root cause:** When proxy entity is externally removed (killed), `_autopilot_disengage()` sets `self.autopilot=False`. On the next tick, `game_core.py` sees `autopilot_locked=True` → calls `update_autopilot()` → but `update_autopilot()` early-returns on `if not self.autopilot`. Proxy is never respawned. Player is locked indefinitely.
+
+**Fix applied:** `update_autopilot()` now re-enables `self.autopilot=True` when `autopilot_locked=True` before the early-return check, allowing the spawn path to re-engage immediately.
+
+### OBSERVATION — Enemy facing while autopilot stuck
+
+User observed enemies attacking the player were not facing the player while the proxy was dead and autopilot was frozen. Likely a visual artifact of `world_x/world_y` diverging from grid `x/y` at proxy death time (smooth interpolation left mid-flight). The re-spawn fix resolves the root cause (no more frozen state). Will confirm facing in next session.
+
+---
+
 ## Session 50 — 2026-03-20 (snap fix + zone exit fix)
 
 **Fixes applied before this run:**

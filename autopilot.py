@@ -111,8 +111,15 @@ class AutopilotMixin:
 
     def update_autopilot(self):
         """Top-level autopilot tick.  Spawns proxy on first call, then maintains it."""
-        if not self.autopilot or self.state != 'playing':
+        if self.state != 'playing':
             return
+        # In locked mode (Shift+A), re-enable autopilot flag if it was cleared by a
+        # proxy death or persistent-flee disengage — the proxy will be respawned below.
+        if not self.autopilot:
+            if self.autopilot_locked:
+                self.autopilot = True
+            else:
+                return
 
         # Drain any queued synthetic button presses first
         self._ap_flush_input_queue()
