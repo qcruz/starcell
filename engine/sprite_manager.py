@@ -245,10 +245,29 @@ class SpriteManager:
         print("  ✓ Generated all structure and special cell sprites")
 
         # Load individual PNG sprites for new cell/item types
+        _wa = 'weapons and armour'  # subdirectory shorthand
         _individual_sprites = {
+            # Cells
             'IRON_ORE':   'ironore.png',
             'WELL':       'well.png',
-            'iron_sword': 'sword.png',
+            # Weapons — keyed by item name so inventory/drop lookup finds them directly
+            'iron_sword':       f'{_wa}/sword_red_handle.png',
+            'bone_sword':       f'{_wa}/sword_red_handle.png',
+            'enchanted_sword':  f'{_wa}/sword_gold.png',
+            'club':             f'{_wa}/club_red.png',
+            'bow':              f'{_wa}/bow.png',
+            'bow_metal':        f'{_wa}/bow_metal.png',
+            'staff_red':        f'{_wa}/staff_red.png',
+            'spear':            f'{_wa}/spear_black.png',
+            'warhammer':        f'{_wa}/warhammer_red_bronze.png',
+            # Shields
+            'shield':           f'{_wa}/shield_metal.png',
+            'shield_bronze':    f'{_wa}/shield_red_bronze.png',
+            # Armour
+            'armour_chest':     f'{_wa}/armour_chest_metal.png',
+            'armour_helm':      f'{_wa}/armour_helm_metal.png',
+            'armour_legs':      f'{_wa}/armour_legs_metal.png',
+            'armour_shoes':     f'{_wa}/armour_shoes_metal.png',
         }
         sprite_dir = os.path.join(os.path.dirname(__file__), '..', 'sprites')
         for sprite_key, filename in _individual_sprites.items():
