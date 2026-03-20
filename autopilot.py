@@ -142,8 +142,14 @@ class AutopilotMixin:
 
         proxy = self.entities.get(self.autopilot_proxy_id)
         if proxy is None:
-            # Proxy was externally removed — disengage
+            # Proxy was killed — trigger full death/respawn sequence then re-engage.
+            print("[Autopilot] Proxy killed — triggering death/respawn")
             self._autopilot_disengage()
+            self.death_years = random.randint(3, 10)
+            self.death_start_tick = self.tick
+            self.death_ticks_simulated = 0
+            self._time_pass_spawned = False
+            self.state = 'death'
             return
 
         # Keep proxy position in sync so the player's logical position tracks it
