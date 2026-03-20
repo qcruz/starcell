@@ -594,6 +594,7 @@ class AutopilotMixin:
             target_sk = f"{tsx},{tsy}"
             if target_sk == screen_key:
                 # Same zone: assign as keeper target so NPC AI walks there naturally.
+                proxy.keeper = True
                 proxy.keeper_type = 1
                 proxy.keeper_target = {
                     'type': 'cell', 'ref': None,
