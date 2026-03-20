@@ -113,7 +113,7 @@ Game ← HudMixin, InventoryUIMixin, MenusMixin, DevScreenMixin
 | Key | Action |
 |---|---|
 | I | Items tab |
-| T | Tools tab |
+| T | Tools tab + Equipment panel |
 | M | Magic tab |
 | R | Actions tab |
 | F | Followers tab |
@@ -122,6 +122,7 @@ Game ← HudMixin, InventoryUIMixin, MenusMixin, DevScreenMixin
 | Q | Toggle quest panel |
 | Shift+Q | Get / turn in quest from inspected NPC |
 | Shift+A | Autopilot toggle OR assign quest to NPC (context-sensitive) |
+| Shift+G | Gift item to inspected NPC — offers selected item; NPC gains +favor |
 | Shift+T | Open trade window with inspected NPC |
 | Shift+F | Attempt to recruit inspected NPC as follower (50% chance) |
 | Shift+I | Dev info overlay (zones, entities, followers, domains) |
@@ -410,6 +411,18 @@ State transitions: `update_entity_ai_state()` rolls probability table (aggressiv
 - Damage: `strength // 5` (level-scaled) + weapon bonus + 1.2× hostile multiplier
 - Flee when health low; flee_chance scales by threat
 - Counterattack (non-combat NPCs): 10%
+
+**Favor System**
+- Every NPC has a `favor` score: −100 to 100
+- Default: 0 for peaceful NPCs, −50 for hostiles
+- Decreases on player attack: −5/hit, −20/kill
+- Increases via gift giving (Shift+G while inspecting NPC)
+- Displayed when inspecting NPC alongside faction label
+
+**Equipment Panel** (T key, alongside Tools tab)
+- Slots: Weapon, Off-hand, Armor, Ring ×2, Amulet
+- Stats auto-calculated in combat rolls
+- Click equipment slot then item to equip
 
 **Follower System**
 - `self.followers` list: entity IDs
