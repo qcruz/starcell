@@ -393,7 +393,7 @@ class NpcAiActionsMixin:
                 check_x = entity.x + dx
                 check_y = entity.y + dy
                 if 0 <= check_x < GRID_WIDTH and 0 <= check_y < GRID_HEIGHT:
-                    if screen['grid'][check_y][check_x] in ['TREE1', 'TREE2']:
+                    if screen['grid'][check_y][check_x] in ['TREE1', 'TREE2', 'CACTUS', 'BUSH']:
                         nearby_trees += 1
 
         # Calculate chop rate with density bonus
@@ -412,7 +412,7 @@ class NpcAiActionsMixin:
             check_y = entity.y + dy
             if 0 <= check_x < GRID_WIDTH and 0 <= check_y < GRID_HEIGHT:
                 cell = screen['grid'][check_y][check_x]
-                if cell in ['TREE1', 'TREE2']:
+                if cell in ['TREE1', 'TREE2', 'CACTUS', 'BUSH']:
                     entity.update_facing_toward(check_x, check_y)
                     entity.trigger_action_animation()
                     self.show_attack_animation(check_x, check_y, entity=entity)
@@ -632,8 +632,8 @@ class NpcAiActionsMixin:
                 check_y = entity.y + dy
                 if 0 <= check_x < GRID_WIDTH and 0 <= check_y < GRID_HEIGHT:
                     cell = screen['grid'][check_y][check_x]
-                    if cell in ['TREE1', 'TREE2']:
-                        # Clear tree - apply drop effects but don't collect wood
+                    if cell in ['TREE1', 'TREE2', 'CACTUS', 'BUSH']:
+                        # Clear tree/cactus/bush - apply drop effects but don't collect wood
                         drops = CELL_TYPES[cell].get('drops', [])
                         for drop in drops:
                             if random.random() < drop['chance']:

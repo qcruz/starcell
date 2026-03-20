@@ -260,6 +260,25 @@ class AutopilotMixin:
         # Choose NPC type from active quest
         npc_type = QUEST_NPC_TYPE.get(self.active_quest, DEFAULT_NPC_TYPE)
 
+        # Find nearest walkable (non-solid) cell — player may be near water/walls
+        if screen_key in self.screens:
+            grid = self.screens[screen_key]['grid']
+            if CELL_TYPES.get(grid[py][px], {}).get('solid', False):
+                found = False
+                for radius in range(1, 6):
+                    for dy in range(-radius, radius + 1):
+                        for dx in range(-radius, radius + 1):
+                            cx, cy = px + dx, py + dy
+                            if (0 <= cx < GRID_WIDTH and 0 <= cy < GRID_HEIGHT
+                                    and not CELL_TYPES.get(grid[cy][cx], {}).get('solid', False)):
+                                px, py = cx, cy
+                                found = True
+                                break
+                        if found:
+                            break
+                    if found:
+                        break
+
         # Create the entity
         proxy = Entity(npc_type, px, py, psx, psy, level=self.player.get('level', 1))
 
@@ -545,6 +564,10 @@ class AutopilotMixin:
         if quest.status != 'active':
             self.loreEngine(quest)
         if quest.status != 'active':
+            # No target found in loaded zones — explore adjacent zones to load them.
+            # Once an adjacent zone is entered and generated, loreEngine will find
+            # targets there on the next nudge cycle.
+            self._autopilot_explore_for_target(proxy)
             return
 
         screen_key = f"{proxy.screen_x},{proxy.screen_y}"
@@ -591,6 +614,31 @@ class AutopilotMixin:
             if target_sk != screen_key:
                 self._nudge_toward_zone(proxy, target_entity.screen_x,
                                         target_entity.screen_y, screen_key)
+
+    def _autopilot_explore_for_target(self, proxy):
+        """When loreEngine can't find a target, explore to load new zones.
+
+        Pushes proxy toward the nearest unloaded adjacent zone.  Once the proxy
+        crosses the zone boundary, the new zone is generated and loreEngine will
+        find targets there on the next nudge.  If all adjacent zones are already
+        loaded, nudge toward a random cardinal direction to keep the proxy moving.
+        """
+        screen_key = f"{proxy.screen_x},{proxy.screen_y}"
+        candidates = [
+            (proxy.screen_x + 1, proxy.screen_y),
+            (proxy.screen_x - 1, proxy.screen_y),
+            (proxy.screen_x,     proxy.screen_y + 1),
+            (proxy.screen_x,     proxy.screen_y - 1),
+        ]
+        random.shuffle(candidates)
+        # Prefer unloaded zones (they will be generated on entry)
+        for asx, asy in candidates:
+            if f"{asx},{asy}" not in self.screens:
+                self._nudge_toward_zone(proxy, asx, asy, screen_key)
+                return
+        # All adjacent zones loaded; nudge toward the first cardinal direction anyway
+        asx, asy = candidates[0]
+        self._nudge_toward_zone(proxy, asx, asy, screen_key)
 
     def _nudge_toward_zone(self, proxy, target_sx, target_sy, screen_key):
         """Set proxy target toward the center-corridor exit that leads to (target_sx, target_sy).

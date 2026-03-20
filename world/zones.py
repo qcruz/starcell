@@ -1978,6 +1978,10 @@ class ZonesMixin:
             if eid in self.followers:
                 continue
 
+            # Skip autopilot proxies — their keeper state is managed by the autopilot
+            if entity.props.get('is_autopilot_proxy', False):
+                continue
+
             ktype = KEEPER_ENTITY_TYPE.get(entity.type)
             if not ktype:
                 continue  # TRADER, KING, etc. — never become keepers
