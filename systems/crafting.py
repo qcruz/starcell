@@ -624,8 +624,9 @@ class CraftingMixin:
             else:
                 self.current_screen['grid'][target_y][target_x] = base
 
-    def place_selected_item(self):
+    def place_selected_item(self, item_name=None):
         """Place selected item as a cell in the world, or as an overlay if no cell mapping.
+        Pass item_name to force a specific item (e.g. from hotbar slot).
         Inside structures, non-structural items are always placed as overlays
         to preserve the structure floor."""
         target = self.get_target_cell()
@@ -644,39 +645,56 @@ class CraftingMixin:
         # Structural items that replace grid cells even inside structures
         structural_items = {'wall', 'house', 'cave', 'mineshaft', 'chest'}
 
-        # Find which category has an item selected
-        for category in ['items', 'tools', 'magic', 'followers']:
-            selected = self.inventory.get_selected_item(category)
-            if selected:
-                if not self.inventory.has_item(selected):
-                    continue
+        # Determine which item to place
+        if item_name is not None:
+            # Explicit item (hotbar hotkey): verify it actually exists in inventory
+            selected = item_name if self.inventory.has_item(item_name) else None
+            if not selected:
+                return
+        else:
+            # P key fallback: prefer active tool slot, then other categories
+            selected = None
+            # Check active tool slot first
+            idx = self.inventory.selected_tool_slot_idx
+            if idx is not None and idx < len(self.inventory.tool_slots):
+                slot_item = self.inventory.tool_slots[idx]
+                if slot_item and self.inventory.has_item(slot_item):
+                    selected = slot_item
+            if not selected:
+                for category in ['items', 'magic', 'followers']:
+                    cat_sel = self.inventory.get_selected_item(category)
+                    if cat_sel and self.inventory.has_item(cat_sel):
+                        selected = cat_sel
+                        break
+            if not selected:
+                return
 
-                # Inside structures: non-structural items always go as overlays
-                if in_structure and selected not in structural_items and selected in ITEM_TO_CELL:
-                    self.inventory.remove_item(selected, 1)
-                    if in_structure and self.player.get('structure_key'):
-                        sk = self.player['structure_key']
-                    else:
-                        sk = screen_key
-                    if sk not in self.dropped_items:
-                        self.dropped_items[sk] = {}
-                    cell_key = (target_x, target_y)
-                    if cell_key not in self.dropped_items[sk]:
-                        self.dropped_items[sk][cell_key] = {}
-                    self.dropped_items[sk][cell_key][selected] = \
-                        self.dropped_items[sk][cell_key].get(selected, 0) + 1
-                    return
-                elif selected in ITEM_TO_CELL:
-                    # Overworld: place as a grid cell (replaces the cell)
-                    cell_type = ITEM_TO_CELL[selected]
-                    self.current_screen['grid'][target_y][target_x] = cell_type
-                    self.inventory.remove_item(selected, 1)
-                    return
-                else:
-                    # No cell mapping — place as overlay
-                    self.inventory.remove_item(selected, 1)
-                    self.drop_item(selected, target_x, target_y)
-                    return
+        # Inside structures: non-structural items always go as overlays
+        if in_structure and selected not in structural_items and selected in ITEM_TO_CELL:
+            self.inventory.remove_item(selected, 1)
+            if in_structure and self.player.get('structure_key'):
+                sk = self.player['structure_key']
+            else:
+                sk = screen_key
+            if sk not in self.dropped_items:
+                self.dropped_items[sk] = {}
+            cell_key = (target_x, target_y)
+            if cell_key not in self.dropped_items[sk]:
+                self.dropped_items[sk][cell_key] = {}
+            self.dropped_items[sk][cell_key][selected] = \
+                self.dropped_items[sk][cell_key].get(selected, 0) + 1
+            return
+        elif selected in ITEM_TO_CELL:
+            # Overworld: place as a grid cell (replaces the cell)
+            cell_type = ITEM_TO_CELL[selected]
+            self.current_screen['grid'][target_y][target_x] = cell_type
+            self.inventory.remove_item(selected, 1)
+            return
+        else:
+            # No cell mapping — place as overlay
+            self.inventory.remove_item(selected, 1)
+            self.drop_item(selected, target_x, target_y)
+            return
 
     def drop_selected_item(self):
         """Drop currently selected item"""

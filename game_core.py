@@ -1209,14 +1209,16 @@ class GameCoreMixin:
                         elif not self.inventory.open_menus:
                             # No menus open: hotkey activates the tool slot
                             if slot < len(self.inventory.tool_slots):
+                                slot_item = self.inventory.tool_slots[slot]
                                 self.inventory.selected_tool_slot_idx = slot
-                                self.inventory.selected['tools'] = self.inventory.tool_slots[slot]
-                                if mods & pygame.KMOD_SHIFT:
-                                    self.place_selected_item()
-                                    self.gain_xp(1)
-                                else:
-                                    self.interact()
-                                    self.gain_xp(1)
+                                self.inventory.selected['tools'] = slot_item
+                                if slot_item:
+                                    if mods & pygame.KMOD_SHIFT:
+                                        self.place_selected_item(item_name=slot_item)
+                                        self.gain_xp(1)
+                                    else:
+                                        self.interact()
+                                        self.gain_xp(1)
                         else:
                             self.select_inventory_slot(slot)
                 
