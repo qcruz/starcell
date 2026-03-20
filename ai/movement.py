@@ -478,41 +478,33 @@ class NpcAiMovementMixin:
         new_position = None
         exit_cells = []  # Track exit cells to add to memory
 
-        # Top entrance - must be within 1 cell of center exit
-        if (exits['top'] and entity.y <= 1 and
-            abs(entity.x - center_x) <= 1):  # Must be at center ±1 cell
+        # Top entrance — any x position along top edge
+        if exits['top'] and entity.y <= 1:
             transition_target = (entity.screen_x, entity.screen_y - 1)
             new_position = (entity.x, GRID_HEIGHT - 3)
-            # Mark cells near top exit
-            exit_cells = [(center_x + dx, 0) for dx in range(-2, 3)]
-            exit_cells.extend([(center_x + dx, 1) for dx in range(-2, 3)])
+            exit_cells = [(entity.x + dx, 0) for dx in range(-2, 3)]
+            exit_cells.extend([(entity.x + dx, 1) for dx in range(-2, 3)])
 
-        # Bottom entrance - must be within 1 cell of center exit
-        elif (exits['bottom'] and entity.y >= GRID_HEIGHT - 2 and
-              abs(entity.x - center_x) <= 1):
+        # Bottom entrance — any x position along bottom edge
+        elif exits['bottom'] and entity.y >= GRID_HEIGHT - 2:
             transition_target = (entity.screen_x, entity.screen_y + 1)
             new_position = (entity.x, 2)
-            # Mark cells near bottom exit
-            exit_cells = [(center_x + dx, GRID_HEIGHT - 1) for dx in range(-2, 3)]
-            exit_cells.extend([(center_x + dx, GRID_HEIGHT - 2) for dx in range(-2, 3)])
+            exit_cells = [(entity.x + dx, GRID_HEIGHT - 1) for dx in range(-2, 3)]
+            exit_cells.extend([(entity.x + dx, GRID_HEIGHT - 2) for dx in range(-2, 3)])
 
-        # Left entrance - must be within 1 cell of center exit
-        elif (exits['left'] and entity.x <= 1 and
-              abs(entity.y - center_y) <= 1):
+        # Left entrance — any y position along left edge
+        elif exits['left'] and entity.x <= 1:
             transition_target = (entity.screen_x - 1, entity.screen_y)
             new_position = (GRID_WIDTH - 3, entity.y)
-            # Mark cells near left exit
-            exit_cells = [(0, center_y + dy) for dy in range(-2, 3)]
-            exit_cells.extend([(1, center_y + dy) for dy in range(-2, 3)])
+            exit_cells = [(0, entity.y + dy) for dy in range(-2, 3)]
+            exit_cells.extend([(1, entity.y + dy) for dy in range(-2, 3)])
 
-        # Right entrance - must be within 1 cell of center exit
-        elif (exits['right'] and entity.x >= GRID_WIDTH - 2 and
-              abs(entity.y - center_y) <= 1):
+        # Right entrance — any y position along right edge
+        elif exits['right'] and entity.x >= GRID_WIDTH - 2:
             transition_target = (entity.screen_x + 1, entity.screen_y)
             new_position = (2, entity.y)
-            # Mark cells near right exit
-            exit_cells = [(GRID_WIDTH - 1, center_y + dy) for dy in range(-2, 3)]
-            exit_cells.extend([(GRID_WIDTH - 2, center_y + dy) for dy in range(-2, 3)])
+            exit_cells = [(GRID_WIDTH - 1, entity.y + dy) for dy in range(-2, 3)]
+            exit_cells.extend([(GRID_WIDTH - 2, entity.y + dy) for dy in range(-2, 3)])
 
         if transition_target and new_position:
             new_screen_x, new_screen_y = transition_target
@@ -642,25 +634,25 @@ class NpcAiMovementMixin:
         # Verify entity is in the exit corridor for the direction they're stepping.
         # Corridor geometry mirrors is_at_exit(): 2-tile span at each edge center.
         if new_y < 0:
-            if not screen['exits']['top'] or not (center_x - 1 <= entity.x <= center_x):
+            if not screen['exits']['top']:
                 return
             new_screen_y -= 1
             new_y = GRID_HEIGHT - 2
             facing_after = 'up'
         elif new_y >= GRID_HEIGHT:
-            if not screen['exits']['bottom'] or not (center_x - 1 <= entity.x <= center_x):
+            if not screen['exits']['bottom']:
                 return
             new_screen_y += 1
             new_y = 1
             facing_after = 'down'
         elif new_x < 0:
-            if not screen['exits']['left'] or not (center_y - 1 <= entity.y <= center_y):
+            if not screen['exits']['left']:
                 return
             new_screen_x -= 1
             new_x = GRID_WIDTH - 2
             facing_after = 'left'
         elif new_x >= GRID_WIDTH:
-            if not screen['exits']['right'] or not (center_y - 1 <= entity.y <= center_y):
+            if not screen['exits']['right']:
                 return
             new_screen_x += 1
             new_x = 1

@@ -1119,8 +1119,13 @@ class AutopilotMixin:
 
         Full-stop behavior: proxy stops in place, faces the target cell,
         executes the harvest action. No position movement is applied.
-        (tx, ty) must be adjacent to the proxy (dist == 1).
+        (tx, ty) must be directly adjacent to the proxy (dist == 1).
         """
+        # Hard adjacency guard — only act on cells immediately adjacent
+        dist = abs(tx - int(proxy.x)) + abs(ty - int(proxy.y))
+        if dist != 1:
+            return
+
         screen_key = f"{proxy.screen_x},{proxy.screen_y}"
         if screen_key not in self.screens:
             return
@@ -1189,12 +1194,16 @@ class AutopilotMixin:
                   f"proxy=({int(proxy.x)},{int(proxy.y)}) stuck={self._autopilot_pos_stuck_ticks}t")
 
     def _autopilot_opportunistic_harvest(self, proxy):
-        """Scan the 3×3 area around the proxy for harvestable cells and collect them.
+        """Scan adjacent cells for harvestable resources and collect them.
 
-        Fires every ~30 ticks regardless of movement/ai_state so the proxy
-        accumulates resources while traversing the world.  Trees take priority
+        Fires every ~30 ticks while proxy is stationary.  Trees take priority
         over rocks (lumberjacking yields more varied drops).
         """
+        # Skip if proxy is mid-interpolation — changing facing during movement
+        # causes the smooth movement system to snap the perpendicular axis.
+        if abs(proxy.world_x - proxy.x) + abs(proxy.world_y - proxy.y) > 0.3:
+            return
+
         screen_key = f"{proxy.screen_x},{proxy.screen_y}"
         if screen_key not in self.screens:
             return
