@@ -247,11 +247,11 @@ class AutopilotMixin:
         proxy.facing = self.player.get('facing', 'down')
 
         # ── Seed proxy inventory from player ──────────────────────────────
+        # Tools now live in self.inventory.items — read only that dict to avoid
+        # double-counting (the tools property reads from tool_slots references).
         proxy.inventory = {}
-        for cat in ('items', 'tools'):
-            src = getattr(self.inventory, cat, {})
-            for item_name, count in src.items():
-                proxy.inventory[item_name] = proxy.inventory.get(item_name, 0) + count
+        for item_name, count in self.inventory.items.items():
+            proxy.inventory[item_name] = count
 
         # ── Register entity ───────────────────────────────────────────────
         entity_id = self.next_entity_id
@@ -411,17 +411,15 @@ class AutopilotMixin:
     def _sync_inventory_to_player(self, proxy):
         """Copy proxy entity inventory → player Inventory object.
         Handles both plain item dicts (proxy) and the Inventory class (player).
-        Only syncs items/tools; magic stays on player."""
+        Only syncs items dict; magic/actions/followers stay on player.
+        Tools live in self.inventory.items now — no separate tools sync needed."""
         if not hasattr(proxy, 'inventory'):
             return
 
-        # Build a combined flat dict from player items + tools
-        player_flat = {}
-        for cat in ('items', 'tools'):
-            for item_name, count in getattr(self.inventory, cat, {}).items():
-                player_flat[item_name] = count
-
-        proxy_flat = dict(proxy.inventory)
+        # Player flat: items only (tools are inside items dict; tools property
+        # reads from tool_slots references so must NOT be used here — would double-count).
+        player_flat = dict(self.inventory.items)
+        proxy_flat  = dict(proxy.inventory)
 
         # Find differences and apply them
         all_keys = set(player_flat) | set(proxy_flat)
@@ -434,16 +432,15 @@ class AutopilotMixin:
             if delta > 0:
                 self.inventory.add_item(key, delta)
             else:
-                # Remove items (best-effort)
-                item_info = ITEMS.get(key, {})
-                if item_info.get('is_tool'):
-                    cat_dict = self.inventory.tools
-                else:
-                    cat_dict = self.inventory.items
-                if key in cat_dict:
-                    cat_dict[key] = max(0, cat_dict[key] + delta)
-                    if cat_dict[key] == 0:
-                        del cat_dict[key]
+                # Remove items directly from items dict (best-effort)
+                if key in self.inventory.items:
+                    self.inventory.items[key] = max(0, self.inventory.items[key] + delta)
+                    if self.inventory.items[key] == 0:
+                        del self.inventory.items[key]
+                        # Clear dangling tool_slot references
+                        for i, slot in enumerate(self.inventory.tool_slots):
+                            if slot == key:
+                                self.inventory.tool_slots[i] = None
 
         # Keep proxy in sync so next diff is relative to current state
         proxy.inventory = dict(proxy_flat)
@@ -708,23 +705,36 @@ class AutopilotMixin:
     # ── Periodic random actions ────────────────────────────────────────────────
 
     def _autopilot_do_action(self, proxy):
-        """Randomly perform one of: craft available recipe, change selected tool,
-        use a spell, drop an item, or inspect a nearby NPC."""
+        """Randomly perform one inventory/action/NPC action to exercise new systems."""
         # Don't start a new action while a queued input sequence is in flight
         if self._ap_input_queue:
             return
         # Prioritize crafting whenever a recipe is available
         if self._autopilot_try_craft():
             return
-        action = random.choice(['change_tool', 'use_spell', 'drop_item', 'npc_interact'])
+        action = random.choice([
+            'change_tool', 'use_spell', 'drop_item', 'npc_interact',
+            'use_action', 'hotbar_number', 'assign_tool_slot', 'equip_gear',
+            'gift_npc',
+        ])
         if action == 'change_tool':
             self._autopilot_change_tool()
         elif action == 'use_spell':
             self._autopilot_use_spell()
         elif action == 'drop_item':
             self._autopilot_drop_item(proxy)
-        else:
+        elif action == 'npc_interact':
             self._autopilot_try_npc_interact(proxy)
+        elif action == 'use_action':
+            self._autopilot_use_action()
+        elif action == 'hotbar_number':
+            self._autopilot_use_hotbar_number()
+        elif action == 'assign_tool_slot':
+            self._autopilot_assign_tool_slot()
+        elif action == 'equip_gear':
+            self._autopilot_equip_gear()
+        elif action == 'gift_npc':
+            self._autopilot_try_gift_npc(proxy)
 
     def _autopilot_try_craft(self):
         """Queue a crafting sequence: C → click slot → Space (with human delays).
@@ -765,13 +775,14 @@ class AutopilotMixin:
 
 
     def _autopilot_change_tool(self):
-        """Select a random available tool from the player's tool inventory."""
-        tools = list(self.inventory.tools.keys())
-        if not tools:
+        """Select a random filled tool slot by pressing its number key."""
+        filled = [(i, item) for i, item in enumerate(self.inventory.tool_slots) if item is not None]
+        if not filled:
             return
-        chosen = random.choice(tools)
-        self.inventory.selected['tools'] = chosen
-        print(f"[Autopilot] Tool → {chosen}")
+        slot_idx, item_name = random.choice(filled)
+        self.inventory.selected_tool_slot_idx = slot_idx
+        self.inventory.selected['tools'] = item_name
+        print(f"[Autopilot] Tool slot {slot_idx+1} → {item_name}")
 
     def _autopilot_use_spell(self):
         """Select a spell and queue an L key press to cast it."""
@@ -839,6 +850,160 @@ class AutopilotMixin:
                 d1 = random.randint(10, 20)
                 self._ap_queue(self.handle_npc_quest_assign, d1,
                                f"Shift+A assign {self.active_quest} → {e.type}(id={eid})")
+
+    def _ap_inventory_slot_pixel(self, target_category, item_name):
+        """Return screen pixel centre (x, y) of item_name in target_category panel.
+        Mirrors the layout from draw_inventory_panels / handle_inventory_click.
+        Returns None if not visible."""
+        slot_size = CELL_SIZE
+        start_x = 10
+        start_y = SCREEN_HEIGHT - 90
+        categories = ['tools', 'equipment', 'items', 'magic', 'actions', 'followers', 'crafting']
+        y_offset = 0
+        slots_per_row = max(1, (SCREEN_WIDTH - 20) // (slot_size + 2))
+        for cat in categories:
+            if cat not in self.inventory.open_menus:
+                continue
+            items = (self.inventory.get_craftable_recipes() if cat == 'crafting'
+                     else self.inventory.get_item_list(cat))
+            if not items:
+                continue
+            if cat == target_category:
+                for i, (iname, _) in enumerate(items):
+                    if iname == item_name:
+                        row = i // slots_per_row
+                        col = i % slots_per_row
+                        sx = start_x + col * (slot_size + 2) + slot_size // 2
+                        sy = (start_y - y_offset) - row * (slot_size + 15) + slot_size // 2
+                        return (sx, sy)
+                return None
+            y_offset += slot_size + 15
+        return None
+
+    def _ap_click_inventory_item(self, category, item_name):
+        """Callable: compute pixel pos for item_name in category and post a click."""
+        pos = self._ap_inventory_slot_pixel(category, item_name)
+        if pos:
+            pygame.event.post(self._ap_click(pos[0], pos[1]))
+        else:
+            print(f"[AP] inventory slot '{item_name}' in '{category}' not visible — skipping")
+
+    def _autopilot_use_action(self):
+        """Select a random action from the actions panel and execute it via Space."""
+        actions = list(self.inventory.actions.keys())
+        if not actions:
+            return
+        # Prefer non-combat actions to avoid disrupting world state
+        safe = [a for a in actions if a not in ('attack', 'shove')]
+        chosen = random.choice(safe) if safe else random.choice(actions)
+        d1 = random.randint(5, 12)
+        d2 = random.randint(5, 10)
+        d3 = random.randint(5, 10)
+
+        def _select_action():
+            self.inventory.selected['actions'] = chosen
+            self.inventory.open_menus.add('actions')
+
+        self._ap_queue(_select_action,                    d1,        f"select action '{chosen}'")
+        self._ap_queue(self._ap_key(pygame.K_SPACE),     d1 + d2,   f"execute action '{chosen}' via Space")
+        self._ap_queue(self.inventory.close_all_menus,   d1+d2+d3,  "close menus post-action")
+
+    def _autopilot_use_hotbar_number(self):
+        """Press a number key (no menus open) to activate a filled tool slot."""
+        filled = [(i, item) for i, item in enumerate(self.inventory.tool_slots)
+                  if item is not None]
+        if not filled:
+            return
+        slot_idx, item_name = random.choice(filled)
+        num_keys = [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4, pygame.K_5,
+                    pygame.K_6, pygame.K_7, pygame.K_8, pygame.K_9]
+        if slot_idx >= len(num_keys):
+            return
+        key = num_keys[slot_idx]
+        d1 = random.randint(5, 15)
+        # Menus should already be closed by autopilot cleanup before this fires
+        self._ap_queue(self._ap_key(key), d1,
+                       f"hotkey {slot_idx+1} → activate '{item_name}'")
+
+    def _autopilot_assign_tool_slot(self):
+        """Reassign a tool slot: open T+I, press number to clear+pending, click item."""
+        # Only run if we have assignable items beyond basic resources
+        assignable = [
+            n for n, v in self.inventory.items.items()
+            if v > 0 and n not in ('gold',)
+        ]
+        if not assignable:
+            return
+        item_name = random.choice(assignable)
+        # Pick first empty slot, else a random one
+        empty = [i for i, s in enumerate(self.inventory.tool_slots) if s is None]
+        slot_idx = empty[0] if empty else random.randint(0, 8)
+        num_keys = [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4, pygame.K_5,
+                    pygame.K_6, pygame.K_7, pygame.K_8, pygame.K_9]
+        if slot_idx >= len(num_keys):
+            slot_idx = 0
+        key = num_keys[slot_idx]
+
+        d1 = random.randint(5, 10)
+        d2 = random.randint(5, 10)
+        d3 = random.randint(8, 15)
+        d4 = random.randint(8, 15)
+        d5 = random.randint(5, 10)
+
+        self._ap_queue(self._ap_key(pygame.K_t), d1,
+                       "open T panel for slot reassign")
+        self._ap_queue(self._ap_key(pygame.K_i), d1 + d2,
+                       "open I panel for slot reassign")
+        # Number key while T is open: clear slot + mark pending
+        self._ap_queue(self._ap_key(key),        d1+d2+d3,
+                       f"press {slot_idx+1} to clear+pending slot {slot_idx}")
+        # Click the item in I panel to assign it
+        self._ap_queue(
+            lambda n=item_name: self._ap_click_inventory_item('items', n),
+            d1+d2+d3+d4,
+            f"click '{item_name}' to assign to slot {slot_idx}"
+        )
+        self._ap_queue(self.inventory.close_all_menus, d1+d2+d3+d4+d5, "close menus")
+
+    def _autopilot_equip_gear(self):
+        """Equip an item with an equipment_slot property to its named gear slot."""
+        equippable = [
+            n for n, v in self.inventory.items.items()
+            if v > 0 and ITEMS.get(n, {}).get('equipment_slot')
+        ]
+        if not equippable:
+            return
+        item_name  = random.choice(equippable)
+        slot_name  = ITEMS[item_name]['equipment_slot']
+        current    = self.inventory.equipment_slots.get(slot_name)
+        if current == item_name:
+            return  # Already equipped — skip
+        d1 = random.randint(5, 15)
+
+        def _do_equip():
+            self.inventory.equip_to_equipment_slot(slot_name, item_name, 'items')
+            print(f"[Autopilot] Equip {item_name} → {slot_name}")
+
+        self._ap_queue(_do_equip, d1, f"equip '{item_name}' to '{slot_name}'")
+
+    def _autopilot_try_gift_npc(self, proxy):
+        """If an NPC is inspected and we have surplus items, offer a gift (Shift+G)."""
+        if not self.inspected_npc:
+            return
+        # Need at least one non-essential item to give
+        giveable = [n for n, v in self.inventory.items.items()
+                    if v > 0 and not ITEMS.get(n, {}).get('is_tool')
+                    and not ITEMS.get(n, {}).get('is_spell')
+                    and not ITEMS.get(n, {}).get('is_action')
+                    and n not in ('gold',)]
+        if not giveable:
+            return
+        d1 = random.randint(8, 18)
+        self._ap_queue(
+            self._ap_key(pygame.K_g, pygame.KMOD_LSHIFT),
+            d1,
+            f"Shift+G gift to NPC id={self.inspected_npc}"
+        )
 
     def _autopilot_try_clear_obstacle(self, proxy):
         """When the proxy is stuck in 'targeting' state, scan adjacent cells for

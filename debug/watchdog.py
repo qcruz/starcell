@@ -33,7 +33,7 @@ from debug.fixes import fix_entity_subscreen_flag
 
 
 class Watchdog:
-    CATEGORIES = ['entities', 'cells', 'zones', 'player', 'structures', 'followers', 'npc_actions', 'keepers', 'npc_quests']
+    CATEGORIES = ['entities', 'cells', 'zones', 'player', 'structures', 'followers', 'npc_actions', 'keepers', 'npc_quests', 'inventory_state', 'favor']
     SAMPLE_INTERVAL   = 300    # ticks between cycles (~5 s at 60 fps)
     MAX_ENTRIES_PER_SAMPLE = 200  # max JSON entries per category per cycle
     BACKUP1_INTERVAL  = 3600   # ~60 s at 60 fps
@@ -61,15 +61,17 @@ class Watchdog:
         self._category_index += 1
 
         _SAMPLERS = {
-            'entities':   self._sample_entities,
-            'cells':      self._sample_cells,
-            'zones':      self._sample_zones,
-            'player':     self._sample_player,
-            'structures': self._sample_structures,
-            'followers':  self._sample_followers,
-            'npc_actions': self._sample_npc_actions,
-            'keepers':    self._sample_keepers,
-            'npc_quests': self._sample_npc_quests,
+            'entities':        self._sample_entities,
+            'cells':           self._sample_cells,
+            'zones':           self._sample_zones,
+            'player':          self._sample_player,
+            'structures':      self._sample_structures,
+            'followers':       self._sample_followers,
+            'npc_actions':     self._sample_npc_actions,
+            'keepers':         self._sample_keepers,
+            'npc_quests':      self._sample_npc_quests,
+            'inventory_state': self._sample_inventory_state,
+            'favor':           self._sample_favor,
         }
         _SAMPLERS[category](tick, game)
 
@@ -503,6 +505,58 @@ class Watchdog:
                 'keeper': getattr(entity, 'keeper', False),
                 'keeper_type': getattr(entity, 'keeper_type', None),
             })
+
+    def _sample_inventory_state(self, tick: int, game) -> None:
+        """Log full inventory state: tool_slots, equipment, actions, selection."""
+        inv = game.inventory
+        self.bug_catcher.log({
+            'tick': tick,
+            'category': 'watchdog_inventory_state',
+            'tool_slots': list(inv.tool_slots),
+            'tool_slot_filled': sum(1 for s in inv.tool_slots if s is not None),
+            'equipment_slots': dict(inv.equipment_slots),
+            'any_equipment': any(v is not None for v in inv.equipment_slots.values()),
+            'actions': dict(inv.actions),
+            'items_count': sum(inv.items.values()) if inv.items else 0,
+            'magic_count': sum(inv.magic.values()) if inv.magic else 0,
+            'selected_tool_slot_idx': inv.selected_tool_slot_idx,
+            'selected_tools': inv.selected.get('tools'),
+            'selected_items': inv.selected.get('items'),
+            'selected_actions': inv.selected.get('actions'),
+            'pending_equip_slot': inv.pending_equip_slot,
+            'pending_equip_equipment_slot': inv.pending_equip_equipment_slot,
+            'open_menus': sorted(inv.open_menus),
+            'items_top5': sorted(inv.items.items(), key=lambda x: -x[1])[:5] if inv.items else [],
+        })
+
+    def _sample_favor(self, tick: int, game) -> None:
+        """Log favor scores for all NPCs on the player's current screen."""
+        player_zone = f"{game.player.get('screen_x', 0)},{game.player.get('screen_y', 0)}"
+        eids = game.screen_entities.get(player_zone, [])
+        entries = []
+        for eid in eids:
+            e = game.entities.get(eid)
+            if e is None:
+                continue
+            favor = getattr(e, 'favor', None)
+            if favor is not None:
+                entries.append({
+                    'id': eid,
+                    'type': e.type,
+                    'name': getattr(e, 'name', None),
+                    'favor': favor,
+                    'hostile': e.props.get('hostile', False),
+                    'grid': [e.x, e.y],
+                    'level': e.level,
+                })
+        self.bug_catcher.log({
+            'tick': tick,
+            'category': 'watchdog_favor',
+            'zone': player_zone,
+            'npc_count': len(entries),
+            'npcs': entries,
+            'inspected_npc': getattr(game, 'inspected_npc', None),
+        })
 
     def _sample_spiders(self, tick: int, game) -> None:
         """Log full animation + AI state for every BLACK_SPIDER every cycle — no trimming."""
