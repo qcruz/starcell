@@ -5,6 +5,30 @@ Reviewed from `debug/bugcatcher.log` after each session.
 
 ---
 
+## Session 49 — 2026-03-20 (quest target priority fix)
+
+**Fixes applied before this run:**
+- `try_chop_tree` and `try_mine_rock` now prioritize `quest_nav_target` cell when it is adjacent — root cause of zero quest completions across sessions 43-48
+- Added same priority to `try_harvest_crop` and `try_till_soil` for FARM quests
+
+**Root cause identified:** Both harvest functions scanned 4 cardinal directions and returned after the FIRST matching adjacent cell. In dense forests/stone fields, a different adjacent cell always won the scan before the specific quest target cell. `check_quest_completion` requires the EXACT `(tx, ty)` cell to change, so quests always timed out.
+
+**Run stats:** Session killed early (user intervention), but captured:
+- Quest sequence: FARM (FARMER id=276) → LUMBER (WARRIOR id=463) → MINE (LUMBERJACK id=608)
+- **FARM timed out** — FARM quest probably targeted SOIL/DIRT/TREE, not CARROT3. FARMER proxy's `try_harvest_crop` only looks for CARROT3; `try_till_soil` fix not yet committed.
+- **LUMBER COMPLETED** ✅ — `Quest [LUMBER] completed (autopilot)! +1 XP` — first quest completion ever logged
+- MINE not observed (session killed during MINE quest)
+
+### CONFIRMED BUG — FARM still timing out
+
+The FARM quest can target CARROT1/2/3, SOIL, DIRT, TREE1/2. When target is DIRT, the proxy needs `try_till_soil` to change it to SOIL. Same priority problem existed there. Priority fix added to `try_harvest_crop` and `try_till_soil` in this session. Not yet verified — needs another run.
+
+### CONFIRMED FIX — LUMBER completing
+
+Priority fix to `try_chop_tree` is confirmed working. WARRIOR proxy for LUMBER reached and chopped the quest target cell successfully.
+
+---
+
 ## Session 46 — 2026-03-20 (random proxy types + keeper fix)
 
 **Fixes applied before this run:**

@@ -597,7 +597,16 @@ class NpcAiActionsMixin:
         if screen_key not in self.screens:
             return False
         screen = self.screens[screen_key]
-        for dx, dy in [(0, -1), (0, 1), (-1, 0), (1, 0)]:
+        _harvest_dirs = [(0, -1), (0, 1), (-1, 0), (1, 0)]
+        _qnav = getattr(entity, 'quest_nav_target', None)
+        if _qnav:
+            _, _, _qx, _qy = _qnav
+            _qdx, _qdy = _qx - entity.x, _qy - entity.y
+            if abs(_qdx) + abs(_qdy) == 1 and (_qdx, _qdy) in _harvest_dirs:
+                if (0 <= _qx < GRID_WIDTH and 0 <= _qy < GRID_HEIGHT
+                        and screen['grid'][_qy][_qx] == 'CARROT3'):
+                    _harvest_dirs = [(_qdx, _qdy)] + [d for d in _harvest_dirs if d != (_qdx, _qdy)]
+        for dx, dy in _harvest_dirs:
             cx, cy = entity.x + dx, entity.y + dy
             if not (0 <= cx < GRID_WIDTH and 0 <= cy < GRID_HEIGHT):
                 continue
@@ -623,7 +632,16 @@ class NpcAiActionsMixin:
         if screen_key not in self.screens:
             return False
         screen = self.screens[screen_key]
-        for dx, dy in [(0, -1), (0, 1), (-1, 0), (1, 0)]:
+        _till_dirs = [(0, -1), (0, 1), (-1, 0), (1, 0)]
+        _qnav = getattr(entity, 'quest_nav_target', None)
+        if _qnav:
+            _, _, _qx, _qy = _qnav
+            _qdx, _qdy = _qx - entity.x, _qy - entity.y
+            if abs(_qdx) + abs(_qdy) == 1 and (_qdx, _qdy) in _till_dirs:
+                if (0 <= _qx < GRID_WIDTH and 0 <= _qy < GRID_HEIGHT
+                        and screen['grid'][_qy][_qx] in ('GRASS', 'DIRT')):
+                    _till_dirs = [(_qdx, _qdy)] + [d for d in _till_dirs if d != (_qdx, _qdy)]
+        for dx, dy in _till_dirs:
             cx, cy = entity.x + dx, entity.y + dy
             if not (0 <= cx < GRID_WIDTH and 0 <= cy < GRID_HEIGHT):
                 continue
