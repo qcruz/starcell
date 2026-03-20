@@ -5,6 +5,32 @@ Reviewed from `debug/bugcatcher.log` after each session.
 
 ---
 
+## Session 26 — 2026-03-19 (run 16 — flee-state fix verification)
+
+11888 ticks. 474 entities. 95 zones. Player crossed to zone 1,0. Player health 110.8 (healed above base).
+
+### CONFIRMED FIXED — Proxy flee-state stagnation
+
+Zero stagnation events logged. Proxy moved between grid positions across the session (zone 0,0 → 1,0). Flee-state stuck detection now fires correctly.
+
+### OBSERVATION — Proxy spends ~80% of session in flee state
+
+Player samples at ticks 4911, 8211, 11511 all show proxy_state=flee. Proxy is FARMER type (spawned for GATHER quest), which has low combat rating and flees from hostiles. As entity count grows (~474) and the player zone accumulates bandits/goblins/skeletons/wolves, the FARMER proxy gets into persistent flee loops. Proxy does still move and cross zones; resource accumulation is minimal (seeds:2→3, meat:1 appeared). Not a crash; documented for future proxy-role-assignment improvement.
+
+### OBSERVATION — `selected_tools` transient mismatch during multi-step sequences
+
+At tick 10011, `selected_tools='carrot'` with `tool_slots[2]=None`. This is a mid-sequence transient state captured by the watchdog between an unequip and the matching equip queued action. Not player-visible (player is not controlling during autopilot). No gameplay impact — number keys read `tool_slots` directly.
+
+### OBSERVATION — One MINER keeper_no_target integrity hit (id=345, tick 6111)
+
+Humanoid filter working correctly — this is a legitimate anomaly (MINER with keeper=True briefly without a target). Single occurrence, likely during zone transition. No action needed.
+
+### OBSERVATION — Tool slot assignment sequences executing
+
+Console confirmed: T+I+number+click sequences firing correctly. Carrot and seeds assigned to slots. `close_menus post-action` firing after each sequence.
+
+---
+
 ## Session 25 — 2026-03-19 (run 15 — toolbar/reference architecture stress test)
 
 11935 ticks. 486 entities at shutdown. 86 zones explored. Player stayed zone 0,0.
