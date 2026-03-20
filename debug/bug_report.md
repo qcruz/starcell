@@ -5,6 +5,32 @@ Reviewed from `debug/bugcatcher.log` after each session.
 
 ---
 
+## Session 29 — 2026-03-19 (run 19 — quest completion steering)
+
+13907 ticks. 467 entities. 75 zones. Player zone 0,0. 0 stagnations. Player took combat damage (health 82).
+
+### CONFIRMED — Quest completions now happening in autopilot sessions
+
+3 quests completed this session: COMBAT_HOSTILE, HUNT, SLAY. Previous sessions had 0 completions. Change: proxy now actively steers toward specific target cell within the quest's zone rather than wandering randomly. XP at tick 11385: 2 (2 combat completions credited before SLAY at end).
+
+### CONFIRMED — Tools persisting and accumulating across full session
+
+axe:1, hoe:1, shovel:1, pickaxe:1, bucket:1 all present from tick 1485 through shutdown. Tool slots progressively filled: 7 at tick 3237, 8 at 6537, 9 at 9885 (all slots filled). Weapon slot equipped (enchanted_sword crafted again).
+
+### CONFIRMED — Persistent flee respawn working
+
+"Persistent flee — switching EXPLORE → SLAY, respawning as WARRIOR" fired. Proxy re-engaged as WARRIOR and completed SLAY quest shortly after.
+
+### OBSERVATION — Zero stagnations
+
+No stagnation events logged. Flee detection + flee-stuck escape fully preventing lock-in states.
+
+### OBSERVATION — XP progression: 0→2 over session
+
+Level stayed at 1 (XP reward=1 per quest, 3 completed = 3 XP, but level threshold not reached). Quest completion is now driving forward. Next focus: getting more non-combat quest completions (GATHER/LUMBER/MINE) and accumulating wood/stone for crafting.
+
+---
+
 ## Session 28 — 2026-03-19 (run 18 — tool-seeding fix verification)
 
 10320 ticks. 394 entities. 76 zones. Player zone 0,0. Player health 81.3 (took damage in combat).
