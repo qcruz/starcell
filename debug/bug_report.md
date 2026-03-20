@@ -5,9 +5,43 @@ Reviewed from `debug/bugcatcher.log` after each session.
 
 ---
 
+## Sessions 38–41 — 2026-03-20 (runs 25–28 — cell quest targeting chain)
+
+Session 41: 11368 ticks. FARM/LUMBER/MINE all timed out again. Zero harvest_cell calls. MINE completed once in session 39 (likely by chance — obstacle-clear mining a rock adjacent to the quest target). Several bugs found and fixed in sequence:
+
+### FIXED — Proxy spawn location (user reported proxy spawning in lake)
+
+Proxy spawns at `self.player['x'], self.player['y']`. Player position is not checked for walkability before spawn. Proxy can land on water/impassable tiles and be stuck immediately. Needs spawn location validation — pick nearest walkable cell to player. Not yet fixed — adding to next_up.
+
+### FIXED — 65% natural-behavior skip was cancelling cell-quest steering
+
+The nudge returned early 65% of the time AND explicitly cleared `ai_state = 'wandering'` for any in-progress targeting. For FARM/LUMBER/MINE/GATHER, the natural NPC AI chops random cells, not the specific quest target. Completion requires the SPECIFIC target cell to change. Fix: skip the 65% early-return when the proxy is in the same zone as the target cell (`in_same_zone` flag).
+
+### FIXED — Wrong current_target format (2-tuple vs ('cell', tx, ty))
+
+Nudge was setting `proxy.current_target = (tx, ty)` (2-tuple). The NPC AI targeting code checks `len >= 3 and current_target[0] in ['cell', 'entity']`. A 2-tuple hits a fallback path that walks ONTO the cell (not adjacent), getting stuck on blocking tiles (trees, stone). Fix: use `('cell', tx, ty)` so NPC AI stops at dist==1 (adjacent).
+
+### FIXED — _autopilot_try_harvest_cell missing SOIL/DIRT handlers
+
+For FARM quests targeting SOIL/DIRT cells, `_autopilot_try_harvest_cell` printed "already changed?" and did nothing. Fix: added `SOIL → try_plant_seed()`, `DIRT/GRASS/SAND → try_till_soil()`.
+
+### BUG — harvest_cell still never fires despite fixes
+
+After all three fixes, no `[AP] harvest_cell:` prints appear across sessions 40–41. The proxy navigates (obstacle-clear triggers when adjacent to target), but the nudge's `dist <= 1` branch never fires `_autopilot_try_harvest_cell`. Root cause under investigation:
+- Proxy may reach dist==1, NPC AI idles, obstacle-clear chops the target cell — but `check_quest_completion` doesn't detect because player was not within dist≤2 at that tick
+- OR: the nudge fires at dist > 1 (proxy hasn't arrived yet), sets targeting, but by next nudge the proxy has moved away again
+
+Next step: add dist print to the nudge's same-zone branch to observe proxy distance to target at each nudge cycle.
+
+### OBSERVATION — loreEngine called by update_quests within 1 tick of clear_target
+
+`update_quests()` calls `loreEngine(quest)` for any inactive quest every tick (line 665-666 in lore/engine.py). So after `clear_target()` in `_autopilot_advance_quest`, the quest is reassigned to a nearby target within 1 game tick — BEFORE the first nudge fires (120 ticks later). The diagnostic loreEngine print in the nudge never appeared because quest was already 'active' again. This is correct behavior; diagnostic print removed.
+
+---
+
 ## Session 37 — 2026-03-20 (run 26 — diagnosing loreEngine target assignment)
 
-Session in progress. Adding diagnostic print: after `clear_target()` on quest advance, checking whether `loreEngine(quest)` successfully assigns a new target near the proxy's current position. Investigating why FARM/LUMBER/MINE continue timing out with no harvest_cell calls.
+Session killed immediately after LUMBERJACK spawned — insufficient data. Confirmed: loreEngine print never appeared because `update_quests()` re-activates the quest within 1 tick of clear_target, so quest is already 'active' when the nudge runs.
 
 ---
 

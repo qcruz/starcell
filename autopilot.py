@@ -520,8 +520,7 @@ class AutopilotMixin:
 
         quest = self.quests[self.active_quest]
         if quest.status != 'active':
-            result = self.loreEngine(quest)
-            print(f"[AP] loreEngine({self.active_quest}): status={quest.status} target_cell={quest.target_cell} result={result}")
+            self.loreEngine(quest)
         if quest.status != 'active':
             return
 
@@ -553,20 +552,26 @@ class AutopilotMixin:
         
         travel_quests = ('SEARCH', 'RESCUE', 'EXPLORE')
         force_travel = self.active_quest in travel_quests
-        
-        if not force_travel and random.random() < 0.65:
-            # Natural behavior mode — just make sure proxy is wandering
-            # so its behavior_config fires on the next tick % 60 cycle.
+
+        # For cell-based quests with a target in the same zone, always steer —
+        # don't use the 65% natural-behavior skip.  Natural NPC AI chops random
+        # trees; quest completion requires the SPECIFIC target cell to change.
+        cell_quests = ('FARM', 'LUMBER', 'MINE', 'GATHER')
+        in_same_zone = False
+        if self.active_quest in cell_quests and quest.target_cell:
+            tsx, tsy = quest.target_cell[0], quest.target_cell[1]
+            in_same_zone = (f"{tsx},{tsy}" == screen_key)
+
+        if not force_travel and not in_same_zone and random.random() < 0.65:
+            # Natural behavior mode — let the proxy's behavior_config handle
+            # resource gathering when the target is in a different zone.
             if proxy.ai_state == 'targeting':
-                # Only clear targeting if it was a quest-assigned target,
-                # not a reactive one (hostile, etc.)
                 if proxy.target_type in ('resource', 'entity', None):
                     proxy.ai_state = 'wandering'
                     proxy.current_target = None
                     proxy.ai_state_timer = 2
             return
 
-        # ── 10% travel nudge: pick a target from a nearby zone ─────────
         if quest.target_cell:
             tsx, tsy, tx, ty = quest.target_cell
             target_sk = f"{tsx},{tsy}"
@@ -576,7 +581,7 @@ class AutopilotMixin:
                 # and check_quest_completion can credit the completion.
                 dist = abs(proxy.x - tx) + abs(proxy.y - ty)
                 if dist > 1:
-                    proxy.current_target = (tx, ty)
+                    proxy.current_target = ('cell', tx, ty)
                     proxy.target_type = 'resource'
                     proxy.ai_state = 'targeting'
                     proxy.ai_state_timer = 3
@@ -1095,6 +1100,13 @@ class AutopilotMixin:
         elif cell in ('CARROT1', 'CARROT2', 'CARROT3'):
             if hasattr(self, 'try_harvest_crop'):
                 self.try_harvest_crop(proxy, screen_key)
+        elif cell == 'SOIL':
+            print(f"[AP] harvest_cell: planting on SOIL at ({tx},{ty}) proxy=({int(proxy.x)},{int(proxy.y)})")
+            self.try_plant_seed(proxy, screen_key)
+        elif cell in ('DIRT', 'GRASS', 'SAND'):
+            print(f"[AP] harvest_cell: tilling {cell} at ({tx},{ty}) proxy=({int(proxy.x)},{int(proxy.y)})")
+            if hasattr(self, 'try_till_soil'):
+                self.try_till_soil(proxy, screen_key)
         else:
             print(f"[AP] harvest_cell: target ({tx},{ty}) is now '{cell}' — already changed?")
 
