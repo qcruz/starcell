@@ -39,8 +39,15 @@ INVENTORY_SYNC_INTERVAL = 60  # every 1 second
 # How often (ticks) to perform a random inventory / spell / NPC action
 ACTION_INTERVAL = 300   # every 5 seconds
 
-# Force a quest type rotation even when the current quest is still active
-FORCE_QUEST_SWITCH_INTERVAL = 1800  # every 30 seconds
+# Max ticks to spend on one quest before advancing (fallback for stuck quests)
+QUEST_MAX_TICKS = 3600  # 60 seconds
+
+# Ordered cycle of quest types the autopilot works through in sequence
+AUTOPILOT_QUEST_ORDER = [
+    'GATHER', 'FARM', 'LUMBER', 'MINE',
+    'HUNT', 'SLAY', 'COMBAT_HOSTILE',
+    'EXPLORE', 'RESCUE', 'SEARCH',
+]
 
 # Quest type → NPC role mapping
 QUEST_NPC_TYPE = {
@@ -79,6 +86,7 @@ class AutopilotMixin:
         self._autopilot_proxy_last_pos = None     # (x, y) at last tick for stuck detection
         self._autopilot_pos_stuck_ticks = 0       # ticks at same position while targeting
         self._autopilot_flee_ticks = 0            # consecutive ticks proxy has been fleeing
+        self._autopilot_quest_ticks = 0           # ticks spent on current quest (fallback timer)
         self._autopilot_harvest_timer = 0         # opportunistic harvest every ~30 ticks
         # Simulated input queue — autopilot posts real pygame events with human delays
         self._ap_input_queue = []      # [(fire_at_tick, event_or_callable, log_label)]
@@ -164,12 +172,17 @@ class AutopilotMixin:
             self._autopilot_flee_ticks += 1
             if self._autopilot_flee_ticks >= 1800:
                 self._autopilot_flee_ticks = 0
-                # Switch to a combat quest so re-engage spawns a WARRIOR proxy
-                combat_quests = [q for q in self.quests if q in ('HUNT', 'SLAY', 'COMBAT_HOSTILE')]
-                if combat_quests:
+                # Force-advance to a combat quest in the cycle so re-engage is WARRIOR
+                cycle = [q for q in AUTOPILOT_QUEST_ORDER if q in self.quests]
+                combat_idx = next((cycle.index(q) for q in ('HUNT', 'SLAY', 'COMBAT_HOSTILE')
+                                   if q in cycle), None)
+                if combat_idx is not None:
                     old = self.active_quest
-                    self.active_quest = random.choice(combat_quests)
-                    print(f"[Autopilot] Persistent flee — switching {old} → {self.active_quest}, respawning as WARRIOR")
+                    self.active_quest = cycle[combat_idx]
+                    self._autopilot_quest_ticks = 0
+                    if old and old in self.quests:
+                        self.quests[old].clear_target()
+                    print(f"[Autopilot] Persistent flee — advancing to {self.active_quest}, respawning as WARRIOR")
                 self._autopilot_disengage()
         else:
             self._autopilot_flee_ticks = 0
@@ -194,31 +207,24 @@ class AutopilotMixin:
                 proxy.health = proxy.max_health
                 print(f"[Autopilot] Proxy HP restored to {proxy.max_health:.0f}")
 
-        # ── Quest completion check: 80% chance to switch quest type ────────
+        # ── Quest progression: advance to next quest when complete ──────────
+        # Never switch mid-quest; only advance on completion or fallback timeout.
+        self._autopilot_quest_ticks += 1
         if self.active_quest and self.active_quest in self.quests:
             quest = self.quests[self.active_quest]
-            if quest.status == 'completed' or quest.status == 'cooldown':
-                if random.random() < 0.80:
-                    self._autopilot_switch_quest()
-
-        # ── Forced periodic quest rotation (even when quest is still active)
-        self._autopilot_force_switch_timer += 1
-        if self._autopilot_force_switch_timer >= FORCE_QUEST_SWITCH_INTERVAL:
-            self._autopilot_force_switch_timer = 0
-            self._autopilot_switch_quest()
+            if quest.status in ('completed', 'cooldown'):
+                self._autopilot_advance_quest()
+            elif self._autopilot_quest_ticks >= QUEST_MAX_TICKS:
+                # Fallback: quest still active but taking too long (unreachable target)
+                print(f"[Autopilot] Quest timeout: {self.active_quest} — advancing")
+                self._autopilot_quest_ticks = 0
+                self._autopilot_advance_quest()
 
         # Periodically nudge proxy toward quest target
         self._autopilot_nudge_timer += 1
         if self._autopilot_nudge_timer >= QUEST_NUDGE_INTERVAL:
             self._autopilot_nudge_timer = 0
             self._autopilot_nudge_quest_target(proxy)
-
-            # Small chance (2%) per nudge to abandon current quest if stuck
-            # This prevents the autopilot from endlessly chasing an
-            # unreachable target (e.g. entity that crossed zones, cell that
-            # was consumed by another NPC, etc.)
-            if random.random() < 0.02:
-                self._autopilot_switch_quest()
 
         # ── Periodic inventory / spell / NPC action ──────────────────────
         self._autopilot_action_timer += 1
@@ -565,15 +571,16 @@ class AutopilotMixin:
             target_sk = f"{tsx},{tsy}"
             if target_sk == screen_key:
                 # Already in the target zone — steer toward the specific cell
-                # so the proxy gets within distance 2 and triggers completion.
+                # until adjacent (dist≤1), then harvest so the cell changes
+                # and check_quest_completion can credit the completion.
                 dist = abs(proxy.x - tx) + abs(proxy.y - ty)
-                if dist > 2:
+                if dist > 1:
                     proxy.current_target = (tx, ty)
                     proxy.target_type = 'resource'
                     proxy.ai_state = 'targeting'
                     proxy.ai_state_timer = 3
                 else:
-                    # Close enough — try to harvest it, then let quest completion fire
+                    # Adjacent — harvest the cell, then let quest completion fire
                     self._autopilot_try_harvest_cell(proxy, tx, ty)
                     proxy.ai_state = 'wandering'
                     proxy.current_target = None
@@ -637,34 +644,49 @@ class AutopilotMixin:
         proxy.ai_state = 'targeting'
         proxy.ai_state_timer = 3
 
-    def _autopilot_switch_quest(self):
-        """Switch the autopilot to a random different quest type.
+    def _autopilot_advance_quest(self):
+        """Advance to the next quest type in the ordered cycle.
 
-        Picks from all available quest types (excluding COMBAT_ALL unless
-        friendly fire is on), skipping the current quest so it always
-        actually changes.
+        Cycles through AUTOPILOT_QUEST_ORDER sequentially so the autopilot
+        works through all quest types in a predictable order. Never skips
+        mid-quest — only called on completion or timeout.
         """
-        available = []
-        for qt in self.quests:
-            if qt == self.active_quest:
-                continue
-            # Skip COMBAT_ALL when friendly fire is off
-            if qt == 'COMBAT_ALL' and not self.player.get('friendly_fire', False):
-                continue
-            available.append(qt)
-
-        if not available:
+        # Build valid cycle: only quests that exist and aren't COMBAT_ALL without FF
+        cycle = [q for q in AUTOPILOT_QUEST_ORDER
+                 if q in self.quests
+                 and not (q == 'COMBAT_ALL' and not self.player.get('friendly_fire', False))]
+        if not cycle:
             return
 
         old = self.active_quest
-        self.active_quest = random.choice(available)
+        # Find current position and step forward one
+        try:
+            cur_idx = cycle.index(self.active_quest) if self.active_quest in cycle else -1
+        except ValueError:
+            cur_idx = -1
+        next_idx = (cur_idx + 1) % len(cycle)
+        self.active_quest = cycle[next_idx]
+        self._autopilot_quest_ticks = 0
 
-        # Clear stale target from the previous quest so the next nudge
-        # picks a fresh target for the new quest type.
+        # Clear stale target from the previous quest
         if old and old in self.quests:
             self.quests[old].clear_target()
 
-        print(f"[Autopilot] Quest switch: {old} → {self.active_quest}")
+        # Respawn proxy as the role type appropriate for the new quest
+        new_npc_type = QUEST_NPC_TYPE.get(self.active_quest, DEFAULT_NPC_TYPE)
+        old_npc_type = QUEST_NPC_TYPE.get(old, DEFAULT_NPC_TYPE)
+        if new_npc_type != old_npc_type and self.autopilot_proxy_id is not None:
+            self._autopilot_disengage()
+            # _autopilot_disengage sets autopilot=False (designed for player takeover),
+            # but here we're just swapping proxy types — keep autopilot running.
+            self.autopilot = True
+            print(f"[Autopilot] Quest advance: {old} → {self.active_quest} (respawn {old_npc_type}→{new_npc_type})")
+        else:
+            print(f"[Autopilot] Quest advance: {old} → {self.active_quest}")
+
+    # Keep old name as alias so any remaining call sites don't break
+    def _autopilot_switch_quest(self):
+        self._autopilot_advance_quest()
 
     # ── Simulated input helpers ───────────────────────────────────────────────
 
@@ -1058,12 +1080,16 @@ class AutopilotMixin:
             return
         cell = grid[ty][tx]
         if cell in ('TREE1', 'TREE2'):
+            print(f"[AP] harvest_cell: chopping {cell} at ({tx},{ty}) proxy=({int(proxy.x)},{int(proxy.y)})")
             self.try_chop_tree(proxy, screen_key)
         elif cell in ('STONE', 'IRON_ORE'):
+            print(f"[AP] harvest_cell: mining {cell} at ({tx},{ty}) proxy=({int(proxy.x)},{int(proxy.y)})")
             self.try_mine_rock(proxy, screen_key)
         elif cell in ('CARROT1', 'CARROT2', 'CARROT3'):
             if hasattr(self, 'try_harvest_crop'):
                 self.try_harvest_crop(proxy, screen_key)
+        else:
+            print(f"[AP] harvest_cell: target ({tx},{ty}) is now '{cell}' — already changed?")
 
     def _autopilot_try_clear_obstacle(self, proxy):
         """When the proxy is stuck in 'targeting' state, scan adjacent cells for

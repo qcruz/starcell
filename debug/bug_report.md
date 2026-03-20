@@ -5,6 +5,41 @@ Reviewed from `debug/bugcatcher.log` after each session.
 
 ---
 
+## Session 34 — 2026-03-19 (run 24 — proxy respawn fix for quest type transitions)
+
+10228 ticks. Session ran ~190s.
+
+### FIXED — LUMBERJACK/MINER proxy never spawning after FARM→LUMBER or LUMBER→MINE advance
+
+Root cause: `_autopilot_advance_quest()` calls `_autopilot_disengage()` when the new quest requires a different NPC type. `_autopilot_disengage()` sets `self.autopilot = False` (designed for player takeover), which prevents `update_autopilot()` from ever calling `_autopilot_engage()` again. The LUMBERJACK proxy was never created; LUMBER quest ran its full 3600-tick timeout with no activity.
+
+Fix: In `_autopilot_advance_quest()`, immediately after `_autopilot_disengage()`, set `self.autopilot = True` to keep the autopilot running through the proxy swap.
+
+### CONFIRMED — Quest progression working across multiple types
+
+Results this session:
+- FARM completed ×2, then timed out (quest re-assigned after completions but stalled)
+- LUMBER completed ×1 (proxy spawned, navigated to target tree, chopped)
+- MINE started (MINER proxy spawned at tick ~10000+, session ended before completion)
+
+Previous sessions: LUMBER/MINE/GATHER always timed out (0 completions). Now working.
+
+### OBSERVATION — FARM "already changed?" repeated calls after completions
+
+`[AP] harvest_cell: target (11,3) is now 'SOIL' — already changed?` fires repeatedly on same (11,3) target after FARM completes. This is the FARM quest target_cell still pointing to a now-tilled cell. Harmless but noisy — suggest clearing or refreshing FARM target on quest status change to 'cooldown'.
+
+### OBSERVATION — LUMBER timed out on 2nd cycle
+
+After first LUMBER completion, quest re-assigned. The new LUMBER target was not reached before the 3600-tick timeout. Likely the second target was in a different zone and cross-zone travel didn't complete in time. Worth watching in future sessions.
+
+---
+
+## Session 33 — 2026-03-19 (run 23 — diagnostic run, LUMBER failure mode)
+
+Session run to observe diagnostic prints in `_autopilot_try_harvest_cell`. No harvest_cell prints appeared for LUMBER quest — LUMBERJACK proxy was never spawned after FARM→LUMBER advance (see Session 34 root cause above).
+
+---
+
 ## Session 29 — 2026-03-19 (run 19 — quest completion steering)
 
 13907 ticks. 467 entities. 75 zones. Player zone 0,0. 0 stagnations. Player took combat damage (health 82).
