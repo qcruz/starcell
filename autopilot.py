@@ -324,6 +324,7 @@ class AutopilotMixin:
         # Baseline snapshot: sync compares proxy-current vs proxy-last-sync,
         # not proxy vs player — prevents crafted/bought items from being reversed.
         proxy._sync_baseline = dict(proxy.inventory)
+        proxy.quest_nav_target = None   # cleared; set by nudge once quest is active
 
         # ── Register entity ───────────────────────────────────────────────
         entity_id = self.next_entity_id
@@ -582,25 +583,12 @@ class AutopilotMixin:
                                             target_entity.screen_y, screen_key)
             return
 
-        # ── Cell quests: use the keeper_target system for natural navigation ─
-        # Set keeper_target_pos so the NPC AI navigates there via its own
-        # state machine — no state overrides from the autopilot.
+        # ── Cell quests: set quest_nav_target (highest-priority nav in npc_ai.py) ─
         if quest.target_cell:
             tsx, tsy, tx, ty = quest.target_cell
-            target_sk = f"{tsx},{tsy}"
-            if target_sk == screen_key:
-                # Same zone: assign as keeper target so NPC AI walks there naturally.
-                proxy.keeper = True
-                proxy.keeper_type = 1
-                proxy.keeper_target = {
-                    'type': 'cell', 'ref': None,
-                    'pos': (tx, ty),
-                    'screen': (tsx, tsy),
-                }
-                proxy.keeper_target_pos = (tx, ty)
-            else:
-                # Different zone: steer toward the exit, let zone-crossing handle it.
-                self._nudge_toward_zone(proxy, tsx, tsy, screen_key)
+            # Set quest_nav_target — this is the highest-priority keeper target in
+            # npc_ai.py and is immune to resets from _try_complete_assigned_quest.
+            proxy.quest_nav_target = (tsx, tsy, tx, ty)
 
         # ── Combat quests: set quest_target so NPC combat AI handles fighting ─
         elif quest.target_entity_id and quest.target_entity_id in self.entities:
@@ -714,6 +702,12 @@ class AutopilotMixin:
             old_q = self.quests[old]
             old_q.clear_target()
             old_q._proxy_damaged_target = False
+
+        # Clear quest nav target on the old proxy before despawning
+        if self.autopilot_proxy_id is not None:
+            old_proxy = self.entities.get(self.autopilot_proxy_id)
+            if old_proxy:
+                old_proxy.quest_nav_target = None
 
         # Clear the new quest's stale game-start target so loreEngine re-assigns
         # it near the proxy's current position on the first nudge cycle.

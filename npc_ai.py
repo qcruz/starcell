@@ -1436,6 +1436,43 @@ class NpcAiMixin:
         # If a keeper NPC is outside its target range, immediately enter targeting.
         # Handles cross-zone chasing: routes to zone exit when target is in another zone.
         # =====================================================================
+        # QUEST NAV TARGET — highest navigation priority
+        # Set by the quest system (loreEngine / autopilot nudge) when the NPC
+        # must reach a specific cell.  Always overrides other keeper state so
+        # no internal reset (e.g. _try_complete_assigned_quest) can interrupt
+        # navigation.  NPC can still combat/flee; behaviour fires when adjacent.
+        # Format: (screen_x, screen_y, grid_x, grid_y)
+        # =====================================================================
+        quest_nav = getattr(entity, 'quest_nav_target', None)
+        if quest_nav and entity.ai_state not in ('combat', 'flee'):
+            tsx, tsy, tx, ty = quest_nav
+            my_sk = f"{entity.screen_x},{entity.screen_y}"
+            target_sk = f"{tsx},{tsy}"
+            if target_sk == my_sk:
+                dist = abs(entity.x - tx) + abs(entity.y - ty)
+                if dist > 1:
+                    # Not yet adjacent — force keeper navigation toward cell
+                    entity.keeper = True
+                    entity.keeper_type = 1
+                    entity.keeper_target_pos = (tx, ty)
+                    entity.ai_state = 'targeting'
+                    entity.target_type = 'keeper_target'
+                    entity.current_target = (tx, ty)
+                    entity.ai_state_timer = 1
+                    return
+                # dist <= 1: adjacent — fall through so NPC executes its action
+            else:
+                # Different zone: steer toward the exit corridor
+                ex, ey = self._get_exit_toward_zone(
+                    entity.screen_x, entity.screen_y, tsx, tsy)
+                entity.keeper = True
+                entity.ai_state = 'targeting'
+                entity.target_type = 'keeper_target'
+                entity.current_target = (ex, ey)
+                entity.ai_state_timer = 1
+                return
+
+        # =====================================================================
         if (getattr(entity, 'keeper', False) and
                 entity.ai_state not in ('combat', 'flee')):
             ktype = getattr(entity, 'keeper_type', 3)
@@ -2181,9 +2218,10 @@ class NpcAiMixin:
         entity.keeper_target_pos = None
         entity._quest_update_counter = 0
 
-        # If back to base quest only, release keeper anchor so NPC roams freely
+        # If back to base quest only, release keeper anchor so NPC roams freely.
+        # Skip if quest_nav_target is active — it holds the keeper anchor.
         has_non_base = any(not e.get('base') for e in queue)
-        if not has_non_base:
+        if not has_non_base and not getattr(entity, 'quest_nav_target', None):
             entity.keeper = False
             entity.keeper_type = getattr(entity, '_base_keeper_type', 3)
 
