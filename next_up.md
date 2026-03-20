@@ -14,16 +14,16 @@ Small additions using existing systems and minimal changes to code.
 - [x] Butterfly flower growth — when butterfly moves over GRASS/DIRT, small chance to grow it to FLOWER or FLOWER_PATTERN; doesn't grow trees
 - [x] Keeper-status spell — new spell type: cast on inspected NPC to assign them as keeper for a target cell or item; uses existing keeper system
 - [ ] NPC infection system: vampirism and lycanthropy — hostile bats can infect humanoid NPCs with vampirism (transforms to BAT at night, reverts at dawn); hostile wolves can infect with lycanthropy (transforms to WOLF at night, reverts at dawn); silver weapons prevent/cure infection
-- [ ] Action inventory, equipment inventory, and favor system — one session
-- [ ] Add actions inventory tab (R key) — shove and other contextual action items. Start with Attack, Block, Sneak, Dig, and Talk placeholders. Actions not dropped on death, will be starting options for game actions before player has tools.
-- [ ] Make actions default on spawn - 'attack', 'block' - allow player to collect resources without tools (low success chance)(actions and spells not dropped on death)
-- [ ] Add NPC trait Favor: -100 to 100, default zero for peacful NPCs, default -50 for hostiles. Will increase or decrease for certain actions (we will discuss when implementing)
-- [ ] Add faction standing display when inspecting NPC — show NPC favor score and faction label
-- [ ] Add per-NPC favor system — -100 to 100 favorability score; reduces follower energy cost
-- [ ] Add gift giving — player offers item to NPC to increase favor;
+- [x] Action inventory, equipment inventory, and favor system — one session
+- [x] Add actions inventory tab (U key) — attack, block, sneak, dig, talk, inspect, shove. Actions not dropped on death.
+- [x] Make actions default on spawn - 'attack', 'block', 'inspect' added to starting inventory
+- [x] Add NPC trait Favor: -100 to 100, default zero for peaceful NPCs, default -50 for hostiles. Decreases on player attack (-5/hit, -20/kill). Increases via gift giving.
+- [x] Add faction standing display when inspecting NPC — show NPC favor score and faction label
+- [x] Add per-NPC favor system — -100 to 100 favorability score
+- [x] Add gift giving — Shift+G while inspecting NPC; offers selected item; NPC gains +favor
 - [ ] Add energy cost for active followers — each follower reduces max energy by 30% of their max energy; recalculates on add/remove
 - [ ] Add item level display in inventory UI — show level badge on leveled items in all tabs
-- [ ] Add equipment panel UI — Weapon, Off-hand, Armor, Ring ×2, Amulet slots; passive stat bonuses
+- [x] Add equipment panel UI — Weapon, Off-hand, Armor, Ring ×2, Amulet slots; auto-calculated in combat rolls. Opens alongside Tools panel (T key). Click equipment slot then item to equip.
 
 - [ ] Village and dungeon biome — required sprites: fence, stairs up/down
 - [ ] Create village biome — VILLAGE zone type; rare spawn; clustered housing with fence cells enclosing plots, market stall, well; higher NPC density (FARMER, GUARD, BLACKSMITH, TRADER, COMMANDER, KING); guard keepers protect zone perimeter. Required sprites: fence.

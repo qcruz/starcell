@@ -44,6 +44,22 @@ class CombatMixin:
                     best_damage = dmg
         return best_damage
 
+    def calculate_equipped_weapon_damage(self):
+        """Return damage from player's equipped weapon slot (0 if empty)."""
+        weapon = getattr(self.inventory, 'equipment_slots', {}).get('weapon')
+        if weapon and weapon in ITEMS:
+            return ITEMS[weapon].get('damage', 0)
+        return 0
+
+    def calculate_equipped_armor_reduction(self):
+        """Return damage reduction (0–1 fraction) from player's equipped armor."""
+        armor = getattr(self.inventory, 'equipment_slots', {}).get('armor')
+        if armor and armor in ITEMS:
+            armor_val = ITEMS[armor].get('armor', 0)
+            # Each armor point = 2% reduction, capped at 60%
+            return min(0.60, armor_val * 0.02)
+        return 0.0
+
     # -------------------------------------------------------------------------
     # Player attack
     # -------------------------------------------------------------------------
@@ -83,8 +99,10 @@ class CombatMixin:
                         if not entity.props.get('hostile', False):
                             print(f"[FF blocked] {entity.type} is peaceful — press V to enable friendly fire")
                             return False
-                    # Calculate damage
-                    weapon_damage = ITEMS[weapon].get('damage', 0)
+                    # Calculate damage: hotbar weapon + equipped weapon slot (take best)
+                    hotbar_dmg = ITEMS[weapon].get('damage', 0)
+                    equip_dmg = self.calculate_equipped_weapon_damage()
+                    weapon_damage = max(hotbar_dmg, equip_dmg)
                     total_damage = self.player['base_damage'] + weapon_damage
 
                     # Add magic damage from runestones
@@ -106,12 +124,19 @@ class CombatMixin:
 
                     entity.take_damage(total_damage, 'player')
                     entity.last_attacked_tick = self.tick
+                    # Favor penalty on hit
+                    if hasattr(entity, 'favor'):
+                        entity.favor = max(-100, entity.favor - 5)
 
                     # Temp energy cost for attacking
                     self.player['energy'] = max(0, self.player.get('energy', 0) - 2)
 
                     # Show attack animation (with magic color if applicable)
                     self.show_attack_animation(check_x, check_y, target_entity=entity, magic_type=magic_type)
+
+                    # Additional favor penalty on kill
+                    if entity.health <= 0 and hasattr(entity, 'favor'):
+                        entity.favor = max(-100, entity.favor - 20)
 
                     if magic_damage > 0:
                         print(f"Hit {entity.type} for {int(total_damage)} damage ({int(magic_damage)} magic)! HP: {int(entity.health)}/{entity.max_health}")
@@ -126,7 +151,7 @@ class CombatMixin:
     # -------------------------------------------------------------------------
 
     def player_take_damage(self, damage):
-        """Player takes damage with blocking reduction"""
+        """Player takes damage with blocking and armor reduction"""
         # Don't take damage if already dead
         if self.state == 'death':
             return
@@ -134,6 +159,11 @@ class CombatMixin:
         if self.player['blocking']:
             damage *= 0.1  # 90% reduction when blocking
             self.player['energy'] = max(0, self.player.get('energy', 0) - 5)
+
+        # Apply equipped armor reduction
+        armor_reduction = self.calculate_equipped_armor_reduction()
+        if armor_reduction > 0:
+            damage *= (1.0 - armor_reduction)
 
         self.player['health'] -= damage
         print(f"Player took {int(damage)} damage! Health: {int(self.player['health'])}/{self.player['max_health']}")
@@ -203,6 +233,13 @@ class CombatMixin:
         self.inventory.tool_slots = [None] * len(self.inventory.tool_slots)
         self.inventory.selected_tool_slot_idx = None
         self.inventory.selected['tools'] = None
+
+        # Drop equipment slot items
+        for slot_name, eq_item in list(self.inventory.equipment_slots.items()):
+            if eq_item is not None:
+                self.dropped_items[death_screen_key][death_pos][eq_item] = \
+                    self.dropped_items[death_screen_key][death_pos].get(eq_item, 0) + 1
+                self.inventory.equipment_slots[slot_name] = None
 
         # Release all followers — remove from party so they survive time passage
         for fid in list(self.followers):

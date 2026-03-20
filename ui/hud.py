@@ -812,7 +812,7 @@ class HudMixin:
                 elif CELL_TYPES.get(cell, {}).get('enterable'):
                     hint_text = "SPACE: Enter"
 
-            controls = f"{hint_text} | B: Block | C: Craft | X: Combine | L: Cast | E: Pickup"
+            controls = f"{hint_text} | Shift: Block | C: Craft | X: Combine | L: Cast | U: Actions | E: Pickup"
             text = self.tiny_font.render(controls, True, COLORS['WHITE'])
             self.screen.blit(text, (10, ui_y + 58))
 
@@ -820,8 +820,8 @@ class HudMixin:
             key_ref_x = SCREEN_WIDTH - 340
             key_lines = [
                 "WASD/Arrows: Move  SPACE: Interact  ESC: Pause",
-                "I/T/M/F: Items/Tools/Magic/Follow  Q: Quests  N: Trade",
-                "E: Pickup  P: Place  D: Drop  B: Block  V: FF  C/X: Craft",
+                "I/T/M/U/F: Items/Tools/Magic/Actions/Follow  Q: Quests  N: Trade",
+                "E: Pickup  P: Place  D: Drop  Shift: Block  V: FF  C/X: Craft",
             ]
             for i, line in enumerate(key_lines):
                 ref_text = self.tiny_font.render(line, True, (160, 160, 170))

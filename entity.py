@@ -525,6 +525,9 @@ class Entity:
         
         # Faction system (used by warriors)
         self.faction = None  # Warriors join factions, None for non-warriors or unaffiliated
+
+        # Favor system: -100 to 100, how this NPC feels about the player
+        self.favor = -50 if self.props.get('hostile', False) else 0
         
         # Quest tracking
         self.killed_by = None  # Track who killed this entity
@@ -910,13 +913,19 @@ class Inventory:
         self.followers = {} # {follower_name: count}
         self.actions = {}   # {action_name: count}
         # Tool bar: fixed equip slots (None = empty)
-        self.tool_slots = [None] * 8
+        self.tool_slots = [None] * 9
         self.selected_tool_slot_idx = None  # index of active/target slot
         self.pending_equip_slot = None      # slot index waiting to receive an item
         self.max_slots = 20
 
+        # Equipment slots: named gear slots
+        EQUIPMENT_SLOT_NAMES = ['weapon', 'offhand', 'armor', 'ring1', 'ring2', 'amulet']
+        self.EQUIPMENT_SLOT_NAMES = EQUIPMENT_SLOT_NAMES
+        self.equipment_slots = {name: None for name in EQUIPMENT_SLOT_NAMES}
+        self.pending_equip_equipment_slot = None  # slot name waiting to receive an item
+
         # Track which menus are open
-        self.open_menus = set()  # Can contain 'items', 'tools', 'magic', 'actions', 'followers', 'crafting'
+        self.open_menus = set()  # Can contain 'items', 'tools', 'magic', 'actions', 'followers', 'crafting', 'equipment'
 
         # Track selected item in each menu
         self.selected = {
@@ -925,7 +934,8 @@ class Inventory:
             'magic': None,
             'actions': None,
             'followers': None,
-            'crafting': None  # For crafting screen selection
+            'crafting': None,   # For crafting screen selection
+            'equipment': None,  # For equipment slot selection
         }
 
     @property
@@ -1077,13 +1087,18 @@ class Inventory:
             self.open_menus.remove(menu_type)
             if menu_type == 'tools':
                 self.pending_equip_slot = None
+                self.open_menus.discard('equipment')
+                self.pending_equip_equipment_slot = None
         else:
             self.open_menus.add(menu_type)
+            if menu_type == 'tools':
+                self.open_menus.add('equipment')
 
     def close_all_menus(self):
         """Close all inventory menus."""
         self.open_menus.clear()
         self.pending_equip_slot = None
+        self.pending_equip_equipment_slot = None
     
     def get_selected_item(self, category):
         """Get the currently selected item in a category"""
@@ -1102,11 +1117,47 @@ class Inventory:
                 return name
         return None
     
+    def equip_to_equipment_slot(self, slot_name, item_name, source_category):
+        """Move item from source_category into a named equipment slot."""
+        if slot_name not in self.equipment_slots:
+            return False
+        # Unequip whatever is in the slot first
+        if self.equipment_slots[slot_name] is not None:
+            self.unequip_equipment_slot(slot_name)
+        # Remove from source
+        src_inv = getattr(self, source_category, None)
+        if src_inv is None or src_inv.get(item_name, 0) <= 0:
+            return False
+        src_inv[item_name] -= 1
+        if src_inv[item_name] <= 0:
+            del src_inv[item_name]
+            if self.selected.get(source_category) == item_name:
+                remaining = list(src_inv.keys())
+                self.selected[source_category] = remaining[0] if remaining else None
+        self.equipment_slots[slot_name] = item_name
+        self.pending_equip_equipment_slot = None
+        return True
+
+    def unequip_equipment_slot(self, slot_name):
+        """Remove item from equipment slot and return it to items inventory."""
+        item = self.equipment_slots.get(slot_name)
+        if item is None:
+            return False
+        self.items[item] = self.items.get(item, 0) + 1
+        if self.selected.get('items') is None:
+            self.selected['items'] = item
+        self.equipment_slots[slot_name] = None
+        return True
+
     def get_item_list(self, menu_type):
         """Get list of (item_name, count) pairs for a menu.
-        For 'tools', returns all 8 slots (None = empty slot)."""
+        For 'tools', returns all 9 slots (None = empty slot).
+        For 'equipment', returns (slot_name, item_or_None) for each gear slot."""
         if menu_type == 'tools':
             return [(name, 1) if name is not None else (None, 0) for name in self.tool_slots]
+        if menu_type == 'equipment':
+            return [(self.equipment_slots[s], 1) if self.equipment_slots[s] else (None, 0)
+                    for s in self.EQUIPMENT_SLOT_NAMES]
         inv = getattr(self, menu_type)
         return list(inv.items())
     

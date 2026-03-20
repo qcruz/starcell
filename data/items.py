@@ -27,8 +27,8 @@ ITEMS = {
 
     # Weapons
     'hilt': {'color': (139, 90, 43), 'name': 'Weapon Hilt'},
-    'bone_sword': {'color': (220, 220, 200), 'name': 'Bone Sword', 'is_tool': True, 'damage': 15},
-    'club': {'color': (101, 67, 33), 'name': 'Club', 'is_tool': True, 'damage': 8},
+    'bone_sword': {'color': (220, 220, 200), 'name': 'Bone Sword', 'is_tool': True, 'is_weapon': True, 'damage': 15, 'equipment_slot': 'weapon'},
+    'club': {'color': (101, 67, 33), 'name': 'Club', 'is_tool': True, 'is_weapon': True, 'damage': 8, 'equipment_slot': 'weapon'},
 
     # Magic items
     'star_spell': {'color': (255, 215, 0), 'name': 'Star Spell', 'is_spell': True,
@@ -90,13 +90,13 @@ ITEMS = {
     'transform_chicken':      {'color': (255, 220, 100), 'name': 'Transform: Chicken',      'is_spell': True, 'spell_type': 'transform', 'npc_type': 'CHICKEN'},
     'transform_black_spider': {'color': (20,  20,  20),  'name': 'Transform: Spider',       'is_spell': True, 'spell_type': 'transform', 'npc_type': 'BLACK_SPIDER'},
 
-    'enchanted_sword': {'color': (147, 112, 219), 'name': 'Enchanted Sword', 'is_tool': True, 'damage': 25},
+    'enchanted_sword': {'color': (147, 112, 219), 'name': 'Enchanted Sword', 'is_tool': True, 'is_weapon': True, 'damage': 25, 'equipment_slot': 'weapon'},
     'enchanted_axe': {'color': (148, 0, 211), 'name': 'Enchanted Axe', 'is_tool': True, 'damage': 20},
 
     # Materials
     'rope': {'color': (139, 119, 101), 'name': 'Rope'},
     'leather': {'color': (139, 90, 43), 'name': 'Leather'},
-    'leather_armor': {'color': (160, 82, 45), 'name': 'Leather Armor', 'is_tool': True, 'armor': 5},
+    'leather_armor': {'color': (160, 82, 45), 'name': 'Leather Armor', 'is_tool': True, 'is_armor': True, 'armor': 5, 'equipment_slot': 'armor'},
     'chest': {'color': (139, 69, 19), 'name': 'Chest'},
     'seeds': {'color': (205, 133, 63), 'name': 'Seeds'},
 
@@ -111,7 +111,7 @@ ITEMS = {
     # Iron pipeline
     'iron_ore':   {'color': (139, 90, 43),   'name': 'Iron Ore'},
     'iron_ingot': {'color': (180, 140, 100),  'name': 'Iron Ingot'},
-    'iron_sword': {'color': (200, 200, 220),  'name': 'Iron Sword', 'is_tool': True, 'damage': 20, 'sprite_name': 'iron_sword'},
+    'iron_sword': {'color': (200, 200, 220),  'name': 'Iron Sword', 'is_tool': True, 'is_weapon': True, 'damage': 20, 'equipment_slot': 'weapon', 'sprite_name': 'iron_sword'},
 
     # World structures / placeable cells
     'well':                    {'color': (100, 80, 60),    'name': 'Well'},
@@ -122,8 +122,13 @@ ITEMS = {
     'forge':                   {'color': (180, 60, 20),    'name': 'Forge'},
 
     # Actions
-    'shove': {'color': (220, 120, 60), 'name': 'Shove', 'is_action': True,
-              'description': 'Push target back one cell'},
+    'attack':  {'color': (220, 80,  60),  'name': 'Attack',  'is_action': True, 'description': 'Strike the target'},
+    'block':   {'color': (80,  100, 220), 'name': 'Block',   'is_action': True, 'description': 'Raise guard to reduce damage'},
+    'sneak':   {'color': (60,  80,  60),  'name': 'Sneak',   'is_action': True, 'description': 'Move quietly'},
+    'dig':     {'color': (139, 90,  43),  'name': 'Dig',     'is_action': True, 'description': 'Dig soft cells'},
+    'talk':    {'color': (100, 180, 220), 'name': 'Talk',    'is_action': True, 'description': 'Speak with target NPC'},
+    'inspect': {'color': (200, 180, 100), 'name': 'Inspect', 'is_action': True, 'description': 'Examine target'},
+    'shove':   {'color': (220, 120, 60),  'name': 'Shove',   'is_action': True, 'description': 'Push target back one cell'},
 
     # Special
     'skeleton_bones': {'color': (240, 240, 230), 'name': 'Skeleton Bones', 'is_follower': True},

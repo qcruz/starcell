@@ -411,6 +411,12 @@ class MenusMixin:
             prefix = "Quest*" if assigned else "Quest"
             info_lines.append(f"{prefix}: {q_label}")
 
+        # Favor score
+        if hasattr(entity, 'favor'):
+            favor_val = entity.favor
+            favor_label = "Hostile" if favor_val <= -75 else ("Wary" if favor_val < 0 else ("Neutral" if favor_val == 0 else ("Friendly" if favor_val < 60 else "Allied")))
+            info_lines.append(f"Favor:{favor_val:+d} ({favor_label})")
+
         # Faction (if entity has faction)
         if hasattr(entity, 'faction') and entity.faction:
             info_lines.append(f"{entity.faction}")
@@ -439,6 +445,9 @@ class MenusMixin:
         # Show trade hint if NPC has items
         if entity.inventory:
             info_lines.append("Shift+T: Trade")
+        # Gift giving hint
+        if self.inventory.items:
+            info_lines.append("Shift+G: Gift item")
 
         # Draw each line (no background box)
         for i, line in enumerate(info_lines):

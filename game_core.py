@@ -41,6 +41,8 @@ class GameCoreMixin:
             'max_energy': 100,
             'base_damage': 5,
             'blocking': False,
+            'block_locked': False,
+            'last_shift_press_tick': 0,
             'friendly_fire': False,      # OFF = cannot damage peaceful entities (press V to toggle)
             'last_attack_tick': 0,
             'in_structure': False,
@@ -835,9 +837,11 @@ class GameCoreMixin:
             self.inspected_npc = None
             return
 
-        # Inspection only triggers while Shift is held
+        # Inspection triggers when 'inspect' action is selected AND Shift is held
+        selected_action = self.inventory.selected.get('actions')
         keys = pygame.key.get_pressed()
-        if not (keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]):
+        shift_held = keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]
+        if not (selected_action == 'inspect' and shift_held):
             self.inspected_npc = None
             return
 
@@ -1031,7 +1035,12 @@ class GameCoreMixin:
                     else:
                         self.handle_inventory_click(event.pos)
                     self.handle_quest_ui_click(event.pos)
-            
+
+            if event.type == pygame.KEYUP:
+                if event.key in (pygame.K_LSHIFT, pygame.K_RSHIFT):
+                    if self.state == 'playing' and not self.player.get('block_locked', False):
+                        self.player['blocking'] = False
+
             if event.type == pygame.KEYDOWN:
                 if self.state == 'menu':
                     if event.key == pygame.K_1:
@@ -1080,11 +1089,16 @@ class GameCoreMixin:
                     elif event.key == pygame.K_j:
                         self.release_follower()
                         self.gain_xp(1)
-                    elif event.key == pygame.K_b:
-                        # Toggle blocking
-                        self.player['blocking'] = not self.player['blocking']
-                        print(f"Blocking: {'ON' if self.player['blocking'] else 'OFF'}")
-                        self.gain_xp(1)
+                    elif event.key in (pygame.K_LSHIFT, pygame.K_RSHIFT):
+                        # Shift held = start blocking; double-tap within 18 ticks = toggle block lock
+                        now = self.tick
+                        last = self.player.get('last_shift_press_tick', 0)
+                        if now - last <= 18:
+                            locked = not self.player.get('block_locked', False)
+                            self.player['block_locked'] = locked
+                            print(f"Block lock: {'ON' if locked else 'OFF'}")
+                        self.player['last_shift_press_tick'] = now
+                        self.player['blocking'] = True
                     elif event.key == pygame.K_v:
                         # Toggle friendly fire (allow/deny damage to peaceful entities)
                         self.player['friendly_fire'] = not self.player.get('friendly_fire', False)
@@ -1128,11 +1142,17 @@ class GameCoreMixin:
                         self.inventory.toggle_menu('magic')
                         if not _was_open:
                             self.sound.on_inventory_open()
-                    elif event.key == pygame.K_r:
+                    elif event.key == pygame.K_u:
                         _was_open = 'actions' in self.inventory.open_menus
                         self.inventory.toggle_menu('actions')
                         if not _was_open:
                             self.sound.on_inventory_open()
+                    elif event.key == pygame.K_g:
+                        if (pygame.key.get_mods() & pygame.KMOD_SHIFT) and self.inspected_npc:
+                            self.give_gift_to_npc(self.inspected_npc)
+                        else:
+                            self.debug_memory_lanes = not self.debug_memory_lanes
+                            print(f"Debug Memory Lanes: {'ON' if self.debug_memory_lanes else 'OFF'}")
                     elif event.key == pygame.K_f:
                         if pygame.key.get_mods() & pygame.KMOD_SHIFT:
                             if self.inspected_npc:
@@ -1173,10 +1193,6 @@ class GameCoreMixin:
                             self.gain_xp(1)
                         else:
                             self.toggle_autopilot()
-                    elif event.key == pygame.K_g:
-                        # Toggle debug memory lanes visualization
-                        self.debug_memory_lanes = not self.debug_memory_lanes
-                        print(f"Debug Memory Lanes: {'ON' if self.debug_memory_lanes else 'OFF'}")
                     # Number keys to select inventory slots (no XP)
                     elif event.key in [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4,
                                       pygame.K_5, pygame.K_6, pygame.K_7, pygame.K_8,
@@ -1196,7 +1212,7 @@ class GameCoreMixin:
                         self.inventory.toggle_menu('items')
                     elif event.key == pygame.K_t:
                         self.inventory.toggle_menu('tools')
-                    elif event.key == pygame.K_r:
+                    elif event.key == pygame.K_u:
                         self.inventory.toggle_menu('actions')
                     elif event.key == pygame.K_f:
                         self.inventory.toggle_menu('followers')
@@ -1247,7 +1263,7 @@ class GameCoreMixin:
         start_y = SCREEN_HEIGHT - 90  # Above UI bar
         
         # Stack categories vertically from bottom
-        categories = ['tools', 'items', 'magic', 'actions', 'followers', 'crafting']
+        categories = ['tools', 'equipment', 'items', 'magic', 'actions', 'followers', 'crafting']
         y_offset = 0
 
         for category in categories:
@@ -1280,12 +1296,34 @@ class GameCoreMixin:
 
                     if category == 'tools':
                         # --- Tool bar slot clicked: select and mark as pending ---
-                        # Never unequip on click — unequip only happens when a
-                        # different inventory item is then clicked (equip_to_slot)
                         self.inventory.selected_tool_slot_idx = i
                         self.inventory.selected['tools'] = item_name
                         self.inventory.pending_equip_slot = i
+                        self.inventory.pending_equip_equipment_slot = None
                         self.sound.on_inventory_select()
+                        return
+
+                    elif category == 'equipment':
+                        # --- Equipment slot clicked: mark as pending for item assignment ---
+                        slot_name = self.inventory.EQUIPMENT_SLOT_NAMES[i]
+                        if self.inventory.pending_equip_equipment_slot == slot_name:
+                            # Clicking same slot again clears pending
+                            self.inventory.pending_equip_equipment_slot = None
+                        else:
+                            self.inventory.pending_equip_equipment_slot = slot_name
+                            self.inventory.pending_equip_slot = None
+                        self.sound.on_inventory_select()
+                        return
+
+                    elif (self.inventory.pending_equip_equipment_slot is not None and
+                          item_name is not None):
+                        # --- Item clicked while equipment slot is pending ---
+                        slot_name = self.inventory.pending_equip_equipment_slot
+                        self.inventory.equip_to_equipment_slot(slot_name, item_name, category)
+                        if ITEMS.get(item_name, {}).get('damage'):
+                            self.sound.on_equip_sword()
+                        else:
+                            self.sound.on_inventory_select()
                         return
 
                     elif ('tools' in self.inventory.open_menus and
@@ -1444,6 +1482,36 @@ class GameCoreMixin:
     def execute_action(self, action_name):
         if action_name == 'shove':
             self.do_shove()
+        elif action_name == 'attack':
+            self.interact()
+        elif action_name == 'block':
+            self.player['blocking'] = True
+        elif action_name == 'inspect':
+            # Inspect is handled via check_npc_inspection (hold shift)
+            pass
+        elif action_name in ('sneak', 'dig', 'talk'):
+            pass  # Placeholder — implementation in future sessions
+
+    def give_gift_to_npc(self, npc_id):
+        """Shift+G: offer selected item to inspected NPC to gain favor."""
+        if npc_id not in self.entities:
+            return
+        entity = self.entities[npc_id]
+        # Find best item to gift (selected item first, then first available)
+        item_name = (self.inventory.selected.get('items') or
+                     next(iter(self.inventory.items), None))
+        if not item_name or self.inventory.items.get(item_name, 0) <= 0:
+            print("[Gift] No item to give.")
+            return
+        item_data = ITEMS.get(item_name, {})
+        # Favor gain: base 10, +5 per damage value (weapons are better gifts)
+        favor_gain = 10 + item_data.get('damage', 0) // 2
+        favor_gain = min(favor_gain, 30)
+        self.inventory.remove_item(item_name, 1)
+        entity.favor = max(-100, min(100, entity.favor + favor_gain))
+        item_display = item_data.get('name', item_name)
+        npc_name = entity.name or entity.type
+        print(f"[Gift] Gave {item_display} to {npc_name}. Favor: {entity.favor:+d}")
 
     def do_shove(self):
         px, py = self.player['x'], self.player['y']
@@ -2635,6 +2703,8 @@ class GameCoreMixin:
             'max_energy': 100,
             'base_damage': 10,
             'blocking': False,
+            'block_locked': False,
+            'last_shift_press_tick': 0,
             'friendly_fire': False,      # OFF = cannot damage peaceful entities
             'last_attack_tick': 0,
             'in_structure': False,
@@ -2666,6 +2736,9 @@ class GameCoreMixin:
         for _t in _dev_npc_types:
             self.inventory.add_item(f'summon_{_t}', 1)
             self.inventory.add_item(f'transform_{_t}', 1)
+        self.inventory.add_item('attack', 1)
+        self.inventory.add_item('block', 1)
+        self.inventory.add_item('inspect', 1)
         self.inventory.add_item('shove', 1)
         self.inventory.add_item('bone_sword', 1)
         self.inventory.add_item('carrot', 5)
