@@ -5,6 +5,40 @@ Reviewed from `debug/bugcatcher.log` after each session.
 
 ---
 
+## Session 50 — 2026-03-20 (snap fix + zone exit fix)
+
+**Fixes applied before this run:**
+- `_autopilot_opportunistic_harvest`: skip harvest if proxy `world_x/y` lag > 0.3 cells (prevents facing change mid-interpolation causing visual snap)
+- `_autopilot_try_harvest_cell`: hard `dist == 1` adjacency guard before any action
+- `try_entity_zone_transition`: removed center ±1 corridor constraint — any edge position can now cross if exit is open
+- `try_entity_screen_crossing`: removed corridor position checks — only exit-open flag gates crossing
+
+**Run stats:** Tick 14757 (~4 min). Quest sequence: FARM → LUMBER → MINE → HUNT → SLAY (session end)
+
+- **FARM**: Timeout — no completion
+- **LUMBER**: ✅ **2 completions** — `Quest [LUMBER] completed (autopilot)!` ×2 — consistent with Session 49
+- **MINE**: Timeout — proxy (WARRIOR id=748) entered combat state at ticks 8157 and 11457; never able to mine
+- **HUNT**: Timeout — proxy (GUARD id=868) logged "Stuck at exit (12,17) — entering wander cooldown" but **DID cross to zone 0,-1** by tick 14757 ✅
+- **SLAY**: Session ended before observation
+
+### CONFIRMED FIX — Zone crossing working
+
+Proxy (GUARD id=868) crossed from zone 0,0 to zone 0,-1 during HUNT quest. Previous sessions never left the starting zone. Zone exit fix confirmed.
+
+### OBSERVATION — Stuck-at-exit message still appears
+
+"Stuck at exit (12,17) — entering wander cooldown" logged during HUNT. Proxy DID eventually cross (zone 0,-1 confirmed), so the corridor fix resolved the blocking issue. The stuck message is from autopilot's own exit-stuck detection (`_autopilot_nudge_zone_explore`) which triggered before the crossing completed — likely the anti-bounce cooldown (30 ticks) delayed it. Not a blocker.
+
+### CONFIRMED BUG — MINE timing out (combat interference)
+
+MINE proxy (WARRIOR id=748) was in combat state at both watchdog samples (ticks 8157, 11457). The proxy's aggression as a WARRIOR type pulls it into fights before it can mine. The quest target cell never gets mined because the proxy keeps fighting instead of executing the MINE behavior. Needs either: (a) spawn a MINER for MINE quests, or (b) suppress combat for quest proxies when in quest-action range.
+
+### CONFIRMED BUG — FARM still timing out
+
+FARM has not completed across any session. Likely the quest target is being modified by a different entity (cell changes to something other than what's expected) before the proxy arrives, or the `try_till_soil`/`try_harvest_crop` priority path still has an issue. Needs a dedicated run focused on FARM with closer logging.
+
+---
+
 ## Session 49 — 2026-03-20 (quest target priority fix)
 
 **Fixes applied before this run:**
