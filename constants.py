@@ -455,6 +455,7 @@ CELL_TYPES = {
         'solid': True,
         'degrades_to': 'SAND',
         'degrade_rate': 0.00002,  # Very low — cacti persist in deserts
+        'drops': [{'cell': 'SAND', 'chance': 0.8}],
     },
     'BARREL': {
         'color': COLORS['BARREL'],
@@ -490,7 +491,7 @@ CELL_TYPES = {
         'label': 'Bush',
         'solid': True,
         'drops': [{'item': 'wood', 'amount': 1, 'chance': 0.6},
-                  {'cell': 'GRASS', 'chance': 0.4}],
+                  {'cell': 'GRASS', 'chance': 0.8}],
     },
 }
 
