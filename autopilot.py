@@ -2,10 +2,11 @@
 StarCell Autopilot System — NPC Possession Model
 -------------------------------------------------
 When the player goes idle, autopilot spawns a "proxy NPC" at the player's
-position.  The proxy is a real Entity of the appropriate role type (FARMER,
-WARRIOR, MINER, etc.) and is driven by the existing NPC AI with zero extra
-movement code.  The wizard sprites are used instead of the NPC sprites so the
-player character looks the same on screen.
+position.  The proxy is a real Entity of a randomly selected role type (FARMER,
+WARRIOR, MINER, etc.) and is driven by the existing NPC AI.  A new random type
+is picked on each quest advance so we can observe how every NPC type handles
+every quest type.  The wizard sprite is used so the player character looks the
+same on screen.
 
 Inventory changes made by the proxy (harvested items, consumed tools) are
 mirrored to the real player inventory.  When the player resumes control, the
@@ -49,21 +50,14 @@ AUTOPILOT_QUEST_ORDER = [
     'EXPLORE', 'RESCUE', 'SEARCH',
 ]
 
-# Quest type → NPC role mapping
-QUEST_NPC_TYPE = {
-    'FARM':           'FARMER',
-    'GATHER':         'LUMBERJACK',
-    'LUMBER':         'LUMBERJACK',
-    'MINE':           'MINER',
-    'HUNT':           'WARRIOR',
-    'SLAY':           'WARRIOR',
-    'EXPLORE':        'TRADER',
-    'SEARCH':         'WIZARD',
-    'RESCUE':         'WIZARD',
-    'COMBAT_HOSTILE': 'WARRIOR',
-    'COMBAT_ALL':     'WARRIOR',
-}
-DEFAULT_NPC_TYPE = 'FARMER'
+# Pool of humanoid NPC types the autopilot may use as proxy.
+# A random type is picked fresh on each quest so we can observe how different
+# NPC types perform across all quest types — a BLACKSMITH on LUMBER, a FARMER
+# on HUNT, etc.  Hostile types are excluded (they would attack the player).
+AUTOPILOT_PROXY_TYPES = [
+    'FARMER', 'LUMBERJACK', 'MINER', 'BLACKSMITH',
+    'WIZARD', 'GUARD', 'WARRIOR', 'TRADER', 'COMMANDER',
+]
 
 
 class AutopilotMixin:
@@ -257,8 +251,10 @@ class AutopilotMixin:
         psy = self.player['screen_y']
         screen_key = f"{psx},{psy}"
 
-        # Choose NPC type from active quest
-        npc_type = QUEST_NPC_TYPE.get(self.active_quest, DEFAULT_NPC_TYPE)
+        # Pick a random NPC type from the proxy pool.
+        # Random selection (not quest-matched) lets us observe how every NPC type
+        # handles every quest type — a BLACKSMITH on LUMBER, a FARMER on HUNT, etc.
+        npc_type = random.choice(AUTOPILOT_PROXY_TYPES)
 
         # Find nearest walkable (non-solid) cell — player may be near water/walls
         if screen_key in self.screens:
@@ -351,7 +347,7 @@ class AutopilotMixin:
         # Initial quest nudge
         self._autopilot_nudge_quest_target(proxy)
 
-        print(f"[Autopilot] Proxy {npc_type} spawned (id={entity_id}) at ({px},{py})")
+        print(f"[Autopilot] Proxy {npc_type} spawned (id={entity_id}) for {self.active_quest} at ({px},{py})")
 
     def _autopilot_disengage(self):
         """Despawn proxy NPC and restore player position from its last location."""
@@ -725,17 +721,15 @@ class AutopilotMixin:
         if new_quest:
             new_quest.clear_target()
 
-        # Respawn proxy as the role type appropriate for the new quest
-        new_npc_type = QUEST_NPC_TYPE.get(self.active_quest, DEFAULT_NPC_TYPE)
-        old_npc_type = QUEST_NPC_TYPE.get(old, DEFAULT_NPC_TYPE)
-        if new_npc_type != old_npc_type and self.autopilot_proxy_id is not None:
+        # Always respawn with a fresh random proxy type on quest advance.
+        # This lets each quest run with a different NPC role so we can observe
+        # how different types handle each quest (e.g. BLACKSMITH on LUMBER).
+        if self.autopilot_proxy_id is not None:
             self._autopilot_disengage()
             # _autopilot_disengage sets autopilot=False (designed for player takeover),
             # but here we're just swapping proxy types — keep autopilot running.
             self.autopilot = True
-            print(f"[Autopilot] Quest advance: {old} → {self.active_quest} (respawn {old_npc_type}→{new_npc_type})")
-        else:
-            print(f"[Autopilot] Quest advance: {old} → {self.active_quest}")
+        print(f"[Autopilot] Quest advance: {old} → {self.active_quest}")
 
     # Keep old name as alias so any remaining call sites don't break
     def _autopilot_switch_quest(self):
