@@ -5,6 +5,62 @@ Reviewed from `debug/bugcatcher.log` after each session.
 
 ---
 
+## Session 25 — 2026-03-19 (run 15 — toolbar/reference architecture stress test)
+
+11935 ticks. 486 entities at shutdown. 86 zones explored. Player stayed zone 0,0.
+
+### CONFIRMED BUG — Proxy stagnation in `flee` state
+
+**Symptom:** Proxy stuck at grid [1,1] for ~3300 ticks (tick ~8200 to 11517). Proxy ai_state was `flee` the entire time. `last_input_tick` was 1617, meaning no new inputs were generated for nearly the full session duration.
+
+**Root cause:** Stuck detection in `update_autopilot()` (autopilot.py:147) only checks `targeting` and `wandering` states. When hostile NPCs cornered the proxy at [1,1] and forced it into `flee`, neither obstacle clearing nor stuck counter increments fired. The proxy remained frozen with menus open.
+
+**Fix (applied):** Extended stuck detection to include `flee` state. After 300+ ticks stuck in flee, force proxy ai_state back to `wandering` so it can resume normal movement.
+
+### OBSERVATION — Tool slot assignment working
+
+Tool slots progressively filled: slot 1 (shovel) at tick 3417, slots 0+1 (seeds+shovel) at tick 6717, slots 0+1+2 at tick 10017. Assignment sequence (T→I→number→click) confirmed functional.
+
+### OBSERVATION — Actions dict correct
+
+All four actions present throughout: attack, block, inspect, shove. `selected_actions` cycled between block and inspect across samples — action selection working.
+
+### OBSERVATION — New watchdog categories firing
+
+`watchdog_inventory_state` and `watchdog_favor` both sampled correctly (3 entries each). Favor values correct: peaceful NPCs at 0, hostiles (WOLF, SKELETON, BANDIT, GOBLIN, TERMITE) at -50.
+
+### OBSERVATION — Equipment slots never filled
+
+All equipment slots null across all three inventory state samples. No equippable items (weapons, armor) appeared in inventory during this session — autopilot harvested only seeds/shovel/carrot. Not a bug; need combat/crafting paths to yield equippable gear before this can be tested.
+
+### OBSERVATION — `selected_items` pointing to missing item
+
+Player sample at tick 11517 shows `selected_items: 'axe'` but axe not present in `items_top5` or `items_count=3`. Stale selection reference when item leaves inventory. Low priority cosmetic issue — doesn't affect gameplay.
+
+### OBSERVATION — No resource accumulation
+
+items_count stayed at 3 (seeds:1, shovel:1, carrot:1) from early session through end. No wood/stone/iron harvested. Related to proxy being stuck in flee/cornered for most of the session — opportunistic harvesting never fired.
+
+---
+
+## Session 24 — 2026-03-19 (run 14 — prior session, pre-watchdog-category additions)
+
+Session ran before `watchdog_inventory_state` and `watchdog_favor` categories were wired in. No category data available for those samplers.
+
+### CONFIRMED (fixed before this run) — keeper_no_target integrity flood
+
+242 false-positive integrity entries from non-humanoid types (animals, hostiles). Fixed by filtering `keeper_no_target` check to `_KEEPER_HUMANOIDS` set.
+
+### CONFIRMED (fixed before this run) — Proxy sync reversing crafted items
+
+Proxy sync compared `proxy_flat` vs `player_flat`; items crafted by player (not in proxy) generated negative delta → removed from player inventory. Fixed by using `proxy._sync_baseline` (proxy's own previous state) as the comparison baseline.
+
+### CONFIRMED (fixed before this run) — Tool slot double-counting in crafting
+
+`get_craftable_recipes` and `get_all_craftable_items` counted tool_slots separately when tools already live in `items` dict. Removed tool_slots counting from both methods.
+
+---
+
 ## Session 23 — 2026-03-15 (live player review — chest/faction/NPC behavior fixes)
 
 ### FIXED — WOOD and PLANKS appearing as overworld grid cells

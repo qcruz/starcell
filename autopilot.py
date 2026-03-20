@@ -144,11 +144,16 @@ class AutopilotMixin:
 
         # ── Obstacle clearing: detect stuck position and chop/mine blocking cells ─
         cur_pos = (proxy.x, proxy.y)
-        if proxy.ai_state in ('targeting', 'wandering') and cur_pos == self._autopilot_proxy_last_pos:
+        if proxy.ai_state in ('targeting', 'wandering', 'flee') and cur_pos == self._autopilot_proxy_last_pos:
             self._autopilot_pos_stuck_ticks += 1
             # Try to clear obstacle every 60 ticks of being stuck (once per NPC AI cycle)
             if self._autopilot_pos_stuck_ticks % 60 == 0:
                 self._autopilot_try_clear_obstacle(proxy)
+            # If stuck in flee for 300+ ticks (cornered), force wandering so it can move again
+            if proxy.ai_state == 'flee' and self._autopilot_pos_stuck_ticks >= 300:
+                proxy.ai_state = 'wandering'
+                proxy.current_target = None
+                self._autopilot_pos_stuck_ticks = 0
         else:
             self._autopilot_proxy_last_pos = cur_pos
             self._autopilot_pos_stuck_ticks = 0
@@ -252,6 +257,9 @@ class AutopilotMixin:
         proxy.inventory = {}
         for item_name, count in self.inventory.items.items():
             proxy.inventory[item_name] = count
+        # Baseline snapshot: sync compares proxy-current vs proxy-last-sync,
+        # not proxy vs player — prevents crafted/bought items from being reversed.
+        proxy._sync_baseline = dict(proxy.inventory)
 
         # ── Register entity ───────────────────────────────────────────────
         entity_id = self.next_entity_id
@@ -410,40 +418,42 @@ class AutopilotMixin:
 
     def _sync_inventory_to_player(self, proxy):
         """Copy proxy entity inventory → player Inventory object.
-        Handles both plain item dicts (proxy) and the Inventory class (player).
+
+        Uses a BASELINE snapshot so that items the player acquired directly
+        (crafting, buying, spells) are never reversed by the sync.
+
         Only syncs items dict; magic/actions/followers stay on player.
-        Tools live in self.inventory.items now — no separate tools sync needed."""
+        Tools live in self.inventory.items now — no separate tools sync needed.
+        """
         if not hasattr(proxy, 'inventory'):
             return
 
-        # Player flat: items only (tools are inside items dict; tools property
-        # reads from tool_slots references so must NOT be used here — would double-count).
-        player_flat = dict(self.inventory.items)
-        proxy_flat  = dict(proxy.inventory)
+        proxy_current  = dict(proxy.inventory)
+        proxy_baseline = getattr(proxy, '_sync_baseline', {})
 
-        # Find differences and apply them
-        all_keys = set(player_flat) | set(proxy_flat)
+        # Apply only the deltas the PROXY itself caused (resource gain/loss).
+        # Items added directly to player inventory (crafting, loot) are untouched.
+        all_keys = set(proxy_current) | set(proxy_baseline)
         for key in all_keys:
-            old_count = player_flat.get(key, 0)
-            new_count = proxy_flat.get(key, 0)
-            delta = new_count - old_count
+            old = proxy_baseline.get(key, 0)
+            new = proxy_current.get(key, 0)
+            delta = new - old
             if delta == 0:
                 continue
             if delta > 0:
                 self.inventory.add_item(key, delta)
             else:
-                # Remove items directly from items dict (best-effort)
+                # Proxy lost the item — mirror removal in player inventory
                 if key in self.inventory.items:
                     self.inventory.items[key] = max(0, self.inventory.items[key] + delta)
                     if self.inventory.items[key] == 0:
                         del self.inventory.items[key]
-                        # Clear dangling tool_slot references
                         for i, slot in enumerate(self.inventory.tool_slots):
                             if slot == key:
                                 self.inventory.tool_slots[i] = None
 
-        # Keep proxy in sync so next diff is relative to current state
-        proxy.inventory = dict(proxy_flat)
+        # Advance baseline to current proxy state for next sync
+        proxy._sync_baseline = proxy_current
 
     # ── Quest target steering ─────────────────────────────────────────────────
 
