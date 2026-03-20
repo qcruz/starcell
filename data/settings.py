@@ -67,7 +67,7 @@ DEEP_WATER_EVAPORATE_RATE = 0.03 # Deep water becomes water (apply_cellular_auto
 DEEP_WATER_COBBLE_RATE = 0.04   # Stable deep water mineralises into cobblestone (all 4 cardinal = water)
 WATER_TO_DIRT_RATE = 0.005      # Water slowly evaporates to dirt without neighbors (apply_cellular_automata)
 WATER_EDGE_ROCK_RATE = 0.08     # Dirt at water boundary (touching non-dirt) hardens to stone
-SAND_ROCK_TO_DIRT_RATE = 0.01   # Sand touching stone/cobblestone slowly becomes dirt
+SAND_ROCK_TO_DIRT_RATE = 0.0002 # Sand touching stone/cobblestone very slowly becomes dirt
 BIOME_SPREAD_RATE = 0.001       # Chance per update a base cell copies a different NSEW neighbor type
 FLOODING_RATE = 0.015           # Water spreads to dirt (apply_cellular_automata)
 

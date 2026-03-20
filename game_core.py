@@ -1493,9 +1493,26 @@ class GameCoreMixin:
         if self.is_raining:
             return
         self.player['energy'] -= 90
+        # Set rain on the player's current zone through the zone_rain system
+        # (global self.is_raining is synced from zone_rain each update cycle)
+        _pzk = f"{self.player['screen_x']},{self.player['screen_y']}"
+        if not hasattr(self, 'zone_rain'):
+            self.zone_rain = {}
+        if _pzk not in self.zone_rain:
+            self.zone_rain[_pzk] = {
+                'is_raining': False,
+                'weather_timer': 0,
+                'weather_cycle': RAIN_FREQUENCY_MAX,
+                'rain_timer': 0,
+                'rain_duration': 0,
+            }
+        zr = self.zone_rain[_pzk]
+        zr['is_raining'] = True
+        zr['rain_timer'] = 0
+        zr['rain_duration'] = RAIN_DURATION_MIN
+        # Also reset weather_timer so the zone doesn't immediately trigger another cycle
+        zr['weather_timer'] = 0
         self.is_raining = True
-        self.rain_timer = 0
-        self.rain_duration = random.randint(RAIN_DURATION_MIN, RAIN_DURATION_MAX)
 
     def cast_day_spell(self):
         if self.player['energy'] < 90:

@@ -120,7 +120,7 @@ DEEP_WATER_EVAPORATE_RATE = 0.3  # Deep water → water when any cardinal neighb
 DEEP_WATER_COBBLE_RATE = 0.04   # Stable deep water mineralises into cobblestone (all 4 cardinal = water)
 WATER_TO_DIRT_RATE = 0.02       # Water evaporates to dirt when isolated (was 0.005)
 WATER_EDGE_ROCK_RATE = 0.08     # Dirt at water boundary (touching non-dirt) hardens to stone
-SAND_ROCK_TO_DIRT_RATE = 0.01   # Sand touching stone/cobblestone slowly becomes dirt
+SAND_ROCK_TO_DIRT_RATE = 0.0002 # Sand touching stone/cobblestone very slowly becomes dirt
 FLOODING_RATE = 0.08            # Water spreads to dirt during rain only (apply_cellular_automata)
 BIOME_SPREAD_RATE = 0.004          # Chance per update a base cell copies a different NSEW neighbor type (4x increase)
 TREE_CROWD_DECAY_RATE = 0.001      # Trees thin when touching any adjacent tree (produces checkerboard spacing)
@@ -589,7 +589,24 @@ ITEMS = {
 
     'enchanted_sword': {'color': (147, 112, 219), 'name': 'Enchanted Sword', 'is_tool': True, 'is_weapon': True, 'damage': 25, 'equipment_slot': 'weapon'},
     'enchanted_axe': {'color': (148, 0, 211), 'name': 'Enchanted Axe', 'is_tool': True, 'damage': 20},
-    
+
+    # Weapons (ranged / polearm / blunt)
+    'bow':          {'color': (139, 90,  43),  'name': 'Bow',         'is_tool': True, 'is_weapon': True, 'damage': 12, 'equipment_slot': 'weapon'},
+    'bow_metal':    {'color': (150, 150, 150),  'name': 'Metal Bow',   'is_tool': True, 'is_weapon': True, 'damage': 15, 'equipment_slot': 'weapon'},
+    'staff_red':    {'color': (180,  50,  50),  'name': 'Red Staff',   'is_tool': True, 'is_weapon': True, 'damage': 14, 'equipment_slot': 'weapon'},
+    'spear':        {'color': (150, 120,  80),  'name': 'Spear',       'is_tool': True, 'is_weapon': True, 'damage': 16, 'equipment_slot': 'weapon'},
+    'warhammer':    {'color': ( 80,  80, 100),  'name': 'Warhammer',   'is_tool': True, 'is_weapon': True, 'damage': 22, 'equipment_slot': 'weapon'},
+
+    # Shields
+    'shield':        {'color': (150, 150, 160), 'name': 'Shield',        'is_tool': True, 'is_shield': True, 'equipment_slot': 'offhand'},
+    'shield_bronze': {'color': (180, 120,  50), 'name': 'Bronze Shield', 'is_tool': True, 'is_shield': True, 'equipment_slot': 'offhand'},
+
+    # Armour pieces
+    'armour_chest': {'color': (150, 150, 160), 'name': 'Chest Armour', 'is_armor': True, 'armor': 8,  'equipment_slot': 'armor'},
+    'armour_helm':  {'color': (150, 150, 160), 'name': 'Helm',         'is_armor': True, 'armor': 4,  'equipment_slot': 'armor'},
+    'armour_legs':  {'color': (150, 150, 160), 'name': 'Leg Armour',   'is_armor': True, 'armor': 5,  'equipment_slot': 'armor'},
+    'armour_shoes': {'color': (150, 150, 160), 'name': 'Armour Shoes', 'is_armor': True, 'armor': 2,  'equipment_slot': 'armor'},
+
     # Materials
     'rope': {'color': (139, 119, 101), 'name': 'Rope'},
     'leather': {'color': (139, 90, 43), 'name': 'Leather'},
