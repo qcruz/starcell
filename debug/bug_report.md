@@ -50,9 +50,9 @@ Different NPC types assigned per quest. COMMANDER doing LUMBER is intentional �
 
 ---
 
-## Session 43–45 — 2026-03-20 (pending — keeper_target navigation + combat aggression fix)
+## Sessions 43–45 — 2026-03-20 (keeper_target navigation + combat aggression fixes)
 
-Four fixes applied before this run:
+Fixes applied across these runs — results fed into Session 46:
 
 ### FIXED — Proxy position jumping from nudge state overrides
 
