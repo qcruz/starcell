@@ -220,6 +220,21 @@ class AutopilotMixin:
                 self._autopilot_quest_ticks = 0
                 self._autopilot_advance_quest()
 
+        # ── Combat quest: track proxy damage to target ───────────────────
+        # Progress and completion only credit when the proxy dealt damage,
+        # not when the target dies from dehydration or other causes.
+        combat_quests = ('HUNT', 'SLAY', 'COMBAT_HOSTILE', 'COMBAT_ALL')
+        if self.active_quest in combat_quests and self.active_quest in self.quests:
+            cq = self.quests[self.active_quest]
+            if cq.status == 'active' and cq.target_entity_id:
+                target = self.entities.get(cq.target_entity_id)
+                if target and not target.is_dead:
+                    # Proxy is actively attacking the quest target this tick
+                    if proxy.combat_target == cq.target_entity_id:
+                        if target.max_health > 0:
+                            cq.progress = (target.max_health - target.health) / target.max_health
+                        cq._proxy_damaged_target = True
+
         # Periodically nudge proxy toward quest target
         self._autopilot_nudge_timer += 1
         if self._autopilot_nudge_timer >= QUEST_NUDGE_INTERVAL:
@@ -674,9 +689,11 @@ class AutopilotMixin:
         self.active_quest = cycle[next_idx]
         self._autopilot_quest_ticks = 0
 
-        # Clear stale target from the previous quest
+        # Clear stale target from the previous quest (also resets damage tracking)
         if old and old in self.quests:
-            self.quests[old].clear_target()
+            old_q = self.quests[old]
+            old_q.clear_target()
+            old_q._proxy_damaged_target = False
 
         # Clear the new quest's stale game-start target so loreEngine re-assigns
         # it near the proxy's current position on the first nudge cycle.
@@ -1078,11 +1095,19 @@ class AutopilotMixin:
             f"Shift+G gift to NPC id={self.inspected_npc}"
         )
 
-    def _autopilot_try_harvest_cell(self, proxy, tx, ty):
-        """Attempt to harvest the specific quest target cell at (tx, ty).
+    # Cell types the proxy can harvest/clear (excludes structures like HOUSE, CAMP, CAVE)
+    _CHOPPABLE = frozenset(['TREE1', 'TREE2', 'CACTUS', 'BUSH'])
+    _MINABLE   = frozenset(['STONE', 'IRON_ORE'])
+    _PLANTABLE = frozenset(['SOIL'])
+    _TILLABLE  = frozenset(['DIRT', 'GRASS', 'SAND'])
+    _CROPPABLE = frozenset(['CARROT1', 'CARROT2', 'CARROT3'])
 
-        Called when the proxy is within distance 2 of the quest target.
-        Routes to the appropriate harvest method based on cell type.
+    def _autopilot_try_harvest_cell(self, proxy, tx, ty):
+        """Harvest the specific quest target cell at (tx, ty).
+
+        Full-stop behavior: proxy stops in place, faces the target cell,
+        executes the harvest action. No position movement is applied.
+        (tx, ty) must be adjacent to the proxy (dist == 1).
         """
         screen_key = f"{proxy.screen_x},{proxy.screen_y}"
         if screen_key not in self.screens:
@@ -1090,25 +1115,29 @@ class AutopilotMixin:
         grid = self.screens[screen_key]['grid']
         if not (0 <= ty < len(grid) and 0 <= tx < len(grid[0])):
             return
+
+        # Full stop — clear any movement target so the proxy doesn't drift
+        proxy.current_target = None
+        proxy.ai_state = 'wandering'
+
+        # Face the target cell
+        proxy.update_facing_toward(tx, ty)
+
         cell = grid[ty][tx]
-        if cell in ('TREE1', 'TREE2'):
-            print(f"[AP] harvest_cell: chopping {cell} at ({tx},{ty}) proxy=({int(proxy.x)},{int(proxy.y)})")
+        print(f"[AP] harvest_cell: {cell} at ({tx},{ty}) proxy=({int(proxy.x)},{int(proxy.y)})")
+
+        if cell in self._CHOPPABLE:
             self.try_chop_tree(proxy, screen_key)
-        elif cell in ('STONE', 'IRON_ORE'):
-            print(f"[AP] harvest_cell: mining {cell} at ({tx},{ty}) proxy=({int(proxy.x)},{int(proxy.y)})")
+        elif cell in self._MINABLE:
             self.try_mine_rock(proxy, screen_key)
-        elif cell in ('CARROT1', 'CARROT2', 'CARROT3'):
+        elif cell in self._CROPPABLE:
             if hasattr(self, 'try_harvest_crop'):
                 self.try_harvest_crop(proxy, screen_key)
-        elif cell == 'SOIL':
-            print(f"[AP] harvest_cell: planting on SOIL at ({tx},{ty}) proxy=({int(proxy.x)},{int(proxy.y)})")
+        elif cell in self._PLANTABLE:
             self.try_plant_seed(proxy, screen_key)
-        elif cell in ('DIRT', 'GRASS', 'SAND'):
-            print(f"[AP] harvest_cell: tilling {cell} at ({tx},{ty}) proxy=({int(proxy.x)},{int(proxy.y)})")
+        elif cell in self._TILLABLE:
             if hasattr(self, 'try_till_soil'):
                 self.try_till_soil(proxy, screen_key)
-        else:
-            print(f"[AP] harvest_cell: target ({tx},{ty}) is now '{cell}' — already changed?")
 
     def _autopilot_try_clear_obstacle(self, proxy):
         """When the proxy is stuck in 'targeting' state, scan adjacent cells for
@@ -1126,26 +1155,34 @@ class AutopilotMixin:
         screen = self.screens[screen_key]
         grid = screen['grid']
 
-        tree_adjacent = False
-        rock_adjacent = False
+        chop_target = None
+        mine_target = None
         for dx, dy in [(0, -1), (0, 1), (-1, 0), (1, 0)]:
             cx, cy = int(proxy.x) + dx, int(proxy.y) + dy
             if not (0 <= cx < GRID_WIDTH and 0 <= cy < GRID_HEIGHT):
                 continue
             cell = grid[cy][cx]
-            if cell in ('TREE1', 'TREE2'):
-                tree_adjacent = True
-            elif cell in ('STONE', 'IRON_ORE'):
-                rock_adjacent = True
+            if cell in self._CHOPPABLE and chop_target is None:
+                chop_target = (cx, cy, cell)
+            elif cell in self._MINABLE and mine_target is None:
+                mine_target = (cx, cy, cell)
 
-        if tree_adjacent:
+        # Full stop — clear movement so the action is in-place with no snapping
+        proxy.current_target = None
+        proxy.ai_state = 'wandering'
+
+        if chop_target:
+            cx, cy, cell = chop_target
+            proxy.update_facing_toward(cx, cy)
             self.try_chop_tree(proxy, screen_key)
-            print(f"[Autopilot] Obstacle-clear: chopping tree adjacent to proxy "
-                  f"({int(proxy.x)},{int(proxy.y)}) stuck={self._autopilot_pos_stuck_ticks}t")
-        elif rock_adjacent:
+            print(f"[Autopilot] Obstacle-clear: chopping {cell} at ({cx},{cy}) "
+                  f"proxy=({int(proxy.x)},{int(proxy.y)}) stuck={self._autopilot_pos_stuck_ticks}t")
+        elif mine_target:
+            cx, cy, cell = mine_target
+            proxy.update_facing_toward(cx, cy)
             self.try_mine_rock(proxy, screen_key)
-            print(f"[Autopilot] Obstacle-clear: mining rock adjacent to proxy "
-                  f"({int(proxy.x)},{int(proxy.y)}) stuck={self._autopilot_pos_stuck_ticks}t")
+            print(f"[Autopilot] Obstacle-clear: mining {cell} at ({cx},{cy}) "
+                  f"proxy=({int(proxy.x)},{int(proxy.y)}) stuck={self._autopilot_pos_stuck_ticks}t")
 
     def _autopilot_opportunistic_harvest(self, proxy):
         """Scan the 3×3 area around the proxy for harvestable cells and collect them.

@@ -5,6 +5,30 @@ Reviewed from `debug/bugcatcher.log` after each session.
 
 ---
 
+## Session 42 — 2026-03-20 (pending — proxy harvest stop + combat quest damage gate)
+
+Two fixes applied before this run:
+
+### FIXED — Proxy movement snap during mining/chopping
+
+`_autopilot_try_harvest_cell` was calling `try_chop_tree`/`try_mine_rock` while proxy was still in targeting state — caused visible snap as proxy moved into the cell. Fix: explicitly stop proxy (clear current_target, set ai_state='wandering', call `update_facing_toward`) before executing the harvest action. Same fix applied to `_autopilot_try_clear_obstacle`.
+
+### FIXED — Obstacle-clear only handled TREE/STONE, missing CACTUS/BUSH
+
+Expanded `_CHOPPABLE` to include CACTUS, BUSH. Added `_MINABLE`, `_PLANTABLE`, `_TILLABLE`, `_CROPPABLE` constants. Obstacle-clear and harvest now reference shared frozensets.
+
+### FIXED — Combat quests completing on NPC dehydration deaths
+
+`check_quest_completion` was crediting completion whenever the entity died in the same zone, including from dehydration. Proxy combat was irrelevant.
+
+Fix: two-part:
+1. `update_autopilot` now tracks `proxy.combat_target == quest.target_entity_id` each tick. When true, updates `quest.progress` and sets `quest._proxy_damaged_target = True`.
+2. `check_quest_completion` (lore/engine.py) now requires `quest._proxy_damaged_target == True` before crediting completion when entity is dead. If entity died without proxy damage, clears target and reassigns.
+
+`_proxy_damaged_target` is reset to False on `_autopilot_advance_quest()`.
+
+---
+
 ## Sessions 38–41 — 2026-03-20 (runs 25–28 — cell quest targeting chain)
 
 Session 41: 11368 ticks. FARM/LUMBER/MINE all timed out again. Zero harvest_cell calls. MINE completed once in session 39 (likely by chance — obstacle-clear mining a rock adjacent to the quest target). Several bugs found and fixed in sequence:
