@@ -5,6 +5,32 @@ Reviewed from `debug/bugcatcher.log` after each session.
 
 ---
 
+## Session 37 — 2026-03-20 (run 26 — diagnosing loreEngine target assignment)
+
+Session in progress. Adding diagnostic print: after `clear_target()` on quest advance, checking whether `loreEngine(quest)` successfully assigns a new target near the proxy's current position. Investigating why FARM/LUMBER/MINE continue timing out with no harvest_cell calls.
+
+---
+
+## Session 36 — 2026-03-20 (run 25 — stale target clear fix)
+
+Session ran ~190s. FARM timed out, LUMBER timed out, MINE started (MINER spawned). Zero quest completions.
+
+### BUG — clear_target on quest advance may leave quest permanently inactive
+
+After `_autopilot_advance_quest()` clears the new quest's target, the quest status becomes 'inactive'. The nudge calls `loreEngine(quest)` to re-assign. If loreEngine can't find a nearby tree/stone (or the proxy is in a barren zone), it returns False and the quest stays 'inactive' forever — nudge exits early every cycle, no steering, no harvest, timeout fires.
+
+Session confirmed: zero `[AP] harvest_cell:` prints across all three quest types. The nudge is not reaching the target_cell steering block.
+
+Next step: diagnostic print after loreEngine call to confirm whether it assigns or fails.
+
+---
+
+## Session 35 — 2026-03-20 (run 25 — verify proxy respawn fix)
+
+FARM timed out, LUMBER timed out, MINE started. Zero harvest_cell calls. Proxy types spawned correctly (FARMER → LUMBERJACK → MINER) confirming session 34 fix holds. But quest targets from game-start are stale by the time those quests become active — proxy is in a different zone than the original target.
+
+---
+
 ## Session 34 — 2026-03-19 (run 24 — proxy respawn fix for quest type transitions)
 
 10228 ticks. Session ran ~190s.

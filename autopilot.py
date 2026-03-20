@@ -520,7 +520,8 @@ class AutopilotMixin:
 
         quest = self.quests[self.active_quest]
         if quest.status != 'active':
-            self.loreEngine(quest)
+            result = self.loreEngine(quest)
+            print(f"[AP] loreEngine({self.active_quest}): status={quest.status} target_cell={quest.target_cell} result={result}")
         if quest.status != 'active':
             return
 
@@ -671,6 +672,12 @@ class AutopilotMixin:
         # Clear stale target from the previous quest
         if old and old in self.quests:
             self.quests[old].clear_target()
+
+        # Clear the new quest's stale game-start target so loreEngine re-assigns
+        # it near the proxy's current position on the first nudge cycle.
+        new_quest = self.quests.get(self.active_quest)
+        if new_quest:
+            new_quest.clear_target()
 
         # Respawn proxy as the role type appropriate for the new quest
         new_npc_type = QUEST_NPC_TYPE.get(self.active_quest, DEFAULT_NPC_TYPE)
