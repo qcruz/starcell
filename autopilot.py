@@ -564,10 +564,19 @@ class AutopilotMixin:
             tsx, tsy, tx, ty = quest.target_cell
             target_sk = f"{tsx},{tsy}"
             if target_sk == screen_key:
-                # Already in the target zone — let natural behavior handle it
-                proxy.ai_state = 'wandering'
-                proxy.current_target = None
-                proxy.ai_state_timer = 2
+                # Already in the target zone — steer toward the specific cell
+                # so the proxy gets within distance 2 and triggers completion.
+                dist = abs(proxy.x - tx) + abs(proxy.y - ty)
+                if dist > 2:
+                    proxy.current_target = (tx, ty)
+                    proxy.target_type = 'resource'
+                    proxy.ai_state = 'targeting'
+                    proxy.ai_state_timer = 3
+                else:
+                    # Close enough — try to harvest it, then let quest completion fire
+                    self._autopilot_try_harvest_cell(proxy, tx, ty)
+                    proxy.ai_state = 'wandering'
+                    proxy.current_target = None
             else:
                 self._nudge_toward_zone(proxy, tsx, tsy, screen_key)
         elif quest.target_entity_id and quest.target_entity_id in self.entities:
@@ -1034,6 +1043,27 @@ class AutopilotMixin:
             d1,
             f"Shift+G gift to NPC id={self.inspected_npc}"
         )
+
+    def _autopilot_try_harvest_cell(self, proxy, tx, ty):
+        """Attempt to harvest the specific quest target cell at (tx, ty).
+
+        Called when the proxy is within distance 2 of the quest target.
+        Routes to the appropriate harvest method based on cell type.
+        """
+        screen_key = f"{proxy.screen_x},{proxy.screen_y}"
+        if screen_key not in self.screens:
+            return
+        grid = self.screens[screen_key]['grid']
+        if not (0 <= ty < len(grid) and 0 <= tx < len(grid[0])):
+            return
+        cell = grid[ty][tx]
+        if cell in ('TREE1', 'TREE2'):
+            self.try_chop_tree(proxy, screen_key)
+        elif cell in ('STONE', 'IRON_ORE'):
+            self.try_mine_rock(proxy, screen_key)
+        elif cell in ('CARROT1', 'CARROT2', 'CARROT3'):
+            if hasattr(self, 'try_harvest_crop'):
+                self.try_harvest_crop(proxy, screen_key)
 
     def _autopilot_try_clear_obstacle(self, proxy):
         """When the proxy is stuck in 'targeting' state, scan adjacent cells for
