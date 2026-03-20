@@ -40,9 +40,6 @@ INVENTORY_SYNC_INTERVAL = 60  # every 1 second
 # How often (ticks) to perform a random inventory / spell / NPC action
 ACTION_INTERVAL = 300   # every 5 seconds
 
-# Max ticks to spend on one quest before advancing (fallback for stuck quests)
-QUEST_MAX_TICKS = 3600  # 60 seconds
-
 # Ordered cycle of quest types the autopilot works through in sequence
 AUTOPILOT_QUEST_ORDER = [
     'GATHER', 'FARM', 'LUMBER', 'MINE',
@@ -202,16 +199,11 @@ class AutopilotMixin:
                 print(f"[Autopilot] Proxy HP restored to {proxy.max_health:.0f}")
 
         # ── Quest progression: advance to next quest when complete ──────────
-        # Never switch mid-quest; only advance on completion or fallback timeout.
+        # Only advance on natural completion — no timeout fallback.
         self._autopilot_quest_ticks += 1
         if self.active_quest and self.active_quest in self.quests:
             quest = self.quests[self.active_quest]
             if quest.status in ('completed', 'cooldown'):
-                self._autopilot_advance_quest()
-            elif self._autopilot_quest_ticks >= QUEST_MAX_TICKS:
-                # Fallback: quest still active but taking too long (unreachable target)
-                print(f"[Autopilot] Quest timeout: {self.active_quest} — advancing")
-                self._autopilot_quest_ticks = 0
                 self._autopilot_advance_quest()
 
         # ── Combat quest: track proxy damage to target ───────────────────
