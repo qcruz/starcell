@@ -1031,7 +1031,7 @@ class ZonesMixin:
                     # Also allow spawning adjacent to cave/mineshaft entrances
                     for _gy in range(GRID_HEIGHT):
                         for _gx in range(GRID_WIDTH):
-                            if screen['grid'][_gy][_gx] in ('CAVE', 'HIDDEN_CAVE', 'MINESHAFT'):
+                            if screen['grid'][_gy][_gx] in ('CAVE', 'HIDDEN_CAVE'):
                                 for _dx, _dy in ((-1,0),(1,0),(0,-1),(0,1)):
                                     _nx, _ny = _gx + _dx, _gy + _dy
                                     if 0 < _nx < GRID_WIDTH - 1 and 0 < _ny < GRID_HEIGHT - 1:
@@ -1150,8 +1150,11 @@ class ZonesMixin:
                             self.npc_place_camp(entity)
 
                     if entity.type == 'MINER':
-                        if random.random() < NPC_CAMP_PLACE_RATE:
-                            self.miner_place_cave(entity)
+                        # Higher priority: mine existing caves into mineshafts
+                        if not self.miner_mine_cave(entity):
+                            # No cave to mine — create a new one
+                            if random.random() < NPC_CAMP_PLACE_RATE:
+                                self.miner_place_cave(entity)
 
                 if entity.hunger < 80 and has_food:
                     if random.random() < 0.6:

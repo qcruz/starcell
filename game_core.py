@@ -2771,6 +2771,11 @@ class GameCoreMixin:
         self.inventory.add_item('inspect', 1)
         self.inventory.add_item('shove', 1)
         self.inventory.add_item('bone_sword', 1)
+        # Random equipment for testing weapon/armour sprites
+        _test_weapons = ['iron_sword', 'enchanted_sword', 'club', 'bow', 'staff_red', 'spear', 'warhammer']
+        _test_armour = ['armour_chest', 'armour_helm', 'armour_legs', 'armour_shoes', 'shield', 'shield_bronze']
+        self.inventory.add_item(random.choice(_test_weapons), 1)
+        self.inventory.add_item(random.choice(_test_armour), 1)
         self.inventory.add_item('carrot', 5)
         self.inventory.add_item('tree_sapling', 3)
         self.inventory.add_item('magic_rune', 1)  # Testing sprite overlay

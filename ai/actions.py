@@ -940,6 +940,43 @@ class NpcAiActionsMixin:
                     entity.inventory.pop('wood', None)
                     return
 
+    def miner_mine_cave(self, entity):
+        """Miner navigates to nearest CAVE cell and converts it to MINESHAFT"""
+        screen_key = entity.screen_key
+        if screen_key not in self.screens:
+            return False
+
+        screen = self.screens[screen_key]
+        grid = screen['grid']
+
+        # Find nearest CAVE cell
+        nearest_cave = None
+        nearest_dist = 9999
+        for cy in range(GRID_HEIGHT):
+            for cx in range(GRID_WIDTH):
+                if grid[cy][cx] == 'CAVE':
+                    dist = abs(entity.x - cx) + abs(entity.y - cy)
+                    if dist < nearest_dist:
+                        nearest_dist = dist
+                        nearest_cave = (cx, cy)
+
+        if nearest_cave is None:
+            return False
+
+        cave_x, cave_y = nearest_cave
+
+        # Adjacent — convert to MINESHAFT
+        if nearest_dist <= 1:
+            grid[cave_y][cave_x] = 'MINESHAFT'
+            entity.level_up_from_activity('mine', self)
+            name_str = entity.name if entity.name else entity.type
+            print(f"{name_str} mined cave at ({cave_x},{cave_y}) into MINESHAFT in [{screen_key}]")
+            return True
+
+        # Navigate toward cave
+        entity.nav_target = nearest_cave
+        return True
+
     def miner_place_cave(self, entity):
         """Miner creates a cave at zone corners"""
         screen_key = entity.screen_key

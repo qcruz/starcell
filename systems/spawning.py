@@ -370,6 +370,20 @@ class SpawningMixin:
         screen = self.screens[screen_key]
         grid = screen['grid']
 
+        # Don't spawn in zones that have a miner — miners manage their own caves
+        if screen_key in self.screen_entities:
+            for eid in self.screen_entities[screen_key]:
+                if eid in self.entities and self.entities[eid].type == 'MINER':
+                    return None
+
+        # Enforce 2-cave cap per zone
+        cave_count = sum(
+            1 for row in grid for cell in row
+            if cell in ('CAVE', 'HIDDEN_CAVE')
+        )
+        if cave_count >= 2:
+            return None
+
         valid_positions = []
         for y in range(2, GRID_HEIGHT - 2):
             for x in range(2, GRID_WIDTH - 2):
@@ -517,7 +531,7 @@ class SpawningMixin:
         caves = []
         for y in range(GRID_HEIGHT):
             for x in range(GRID_WIDTH):
-                if grid[y][x] in ['CAVE', 'HIDDEN_CAVE', 'MINESHAFT']:
+                if grid[y][x] in ['CAVE', 'HIDDEN_CAVE']:
                     caves.append((x, y))
 
         if not caves:
