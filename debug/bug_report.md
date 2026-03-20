@@ -5,6 +5,47 @@ Reviewed from `debug/bugcatcher.log` after each session.
 
 ---
 
+## Session 53 — 2026-03-20 (proxy death → respawn)
+
+**Fixes applied before this run:**
+- Proxy death now triggers full death/respawn sequence (3–10 years time pass)
+- `update_autopilot()` re-enables `autopilot=True` when locked but flag cleared
+
+**Run stats:** Tick 16049 (~267s). Clean shutdown. Quest: FARM entire session.
+
+- **FARM**: ✅ **×2 completions** — `Quest [FARM] completed (autopilot)!` twice
+- **Quest advance broken**: `active_quest` stayed 'FARM' for the entire session (tick 1500–14700). After FARM completed, the quest never advanced to LUMBER. FARM appears to complete and then immediately re-cycle or the advance logic is not firing.
+- **Proxy survival**: LUMBERJACK id=262 survived all 16049 ticks. HP restored to 160 (proxy leveled up). No proxy death triggered.
+- **Proxy in combat/flee**: Samples show combat/flee at ticks 4800–14700. Quest nudge is suppressed during combat/flee — proxy spends most of the session fighting, not farming.
+- **Session 52 crash**: Not reproduced in Session 53. Session 52 likely a one-off (window close or transient error).
+
+### CONFIRMED BUG — Quest cycle not advancing after completion
+
+FARM completed twice in this session but `active_quest` never changed from FARM. The `_autopilot_advance_quest()` call should move to LUMBER after FARM completes. Either:
+(a) FARM is completing but `_autopilot_advance_quest()` isn't being reached (status check condition failing), or
+(b) FARM completes → advances → GATHER/FARM re-selected because loreEngine assigns FARM again on the new cycle
+
+### OBSERVATION — Proxy combat dominates quest time
+
+Proxy in flee/combat for all 5 watchdog samples (ticks 4800–14700). Quest nudge is skipped during these states, so the proxy effectively stops pursuing the quest goal while fighting. This is by design but worth noting — high combat pressure zones prevent quest progress.
+
+### CONFIRMED FIX — Proxy death respawn not needed this session
+
+No proxy death occurred, so the new respawn path wasn't exercised. Proxy HP was restored correctly by the 300-tick restore check. Respawn path will be observed in a future session.
+
+---
+
+## Session 52 — 2026-03-20 (proxy death respawn — crash session)
+
+**Run stats:** Tick ~3816. Crashed without shutdown event (no traceback captured). Session 53 confirmed this was a one-off.
+
+- Proxy (COMMANDER id=293) alive throughout, in targeting state
+- FARM quest active, proxy using wander priority at tick 2316
+- No proxy death triggered
+- Crash cause unknown (not reproduced)
+
+---
+
 ## Session 51 — 2026-03-20 (quest timeout removed + proxy re-spawn fix)
 
 **Fixes applied before this run:**
