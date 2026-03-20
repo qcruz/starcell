@@ -5,6 +5,32 @@ Reviewed from `debug/bugcatcher.log` after each session.
 
 ---
 
+## Session 27 — 2026-03-19 (run 17 — persistent flee + tool seeding fix)
+
+16680 ticks. 471 entities. 83 zones. Player zone 0,0. No proxy stagnation.
+
+### CONFIRMED BUG — Proxy seeding tools caused player to lose them via sync
+
+**Symptom:** Initial inventory at tick 1437: axe:1, hoe:1, shovel:1, tree_sapling:3, seeds:1. By tick 4737: only seeds:1, carrot:1. All tools and saplings disappeared within ~3300 ticks.
+
+**Root cause:** `_autopilot_engage()` seeded ALL player items (including tools) into `proxy.inventory`. When the NPC AI proxy used a hoe (till action) or shovel (dig action), it removed the item from `proxy.inventory`. The `_sync_inventory_to_player` then applied delta=-1 → player lost the tool.
+
+**Fix (applied):** Proxy seeding now skips items where `is_tool`, `is_spell`, or `is_action` is True. Only resource/consumable items are seeded into the proxy. Tools remain in the player's inventory exclusively.
+
+### CONFIRMED FIXED — Persistent flee detection working
+
+"Persistent flee — switching GATHER → SLAY, respawning as WARRIOR" triggered near end of session (tick ~16400). Proxy disengaged and would have re-engaged as WARRIOR. Session timer expired before re-engage completed — expected behavior.
+
+### OBSERVATION — Tool slots clearing over session
+
+At tick 3237: slots had shovel in slot 2. By tick 6537: all slots empty. Shovel disappeared (confirmed caused by tool-seeding bug above). With the seeding fix applied, tools should persist through sessions.
+
+### OBSERVATION — Resource accumulation still minimal
+
+seeds:1, carrot:1 unchanged from tick 4737 to shutdown. Proxy was mostly fleeing. Persistent flee fix triggers re-engage as WARRIOR — next sessions should show WARRIOR proxy accumulating combat drops (meat, bones) rather than staying in flee.
+
+---
+
 ## Session 26 — 2026-03-19 (run 16 — flee-state fix verification)
 
 11888 ticks. 474 entities. 95 zones. Player crossed to zone 1,0. Player health 110.8 (healed above base).

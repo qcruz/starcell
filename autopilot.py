@@ -78,6 +78,7 @@ class AutopilotMixin:
         self._autopilot_wander_cooldown = 0       # ticks of forced wandering after stuck
         self._autopilot_proxy_last_pos = None     # (x, y) at last tick for stuck detection
         self._autopilot_pos_stuck_ticks = 0       # ticks at same position while targeting
+        self._autopilot_flee_ticks = 0            # consecutive ticks proxy has been fleeing
         self._autopilot_harvest_timer = 0         # opportunistic harvest every ~30 ticks
         # Simulated input queue — autopilot posts real pygame events with human delays
         self._ap_input_queue = []      # [(fire_at_tick, event_or_callable, log_label)]
@@ -157,6 +158,21 @@ class AutopilotMixin:
         else:
             self._autopilot_proxy_last_pos = cur_pos
             self._autopilot_pos_stuck_ticks = 0
+
+        # ── Persistent flee detection: if proxy flees for 1800+ ticks, respawn as WARRIOR ─
+        if proxy.ai_state == 'flee':
+            self._autopilot_flee_ticks += 1
+            if self._autopilot_flee_ticks >= 1800:
+                self._autopilot_flee_ticks = 0
+                # Switch to a combat quest so re-engage spawns a WARRIOR proxy
+                combat_quests = [q for q in self.quests if q in ('HUNT', 'SLAY', 'COMBAT_HOSTILE')]
+                if combat_quests:
+                    old = self.active_quest
+                    self.active_quest = random.choice(combat_quests)
+                    print(f"[Autopilot] Persistent flee — switching {old} → {self.active_quest}, respawning as WARRIOR")
+                self._autopilot_disengage()
+        else:
+            self._autopilot_flee_ticks = 0
 
         # ── Opportunistic harvesting: attempt chop/mine every ~30 ticks while moving ─
         if proxy.ai_state in ('targeting', 'wandering'):
@@ -252,10 +268,14 @@ class AutopilotMixin:
         proxy.facing = self.player.get('facing', 'down')
 
         # ── Seed proxy inventory from player ──────────────────────────────
-        # Tools now live in self.inventory.items — read only that dict to avoid
-        # double-counting (the tools property reads from tool_slots references).
+        # Only seed resource/consumable items — not tools, spells, or actions.
+        # Seeding tools causes the NPC AI to "consume" them during proxy actions,
+        # which the sync then removes from the player's real inventory.
         proxy.inventory = {}
         for item_name, count in self.inventory.items.items():
+            item_def = ITEMS.get(item_name, {})
+            if item_def.get('is_tool') or item_def.get('is_spell') or item_def.get('is_action'):
+                continue
             proxy.inventory[item_name] = count
         # Baseline snapshot: sync compares proxy-current vs proxy-last-sync,
         # not proxy vs player — prevents crafted/bought items from being reversed.
