@@ -5,6 +5,32 @@ Reviewed from `debug/bugcatcher.log` after each session.
 
 ---
 
+## Session 28 — 2026-03-19 (run 18 — tool-seeding fix verification)
+
+10320 ticks. 394 entities. 76 zones. Player zone 0,0. Player health 81.3 (took damage in combat).
+
+### CONFIRMED FIXED — Tools now persist across full session
+
+Inventory at tick 1437: axe:1, hoe:1, shovel:1, pickaxe:1, bucket:1, enchanted_sword:1. Same tools present at tick 8037 (none lost). Tool-seeding fix confirmed: proxy no longer consumes player tools through the sync.
+
+### CONFIRMED — Enchanted sword crafted and equipped to weapon slot
+
+`equip enchanted_sword → weapon` fired. Inventory state at tick 3237 shows `equip=['weapon']`. enchanted_sword assigned to tool slot 5. Gear equip and tool slot assignment both working end-to-end.
+
+### CONFIRMED — Tool slots progressively filling
+
+By tick 9837: 7 slots filled (axe, hoe, shovel, pickaxe, bucket, enchanted_sword, hoe). Multiple assignment sequences executed correctly.
+
+### OBSERVATION — One stagnation event (proxy position stuck)
+
+Single proxy stagnation logged. Proxy still spending time in flee state (tick 8037: flee). Persistent flee detection (1800 ticks) is the escape hatch — not yet visible in this session since flee ticks were spread across movement.
+
+### OBSERVATION — Quest cycle active but resource accumulation slow
+
+Quest switches: FARM→GATHER→LUMBER→COMBAT_HOSTILE→SEARCH→RESCUE→FARM. Carrot appeared at tick 4737, seeds at tick 8037. No stone/wood/iron yet — proxy is FARMER type for most of the session, prioritizing farming over mining/chopping.
+
+---
+
 ## Session 27 — 2026-03-19 (run 17 — persistent flee + tool seeding fix)
 
 16680 ticks. 471 entities. 83 zones. Player zone 0,0. No proxy stagnation.
