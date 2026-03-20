@@ -5,7 +5,29 @@ Reviewed from `debug/bugcatcher.log` after each session.
 
 ---
 
-## Session 42 — 2026-03-20 (pending — proxy harvest stop + combat quest damage gate)
+## Session 43 — 2026-03-20 (pending — keeper_target navigation + combat aggression fix)
+
+Four fixes applied before this run:
+
+### FIXED — Proxy position jumping from nudge state overrides
+
+The nudge was forcing `proxy.ai_state = 'targeting'` and `proxy.current_target` every 120 ticks, externally overriding the NPC's own state machine. This caused visible jerking. Fix: nudge now uses `proxy.keeper_target` / `proxy.keeper_target_pos` / `proxy.keeper_type = 1` for cell quests — the NPC AI navigates naturally without state interruption. For combat quests: `proxy.quest_target = target_entity_id`, NPC AI handles combat.
+
+### FIXED — WARRIOR proxy never attacked (aggressiveness=0.0)
+
+All proxy types had `aggressiveness=0.0`, `combat_chance=0.0` — the proxy never initiated combat, so `_proxy_damaged_target` was never set, and combat quests could never complete. Fix: combat quests get `aggressiveness=0.6`, `combat_chance=0.5`, `flee_chance=0.05`. Non-combat quests keep low aggression (0.1) with high flee (0.85).
+
+### FIXED — Obstacle-clear and harvest were stopping the proxy mid-navigation
+
+`proxy.ai_state = 'wandering'` and `proxy.current_target = None` were set in both `_autopilot_try_harvest_cell` and `_autopilot_try_clear_obstacle`, cancelling the keeper_target navigation. Removed. Proxy now just faces the cell and executes the action without interrupting its navigation state.
+
+### FIXED — loreEngine picking first tree/stone in grid scan (row 0 first)
+
+LUMBER/MINE quest targets were assigned as the first cell found scanning from (0,0), often at the opposite side of the zone. Fix: loreEngine now finds the nearest tree/stone to the player position (Manhattan distance) for local-zone assignments.
+
+---
+
+## Session 42 — 2026-03-20 (run 26 — harvest stop + combat gate)
 
 Two fixes applied before this run:
 

@@ -311,17 +311,28 @@ class LoreEngineMixin:
                         break
 
             if has_local and random.random() < 0.90:
-                # Find a real tree cell so completion check has a specific target
+                # Find the nearest tree to the player so the proxy doesn't have to
+                # cross the whole zone to reach the quest target.
                 screen = self.screens[pz_key]
+                player_x = self.player.get('x', GRID_WIDTH // 2)
+                player_y = self.player.get('y', GRID_HEIGHT // 2)
+                best = None
+                best_dist = 9999
                 for fy, frow in enumerate(screen['grid']):
                     for fx, fcell in enumerate(frow):
                         if fcell in search_types:
-                            quest.target_info = "Chopping trees nearby"
-                            quest.target_zone = pz_key
-                            quest.target_cell = (player_sx, player_sy, fx, fy)
-                            quest._original_cell = fcell
-                            quest.status = 'active'
-                            return True
+                            d = abs(fx - player_x) + abs(fy - player_y)
+                            if d < best_dist:
+                                best_dist = d
+                                best = (fx, fy, fcell)
+                if best:
+                    fx, fy, fcell = best
+                    quest.target_info = "Chopping trees nearby"
+                    quest.target_zone = pz_key
+                    quest.target_cell = (player_sx, player_sy, fx, fy)
+                    quest._original_cell = fcell
+                    quest.status = 'active'
+                    return True
 
             for screen_key, screen_data in self.screens.items():
                 if not self.is_overworld_zone(screen_key):
@@ -368,17 +379,27 @@ class LoreEngineMixin:
                         break
 
             if has_local and random.random() < 0.90:
-                # Find a real stone cell so completion check has a specific target
+                # Find the nearest stone to the player so proxy doesn't cross the zone.
                 screen = self.screens[pz_key]
+                player_x = self.player.get('x', GRID_WIDTH // 2)
+                player_y = self.player.get('y', GRID_HEIGHT // 2)
+                best = None
+                best_dist = 9999
                 for fy, frow in enumerate(screen['grid']):
                     for fx, fcell in enumerate(frow):
                         if fcell == 'STONE':
-                            quest.target_info = "Mining stone nearby"
-                            quest.target_zone = pz_key
-                            quest.target_cell = (player_sx, player_sy, fx, fy)
-                            quest._original_cell = 'STONE'
-                            quest.status = 'active'
-                            return True
+                            d = abs(fx - player_x) + abs(fy - player_y)
+                            if d < best_dist:
+                                best_dist = d
+                                best = (fx, fy)
+                if best:
+                    fx, fy = best
+                    quest.target_info = "Mining stone nearby"
+                    quest.target_zone = pz_key
+                    quest.target_cell = (player_sx, player_sy, fx, fy)
+                    quest._original_cell = 'STONE'
+                    quest.status = 'active'
+                    return True
 
             for screen_key, screen_data in self.screens.items():
                 if not self.is_overworld_zone(screen_key):
