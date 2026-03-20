@@ -463,6 +463,38 @@ class GameCoreMixin:
             'BUSH':                  'bush.png',
             'EMPTY_CRATE':           'empty_crate.png',
         }
+
+        # Weapon / armour sprites — subdir has a space so they can't be found by the
+        # generic search loop above; load them explicitly with the full relative path.
+        _wa_dir = os.path.join(script_dir, 'sprites', 'weapons and armour')
+        _wa_sprites = {
+            'iron_sword':      'sword_red_handle.png',
+            'bone_sword':      'sword_red_handle.png',
+            'enchanted_sword': 'sword_gold.png',
+            'club':            'club_red.png',
+            'bow':             'bow.png',
+            'bow_metal':       'bow_metal.png',
+            'staff_red':       'staff_red.png',
+            'spear':           'spear_black.png',
+            'warhammer':       'warhammer_red_bronze.png',
+            'shield':          'shield_metal.png',
+            'shield_bronze':   'shield_red_bronze.png',
+            'armour_chest':    'armour_chest_metal.png',
+            'armour_helm':     'armour_helm_metal.png',
+            'armour_legs':     'armour_legs_metal.png',
+            'armour_shoes':    'armour_shoes_metal.png',
+        }
+        for sprite_key, fname in _wa_sprites.items():
+            if sprite_key in self.sprite_manager.sprites:
+                continue
+            path = os.path.join(_wa_dir, fname)
+            if os.path.exists(path):
+                try:
+                    img = pygame.image.load(path).convert_alpha()
+                    self.sprite_manager.sprites[sprite_key] = pygame.transform.scale(img, (CELL_SIZE, CELL_SIZE))
+                    sprite_files_loaded += 1
+                except Exception as e:
+                    print(f"Failed to load weapon/armour sprite {fname}: {e}")
         for sprite_key, filename_base in _explicit_sprites.items():
             if sprite_key in self.sprite_manager.sprites:
                 continue
