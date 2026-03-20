@@ -93,14 +93,21 @@ python3 main.py
 # After the session, disable it:
 echo "False" > debug/auto_debug.cfg
 ```
-Session ends automatically (2–3 min timer). Review `debug/bug_catcher.log` and update `debug/bug_report.md` with findings. Commit `debug/bug_report.md` to `dev-q-updates` after each run. Document as `Session N` with CONFIRMED / OBSERVATION / BUG entries.
+Session ends automatically (2–3 min timer). Review `debug/bug_catcher.log` and update `debug/bug_report.md` with findings.
+
+**REQUIRED after every single run — no exceptions:**
+- Add a `## Session N` entry to `debug/bug_report.md` immediately after the session ends
+- Include: fixes applied before the run, run stats (tick count, quest sequence, crashes), and at least one OBSERVATION/CONFIRMED/BUG entry
+- Commit and push `debug/bug_report.md` to `dev-q-updates` before starting the next session or doing anything else
+- Never batch multiple sessions into one entry — each run gets its own section
+- Even sessions killed early or with insufficient data must be documented with what was captured
 
 **Observation run process:**
 1. Choose 2–3 features from roadmap randomly
 2. Update the Watchdog as needed to sample game data relevant to those features
 3. Set a run time limit long enough to observe those features
 4. Run a small number of sessions focused on observing those features
-5. After each run, record observed bugs and interesting game behaviors in `debug/bug_report.md`
+5. **After each individual run:** update `debug/bug_report.md`, commit, push — before running the next session
 6. After all runs complete, review the bug report, summarize improvements needed, and make changes
 7. Repeat 1–3 runs → check if bugs resolved → if not, make edits → repeat
 8. When issues appear addressed, start a new observation test session (new random features, new Watchdog focus)

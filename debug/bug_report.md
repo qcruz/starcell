@@ -29,6 +29,49 @@ Priority fix to `try_chop_tree` is confirmed working. WARRIOR proxy for LUMBER r
 
 ---
 
+## Session 48 — 2026-03-20 (quest_nav_target — navigation confirmed, completion still 0)
+
+**Fixes applied before this run:**
+- `quest_nav_target` field on entities: highest-priority navigation, checked before keeper block in `npc_ai.py`
+- `_try_complete_assigned_quest`: skips keeper reset when `quest_nav_target` is set
+- `assign_zone_keepers` (world/zones.py): skips autopilot proxies to prevent keeper_type=2 override
+- CACTUS drops added: `{'cell': 'SAND', 'chance': 0.8}` — was empty, proxy stalled forever on CACTUS cells
+
+**Run stats:** 5 quests advanced (GATHER→FARM→LUMBER→MINE→HUNT), no stagnation, no crashes.
+
+### OBSERVATION — keeper_type=1 confirmed holding via watchdog
+
+MINER proxy (id=585) npc_quest snapshot: `keeper_type=1`. The quest_nav_target block is overriding all other keeper resets and holding type=1 between nudge cycles. Navigation is working as intended.
+
+### OBSERVATION — HUNT proxy entered real combat
+
+COMMANDER proxy for HUNT: `ai_state=combat`, `quest_target='WOLF(id=526) HP:14/30'`. Proxy is engaging the quest target in combat. Combat engagement path working.
+
+### OBSERVATION — All quests still timing out, 0 completions
+
+All 5 quests advanced via `QUEST_MAX_TICKS=3600` timeout, not completion. Stdout: `[Autopilot] Quest timeout: HUNT — advancing`. Zero `quest_complete` events in bugcatcher.log across any category.
+
+### UNRESOLVED — quest_complete not firing despite navigation working
+
+Root cause not yet identified. Three candidates:
+1. Proxy reaches dist≤1 but `try_chop_tree`/`try_mine_rock` chops a DIFFERENT adjacent cell instead of the quest target
+2. `check_quest_completion` distance check fails (player position not synced)
+3. `_original_cell` mismatch (cell changed by world update before proxy arrives)
+
+---
+
+## Session 47 — 2026-03-20 (quest_nav_target first run — killed early)
+
+**Fixes applied before this run:** Same as Session 48 batch (quest_nav_target approach, CACTUS drops, assign_zone_keepers proxy skip).
+
+**Run stats:** Session killed immediately after LUMBERJACK proxy spawned — insufficient data.
+
+### OBSERVATION — loreEngine diagnostic never appeared (correct behavior)
+
+Added diagnostic print to `_autopilot_nudge_quest_target` to fire when loreEngine found no target. Never appeared. Root cause: `update_quests()` calls `loreEngine(quest)` for any inactive quest every tick. After `clear_target()` in `_autopilot_advance_quest`, the quest is reassigned within 1 game tick — already active before the first nudge fires (120 ticks later). Diagnostic removed. This is correct behavior.
+
+---
+
 ## Session 46 — 2026-03-20 (random proxy types + keeper fix)
 
 **Fixes applied before this run:**
