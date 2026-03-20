@@ -21,7 +21,6 @@ Small additions using existing systems and minimal changes to code.
 - [x] Add faction standing display when inspecting NPC — show NPC favor score and faction label
 - [x] Add per-NPC favor system — -100 to 100 favorability score
 - [x] Add gift giving — Shift+G while inspecting NPC; offers selected item; NPC gains +favor
-- [ ] Add energy cost for active followers — each follower reduces max energy by 30% of their max energy; recalculates on add/remove
 - [ ] Add item level display in inventory UI — show level badge on leveled items in all tabs
 - [x] Add equipment panel UI — Weapon, Off-hand, Armor, Ring ×2, Amulet slots; auto-calculated in combat rolls. Opens alongside Tools panel (T key). Click equipment slot then item to equip.
 
@@ -36,19 +35,13 @@ Small additions using existing systems and minimal changes to code.
 - [ ] Skeleton doubles (and all doubles) need to process the same as their single counterparts (skeelton doubles should take constant damage during the day while outside)
 - [ ] Double entities should have a chance to split back in to singles every update tick if NPC population is low enough. Split inventory, levels, quest, etc randomly for now.
 - [ ] Hard cap on total number of same entity in zone - if more than 15 of the same entity type in zone, single or double, singles get 'absorbed' into doubles automatically - double entity gets level increase.
-- [ ] We need to make sure chest content are still picked up by the player on interaction (spacebar)
-- [ ] Add a few random items to barrels as well, picked up when interacted (same hadnling as chests, but lower quality loot table)
+- [ ] Add a few random items to barrels as well, picked up when interacted (same handling as chests, but lower quality loot table)
 - [ ] When player drops items on a chest cell, they should move to the chest inventory
-- [ ] When butterflys fly over base cells - high chance to grow the cell to next level - sand>dirt>grass>plant (will be adding bush and flowers, ect)(doesn't grow trees)
-- [ ] Complete NPC combat creature sound mapping — verify WOLF, GOBLIN, BAT, SKELETON, BANDIT route through _ENTITY_SOUND
-- [ ] Add wolf/goblin ambient presence sounds — WOLF growl every ~300 ticks within 6 cells; GOBLIN every ~200 ticks
+- [ ] When butterflies fly over base cells - high chance to grow the cell to next level - sand>dirt>grass>plant (will be adding bush and flowers, etc)(doesn't grow trees)
 - [ ] Add ambient rain sound during rain events — play rain_sound loop when is_raining; stop when false
-- [ ] Add do_shove() — push entity in facing direction one cell; blocked by solid cells
-- [ ] Add handle_npc_follow_interaction() — Shift+F on inspected NPC; 50% recruit chance - maybe an action instead? We will discuss.
 - [ ] Add buried treasure — shovel digs soft cells; chance to uncover cached items; Detect spell reveals locations, dig action works as well (low success chance - takes multiple tries)
 - [ ] Boost night-time hostile spawn rate slightly — BAT, GOBLIN, SKELETON have higher spawn weight at night
 - [ ] Add spell energy cost — spells draw from energy pool; drain health if insufficient
-- [ ] Rain affects crop growth — active rain reduces crop decay rate; speeds grass/tree spread
 - [ ] Add poisoned status effect — HP drain per tick; cured by antidote or milk
 - [ ] Add burning status effect — HP drain per tick; spreads to adjacent flammable cells
 - [ ] Add cold status effect — immobile for duration;

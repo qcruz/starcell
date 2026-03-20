@@ -93,7 +93,7 @@ Game ← HudMixin, InventoryUIMixin, MenusMixin, DevScreenMixin
 
 | Key | Action |
 |---|---|
-| Space | Interact — attack (weapon selected), talk to NPC, enter/exit structure, open chest, pick up items |
+| Space | Interact — attack (weapon selected), shove (shove action selected), talk to NPC, enter/exit structure, open chest/pick up chest contents, pick up dropped items |
 | E | Pick up cell or dropped items from target tile |
 | P | Place selected item as a cell |
 | D | Drop selected item |
@@ -267,6 +267,7 @@ Game ← HudMixin, InventoryUIMixin, MenusMixin, DevScreenMixin
 - update_weather called every 30 ticks; every tick during time-pass simulation
 - Per-zone tracking: zone_last_rain timestamp
 - Effects: flooding, absorption, drought reset
+- **Crop growth scaling**: active rain suppresses crop decay rate and boosts grass/tree spread; `world/cells.py` applies drought_severity scaling (see Cell Growth & Decay table)
 
 **Day/Night Cycle**
 - 150 ticks day + 150 ticks night (~5 min total)
@@ -416,6 +417,23 @@ State transitions: `update_entity_ai_state()` rolls probability table (aggressiv
 - Followers never targeted by player attack or friendly NPCs
 - Cannot be merged into doubles
 - Death handler uses `follower_items.pop(entity_id, None)` for cleanup
+- **Energy cost**: each active follower reduces player `max_energy` by 1; recalculates on add/remove (`systems/enchantment.py`)
+
+---
+
+## Sound System
+
+**NPC Combat Creature Sounds** (`ai/actions.py` — `_ENTITY_SOUND` dict)
+- WOLF → `wolf_sound` pool
+- GOBLIN / BANDIT → `goblin_sound` pool
+- BAT → bat sound pool
+- SKELETON → skeleton sound pool
+- Others → `sword_swing` pool
+- Triggered in `find_and_attack_enemy()` on successful attack roll
+
+**Ambient Presence Sounds** (`npc_ai.py`)
+- WOLF: growl every ~300 ticks when player within 6 cells (`_ambient_sound_timer`)
+- GOBLIN: growl every ~200 ticks when player within 6 cells
 
 ---
 
