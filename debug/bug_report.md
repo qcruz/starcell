@@ -5,7 +5,52 @@ Reviewed from `debug/bugcatcher.log` after each session.
 
 ---
 
-## Session 43 — 2026-03-20 (pending — keeper_target navigation + combat aggression fix)
+## Session 46 — 2026-03-20 (random proxy types + keeper fix)
+
+**Fixes applied before this run:**
+- `try_chop_tree` now handles CACTUS/BUSH (was TREE1/TREE2 only) — MINER no longer stuck on BUSH
+- Proxy excluded from `assign_zone_keepers` to prevent keeper_type=2 override on tick 1
+- `proxy.keeper=True` set alongside keeper_type=1 in nudge (was False — keeper block was skipped)
+- Proxy spawns at nearest walkable cell (avoids water/wall spawn)
+- `_autopilot_explore_for_target` fallback added: when loreEngine finds no target, push proxy toward adjacent unloaded zones
+- Random proxy type per quest: `AUTOPILOT_PROXY_TYPES` pool replaces `QUEST_NPC_TYPE` mapping
+
+**Run stats:** tick 10878, no crashes.
+
+### OBSERVATION — No proxy stagnation
+
+Previous sessions had proxy stuck at same position for 3000+ ticks. This session: zero stagnation events. Proxy moved across zone (positions changed each snapshot). The walkable-spawn + keeper fixes are working.
+
+### OBSERVATION — Quest sequence advancing correctly
+
+- Tick 1422: FARM (proxy id=260), pos=[17,5] zone=0,0
+- Tick 4722: LUMBER (proxy id=445), pos=[4,9] zone=0,0
+- Tick 8022: MINE (proxy id=606), pos=[2,10] zone=0,0
+
+GATHER→FARM→LUMBER→MINE all advanced within one session. Proxy ids differ each quest = fresh spawns working.
+
+### OBSERVATION — Quests still advancing via timeout (~3300 ticks), not completion
+
+Gap between quest advances is ~3300 ticks (close to QUEST_MAX_TICKS=3600). Quests are timing out rather than completing. Root cause not yet confirmed — could be:
+1. NPC's own keeper_type reset overriding the nudge's keeper_type=1 (confirmed below)
+2. Quest completion check not triggering (distance, cell change not detected)
+3. loreEngine finding targets too far from proxy
+
+### OBSERVATION — NPC's own behavior resets keeper_type between nudges
+
+LUMBER proxy was COMMANDER (id=445). At tick 6222: `keeper_type=3`, `quest_focus='COMBAT_ALL'`. The nudge sets `keeper_type=1` every 120 ticks, but COMMANDER's `_try_complete_assigned_quest` (called on each combat contact) resets `keeper_type = _base_keeper_type = 3`. So the proxy orbits in zone-keeper mode between nudges instead of walking to the quest cell. This is the **primary blocker for cell quest completion** — needs a different approach (see next section).
+
+### OBSERVATION — Random proxy types working as designed
+
+Different NPC types assigned per quest. COMMANDER doing LUMBER is intentional — reveals that NPC types with combat-focused base quests (COMMANDER, WARRIOR, GUARD) won't navigate to resource cells effectively. This data is useful for identifying which NPC types need quest-steering improvements.
+
+### CONFIRMED BUG — NPC's own keeper management overrides nudge-set keeper_type
+
+**Impact:** Cell quests (LUMBER, MINE, FARM) never complete because the proxy's NPC AI resets keeper_type after every state transition. The nudge sets keeper_type=1 for 120 ticks, but any NPC completing a "base quest" sub-step resets it to 3 (the `_base_keeper_type` fallback). Needs investigation — either anchor the keeper_type more persistently or use a different mechanism to steer the proxy to quest cells.
+
+---
+
+## Session 43–45 — 2026-03-20 (pending — keeper_target navigation + combat aggression fix)
 
 Four fixes applied before this run:
 
