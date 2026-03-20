@@ -9,20 +9,8 @@
 
 Small additions using existing systems and minimal changes to code.
 
-- [x] Add EMPTY_CRATE cell — visual state for empty chests; zones.py swaps CHEST↔EMPTY_CRATE each update based on chest_contents; player can interact with either
-- [x] Add FLOWER_PATTERN cells (3 variants) — non-solid walkable cells that rarely grow from grass in forest/plains; degrade back to grass over time; harvestable; placeable
-- [x] Butterfly flower growth — when butterfly moves over GRASS/DIRT, small chance to grow it to FLOWER or FLOWER_PATTERN; doesn't grow trees
-- [x] Keeper-status spell — new spell type: cast on inspected NPC to assign them as keeper for a target cell or item; uses existing keeper system
 - [ ] NPC infection system: vampirism and lycanthropy — hostile bats can infect humanoid NPCs with vampirism (transforms to BAT at night, reverts at dawn); hostile wolves can infect with lycanthropy (transforms to WOLF at night, reverts at dawn); silver weapons prevent/cure infection
-- [x] Action inventory, equipment inventory, and favor system — one session
-- [x] Add actions inventory tab (U key) — attack, block, sneak, dig, talk, inspect, shove. Actions not dropped on death.
-- [x] Make actions default on spawn - 'attack', 'block', 'inspect' added to starting inventory
-- [x] Add NPC trait Favor: -100 to 100, default zero for peaceful NPCs, default -50 for hostiles. Decreases on player attack (-5/hit, -20/kill). Increases via gift giving.
-- [x] Add faction standing display when inspecting NPC — show NPC favor score and faction label
-- [x] Add per-NPC favor system — -100 to 100 favorability score
-- [x] Add gift giving — Shift+G while inspecting NPC; offers selected item; NPC gains +favor
 - [ ] Add item level display in inventory UI — show level badge on leveled items in all tabs
-- [x] Add equipment panel UI — Weapon, Off-hand, Armor, Ring ×2, Amulet slots; auto-calculated in combat rolls. Opens alongside Tools panel (T key). Click equipment slot then item to equip.
 
 - [ ] Village and dungeon biome — required sprites: fence, stairs up/down
 - [ ] Create village biome — VILLAGE zone type; rare spawn; clustered housing with fence cells enclosing plots, market stall, well; higher NPC density (FARMER, GUARD, BLACKSMITH, TRADER, COMMANDER, KING); guard keepers protect zone perimeter. Required sprites: fence.
