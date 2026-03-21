@@ -335,6 +335,12 @@ class CellsMixin:
                     if random.random() < min(1.0, CACTUS_DROUGHT_RATE * _decay):
                         new_grid[y][x] = 'SAND'
 
+                # Flower pattern decay → biome base cell
+                elif cell.startswith('FLOWER_PATTERN'):
+                    _fp_base = {'DESERT': 'SAND', 'MOUNTAINS': 'DIRT'}.get(biome, 'GRASS')
+                    if random.random() < min(1.0, 0.0003 * _decay):
+                        new_grid[y][x] = _fp_base
+
                 # General neighbor-copy: base terrain may adopt a random NSEW neighbor's type
                 if new_grid[y][x] == cell and cell in ('GRASS', 'DIRT', 'SAND', 'WATER'):
                     nx, ny = random.choice(((x, y - 1), (x, y + 1), (x - 1, y), (x + 1, y)))
@@ -343,6 +349,14 @@ class CellsMixin:
                         if neighbor in ('GRASS', 'DIRT', 'SAND', 'WATER') and neighbor != cell:
                             if random.random() < min(1.0, BIOME_SPREAD_RATE * _tp):
                                 new_grid[y][x] = neighbor
+
+                # Flower pattern growth: rare overlay on eligible unchanged cells
+                _fp_rate = 0.000003 if biome == 'DESERT' else 0.000015
+                if new_grid[y][x] == cell and cell in ('GRASS', 'DIRT', 'SAND', 'COBBLESTONE'):
+                    if random.random() < _fp_rate * _growth:
+                        new_grid[y][x] = random.choice(
+                            ['FLOWER_PATTERN1', 'FLOWER_PATTERN2', 'FLOWER_PATTERN3']
+                        )
 
                 # Wood decay to dirt (outside structures)
                 elif cell == 'WOOD' and not self.is_near_structure(x, y, key):
@@ -384,37 +398,6 @@ class CellsMixin:
                         screen['variant_grid'][vy][vx] = self.roll_cell_variant(new_grid[vy][vx])
 
         screen['grid'] = new_grid
-
-        # Decoration overlays: flower patterns on surface cells, water puddles on cave floor
-        _decs = screen.setdefault('decorations', {})
-        _flower_rate = 0.000003 if biome == 'DESERT' else 0.00002
-        _FLOWER_ELIGIBLE = ('GRASS', 'DIRT', 'SAND', 'COBBLESTONE')
-        _FLOWER_SPRITES = ('FLOWER_PATTERN1', 'FLOWER_PATTERN2', 'FLOWER_PATTERN3')
-        _to_remove = []
-        for (dx, dy), deco in _decs.items():
-            cell_now = screen['grid'][dy][dx]
-            if deco in _FLOWER_SPRITES and cell_now not in _FLOWER_ELIGIBLE:
-                _to_remove.append((dx, dy))
-            elif deco == 'WATER' and cell_now != 'CAVE_FLOOR':
-                _to_remove.append((dx, dy))
-            elif deco in _FLOWER_SPRITES and random.random() < 0.0002 * _decay:
-                _to_remove.append((dx, dy))
-            elif deco == 'WATER' and random.random() < 0.00005 * _decay:
-                _to_remove.append((dx, dy))
-        for pos in _to_remove:
-            _decs.pop(pos, None)
-
-        for y in range(1, GRID_HEIGHT - 1):
-            for x in range(1, GRID_WIDTH - 1):
-                if random.random() > cell_coverage * 0.1:
-                    continue
-                if (x, y) in _decs:
-                    continue
-                cell = screen['grid'][y][x]
-                if cell in _FLOWER_ELIGIBLE and random.random() < _flower_rate * _growth:
-                    _decs[(x, y)] = random.choice(_FLOWER_SPRITES)
-                elif cell == 'CAVE_FLOOR' and random.random() < 0.000002:
-                    _decs[(x, y)] = 'WATER'
 
         self.check_zone_biome_shift(screen_x, screen_y)
 
