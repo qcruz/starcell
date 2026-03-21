@@ -601,11 +601,14 @@ class HudMixin:
             # Check transform state — use NPC sprite/color instead of player sprite
             _transform = self.player.get('transform')
             if _transform:
+                from data.entities import ENTITY_TYPES as _ET
+                # Use the entity's sprite_name (e.g. 'black bat') not raw type ('BAT')
+                _sprite_base = _ET.get(_transform, {}).get('sprite_name', _transform).lower()
                 # Try walking sprite for the NPC type first, fall back to still, then color block
                 if self.use_sprites and hasattr(self, 'sprite_manager'):
-                    for _sname in (f"{_transform.lower()}_{facing}_{anim_frame}",
-                                   f"{_transform.lower()}_{facing}_still",
-                                   f"{_transform.lower()}_down_still"):
+                    for _sname in (f"{_sprite_base}_{facing}_{anim_frame}",
+                                   f"{_sprite_base}_{facing}_still",
+                                   f"{_sprite_base}_down_still"):
                         _sp = self.sprite_manager.sprites.get(_sname)
                         if _sp:
                             player_sprite = _sp
@@ -613,8 +616,7 @@ class HudMixin:
                 if player_sprite:
                     self.screen.blit(player_sprite, (px, py))
                 else:
-                    from data.entities import ENTITY_TYPES
-                    _c = ENTITY_TYPES.get(_transform, {}).get('color', (200, 200, 200))
+                    _c = _ET.get(_transform, {}).get('color', (200, 200, 200))
                     pygame.draw.rect(self.screen, _c, (px, py, CELL_SIZE, CELL_SIZE))
                     _lbl = self.tiny_font.render(_transform[:3], True, (255, 255, 255))
                     self.screen.blit(_lbl, (px + 2, py + CELL_SIZE // 2 - 4))
