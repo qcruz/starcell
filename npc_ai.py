@@ -2611,7 +2611,7 @@ class NpcAiMixin:
                 cx, cy = entity.x + dx, entity.y + dy
                 if not (0 <= cx < GRID_WIDTH and 0 <= cy < GRID_HEIGHT):
                     continue
-                if screen['grid'][cy][cx] != 'CHEST':
+                if screen['grid'][cy][cx] not in ('CHEST', 'EMPTY_CRATE'):
                     continue
                 ck = f"{screen_key}:{cx},{cy}"
                 found_chest = True
@@ -2659,7 +2659,7 @@ class NpcAiMixin:
                 g = self.screens[screen_key]['grid']
                 for sy in range(max(0, entity.y - 8), min(GRID_HEIGHT, entity.y + 9)):
                     for sx in range(max(0, entity.x - 8), min(GRID_WIDTH, entity.x + 9)):
-                        if g[sy][sx] == 'CHEST':
+                        if g[sy][sx] in ('CHEST', 'EMPTY_CRATE'):
                             nearby_chest = True
                             break
                     if nearby_chest:

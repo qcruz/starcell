@@ -358,6 +358,12 @@ class CellsMixin:
                             ['FLOWER_PATTERN1', 'FLOWER_PATTERN2', 'FLOWER_PATTERN3']
                         )
 
+                # Empty crate decay — high rate, reverts to base terrain
+                elif cell == 'EMPTY_CRATE':
+                    _ec_base = {'DESERT': 'SAND', 'MOUNTAINS': 'DIRT'}.get(biome, 'GRASS')
+                    if random.random() < min(1.0, 0.08 * _tp):
+                        new_grid[y][x] = _ec_base
+
                 # Wood decay to dirt (outside structures)
                 elif cell == 'WOOD' and not self.is_near_structure(x, y, key):
                     if random.random() < min(1.0, 0.05 * _tp):
