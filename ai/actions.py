@@ -532,21 +532,29 @@ class NpcAiActionsMixin:
                                     entity.inventory['stone'] = entity.inventory.get('stone', 0) + 2
                                 screen['grid'][check_y][check_x] = 'DIRT'
                                 entity.level_up_from_activity('mine', self)
+                        # Clear stale target so state machine immediately seeks next rock
+                        entity.current_target = None
                     return
 
-        # No rocks adjacent — seek nearest STONE/IRON_ORE/CAVE/MINESHAFT in zone
+        # No rocks adjacent — seek nearest STONE/IRON_ORE/CAVE/MINESHAFT in zone.
+        # Also update entity.current_target so the state machine's targeting state
+        # navigates here without conflicting with this call.
         nearest_target = None
         nearest_dist = 9999
+        _priority = {'IRON_ORE': 0, 'STONE': 1, 'CAVE': 2, 'MINESHAFT': 3}
         for sy in range(GRID_HEIGHT):
             for sx in range(GRID_WIDTH):
-                if screen['grid'][sy][sx] in ('STONE', 'IRON_ORE', 'CAVE', 'MINESHAFT'):
-                    d = abs(entity.x - sx) + abs(entity.y - sy)
+                c = screen['grid'][sy][sx]
+                if c in _priority:
+                    d = abs(entity.x - sx) + abs(entity.y - sy) + _priority[c] * 0.5
                     if d < nearest_dist:
                         nearest_dist = d
-                        nearest_target = (sx, sy)
+                        nearest_target = (sx, sy, c)
         if nearest_target:
+            entity.current_target = ('cell', nearest_target[0], nearest_target[1], nearest_target[2])
             self.move_entity_towards(entity, nearest_target[0], nearest_target[1])
         else:
+            entity.current_target = None
             target_corner = self.get_nearest_corner_target(entity.x, entity.y)
             if target_corner:
                 self.move_entity_towards(entity, target_corner[0], target_corner[1])

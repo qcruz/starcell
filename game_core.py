@@ -133,6 +133,7 @@ class GameCoreMixin:
         # Persistent settings (loaded from settings.json)
         self.ambient_music_enabled = True
         self.debug_prints_enabled = True
+        self.autosave_enabled = True
         self._load_settings()
 
         # Load sprites
@@ -1502,6 +1503,7 @@ class GameCoreMixin:
                 data = _json.load(f)
             self.ambient_music_enabled = bool(data.get('ambient_music', True))
             self.debug_prints_enabled  = bool(data.get('debug_prints',  True))
+            self.autosave_enabled      = bool(data.get('autosave',      True))
         except Exception:
             pass  # use defaults
 
@@ -1512,6 +1514,7 @@ class GameCoreMixin:
                 _json.dump({
                     'ambient_music': self.ambient_music_enabled,
                     'debug_prints':  self.debug_prints_enabled,
+                    'autosave':      self.autosave_enabled,
                 }, f)
         except Exception:
             pass
@@ -1539,6 +1542,7 @@ class GameCoreMixin:
         """Handle left-click on main menu (checkbox toggles)."""
         mr = getattr(self, '_menu_cb_music_rect', None)
         dr = getattr(self, '_menu_cb_debug_rect', None)
+        ar = getattr(self, '_menu_cb_autosave_rect', None)
         if mr and mr.collidepoint(pos):
             self.ambient_music_enabled = not self.ambient_music_enabled
             self._save_settings()
@@ -1547,6 +1551,9 @@ class GameCoreMixin:
             self.debug_prints_enabled = not self.debug_prints_enabled
             self._save_settings()
             self._apply_settings()
+        elif ar and ar.collidepoint(pos):
+            self.autosave_enabled = not self.autosave_enabled
+            self._save_settings()
 
     # -------------------------------------------------------------------------
     # Spells
@@ -2999,6 +3006,10 @@ class GameCoreMixin:
 
                 # Watchdog: periodic sample + integrity checks + flush
                 self.watchdog.update(self.tick, self)
+
+                # Autosave every 30 seconds
+                if self.autosave_enabled and self.tick > 0 and self.tick % (30 * FPS) == 0:
+                    self.save_game()
 
                 # AUTO_DEBUG: hard-stop when wall-clock timer expires
                 if hasattr(self, '_auto_debug_end_time') and _time.time() >= self._auto_debug_end_time:

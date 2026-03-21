@@ -374,6 +374,14 @@ class CellsMixin:
                     if random.random() < min(1.0, 0.03 * _tp):
                         new_grid[y][x] = 'DIRT'
 
+                # Rain flood spread: any terrain adjacent to water while raining converts at 2× base rate.
+                # Independent of earlier elif chain — only fires if the cell was not already changed.
+                if (self.is_raining and new_grid[y][x] == cell
+                        and cell in ('DIRT', 'SAND', 'COBBLESTONE')
+                        and total_water >= 1):
+                    if random.random() < min(1.0, FLOODING_RATE * 2.0 * _tp):
+                        new_grid[y][x] = 'WATER'
+
                 # Crop decay without rain (drought)
                 elif cell in ['CARROT1', 'CARROT2', 'CARROT3']:
                     last_rain = self.zone_last_rain.get(key, 0)
@@ -422,16 +430,24 @@ class CellsMixin:
         screen = self.screens[key]
         biome = screen.get('biome', 'FOREST')
 
-        # Desert: rare puddles (10% chance per tick to attempt one sand→water conversion).
-        # Gives ~1-2 puddles over a full rain cycle. No grass — rain doesn't green desert.
+        # Desert: puddles form more often during rain — 35% chance per tick to attempt 1-2
+        # sand→water conversions. Also checks cells adjacent to existing water.
         if biome == 'DESERT':
-            if random.random() < 0.1:
-                x = random.randint(1, GRID_WIDTH - 2)
-                y = random.randint(1, GRID_HEIGHT - 2)
-                cell = screen['grid'][y][x]
-                if cell == 'SAND' and not self.is_cell_enchanted(x, y, key):
-                    if random.random() < 0.6:
-                        screen['grid'][y][x] = 'WATER'
+            if random.random() < 0.35:
+                for _ in range(2):
+                    x = random.randint(1, GRID_WIDTH - 2)
+                    y = random.randint(1, GRID_HEIGHT - 2)
+                    cell = screen['grid'][y][x]
+                    if cell == 'SAND' and not self.is_cell_enchanted(x, y, key):
+                        # Higher chance if already adjacent to water
+                        adj_water = sum(
+                            1 for dx, dy in ((0,1),(0,-1),(1,0),(-1,0))
+                            if 0 <= x+dx < GRID_WIDTH and 0 <= y+dy < GRID_HEIGHT
+                            and screen['grid'][y+dy][x+dx] in ('WATER', 'DEEP_WATER')
+                        )
+                        rate = 0.75 if adj_water else 0.4
+                        if random.random() < rate:
+                            screen['grid'][y][x] = 'WATER'
             # Even in desert, rain quenches thirst (just rarer puddles)
             for eid in self.screen_entities.get(key, []):
                 if eid in self.entities:

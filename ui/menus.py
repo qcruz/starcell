@@ -63,12 +63,14 @@ class MenusMixin:
             # Return clickable rect (box + label)
             return pygame.Rect(cb_x, cy, 20 + lbl.get_width(), 16)
 
-        music_rect  = draw_checkbox("Ambient Music", getattr(self, 'ambient_music_enabled', True), y)
-        debug_rect  = draw_checkbox("Debug Prints",  getattr(self, 'debug_prints_enabled',  True), y + 22)
+        music_rect    = draw_checkbox("Ambient Music",  getattr(self, 'ambient_music_enabled', True), y)
+        debug_rect    = draw_checkbox("Debug Prints",   getattr(self, 'debug_prints_enabled',  True), y + 22)
+        autosave_rect = draw_checkbox("Autosave (30s)", getattr(self, 'autosave_enabled',      True), y + 44)
 
         # Store rects for click detection in handle_input
-        self._menu_cb_music_rect = music_rect
-        self._menu_cb_debug_rect = debug_rect
+        self._menu_cb_music_rect    = music_rect
+        self._menu_cb_debug_rect    = debug_rect
+        self._menu_cb_autosave_rect = autosave_rect
 
     # -------------------------------------------------------------------------
     # Pause screen

@@ -344,7 +344,15 @@ class NpcAiMixin:
                                 self.move_toward_position(entity, tx, ty, screen_key)
                                 # If at exit, try to cross
                                 self._try_targeting_zone_cross(entity, entity_id)
-                            # dist == 1: adjacent, let state machine handle idle transition
+                            elif dist == 1 and entity.target_type == 'stone' and len(entity.current_target) >= 4:
+                                # Verify the stone target cell still exists; clear if depleted
+                                _stone_cells = ('STONE', 'IRON_ORE', 'CAVE', 'MINESHAFT', 'CAVE_WALL')
+                                _scr = self.screens.get(screen_key, {})
+                                _actual = (_scr.get('grid', [[''] * GRID_WIDTH] * GRID_HEIGHT)[ty][tx]
+                                           if 0 <= tx < GRID_WIDTH and 0 <= ty < GRID_HEIGHT else '')
+                                if _actual not in _stone_cells:
+                                    entity.current_target = None  # Re-find next rock next tick
+                            # else dist == 1: adjacent, let state machine handle idle transition
                         elif len(entity.current_target) >= 2 and isinstance(entity.current_target[0], (int, float)):
                             self.move_toward_position(entity, entity.current_target[0], entity.current_target[1], screen_key)
                             self._try_targeting_zone_cross(entity, entity_id)
@@ -2481,9 +2489,12 @@ class NpcAiMixin:
                     if entity.quest_target is not None:
                         return 'quest_target'   # new specific target just assigned
 
-            # Still in general mode — return None so the entity wanders and lets
-            # the tick%60 execute_npc_behavior handle the actual work actions.
+            # Still in general mode — specialty workers return their job target type so the
+            # state machine keeps them navigating toward their work instead of wandering.
             if entity.quest_target is None:
+                if entity.type == 'MINER':
+                    if self.find_closest_target_by_type(entity, 'stone', screen_key):
+                        return 'stone'
                 return None
         # ─────────────────────────────────────────────────────────────────────
         
