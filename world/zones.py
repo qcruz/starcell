@@ -630,19 +630,19 @@ class ZonesMixin:
                                     entity.inventory[item_name] = entity.inventory.get(item_name, 0) + count
                                 del self.dropped_items[zone_key][cell_key]
 
-                    # Pick up from adjacent chest
-                    for dx, dy in [(0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)]:
-                        cx, cy = ex + dx, ey + dy
-                        if 0 <= cx < GRID_WIDTH and 0 <= cy < GRID_HEIGHT:
-                            if grid[cy][cx] == 'CHEST':
-                                chest_key = f"{zone_key}:{cx},{cy}"
-                                if chest_key in self.chest_contents:
-                                    contents = self.chest_contents[chest_key]
-                                    for item_name, count in contents.items():
-                                        entity.inventory[item_name] = entity.inventory.get(item_name, 0) + count
-                                    self.chest_contents[chest_key] = {}
-                                    # Leave the chest cell — decay system will remove it quickly
-                                break
+                    # Pick up from adjacent chest — hostile entities only
+                    if entity.props.get('hostile', False):
+                        for dx, dy in [(0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)]:
+                            cx, cy = ex + dx, ey + dy
+                            if 0 <= cx < GRID_WIDTH and 0 <= cy < GRID_HEIGHT:
+                                if grid[cy][cx] == 'CHEST':
+                                    chest_key = f"{zone_key}:{cx},{cy}"
+                                    if chest_key in self.chest_contents:
+                                        contents = self.chest_contents[chest_key]
+                                        for item_name, count in contents.items():
+                                            entity.inventory[item_name] = entity.inventory.get(item_name, 0) + count
+                                        self.chest_contents[chest_key] = {}
+                                    break
 
                     # Fill a nearby existing chest when any item stack exceeds 100
                     _inv_overflow = any(c > 20 for c in entity.inventory.values())
