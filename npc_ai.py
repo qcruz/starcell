@@ -2643,12 +2643,6 @@ class NpcAiMixin:
                         if getattr(entity, 'quest_focus', None) == 'DELIVER_ITEMS':
                             entity.quest_focus = None
                             entity.quest_target = None
-                    elif inv_count < 20 and self.chest_contents.get(ck):
-                        # Below limit: withdraw one item stack from chest
-                        chest_inv = self.chest_contents[ck]
-                        item = random.choice(list(chest_inv.keys()))
-                        amt = chest_inv.pop(item)
-                        entity.inventory[item] = entity.inventory.get(item, 0) + amt
                 break  # Only one chest per update
 
         # If overburdened and no chest within 8 cells, small chance to place one
