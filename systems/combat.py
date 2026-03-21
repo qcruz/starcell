@@ -209,38 +209,6 @@ class CombatMixin:
         self.death_start_tick = self.tick
         self.death_ticks_simulated = 0
 
-        # Drop all items at death location
-        death_screen_key = f"{self.player['screen_x']},{self.player['screen_y']}"
-        death_pos = (self.player['x'], self.player['y'])
-
-        if death_screen_key not in self.dropped_items:
-            self.dropped_items[death_screen_key] = {}
-        if death_pos not in self.dropped_items[death_screen_key]:
-            self.dropped_items[death_screen_key][death_pos] = {}
-
-        # Drop all inventory items (except magic - spells are permanent)
-        for category in ['items']:
-            inv = getattr(self.inventory, category)
-            for item_name, count in list(inv.items()):
-                self.dropped_items[death_screen_key][death_pos][item_name] = \
-                    self.dropped_items[death_screen_key][death_pos].get(item_name, 0) + count
-            inv.clear()
-        # Drop tool slot items
-        for slot_item in self.inventory.tool_slots:
-            if slot_item is not None:
-                self.dropped_items[death_screen_key][death_pos][slot_item] = \
-                    self.dropped_items[death_screen_key][death_pos].get(slot_item, 0) + 1
-        self.inventory.tool_slots = [None] * len(self.inventory.tool_slots)
-        self.inventory.selected_tool_slot_idx = None
-        self.inventory.selected['tools'] = None
-
-        # Drop equipment slot items
-        for slot_name, eq_item in list(self.inventory.equipment_slots.items()):
-            if eq_item is not None:
-                self.dropped_items[death_screen_key][death_pos][eq_item] = \
-                    self.dropped_items[death_screen_key][death_pos].get(eq_item, 0) + 1
-                self.inventory.equipment_slots[slot_name] = None
-
         # Release all followers — remove from party so they survive time passage
         for fid in list(self.followers):
             item_name = self.follower_items.pop(fid, None)

@@ -2799,35 +2799,9 @@ class GameCoreMixin:
         self.screens = {}
         self.tick = 0
         self.inventory = Inventory()
-        self.inventory.add_item('axe', 1)
-        self.inventory.add_item('hoe', 1)
-        self.inventory.add_item('shovel', 1)
-        self.inventory.add_item('pickaxe', 1)
-        self.inventory.add_item('bucket', 1)
-        self.inventory.add_magic('star_spell', 1)
-        self.inventory.add_item('rain_spell', 1)
-        self.inventory.add_item('day_spell', 1)
-        self.inventory.add_item('keeper_spell', 1)
-        # Dev spells: summon + transform for every NPC type
-        _dev_npc_types = ['sheep','wolf','deer','farmer','guard','warrior','commander','king',
-                          'trader','blacksmith','wizard','lumberjack','miner','bandit','goblin',
-                          'skeleton','termite','bat','red_bird','butterfly','chicken','black_spider']
-        for _t in _dev_npc_types:
-            self.inventory.add_item(f'summon_{_t}', 1)
-            self.inventory.add_item(f'transform_{_t}', 1)
-        self.inventory.add_item('attack', 1)
-        self.inventory.add_item('block', 1)
-        self.inventory.add_item('inspect', 1)
-        self.inventory.add_item('shove', 1)
-        self.inventory.add_item('bone_sword', 1)
-        # Random equipment for testing weapon/armour sprites
-        _test_weapons = ['iron_sword', 'enchanted_sword', 'club', 'bow', 'staff_red', 'spear', 'warhammer']
-        _test_armour = ['armour_chest', 'armour_helm', 'armour_legs', 'armour_shoes', 'shield', 'shield_bronze']
-        self.inventory.add_item(random.choice(_test_weapons), 1)
-        self.inventory.add_item(random.choice(_test_armour), 1)
-        self.inventory.add_item('carrot', 5)
-        self.inventory.add_item('tree_sapling', 3)
-        self.inventory.add_item('magic_rune', 1)  # Testing sprite overlay
+        # Add every item in ITEMS — covers tools, weapons, armour, spells, actions, consumables
+        for _item_key in ITEMS:
+            self.inventory.add_item(_item_key, 1)
         self.dropped_items = {}
         self.buried_items = {}
         self.enchanted_cells = {}
