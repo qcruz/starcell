@@ -873,8 +873,13 @@ class GameCoreMixin:
             self.inspected_npc = None
             return
 
-        # Inspection triggers when 'inspect' action is selected AND Shift is held
+        # Inspection triggers when 'inspect' action is selected AND Shift is held.
+        # Also activates if inspect is the active tool slot item.
         selected_action = self.inventory.selected.get('actions')
+        _ts_idx = self.inventory.selected_tool_slot_idx
+        if not selected_action and _ts_idx is not None:
+            if self.inventory.tool_slots[_ts_idx] == 'inspect':
+                selected_action = 'inspect'
         keys = pygame.key.get_pressed()
         shift_held = keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]
         if not (selected_action == 'inspect' and shift_held):
@@ -1275,10 +1280,21 @@ class GameCoreMixin:
                                 if slot_item:
                                     if mods & pygame.KMOD_SHIFT:
                                         self.place_selected_item(item_name=slot_item)
-                                        self.gain_xp(1)
+                                    elif slot_item in self.inventory.magic:
+                                        _prev_magic = self.inventory.selected.get('magic')
+                                        self.inventory.selected['magic'] = slot_item
+                                        if slot_item == 'rain_spell': self.cast_rain_spell()
+                                        elif slot_item == 'day_spell': self.cast_day_spell()
+                                        elif slot_item == 'keeper_spell': self.cast_keeper_spell()
+                                        elif slot_item.startswith('summon_'): self.cast_summon_spell()
+                                        elif slot_item.startswith('transform_'): self.cast_transform_spell()
+                                        else: self.cast_star_spell()
+                                        self.inventory.selected['magic'] = _prev_magic
+                                    elif slot_item in self.inventory.actions:
+                                        self.execute_action(slot_item)
                                     else:
                                         self.interact()
-                                        self.gain_xp(1)
+                                    self.gain_xp(1)
                         else:
                             self.select_inventory_slot(slot)
                 
@@ -1606,8 +1622,8 @@ class GameCoreMixin:
         elif action_name == 'block':
             self.player['blocking'] = True
         elif action_name == 'inspect':
-            # Inspect is handled via check_npc_inspection (hold shift)
-            pass
+            # Flag inspect as active so check_npc_inspection picks it up (hold Shift to scan)
+            self.inventory.selected['actions'] = 'inspect'
         elif action_name in ('sneak', 'dig', 'talk'):
             pass  # Placeholder — implementation in future sessions
 
