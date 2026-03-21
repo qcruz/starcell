@@ -155,6 +155,7 @@ Run a cleanup session every ~5 feature additions or when the codebase shows sign
 
 | File / Dir | Role |
 |---|---|
+| `main_branch_prep.md` | **Pre-merge checklist for main.** Read before any merge to main. Contains all required code changes, value adjustments, and file removals. |
 | `roadmap.md` | Big-picture feature vision. Owner-maintained. Do not edit during development. |
 | `next_up.md` | Two-tier work list: Tier 1 (autonomous) and Tier 2 (needs approval). Claude reads Tier 1 top to bottom. Owner-maintained. |
 | `current_features.md` | Technical implementation notes for completed and in-progress features. No planned items — those belong in `roadmap.md`. |
@@ -191,3 +192,17 @@ This keeps the autopilot as a thin dispatcher calling real game-system methods. 
 - When adding a feature that touches NPC behavior, add an autopilot test for it
 - Keep `autopilot.py` calling real game methods — no parallel pathfinding or resource logic
 - `debug/bug_catcher.log` is ephemeral (cleared on new game) — findings go in `debug/bug_report.md`
+
+---
+
+## ⚠ MAIN BRANCH MERGE — MANDATORY PRE-FLIGHT ⚠
+
+**Before any merge to `main`, you MUST:**
+
+1. **Read `main_branch_prep.md` in full** — this document lists every code change, value adjustment, and file removal required before main receives dev code. It is not optional.
+2. **Post the checklist to @qcruz** and wait for explicit sign-off on every open decision (inventory, follower cost, spell cost, E-button behavior, biome rates, etc.).
+3. **Make the required code changes** as specified in the checklist — main is not a straight copy of dev; values and behaviors differ.
+4. **Remove dev-only files** listed in `main_branch_prep.md` section 11 from the main worktree.
+5. **Only then push** — never push to main speculatively or to "test" the merge.
+
+If you are uncertain whether something qualifies as a main merge, assume it does not and ask @qcruz first. The cost of one extra confirmation is zero. The cost of shipping dev artifacts to main is real.
