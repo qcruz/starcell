@@ -844,7 +844,15 @@ class GameCoreMixin:
     def _maybe_spawn_gravestone(self, entity, screen_key):
         """Spawn or inscribe a gravestone when a peaceful entity dies."""
         name = entity.name if entity.name else entity.type
-        grid = self.screens.get(screen_key, {}).get('grid')
+
+        # If entity died inside a structure zone, resolve to the parent overworld zone
+        overworld_key = screen_key
+        if screen_key not in self.screens and screen_key in self.structures:
+            parent = self.structures[screen_key].get('parent_screen')
+            if parent:
+                overworld_key = f"{parent[0]},{parent[1]}"
+
+        grid = self.screens.get(overworld_key, {}).get('grid')
 
         # Zone must have at least one house/stone_house cell in the actual grid
         has_house = grid and any(
@@ -856,7 +864,7 @@ class GameCoreMixin:
             return
 
         level = getattr(entity, 'level', 1)
-        if level < 2 and random.random() >= 0.10:
+        if level < 2 and random.random() >= 0.40:
             return
         if not grid:
             return
@@ -869,7 +877,7 @@ class GameCoreMixin:
             if grid[y][x] == 'GRAVESTONE'
         ]
 
-        zone_gs = self.gravestone_names.setdefault(screen_key, {})
+        zone_gs = self.gravestone_names.setdefault(overworld_key, {})
 
         if len(existing) >= 5:
             # Add name to an existing gravestone with room (max 10 names)
@@ -2323,11 +2331,25 @@ class GameCoreMixin:
         
         # Cannot interact with enchanted cells
         if self.is_cell_enchanted(check_x, check_y, screen_key):
+            cell_type = self.current_screen['grid'][check_y][check_x]
+            if cell_type == 'WATER':
+                print("Drank from enchanted water!")
+                return
             print("Cannot interact with enchanted cell!")
             return
-        
+
+        # Pick up any dropped items on this cell first
+        if screen_key in self.dropped_items:
+            cell_key = (check_x, check_y)
+            if cell_key in self.dropped_items[screen_key]:
+                for item_name, count in self.dropped_items[screen_key][cell_key].items():
+                    self.inventory.add_item(item_name, count)
+                del self.dropped_items[screen_key][cell_key]
+                self.sound.on_pickup()
+                return
+
         cell = self.current_screen['grid'][check_y][check_x]
-        
+
         # Check for structure exit (STAIRS_UP)
         if cell == 'STAIRS_UP':
             # Check if in a deep cave level
@@ -2346,9 +2368,16 @@ class GameCoreMixin:
             self.descend_cave()
             return
         
-        # Check for chest interaction (CHEST or EMPTY_CRATE — same handler)
-        if cell in ('CHEST', 'EMPTY_CRATE'):
+        # Check for chest/container interaction
+        if cell in ('CHEST', 'EMPTY_CRATE', 'BARREL'):
             self.interact_with_chest(check_x, check_y)
+            return
+
+        # WELL — restore energy
+        if cell == 'WELL':
+            restore = min(40, self.player['max_energy'] - self.player.get('energy', 0))
+            self.player['energy'] = self.player.get('energy', 0) + restore
+            print(f"You drink from the well. (+{restore} energy)")
             return
         
         # Check for enterable structure (HOUSE, CAVE)
