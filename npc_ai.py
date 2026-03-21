@@ -447,8 +447,16 @@ class NpcAiMixin:
                                         self.screens[screen_key]['grid'][cy][cx] = 'GRASS'
                                     entity.current_target = None
                         elif entity.target_type == 'water':
-                            # Drink water
+                            # Drink water; deep water has high chance to leave cave floor
                             entity.drink(40)
+                            if isinstance(entity.current_target, tuple) and len(entity.current_target) >= 3:
+                                _wx, _wy = entity.current_target[1], entity.current_target[2]
+                                _wscr = self.screens.get(screen_key, {})
+                                _wcell = _wscr.get('grid', [])[_wy][_wx] if _wscr else None
+                                if _wcell == 'DEEP_WATER' and random.random() < 0.75:
+                                    _wscr['grid'][_wy][_wx] = 'CAVE_FLOOR'
+                                elif _wcell == 'WATER' and random.random() < 0.20:
+                                    _wscr['grid'][_wy][_wx] = 'CAVE_FLOOR'
                             entity.current_target = None  # Done drinking, find new goal
                         elif entity.target_type == 'resource':
                             # Harvest resource — use behavior_config

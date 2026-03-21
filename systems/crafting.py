@@ -615,12 +615,17 @@ class CraftingMixin:
 
             self.sound.on_pickup()
 
-            # Replace cell: inside structures → restore structure floor, else biome base
+            # Replace cell: inside structures → restore structure floor, else biome base.
+            # Water cells leave cave floor behind (high chance for deep water, low for regular).
             base = self.get_biome_base_cell()
             if structure_floor:
                 self.current_screen['grid'][target_y][target_x] = structure_floor
             elif cell_type in ['CARROT1', 'CARROT2', 'CARROT3']:
                 self.current_screen['grid'][target_y][target_x] = 'SOIL'
+            elif cell_type == 'DEEP_WATER' and random.random() < 0.80:
+                self.current_screen['grid'][target_y][target_x] = 'CAVE_FLOOR'
+            elif cell_type == 'WATER' and random.random() < 0.25:
+                self.current_screen['grid'][target_y][target_x] = 'CAVE_FLOOR'
             else:
                 self.current_screen['grid'][target_y][target_x] = base
 

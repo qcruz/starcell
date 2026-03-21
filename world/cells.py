@@ -166,6 +166,7 @@ class CellsMixin:
 
                 water_count = self.count_cell_type(neighbors, 'WATER')
                 deep_water_count = self.count_cell_type(neighbors, 'DEEP_WATER')
+                cave_floor_count = self.count_cell_type(neighbors, 'CAVE_FLOOR')
                 dirt_count = self.count_cell_type(neighbors, 'DIRT')
                 grass_count = self.count_cell_type(neighbors, 'GRASS')
                 tree_count = self.count_cell_type(neighbors, 'TREE')
@@ -173,7 +174,9 @@ class CellsMixin:
                 flower_count = self.count_cell_type(neighbors, 'FLOWER')
                 cobblestone_count = self.count_cell_type(neighbors, 'COBBLESTONE')
 
-                total_water = water_count + deep_water_count
+                # CAVE_FLOOR counts as water for spread calculations — it is the dried bed of
+                # former deep water and should allow water to reform around it.
+                total_water = water_count + deep_water_count + cave_floor_count
 
                 # Dirt → Water (flooding, rain only — highest priority for dirt)
                 if cell == 'DIRT' and total_water >= 3 and self.is_raining:
@@ -249,12 +252,12 @@ class CellsMixin:
                     if _stone_adj >= 1 and random.random() < min(1.0, SAND_ROCK_TO_DIRT_RATE * _growth):
                         new_grid[y][x] = 'DIRT'
 
-                # Deep water formation: all 4 cardinal neighbors must be water/deepwater
+                # Deep water formation: all 4 cardinal neighbors must be water/deep_water/cave_floor
                 elif cell == 'WATER':
                     cardinal_water = sum(
                         1 for cdx, cdy in ((0, -1), (0, 1), (-1, 0), (1, 0))
                         if 0 <= x + cdx < GRID_WIDTH and 0 <= y + cdy < GRID_HEIGHT
-                        and screen['grid'][y + cdy][x + cdx] in ('WATER', 'DEEP_WATER')
+                        and screen['grid'][y + cdy][x + cdx] in ('WATER', 'DEEP_WATER', 'CAVE_FLOOR')
                     )
                     # Stone/cobblestone neighbors slow evaporation (natural grotto walls)
                     _stone_shield = max(0.1, 1.0 - 0.2 * sum(
@@ -265,27 +268,34 @@ class CellsMixin:
                     if cardinal_water == 4 and random.random() < min(1.0, DEEP_WATER_FORM_RATE * _tp):
                         new_grid[y][x] = 'DEEP_WATER'
                     elif total_water <= 1 and random.random() < min(1.0, WATER_TO_DIRT_RATE * _decay * _stone_shield):
-                        new_grid[y][x] = 'DIRT'
+                        # 20% chance to leave a cave floor water bed when isolated water dries
+                        new_grid[y][x] = 'CAVE_FLOOR' if random.random() < 0.20 else 'DIRT'
                     elif _water_decay_target and zone_water_count > 4:
                         # Volume-based decay: large water bodies drain toward biome base cell.
                         # Rate = (zone_water_count - 4) * BASE_DECAY_RATE, scaled by drought.
                         # Pools of ≤ 4 cells are fully stable (rate = 0).
                         _wdr = (zone_water_count - 4) * BASE_DECAY_RATE * _stone_shield
                         if random.random() < min(1.0, _wdr * _decay):
-                            new_grid[y][x] = _water_decay_target
+                            # 15% chance to leave cave floor as the lake bed dries out
+                            new_grid[y][x] = 'CAVE_FLOOR' if random.random() < 0.15 else _water_decay_target
 
-                # Deep water evaporation — mirrors formation: requires all 4 cardinal
-                # neighbors to be water/deep_water to stay deep; decays quickly otherwise.
-                # Stable deep water forms cave floor (sediment deposit).
+                # Deep water evaporation — requires all 4 cardinal neighbors to be water/deep_water/
+                # cave_floor to stay deep; decays to cave floor otherwise (sediment deposit).
                 elif cell == 'DEEP_WATER':
                     cardinal_water_dw = sum(
                         1 for cdx, cdy in ((0, -1), (0, 1), (-1, 0), (1, 0))
                         if 0 <= x + cdx < GRID_WIDTH and 0 <= y + cdy < GRID_HEIGHT
-                        and screen['grid'][y + cdy][x + cdx] in ('WATER', 'DEEP_WATER')
+                        and screen['grid'][y + cdy][x + cdx] in ('WATER', 'DEEP_WATER', 'CAVE_FLOOR')
                     )
                     if cardinal_water_dw == 4 and random.random() < min(1.0, DEEP_WATER_COBBLE_RATE * _tp):
                         new_grid[y][x] = 'CAVE_FLOOR'
                     elif cardinal_water_dw < 4 and random.random() < min(1.0, DEEP_WATER_EVAPORATE_RATE * _decay):
+                        # Deep water drying always deposits cave floor (water bed sediment)
+                        new_grid[y][x] = 'CAVE_FLOOR'
+
+                # Cave floor re-floods when surrounded by enough water (lake bed refills quickly)
+                elif cell == 'CAVE_FLOOR' and total_water >= 2:
+                    if random.random() < min(1.0, 0.35 * _tp):
                         new_grid[y][x] = 'WATER'
 
                 # Flower spread
@@ -374,12 +384,12 @@ class CellsMixin:
                     if random.random() < min(1.0, 0.03 * _tp):
                         new_grid[y][x] = 'DIRT'
 
-                # Rain flood spread: any terrain adjacent to water while raining converts at 2× base rate.
-                # Independent of earlier elif chain — only fires if the cell was not already changed.
+                # Rain flood spread: any terrain adjacent to water while raining gets a small
+                # extra conversion chance. Independent of main elif chain.
                 if (self.is_raining and new_grid[y][x] == cell
                         and cell in ('DIRT', 'SAND', 'COBBLESTONE')
                         and total_water >= 1):
-                    if random.random() < min(1.0, FLOODING_RATE * 2.0 * _tp):
+                    if random.random() < min(1.0, FLOODING_RATE * 0.4 * _tp):
                         new_grid[y][x] = 'WATER'
 
                 # Crop decay without rain (drought)
@@ -430,10 +440,10 @@ class CellsMixin:
         screen = self.screens[key]
         biome = screen.get('biome', 'FOREST')
 
-        # Desert: puddles form more often during rain — 35% chance per tick to attempt 1-2
+        # Desert: puddles form during rain — 22% chance per tick to attempt 1-2
         # sand→water conversions. Also checks cells adjacent to existing water.
         if biome == 'DESERT':
-            if random.random() < 0.35:
+            if random.random() < 0.22:
                 for _ in range(2):
                     x = random.randint(1, GRID_WIDTH - 2)
                     y = random.randint(1, GRID_HEIGHT - 2)
