@@ -9,7 +9,7 @@ from constants import (
     TREE_GROWTH_RATE, TREE_DECAY_RATE, TREE_CROWD_DECAY_RATE,
     SAND_RECLAIM_RATE, CACTUS_DROUGHT_RATE, TREE_DROUGHT_RATE,
     FLOWER_SPREAD_RATE, FLOWER_DECAY_RATE,
-    DEEP_WATER_FORM_RATE, DEEP_WATER_EVAPORATE_RATE, DEEP_WATER_COBBLE_RATE,
+    DEEP_WATER_FORM_RATE, DEEP_WATER_EVAPORATE_RATE,
     WATER_TO_DIRT_RATE, WATER_EDGE_ROCK_RATE, FLOODING_RATE,
     SAND_ROCK_TO_DIRT_RATE,
     BIOME_SPREAD_RATE,
@@ -279,24 +279,23 @@ class CellsMixin:
                             # 15% chance to leave cave floor as the lake bed dries out
                             new_grid[y][x] = 'CAVE_FLOOR' if random.random() < 0.15 else _water_decay_target
 
-                # Deep water evaporation — requires all 4 cardinal neighbors to be water/deep_water/
-                # cave_floor to stay deep; decays to cave floor otherwise (sediment deposit).
+                # Deep water evaporation — stable when fully surrounded; decays when exposed.
                 elif cell == 'DEEP_WATER':
                     cardinal_water_dw = sum(
                         1 for cdx, cdy in ((0, -1), (0, 1), (-1, 0), (1, 0))
                         if 0 <= x + cdx < GRID_WIDTH and 0 <= y + cdy < GRID_HEIGHT
                         and screen['grid'][y + cdy][x + cdx] in ('WATER', 'DEEP_WATER', 'CAVE_FLOOR')
                     )
-                    if cardinal_water_dw == 4 and random.random() < min(1.0, DEEP_WATER_COBBLE_RATE * _tp):
-                        new_grid[y][x] = 'CAVE_FLOOR'
-                    elif cardinal_water_dw < 4 and random.random() < min(1.0, DEEP_WATER_EVAPORATE_RATE * _decay):
-                        # Deep water drying always deposits cave floor (water bed sediment)
-                        new_grid[y][x] = 'CAVE_FLOOR'
+                    # Only evaporate when no longer fully surrounded — fully surrounded deep water is stable.
+                    if cardinal_water_dw < 4 and random.random() < min(1.0, DEEP_WATER_EVAPORATE_RATE * _decay):
+                        # Evaporates to regular water; 80% chance the water bed (CAVE_FLOOR) forms instead.
+                        new_grid[y][x] = 'CAVE_FLOOR' if random.random() < 0.80 else 'WATER'
 
-                # Cave floor re-floods when surrounded by enough water (lake bed refills quickly)
-                elif cell == 'CAVE_FLOOR' and total_water >= 2:
-                    if random.random() < min(1.0, 0.35 * _tp):
-                        new_grid[y][x] = 'WATER'
+                # CAVE_FLOOR is a stable water-bed state (renders with water overlay).
+                # It only dries out when completely isolated from water neighbors.
+                elif cell == 'CAVE_FLOOR' and total_water == 0:
+                    if random.random() < min(1.0, WATER_TO_DIRT_RATE * _decay):
+                        new_grid[y][x] = _water_decay_target or 'DIRT'
 
                 # Flower spread
                 elif cell == 'GRASS' and 1 <= flower_count <= 2 and total_water >= 1:
