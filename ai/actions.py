@@ -534,10 +534,22 @@ class NpcAiActionsMixin:
                                 entity.level_up_from_activity('mine', self)
                     return
 
-        # No rocks adjacent — move toward nearest corner to mine
-        target_corner = self.get_nearest_corner_target(entity.x, entity.y)
-        if target_corner:
-            self.move_entity_towards(entity, target_corner[0], target_corner[1])
+        # No rocks adjacent — seek nearest STONE/IRON_ORE/CAVE/MINESHAFT in zone
+        nearest_target = None
+        nearest_dist = 9999
+        for sy in range(GRID_HEIGHT):
+            for sx in range(GRID_WIDTH):
+                if screen['grid'][sy][sx] in ('STONE', 'IRON_ORE', 'CAVE', 'MINESHAFT'):
+                    d = abs(entity.x - sx) + abs(entity.y - sy)
+                    if d < nearest_dist:
+                        nearest_dist = d
+                        nearest_target = (sx, sy)
+        if nearest_target:
+            self.move_entity_towards(entity, nearest_target[0], nearest_target[1])
+        else:
+            target_corner = self.get_nearest_corner_target(entity.x, entity.y)
+            if target_corner:
+                self.move_entity_towards(entity, target_corner[0], target_corner[1])
 
     def try_build_well(self, entity, screen_key):
         """Miner builds a well if zone has 2+ houses and no existing well."""
@@ -645,7 +657,8 @@ class NpcAiActionsMixin:
             cx, cy = entity.x + dx, entity.y + dy
             if not (0 <= cx < GRID_WIDTH and 0 <= cy < GRID_HEIGHT):
                 continue
-            if screen['grid'][cy][cx] not in ('GRASS', 'DIRT'):
+            cell = screen['grid'][cy][cx]
+            if cell not in ('GRASS', 'DIRT', 'SAND'):
                 continue
             entity.update_facing_toward(cx, cy)
             entity.trigger_action_animation()
@@ -653,7 +666,9 @@ class NpcAiActionsMixin:
             entity.xp += 1
             if entity.xp >= entity.xp_to_level:
                 entity.level_up()
-            if random.random() < FARMER_TILL_SUCCESS:
+            # Sand is much harder to till than grass/dirt
+            success_rate = FARMER_TILL_SUCCESS * 0.15 if cell == 'SAND' else FARMER_TILL_SUCCESS
+            if random.random() < success_rate:
                 screen['grid'][cy][cx] = 'SOIL'
             return True   # acted; stop scanning
         return False

@@ -853,9 +853,9 @@ ENTITY_TYPES = {
             'wander_when_idle': True
         },
         'ai_params': {
-            'aggressiveness': 0.05,  # Very low - farmers flee from danger
-            'passiveness': 0.40,     # Somewhat passive - focus on work
-            'idleness': 0.15,        # Moderately idle - take breaks
+            'aggressiveness': 0.65,  # High — farmers actively seek crops/soil to work
+            'passiveness': 0.15,     # Rarely drops task to wander
+            'idleness': 0.10,        # Takes occasional breaks
             'flee_chance': 0.70,
             'combat_chance': 0.30,
             'target_types': ['food', 'water', 'resource']
@@ -1136,12 +1136,12 @@ ENTITY_TYPES = {
             'wander_when_idle': True  # Wander between mining
         },
         'ai_params': {
-            'aggressiveness': 0.10,  # Low but not fleeing
-            'passiveness': 0.35,     # Focused on mining
-            'idleness': 0.20,        # Take breaks between mining
+            'aggressiveness': 0.75,  # High — miners consistently seek rocks/ore/caves
+            'passiveness': 0.10,     # Rarely drops task
+            'idleness': 0.05,        # Rarely idles
             'flee_chance': 0.65,
             'combat_chance': 0.35,
-            'target_types': ['food', 'water', 'resource']
+            'target_types': ['food', 'water', 'stone', 'resource']
         }
     },
     # Enemies

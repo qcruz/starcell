@@ -2070,18 +2070,22 @@ class NpcAiMovementMixin:
         return closest
 
     def _find_closest_stone(self, entity, screen_key):
-        """Closest mineable stone (mining quest)."""
+        """Closest miner target: stone, iron ore, cave, or mineshaft."""
         if screen_key not in self.screens:
             return None
         screen = self.screens[screen_key]
         closest, closest_dist = None, float('inf')
+        # Priority: ore > stone > cave > mineshaft (lower dist wins within same priority)
+        _priority = {'IRON_ORE': 0, 'STONE': 1, 'CAVE': 2, 'MINESHAFT': 3, 'CAVE_WALL': 4}
         for y in range(GRID_HEIGHT):
             for x in range(GRID_WIDTH):
-                if screen['grid'][y][x] in ('STONE', 'CAVE_WALL'):
-                    dist = abs(x - entity.x) + abs(y - entity.y)
-                    if dist < closest_dist:
-                        closest_dist = dist
-                        closest = ('cell', x, y, screen['grid'][y][x])
+                cell = screen['grid'][y][x]
+                if cell not in _priority:
+                    continue
+                dist = abs(x - entity.x) + abs(y - entity.y) + _priority[cell] * 0.5
+                if dist < closest_dist:
+                    closest_dist = dist
+                    closest = ('cell', x, y, cell)
         return closest
 
     def _find_closest_any_entity(self, entity, screen_key):
