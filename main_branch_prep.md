@@ -20,15 +20,17 @@
 
 **Current dev behavior:** `new_game()` adds every item in `ITEMS` to the player inventory. This is a dev convenience — the player starts with all tools, weapons, spells, and items unlocked.
 
-**Required for main:** Clear this block. Player starts with empty inventory, or a minimal defined starter kit (e.g. one axe, one pickaxe). Decide with @qcruz before implementing.
+**Policy for main:** Replace the "give all items" loop with an explicit starter set:
+- `star_spell` (1x) — in magic tab
+- `attack`, `block`, `inspect`, `dig`, `sneak`, `talk` (1x each) — in actions tab
+- Nothing else — no tools, weapons, consumables, or crafting materials
 
 ```python
-# REMOVE OR REPLACE THIS BLOCK:
-for _item_key in ITEMS:
-    self.inventory.add_item(_item_key, 1)
+# REPLACE THE DEV LOOP WITH:
+self.inventory.add_item('star_spell', 1)
+for _action in ['attack', 'block', 'inspect', 'dig', 'sneak', 'talk']:
+    self.inventory.add_item(_action, 1)
 ```
-
-**Decision needed:** What items (if any) should the player start with?
 
 ---
 
@@ -38,9 +40,14 @@ for _item_key in ITEMS:
 
 **Current dev behavior:** A random follower type (SHEEP, DEER, WOLF, BAT, GOBLIN, SKELETON, TERMITE) is selected on new_game and spawned after time passage.
 
-**Required for main:** Confirm whether a starting follower is intended for main release. If yes, confirm which type. If no, remove the `_pending_follower_type` and `_time_pass_spawned` block.
+**Policy for main:** Player starts with one random peaceful animal follower. Restrict the pool to: `SHEEP`, `DEER`, `RED_BIRD`, `BUTTERFLY`, `CHICKEN`. This introduces the follower system without implying combat NPCs are easy to tame.
 
-**Decision needed:** Starting follower — yes/no? If yes, which type?
+```python
+# REPLACE the current line in new_game():
+self._pending_follower_type = random.choice(['SHEEP', 'DEER', 'WOLF', 'BAT', 'GOBLIN', 'SKELETON', 'TERMITE'])
+# WITH:
+self._pending_follower_type = random.choice(['SHEEP', 'DEER', 'RED_BIRD', 'BUTTERFLY', 'CHICKEN'])
+```
 
 ---
 
@@ -48,13 +55,7 @@ for _item_key in ITEMS:
 
 **Location:** `game_core.py:1250–1255`, `ui/menus.py:36`, `ui/menus.py:118`
 
-**Current dev behavior:** Shift+A toggles the autopilot. This key binding is listed in both the in-game controls help screens.
-
-**Required for main:** Remove the autopilot toggle binding from the input handler and from the controls display text. The autopilot system itself (`autopilot.py`) can remain in the codebase but must not be player-accessible.
-
-**Files to update:**
-- `game_core.py` — remove `elif event.key == pygame.K_a and (pygame.key.get_mods() & pygame.KMOD_SHIFT): self.toggle_autopilot()`
-- `ui/menus.py` — remove `"Shift+A - Toggle autopilot"` from both controls screens
+**Policy for main:** No change needed. Autopilot is an intentional main game mechanic, not a dev tool. Keep Shift+A binding and controls text as-is.
 
 ---
 
@@ -64,21 +65,38 @@ for _item_key in ITEMS:
 
 **Current dev behavior:** Shift+I opens the dev info overlay showing internal state, entity counts, tick info, etc.
 
-**Required for main:** Disable or remove the dev screen toggle. Simplest approach: remove the `elif event.key == pygame.K_i and Shift:` branch so Shift+I only opens the inventory (current else branch). The `draw_dev_screen()` call and `show_dev_screen` flag can remain but should always be False.
-
-**Alternative:** Leave in as a hidden debug tool — low risk, low reward. Confirm with @qcruz.
+**Policy for main:** Remove entirely. Delete:
+- The `elif event.key == pygame.K_i and Shift: self.show_dev_screen = not self.show_dev_screen` branch in `game_core.py:1184–1186` (Shift+I will fall through to normal inventory open)
+- The `self.show_dev_screen = False` init line in `game_core.py:206`
+- The `self.draw_dev_screen()` call in `game_core.py:3021`
+- `ui/dev_screen.py` — delete the file
 
 ---
 
-## 5. Spell Energy Cost
+## 5. Spell Energy Cost + Enchanted Cell Permanence
 
-**Location:** `systems/enchantment.py:64–69`
+**Location:** `systems/enchantment.py:64–69`, `ai/actions.py:50–`, `world/zones.py:68`, `ui/hud.py:199–203`
 
-**Current dev behavior:** Star spell costs 3 energy per cast. This may be intentionally low for testing.
+**Policy for main:** Spell energy cost of 3 per cast is correct for main. No change needed.
 
-**Required for main:** Review and set final energy cost. CLAUDE.md mentions spell cost as a variable that differs between dev and main.
+**Enchanted cell permanence — required fixes before main:**
 
-**Decision needed:** What is the intended spell energy cost for main?
+Enchanted cells must be immutable: no NPC action or world system may alter them. Current protection status:
+
+| System | Protected? | Notes |
+|---|---|---|
+| Cellular automata (`world/cells.py:140`) | Yes | `is_cell_enchanted` skip in place |
+| NPC eating/drinking (`ai/movement.py:1862, 1938`) | Yes | `is_cell_enchanted` skip in place |
+| Zone update / biome spread (`world/zones.py:344, 927, 1875`) | Yes | `is_cell_enchanted` skip in place |
+| NPC harvest (`ai/actions.py:action_harvest_cell`) | **No** | Missing check — NPCs can chop/mine enchanted cells |
+| Zone unload (`world/zones.py:68`) | **No** | `enchanted_cells.pop(zone_key)` purges enchantments from unloaded zones mid-session |
+
+**Required code fixes:**
+1. `ai/actions.py:action_harvest_cell` — add `if self.is_cell_enchanted(cx, cy, screen_key): continue` before the harvest executes (inside the `for dx, dy` loop, after cell type check)
+2. `world/zones.py` zone unload — do not pop from `enchanted_cells` on zone unload; enchantments must survive zone cycling. Remove or guard the `self.enchanted_cells.pop(zone_key, None)` line.
+
+**Visual clarity — required for main:**
+Current marker is a small golden rect in the top-left corner of the cell (`ui/hud.py:199–203`). Must be replaced with a clearly visible enchantment icon (star/sparkle sprite or distinct overlay) so players can reliably identify enchanted cells at a glance. Exact visual TBD with @qcruz — flag when ready to implement.
 
 ---
 
@@ -86,11 +104,11 @@ for _item_key in ITEMS:
 
 **Location:** `systems/enchantment.py:93`
 
-**Current dev behavior:** Each follower added permanently reduces player max_energy by 1 (`max_energy - 1`). This may be intentionally low for testing.
+**Current dev behavior:** Each follower added permanently reduces player max_energy by 1 (`max_energy - 1`).
 
-**Required for main:** Confirm whether this is the final cost, or whether it should be higher (e.g. reduce by 5–10 per follower). CLAUDE.md notes follower costs differ between dev and main.
+**Policy for main:** Each follower costs 30 max energy while they are a follower. When a follower is released or dies, those 30 points are restored. This is a meaningful resource commitment — a player with 100 max energy can sustain a maximum of 3 followers before being nearly immobilized.
 
-**Decision needed:** Final max_energy reduction per follower?
+**Required code change:** `systems/enchantment.py:93` — change the reduction from `- 1` to `- 30`. Confirm the release path in the same file restores the matching amount (currently `energy_restored` is computed dynamically — verify it restores the correct 30 per follower level).
 
 ---
 
@@ -100,27 +118,17 @@ for _item_key in ITEMS:
 
 **Current dev value:** `BIOME_SPREAD_RATE = 0.004` — noted in comments as "4x increase"
 
-**Required for main:** Confirm whether this elevated rate is intentional for release or was bumped for testing. If testing only, revert to 0.001.
-
-**Decision needed:** Keep 0.004 or revert?
+**Policy for main:** Keep at 0.004. No change needed.
 
 ---
 
 ## 8. Biome Occurrence Rates
 
-**Location:** `constants.py:214–217`
+**Location:** `world/generation.py:85`, `constants.py:214–217`
 
-**Current dev values:**
-```python
-FOREST_BIOME_CHANCE = 0.60
-PLAINS_BIOME_CHANCE = 0.20
-MOUNTAINS_BIOME_CHANCE = 0.15
-DESERT_BIOME_CHANCE = 0.05
-```
+**Current state:** Generation already uses `random.choice(list(BIOMES.keys()))` — all biomes spawn at equal probability. The `FOREST_BIOME_CHANCE` / `PLAINS_BIOME_CHANCE` / `MOUNTAINS_BIOME_CHANCE` / `DESERT_BIOME_CHANCE` constants in `constants.py` are stale and unused.
 
-**Required for main:** Confirm these are tuned for the intended player experience, not test convenience.
-
-**Decision needed:** Adjust any of these for main?
+**Policy for main:** Equal biome distribution is correct. No change to generation logic needed. Remove the four stale `*_BIOME_CHANCE` constants from `constants.py` as part of the cleanup pass (section 13).
 
 ---
 
@@ -128,16 +136,17 @@ DESERT_BIOME_CHANCE = 0.05
 
 **Location:** `game_core.py:1226–1228`
 
-**Current dev behavior:** E key calls `pickup_cell_or_items()` which allows picking up any cell directly into inventory (creative/admin mode) plus dropped items.
+**Current dev behavior:** E key calls `pickup_cell_or_items()` — picks up dropped item piles AND raw cells directly into inventory (creative/admin mode).
 
-**CLAUDE.md note:** Branch table mentions "no E-button pickup" as a main branch custom constant.
+**Policy for main:**
+- **Remove the E key binding entirely** — `pickup_cell_or_items()` is a dev catch-all and has no place in main.
+- **Dropped item pickup via Spacebar** — `interact()` (`game_core.py:2207`) should check for dropped items at the target cell as its first step (before attack, before entity targeting). If items are present, pick them up and return.
+- **Raw cell pickup requires proper tool** — cells are only obtainable through tool use (axe → wood, pickaxe → stone/iron ore, etc.). No direct cell-to-inventory shortcut exists for the player on main.
 
-**Required for main:** Clarify the intended behavior. Options:
-- (a) Remove E key entirely — player never picks up raw cells; only dropped item piles via Space/interact
-- (b) E key only picks up dropped item piles, not raw cells
-- (c) Keep current behavior
-
-**Decision needed:** Which option?
+**Required code changes:**
+1. `game_core.py:1226–1228` — remove the `elif event.key == pygame.K_e:` block entirely.
+2. `game_core.py:interact()` — add dropped item pickup as the first check after facing snap, before `player_attack()`: if dropped items exist at the target cell, pick them up and return.
+3. `ui/menus.py:116` — update controls text: replace `"E - Pick up"` with the correct spacebar pickup description.
 
 ---
 
@@ -149,48 +158,26 @@ DESERT_BIOME_CHANCE = 0.05
 
 ---
 
-## 11. Dev Doc Files — Remove from Main
+## 11. Documentation Files
 
-These files exist in dev branches for planning, tracking, and debugging. They should not appear in the main branch.
+**Policy for main:** Keep all files. All docs — dev planning, design notes, roadmap, bounties, legal, etc. — are welcome on main for anyone to read.
 
-**Files to exclude from main (do not commit to main or delete from worktree before merge):**
+**Required action:** Update `README.md` to include an audience-organized file directory so players, coders, and contributors can immediately find what's relevant to them. See the three-audience structure below — this replaces the existing flat "Quick Links" table.
 
-| File | Reason |
-|---|---|
-| `next_up.md` | Dev work queue |
-| `roadmap.md` | Internal planning doc |
-| `current_features.md` | Dev implementation notes |
-| `debug/bug_report.md` | Dev session logs |
-| `debug/held_back.md` | Dev backlog |
-| `debug/auto_debug.cfg` | Already git-ignored; confirm it stays out |
-| `debug/auto_debug_save.json` | Already git-ignored |
-| `debug/auto_debug_state.json` | Already git-ignored |
-| `debug/session_stdout.log` | Already git-ignored |
-| `autopilot_npc_recon.md` | Dev recon doc |
-| `code_cleanup_plan.md` | Dev planning doc |
-| `DEVELOPMENT_STRATEGY.md` | Dev strategy doc |
-| `monolith_extraction_recon.md` | Dev recon doc |
-| `biome_template.md` | Dev design template |
-| `npc_society_design.md` | Dev design doc |
-| `economy_balance.md` | Dev design doc |
-| `player_arc.md` | Dev design doc |
-| `design_identity.md` | Dev design doc (review — may be worth keeping for contributors) |
-| `sound_design.md` | Dev design doc |
-| `art_direction.md` | Dev design doc |
-| `BOUNTIES.md` | Dev design doc |
-| `starcellv1-1-*.py` | Legacy monolith versions — remove from main |
-| `spritechange.py`, `spritepro.py` | Dev utility scripts |
-| `next_up 2.md` | Duplicate/stale |
+**README file directory structure:**
 
-**Files to KEEP in main:**
+```
+### For Players
+Files to get you set up and playing fast.
 
-| File | Reason |
-|---|---|
-| `README.md` | Player-facing documentation |
-| `CHANGELOG.md` | Release notes — keep and update |
-| `CLAUDE.md` | Keep but review for main-appropriate instructions |
-| `contributing.md` | Contributor guidelines |
-| `commercial_use.md`, `Legal Disclosures.md` | Legal — keep |
+### For Coders
+Files that explain the game's architecture and code for your own projects.
+
+### For Devs & Contributors
+Files explaining the roadmap, bounties, and what's needed next.
+```
+
+**Also clean up `" 2"` duplicate files** — git status shows many asset files with ` 2` and ` 3` suffixes (e.g. `sprites/icons/tile000 2.png`). These are macOS duplicate copies and should not be in main. Confirm they are not referenced in code before deleting.
 
 ---
 

@@ -119,8 +119,7 @@ The player exists inside this simulation — exploring, fighting, crafting, gath
 ### Actions
 | Key | Action |
 |---|---|
-| Space | Interact — talk, enter structure, open chest, pick up |
-| E | Pick up cell or items from target tile |
+| Space | Interact — attack, talk, enter structure, open chest, pick up items |
 | P | Place selected item as a cell |
 | N | Open NPC trade |
 | B | Toggle blocking (90% damage reduction) |
@@ -173,17 +172,45 @@ See [BOUNTIES.md](BOUNTIES.md) for a prioritized list of open features with esti
 
 ---
 
-## Quick Links
+## File Directory
 
-| Document | Purpose |
+### For Players
+*Get set up and playing as fast as possible.*
+
+| File | What it covers |
 |---|---|
-| [CHANGELOG.md](CHANGELOG.md) | What has changed and when |
-| [ROADMAP.md](roadmap.md) | Planned features — the authoritative design wishlist |
-| [BOUNTIES.md](BOUNTIES.md) | Open bounties with reward estimates |
-| [CONTRIBUTING.md](contributing.md) | Contributor License Agreement and Reward Pool details |
-| [COMMERCIAL_USE.md](commercial_use.md) | Rules for indie monetization vs. CSP |
+| [README.md](README.md) | This file — download, install, controls, feature overview |
+| [CHANGELOG.md](CHANGELOG.md) | What has changed in each release |
 | [Legal Disclosures](Legal%20Disclosures.md) | Full legal terms |
-| [current_features.md](current_features.md) | Full feature reference with all controls and config values |
+
+### For Coders
+*Understand the architecture and reuse the code in your own projects.*
+
+| File | What it covers |
+|---|---|
+| [current_features.md](current_features.md) | Full feature reference: all systems, controls, and config values |
+| [CLAUDE.md](CLAUDE.md) | How the codebase is structured and maintained — file roles, branch protocol, development loop |
+| [design_identity.md](design_identity.md) | Core design principles and what makes StarCell's simulation tick |
+| [commercial_use.md](commercial_use.md) | Rules for building and selling your own game on top of this engine |
+| [economy_balance.md](economy_balance.md) | Economy design: item values, NPC trade logic, balance targets |
+| [npc_society_design.md](npc_society_design.md) | NPC faction and society system design |
+| [biome_template.md](biome_template.md) | Template and rules for adding new biomes |
+| [sound_design.md](sound_design.md) | Sound system layout and audio file conventions |
+| [art_direction.md](art_direction.md) | Sprite and visual style guidelines |
+
+### For Devs & Contributors
+*See what's planned, what's needed, and how to get paid to contribute.*
+
+| File | What it covers |
+|---|---|
+| [BOUNTIES.md](BOUNTIES.md) | Open bounties with reward estimates — start here if you want to contribute for pay |
+| [CONTRIBUTING.md](contributing.md) | Contributor License Agreement and Reward Pool details |
+| [roadmap.md](roadmap.md) | Full feature wishlist — the long-term vision |
+| [next_up.md](next_up.md) | Active work queue: what's being built right now |
+| [player_arc.md](player_arc.md) | Intended player progression and experience arc |
+| [DEVELOPMENT_STRATEGY.md](DEVELOPMENT_STRATEGY.md) | Branch strategy, dev loop, and how the project is run |
+| [debug/bug_report.md](debug/bug_report.md) | Autopilot session logs and confirmed bug history |
+| [debug/held_back.md](debug/held_back.md) | Known issues held back from active development with full context |
 
 ---
 
