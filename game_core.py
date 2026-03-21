@@ -1101,8 +1101,32 @@ class GameCoreMixin:
                                 self.execute_action(selected_action)
                                 self.gain_xp(1)
                                 continue
-                        self.interact()
-                        self.gain_xp(1)
+                        # Fire selected toolbar slot; do nothing if slot is empty
+                        _slot_item = None
+                        if self.inventory.selected_tool_slot_idx is not None:
+                            _slot_item = self.inventory.tool_slots[self.inventory.selected_tool_slot_idx]
+                        if _slot_item:
+                            if _slot_item in self.inventory.magic:
+                                _prev_magic = self.inventory.selected.get('magic')
+                                self.inventory.selected['magic'] = _slot_item
+                                if _slot_item == 'rain_spell':
+                                    self.cast_rain_spell()
+                                elif _slot_item == 'day_spell':
+                                    self.cast_day_spell()
+                                elif _slot_item == 'keeper_spell':
+                                    self.cast_keeper_spell()
+                                elif _slot_item.startswith('summon_'):
+                                    self.cast_summon_spell()
+                                elif _slot_item.startswith('transform_'):
+                                    self.cast_transform_spell()
+                                else:
+                                    self.cast_star_spell()
+                                self.inventory.selected['magic'] = _prev_magic
+                            elif _slot_item in self.inventory.actions:
+                                self.execute_action(_slot_item)
+                            else:
+                                self.interact()
+                            self.gain_xp(1)
                     elif event.key == pygame.K_l:
                         selected = self.inventory.selected_magic
                         if selected == 'rain_spell':
@@ -1384,6 +1408,12 @@ class GameCoreMixin:
                           item_name is not None):
                         # --- Item clicked while equipment slot is pending ---
                         slot_name = self.inventory.pending_equip_equipment_slot
+                        # Enforce slot type: item must declare the matching equipment_slot
+                        item_equip_slot = ITEMS.get(item_name, {}).get('equipment_slot')
+                        _target = 'ring' if slot_name in ('ring1', 'ring2') else slot_name
+                        if item_equip_slot != _target and item_equip_slot != slot_name:
+                            # Wrong slot type — ignore click, keep pending
+                            return
                         self.inventory.equip_to_equipment_slot(slot_name, item_name, category)
                         if ITEMS.get(item_name, {}).get('damage'):
                             self.sound.on_equip_sword()
