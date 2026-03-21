@@ -200,15 +200,6 @@ class HudMixin:
                             pygame.draw.rect(self.screen, COLORS['BLACK'],
                                            (x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE), 1)
 
-                            # Draw label ONLY when no sprite
-                            label = CELL_TYPES[cell]['label']
-                            text = self.tiny_font.render(label, True, COLORS['WHITE'])
-                            text_rect = text.get_rect(center=(
-                                x * CELL_SIZE + CELL_SIZE // 2,
-                                y * CELL_SIZE + CELL_SIZE // 2
-                            ))
-                            self.screen.blit(text, text_rect)
-
                     # Draw enchantment indicator if cell is enchanted
                     if self.is_cell_enchanted(x, y, screen_key):
                         enchant_level = self.enchanted_cells[screen_key].get((x, y), 0)
