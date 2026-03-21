@@ -547,6 +547,22 @@ class WorldGenerationMixin:
         grid[GRID_HEIGHT - 2][GRID_WIDTH // 2 - 1] = 'FLOOR_WOOD'
         grid[GRID_HEIGHT - 2][GRID_WIDTH // 2 + 1] = 'FLOOR_WOOD'
 
+        # Place 0-2 empty crates in interior corners (against walls)
+        _corner_candidates = [
+            (1, 1), (2, 1), (1, 2),
+            (GRID_WIDTH - 2, 1), (GRID_WIDTH - 3, 1), (GRID_WIDTH - 2, 2),
+            (1, GRID_HEIGHT - 3), (2, GRID_HEIGHT - 3),
+            (GRID_WIDTH - 2, GRID_HEIGHT - 3), (GRID_WIDTH - 3, GRID_HEIGHT - 3),
+        ]
+        random.shuffle(_corner_candidates)
+        _crates_placed = 0
+        for cx, cy in _corner_candidates:
+            if _crates_placed >= random.randint(0, 2):
+                break
+            if 0 <= cy < GRID_HEIGHT and 0 <= cx < GRID_WIDTH and grid[cy][cx] == 'FLOOR_WOOD':
+                grid[cy][cx] = 'EMPTY_CRATE'
+                _crates_placed += 1
+
         # Place 0-3 barrels on random FLOOR_WOOD cells
         num_barrels = random.randint(0, 3)
         placed = 0

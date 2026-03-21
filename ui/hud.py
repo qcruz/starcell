@@ -207,6 +207,14 @@ class HudMixin:
                             level_text = self.tiny_font.render(str(enchant_level), True, COLORS['YELLOW'])
                             self.screen.blit(level_text, (x * CELL_SIZE + 8, y * CELL_SIZE + 2))
 
+                    # Draw decoration overlay (flower patterns, cave puddles)
+                    if self.current_screen:
+                        _deco = self.current_screen.get('decorations', {}).get((x, y))
+                        if _deco and self.use_sprites and hasattr(self, 'sprite_manager'):
+                            _deco_spr = self.sprite_manager.sprites.get(_deco)
+                            if _deco_spr:
+                                self.screen.blit(_deco_spr, (x * CELL_SIZE, y * CELL_SIZE))
+
                     # Draw dropped items (layered over base cell)
                     if screen_key in self.dropped_items:
                         cell_key = (x, y)

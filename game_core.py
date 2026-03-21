@@ -461,7 +461,10 @@ class GameCoreMixin:
             'CACTUS':                'cactus.png',
             'BARREL':                'barrel.png',
             'BUSH':                  'bush.png',
-            'EMPTY_CRATE':           'empty_crate.png',
+            'EMPTY_CRATE':           'emptycrate.png',
+            'FLOWER_PATTERN1':       'flowerpattern1.png',
+            'FLOWER_PATTERN2':       'flowerpattern2.png',
+            'FLOWER_PATTERN3':       'flowerpattern3.png',
         }
 
         # Weapon / armour sprites — subdir has a space so they can't be found by the

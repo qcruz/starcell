@@ -276,7 +276,7 @@ class CellsMixin:
 
                 # Deep water evaporation — mirrors formation: requires all 4 cardinal
                 # neighbors to be water/deep_water to stay deep; decays quickly otherwise.
-                # Stable deep water mineralises to cobblestone (mineral deposits).
+                # Stable deep water forms cave floor (sediment deposit).
                 elif cell == 'DEEP_WATER':
                     cardinal_water_dw = sum(
                         1 for cdx, cdy in ((0, -1), (0, 1), (-1, 0), (1, 0))
@@ -284,7 +284,7 @@ class CellsMixin:
                         and screen['grid'][y + cdy][x + cdx] in ('WATER', 'DEEP_WATER')
                     )
                     if cardinal_water_dw == 4 and random.random() < min(1.0, DEEP_WATER_COBBLE_RATE * _tp):
-                        new_grid[y][x] = 'COBBLESTONE'
+                        new_grid[y][x] = 'CAVE_FLOOR'
                     elif cardinal_water_dw < 4 and random.random() < min(1.0, DEEP_WATER_EVAPORATE_RATE * _decay):
                         new_grid[y][x] = 'WATER'
 
@@ -384,6 +384,37 @@ class CellsMixin:
                         screen['variant_grid'][vy][vx] = self.roll_cell_variant(new_grid[vy][vx])
 
         screen['grid'] = new_grid
+
+        # Decoration overlays: flower patterns on surface cells, water puddles on cave floor
+        _decs = screen.setdefault('decorations', {})
+        _flower_rate = 0.000003 if biome == 'DESERT' else 0.00002
+        _FLOWER_ELIGIBLE = ('GRASS', 'DIRT', 'SAND', 'COBBLESTONE')
+        _FLOWER_SPRITES = ('FLOWER_PATTERN1', 'FLOWER_PATTERN2', 'FLOWER_PATTERN3')
+        _to_remove = []
+        for (dx, dy), deco in _decs.items():
+            cell_now = screen['grid'][dy][dx]
+            if deco in _FLOWER_SPRITES and cell_now not in _FLOWER_ELIGIBLE:
+                _to_remove.append((dx, dy))
+            elif deco == 'WATER' and cell_now != 'CAVE_FLOOR':
+                _to_remove.append((dx, dy))
+            elif deco in _FLOWER_SPRITES and random.random() < 0.0002 * _decay:
+                _to_remove.append((dx, dy))
+            elif deco == 'WATER' and random.random() < 0.00005 * _decay:
+                _to_remove.append((dx, dy))
+        for pos in _to_remove:
+            _decs.pop(pos, None)
+
+        for y in range(1, GRID_HEIGHT - 1):
+            for x in range(1, GRID_WIDTH - 1):
+                if random.random() > cell_coverage * 0.1:
+                    continue
+                if (x, y) in _decs:
+                    continue
+                cell = screen['grid'][y][x]
+                if cell in _FLOWER_ELIGIBLE and random.random() < _flower_rate * _growth:
+                    _decs[(x, y)] = random.choice(_FLOWER_SPRITES)
+                elif cell == 'CAVE_FLOOR' and random.random() < 0.000002:
+                    _decs[(x, y)] = 'WATER'
 
         self.check_zone_biome_shift(screen_x, screen_y)
 
