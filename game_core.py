@@ -191,8 +191,9 @@ class GameCoreMixin:
         # Trading System
         self.trader_display = None  # {entity_id: {recipes: [...], position: (x,y)}}
         self.trader_display_tick = 0
-        self.inspected_npc = None  # Entity being inspected
-        self.inspected_npc_tick = 0  # When inspection started  # When to hide display
+        self.inspected_npc = None       # Entity being inspected
+        self.inspected_npc_tick = 0     # When inspection started
+        self.inspect_cell_target = None # (x, y) of cell being inspected (no NPC at target)
 
         # Item UID registry — tracks individually identified items (quest/keeper targets)
         self._item_uid_counter = 0
@@ -863,66 +864,71 @@ class GameCoreMixin:
                 self.follower_items.pop(entity_id, None)
 
     def check_npc_inspection(self):
-        """Check if player is targeting any entity and Shift is held — set inspection"""
-        # During autopilot, the proxy's facing direction constantly sweeps over
-        # nearby NPCs.  The inspection system sets idle_timer=30 on each one and
-        # the inspected_npc guard skips their entire AI update, which freezes
-        # every NPC the proxy walks past.  Disable inspection while autopilot
-        # is active so the proxy doesn't paralyse the zone.
+        """Inspect whatever the player is facing when Shift is held or inspect tool is active."""
         if getattr(self, 'autopilot', False):
             self.inspected_npc = None
+            self.inspect_cell_target = None
             return
 
-        # Inspection triggers when 'inspect' action is selected AND Shift is held.
-        # Also activates if inspect is the active tool slot item.
-        selected_action = self.inventory.selected.get('actions')
-        _ts_idx = self.inventory.selected_tool_slot_idx
-        if not selected_action and _ts_idx is not None:
-            if self.inventory.tool_slots[_ts_idx] == 'inspect':
-                selected_action = 'inspect'
         keys = pygame.key.get_pressed()
         shift_held = keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]
-        if not (selected_action == 'inspect' and shift_held):
+        _ts_idx = self.inventory.selected_tool_slot_idx
+        inspect_tool_active = (
+            _ts_idx is not None and
+            _ts_idx < len(self.inventory.tool_slots) and
+            self.inventory.tool_slots[_ts_idx] == 'inspect'
+        )
+        if not (shift_held or inspect_tool_active):
             self.inspected_npc = None
+            self.inspect_cell_target = None
             return
 
+        # Hostile within 2 cells suppresses inspect entirely
+        screen_key = f"{self.player['screen_x']},{self.player['screen_y']}"
+        px, py = self.player['x'], self.player['y']
+        for eid in self.screen_entities.get(screen_key, []):
+            if eid in self.entities:
+                e = self.entities[eid]
+                if e.props.get('hostile', False) and abs(e.x - px) + abs(e.y - py) <= 2:
+                    self.inspected_npc = None
+                    self.inspect_cell_target = None
+                    return
+
+        target = self.get_target_cell()
         target = self.get_target_cell()
         if not target:
             self.inspected_npc = None
+            self.inspect_cell_target = None
             return
-        
-        check_x, check_y = target
 
-        # Unified zone system: player screen coords reflect current zone (incl. structure virtual coords)
-        screen_key = f"{self.player['screen_x']},{self.player['screen_y']}"
+        check_x, check_y = target
         candidates = self.screen_entities.get(screen_key, [])
 
-        # Find entity at target cell
+        # NPC at target cell?
         for entity_id in candidates:
             if entity_id in self.entities:
                 entity = self.entities[entity_id]
                 if entity.x == check_x and entity.y == check_y:
-                    # Never inspect the autopilot proxy — it renders as the player
                     if entity.props.get('is_autopilot_proxy', False):
                         self.inspected_npc = None
+                        self.inspect_cell_target = None
                         return
                     if self.inspected_npc != entity_id:
-                        # New NPC targeted — open all inventory panels + quest UI
                         for cat in ['items', 'tools', 'magic', 'followers']:
                             self.inventory.open_menus.add(cat)
                         self.quest_ui_open = True
                     self.inspected_npc = entity_id
+                    self.inspect_cell_target = None
                     self.inspected_npc_tick = self.tick
-
-                    # Make peaceful entities idle briefly during inspection
                     if not entity.props.get('hostile'):
                         entity.is_idle = True
-                        entity.idle_timer = 30  # 0.5 seconds
+                        entity.idle_timer = 30
                         entity.idle_duration = 30
                     return
 
-        # No entity at target
+        # No NPC — inspect the cell/items at target
         self.inspected_npc = None
+        self.inspect_cell_target = (check_x, check_y)
     
     def is_at_corner(self, x, y):
         """Check if position is near a zone corner"""
@@ -1622,8 +1628,7 @@ class GameCoreMixin:
         elif action_name == 'block':
             self.player['blocking'] = True
         elif action_name == 'inspect':
-            # Flag inspect as active so check_npc_inspection picks it up (hold Shift to scan)
-            self.inventory.selected['actions'] = 'inspect'
+            pass  # Handled by check_npc_inspection via tool slot or Shift key
         elif action_name in ('sneak', 'dig', 'talk'):
             pass  # Placeholder — implementation in future sessions
 
@@ -2021,6 +2026,7 @@ class GameCoreMixin:
                     self.quest_ui_open = False
                     self.trader_display = None
                     self.inspected_npc = None
+                    self.inspect_cell_target = None
         if self.state != 'playing' or self.inventory.open_menus:
             return
         
@@ -2236,17 +2242,6 @@ class GameCoreMixin:
             check_x, check_y = target
             screen_key = f"{self.player['screen_x']},{self.player['screen_y']}"
             
-            # Check if there's an entity at this position
-            if screen_key in self.screen_entities:
-                for entity_id in self.screen_entities[screen_key]:
-                    if entity_id in self.entities:
-                        entity = self.entities[entity_id]
-                        if entity.x == check_x and entity.y == check_y:
-                            # Target this entity
-                            self.inspected_npc = entity_id
-                            print(f"Targeting: {entity.name if entity.name else entity.type}")
-                            return  # Entity targeting takes priority
-        
         # Otherwise, normal interactions
         if not target:
             return
@@ -2366,8 +2361,10 @@ class GameCoreMixin:
             self.current_screen['grid'][check_y][check_x] = 'CARROT1'
             return
         
-        # Place bones as decoration on ground cells
-        if cell in ['GRASS', 'DIRT', 'SAND', 'STONE', 'FLOOR_WOOD', 'CAVE_FLOOR', 'COBBLESTONE'] and self.inventory.has_item('bones'):
+        # Place bones as decoration on ground cells (only when bones is the selected item)
+        if cell in ['GRASS', 'DIRT', 'SAND', 'STONE', 'FLOOR_WOOD', 'CAVE_FLOOR', 'COBBLESTONE'] \
+                and self.inventory.selected.get('items') == 'bones' \
+                and self.inventory.has_item('bones'):
             self.inventory.remove_item('bones', 1)
             
             # Add bones to dropped items (as overlay decoration)

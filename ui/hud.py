@@ -891,8 +891,11 @@ class HudMixin:
                 else:
                     self.draw_trader_ui()
 
-            # Draw NPC inspection if targeting peaceful NPC
+            # Draw NPC inspection panel (Shift or inspect tool active)
             self.draw_inspected_npc()
+
+            # Draw cell/item inspect panel (Shift or inspect tool, no NPC at target)
+            self.draw_inspect_target()
 
             # Draw item list when targeting a cell with dropped items or a chest
             self.draw_targeted_items()
