@@ -1328,12 +1328,17 @@ class GameCoreMixin:
                         slot = (event.key - pygame.K_1) if event.key != pygame.K_0 else 9
                         mods = pygame.key.get_mods()
                         if 'tools' in self.inventory.open_menus:
-                            # Tools panel open: clear slot and mark pending for reassignment
-                            self.inventory.unequip_slot(slot)
-                            self.inventory.selected_tool_slot_idx = slot
-                            self.inventory.selected['tools'] = None
-                            self.inventory.pending_equip_slot = slot
-                            self.inventory.pending_equip_equipment_slot = None
+                            if self.inventory.selected_tool_slot_idx == slot:
+                                # Second press on same slot — unequip and mark pending
+                                self.inventory.unequip_slot(slot)
+                                self.inventory.selected['tools'] = None
+                                self.inventory.pending_equip_slot = slot
+                                self.inventory.pending_equip_equipment_slot = None
+                            else:
+                                # First press — just select the slot
+                                self.inventory.selected_tool_slot_idx = slot
+                                self.inventory.selected['tools'] = self.inventory.tool_slots[slot]
+                                self.inventory.pending_equip_slot = None
                         elif not self.inventory.open_menus:
                             # No menus open: hotkey activates the tool slot
                             if slot < len(self.inventory.tool_slots):
@@ -1390,11 +1395,15 @@ class GameCoreMixin:
                                        pygame.K_9, pygame.K_0]:
                         slot = (event.key - pygame.K_1) if event.key != pygame.K_0 else 9
                         if 'tools' in self.inventory.open_menus:
-                            self.inventory.unequip_slot(slot)
-                            self.inventory.selected_tool_slot_idx = slot
-                            self.inventory.selected['tools'] = None
-                            self.inventory.pending_equip_slot = slot
-                            self.inventory.pending_equip_equipment_slot = None
+                            if self.inventory.selected_tool_slot_idx == slot:
+                                self.inventory.unequip_slot(slot)
+                                self.inventory.selected['tools'] = None
+                                self.inventory.pending_equip_slot = slot
+                                self.inventory.pending_equip_equipment_slot = None
+                            else:
+                                self.inventory.selected_tool_slot_idx = slot
+                                self.inventory.selected['tools'] = self.inventory.tool_slots[slot]
+                                self.inventory.pending_equip_slot = None
                         else:
                             self.select_inventory_slot(slot)
         
@@ -1463,12 +1472,17 @@ class GameCoreMixin:
                         slot_y <= pos[1] <= slot_y + slot_size):
 
                     if category == 'tools':
-                        # --- Tool bar slot clicked: clear slot, then mark as pending ---
-                        self.inventory.unequip_slot(i)
-                        self.inventory.selected_tool_slot_idx = i
-                        self.inventory.selected['tools'] = None
-                        self.inventory.pending_equip_slot = i
-                        self.inventory.pending_equip_equipment_slot = None
+                        if self.inventory.selected_tool_slot_idx == i:
+                            # Second click on same slot — unequip and mark pending for reassignment
+                            self.inventory.unequip_slot(i)
+                            self.inventory.selected['tools'] = None
+                            self.inventory.pending_equip_slot = i
+                            self.inventory.pending_equip_equipment_slot = None
+                        else:
+                            # First click — just select the slot, keep its item
+                            self.inventory.selected_tool_slot_idx = i
+                            self.inventory.selected['tools'] = self.inventory.tool_slots[i]
+                            self.inventory.pending_equip_slot = None
                         self.sound.on_inventory_select()
                         return
 
