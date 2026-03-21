@@ -363,6 +363,7 @@ COLORS = {
     'FLOWER': (255, 100, 200),
     'IRON_ORE': (139, 90, 43),
     'WELL': (100, 80, 60),
+    'GRAVESTONE': (130, 125, 135),
     'CACTUS': (50, 120, 50),
     'BARREL': (120, 80, 40),
     'STONE_HOUSE': (110, 110, 120),
@@ -451,6 +452,11 @@ CELL_TYPES = {
         'label': 'Wel',
         'solid': True,
         'interactable': True,
+    },
+    'GRAVESTONE': {
+        'color': COLORS['GRAVESTONE'],
+        'label': 'GS',
+        'solid': True,
     },
     'CACTUS': {
         'color': COLORS['CACTUS'],

@@ -250,6 +250,7 @@ class SpriteManager:
             # Cells
             'IRON_ORE':   'ironore.png',
             'WELL':       'well.png',
+            'GRAVESTONE': 'gravestone.png',
             # Weapons — keyed by item name so inventory/drop lookup finds them directly
             'iron_sword':       f'{_wa}/sword_red_handle.png',
             'bone_sword':       f'{_wa}/sword_red_handle.png',

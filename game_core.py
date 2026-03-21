@@ -90,6 +90,8 @@ class GameCoreMixin:
         self.structure_zones = {}
         # Reverse lookup: {parent_zone_key: [structure_zone_key, ...]}
         self.zone_structures = {}
+        # Gravestone inscriptions: {screen_key: {(x,y): [name, ...]}}
+        self.gravestone_names = {}
         # Next structure zone ID (structure zones use coords like (10000+id, 0))
         self.next_structure_zone_id = 0
         
@@ -832,9 +834,66 @@ class GameCoreMixin:
         # Check if this was a hostile entity and zone is now clear
         if entity.props.get('hostile', False):
             self.check_zone_clear_hostiles(screen_key)
-        
+        else:
+            # Peaceful entity died — maybe place a gravestone
+            self._maybe_spawn_gravestone(entity, screen_key)
+
         # Remove from entities dict
         del self.entities[entity_id]
+
+    def _maybe_spawn_gravestone(self, entity, screen_key):
+        """Spawn or inscribe a gravestone when a peaceful entity dies."""
+        # Zone must have at least one house structure
+        has_house = any(
+            'HOUSE' in self.structure_zones.get(sk, {}).get('type', '')
+            for sk in self.zone_structures.get(screen_key, [])
+        )
+        if not has_house:
+            return
+
+        level = getattr(entity, 'level', 1)
+        if level < 2 and random.random() >= 0.10:
+            return
+
+        name = entity.name if entity.name else entity.type
+        grid = self.screens.get(screen_key, {}).get('grid')
+        if not grid:
+            return
+
+        # Count existing gravestones
+        existing = [
+            (x, y)
+            for y in range(GRID_HEIGHT)
+            for x in range(GRID_WIDTH)
+            if grid[y][x] == 'GRAVESTONE'
+        ]
+
+        zone_gs = self.gravestone_names.setdefault(screen_key, {})
+
+        if len(existing) >= 5:
+            # Add name to an existing gravestone with room (max 10 names)
+            candidates = [pos for pos in existing if len(zone_gs.get(pos, [])) < 10]
+            if candidates:
+                chosen = random.choice(candidates)
+                zone_gs.setdefault(chosen, []).append(name)
+            return
+
+        # Place a new gravestone in a random corner area
+        corners = [
+            [(x, y) for x in range(0, 3)             for y in range(0, 3)],
+            [(x, y) for x in range(GRID_WIDTH - 3, GRID_WIDTH) for y in range(0, 3)],
+            [(x, y) for x in range(0, 3)             for y in range(GRID_HEIGHT - 3, GRID_HEIGHT)],
+            [(x, y) for x in range(GRID_WIDTH - 3, GRID_WIDTH) for y in range(GRID_HEIGHT - 3, GRID_HEIGHT)],
+        ]
+        random.shuffle(corners)
+        _open = {'GRASS', 'DIRT', 'SAND', 'COBBLESTONE', 'SOIL'}
+        for corner in corners:
+            candidates = [(x, y) for x, y in corner if grid[y][x] in _open]
+            if candidates:
+                cx, cy = random.choice(candidates)
+                grid[cy][cx] = 'GRAVESTONE'
+                zone_gs[(cx, cy)] = [name]
+                return
 
     def check_follower_integrity(self):
         """Every-tick check: ensure followers are alive, non-hostile, not targeting player."""

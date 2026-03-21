@@ -497,6 +497,12 @@ class MenusMixin:
                 info_lines.append(f"  {name}{f' x{count}' if count > 1 else ''}")
             prompts.append("E:Pickup")
 
+        # Gravestone inscriptions
+        if cell == 'GRAVESTONE':
+            gs_names = getattr(self, 'gravestone_names', {}).get(screen_key, {}).get((check_x, check_y), [])
+            for n in gs_names:
+                info_lines.append(f"  {n}")
+
         # Chest contents
         if cell == 'CHEST':
             chest_key = f"{screen_key}:{check_x},{check_y}"
