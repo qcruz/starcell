@@ -203,9 +203,9 @@ CELL_PICKUP = {
     'MEAT': {'tool': None, 'item': 'meat'},
     'FUR': {'tool': None, 'item': 'fur'},
     'BONES': {'tool': None, 'item': 'bones'},
-    'FLOWER_PATTERN1': {'tool': None, 'item': 'flower'},
-    'FLOWER_PATTERN2': {'tool': None, 'item': 'flower'},
-    'FLOWER_PATTERN3': {'tool': None, 'item': 'flower'},
+    'FLOWER_PATTERN1': {'tool': None, 'item': 'flower_pattern1'},
+    'FLOWER_PATTERN2': {'tool': None, 'item': 'flower_pattern2'},
+    'FLOWER_PATTERN3': {'tool': None, 'item': 'flower_pattern3'},
 }
 
 # Cell placement - what item places what cell
@@ -234,7 +234,11 @@ ITEM_TO_CELL = {
     'meat': 'MEAT',
     'fur': 'FUR',
     'bones': 'BONES',
-    'flower': 'FLOWER',
+    'flower': 'FLOWER_PATTERN1',
+    'flower_pattern1': 'FLOWER_PATTERN1',
+    'flower_pattern2': 'FLOWER_PATTERN2',
+    'flower_pattern3': 'FLOWER_PATTERN3',
+    'gravestone': 'GRAVESTONE',
     'iron_ore': 'IRON_ORE',
     'well': 'WELL',
     'cactus': 'CACTUS',
