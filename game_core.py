@@ -913,10 +913,6 @@ class GameCoreMixin:
                         self.inspected_npc = None
                         self.inspect_cell_target = None
                         return
-                    if self.inspected_npc != entity_id:
-                        for cat in ['items', 'tools', 'magic', 'followers']:
-                            self.inventory.open_menus.add(cat)
-                        self.quest_ui_open = True
                     self.inspected_npc = entity_id
                     self.inspect_cell_target = None
                     self.inspected_npc_tick = self.tick

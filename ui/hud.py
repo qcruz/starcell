@@ -897,5 +897,6 @@ class HudMixin:
             # Draw cell/item inspect panel (Shift or inspect tool, no NPC at target)
             self.draw_inspect_target()
 
-            # Draw item list when targeting a cell with dropped items or a chest
-            self.draw_targeted_items()
+            # Draw item list when targeting a cell — suppressed when inspect panel is active
+            if not getattr(self, 'inspect_cell_target', None):
+                self.draw_targeted_items()
