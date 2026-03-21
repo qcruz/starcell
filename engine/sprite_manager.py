@@ -248,9 +248,12 @@ class SpriteManager:
         _wa = 'weapons and armour'  # subdirectory shorthand
         _individual_sprites = {
             # Cells
-            'IRON_ORE':   'ironore.png',
-            'WELL':       'well.png',
-            'GRAVESTONE': 'gravestone.png',
+            'IRON_ORE':        'ironore.png',
+            'WELL':            'well.png',
+            'GRAVESTONE':      'gravestone.png',
+            'FLOWER_PATTERN1': 'flowerpattern1.png',
+            'FLOWER_PATTERN2': 'flowerpattern2.png',
+            'FLOWER_PATTERN3': 'flowerpattern3.png',
             # Weapons — keyed by item name so inventory/drop lookup finds them directly
             'iron_sword':       f'{_wa}/sword_red_handle.png',
             'bone_sword':       f'{_wa}/sword_red_handle.png',

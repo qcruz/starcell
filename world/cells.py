@@ -204,7 +204,7 @@ class CellsMixin:
                     _non_dirt_land = sum(1 for n in neighbors
                                          if n not in ('DIRT', 'WATER', 'DEEP_WATER'))
                     if _non_dirt_land >= 1 and random.random() < min(1.0, WATER_EDGE_ROCK_RATE * _growth):
-                        new_grid[y][x] = 'STONE'
+                        new_grid[y][x] = random.choice(['FLOWER_PATTERN1', 'FLOWER_PATTERN2', 'FLOWER_PATTERN3'])
 
                 # Dirt → Sand (any sand neighbor, no water — desertification spread)
                 elif cell == 'DIRT' and total_water == 0 and sand_count >= 1:

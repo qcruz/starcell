@@ -843,10 +843,14 @@ class GameCoreMixin:
 
     def _maybe_spawn_gravestone(self, entity, screen_key):
         """Spawn or inscribe a gravestone when a peaceful entity dies."""
-        # Zone must have at least one house structure
-        has_house = any(
-            'HOUSE' in self.structure_zones.get(sk, {}).get('type', '')
-            for sk in self.zone_structures.get(screen_key, [])
+        name = entity.name if entity.name else entity.type
+        grid = self.screens.get(screen_key, {}).get('grid')
+
+        # Zone must have at least one house/stone_house cell in the actual grid
+        has_house = grid and any(
+            grid[y][x] in ('HOUSE', 'STONE_HOUSE')
+            for y in range(GRID_HEIGHT)
+            for x in range(GRID_WIDTH)
         )
         if not has_house:
             return
@@ -854,9 +858,6 @@ class GameCoreMixin:
         level = getattr(entity, 'level', 1)
         if level < 2 and random.random() >= 0.10:
             return
-
-        name = entity.name if entity.name else entity.type
-        grid = self.screens.get(screen_key, {}).get('grid')
         if not grid:
             return
 

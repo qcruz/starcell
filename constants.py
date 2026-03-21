@@ -425,9 +425,9 @@ CELL_TYPES = {
     'CAMP': {'color': (200, 100, 50), 'label': 'Camp', 'solid': False, 'grows_to': 'HOUSE', 'growth_rate': 0.001},
     'SOIL': {'color': COLORS['SOIL'], 'label': 'Soil', 'solid': False},
     'FLOWER': {'color': COLORS['FLOWER'], 'label': 'Flwr', 'solid': False, 'degrades_to': 'GRASS', 'degrade_rate': 0.0001},  # Very slow decay
-    'FLOWER_PATTERN1': {'color': (255, 200, 50), 'label': 'Fp1', 'solid': False, 'degrades_to': 'GRASS', 'degrade_rate': 0.00015},
-    'FLOWER_PATTERN2': {'color': (180, 100, 220), 'label': 'Fp2', 'solid': False, 'degrades_to': 'GRASS', 'degrade_rate': 0.00015},
-    'FLOWER_PATTERN3': {'color': (255, 100, 100), 'label': 'Fp3', 'solid': False, 'degrades_to': 'GRASS', 'degrade_rate': 0.00015},
+    'FLOWER_PATTERN1': {'color': (255, 200, 50), 'label': 'Fp1', 'solid': True, 'degrades_to': 'GRASS', 'degrade_rate': 0.00015},
+    'FLOWER_PATTERN2': {'color': (180, 100, 220), 'label': 'Fp2', 'solid': True, 'degrades_to': 'GRASS', 'degrade_rate': 0.00015},
+    'FLOWER_PATTERN3': {'color': (255, 100, 100), 'label': 'Fp3', 'solid': True, 'degrades_to': 'GRASS', 'degrade_rate': 0.00015},
     # Placeable item cells
     'WOOD': {'color': COLORS['WOOD'], 'label': 'Wood', 'solid': False},
     'PLANKS': {'color': COLORS['PLANKS'], 'label': 'Plnk', 'solid': False},
