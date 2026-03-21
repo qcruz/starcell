@@ -119,7 +119,7 @@ DEEP_WATER_FORM_RATE = 0.05     # Water becomes deep water (apply_cellular_autom
 DEEP_WATER_EVAPORATE_RATE = 0.3  # Deep water → water when any cardinal neighbor isn't water (was 0.03)
 DEEP_WATER_COBBLE_RATE = 0.04   # Stable deep water forms cave floor (all 4 cardinal = water)
 WATER_TO_DIRT_RATE = 0.02       # Water evaporates to dirt when isolated (was 0.005)
-WATER_EDGE_ROCK_RATE = 0.08     # Dirt at water boundary (touching non-dirt) hardens to stone
+WATER_EDGE_ROCK_RATE = 0.008    # Dirt at water boundary (touching non-dirt) hardens to stone
 SAND_ROCK_TO_DIRT_RATE = 0.0002 # Sand touching stone/cobblestone very slowly becomes dirt
 FLOODING_RATE = 0.015           # Water spreads to dirt during rain only (apply_cellular_automata)
 BIOME_SPREAD_RATE = 0.004          # Chance per update a base cell copies a different NSEW neighbor type (4x increase)
