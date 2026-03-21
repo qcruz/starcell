@@ -65,11 +65,32 @@ class CombatMixin:
     # -------------------------------------------------------------------------
 
     def player_attack(self):
-        """Player attacks with equipped weapon (SPACE when weapon selected)"""
-        # Check if weapon selected in tools
-        weapon = self.inventory.selected_tool
-        if not weapon or 'damage' not in ITEMS.get(weapon, {}):
-            return False  # No weapon equipped
+        """Player attacks whenever a valid target is in range (Space bar).
+        Damage = base_damage + equipment-slot weapon + hotbar weapon (if any).
+        No hotbar weapon is required to attack."""
+        # Get target cell first — bail early if nothing there
+        target = self.get_target_cell()
+        if not target:
+            return False
+
+        check_x, check_y = target
+        screen_key = f"{self.player['screen_x']},{self.player['screen_y']}"
+        entities_list = self.screen_entities.get(screen_key, [])
+
+        # Check for a valid target entity
+        target_entity = None
+        for entity_id in entities_list:
+            if entity_id in self.entities:
+                entity = self.entities[entity_id]
+                if entity.x == check_x and entity.y == check_y:
+                    if not self.player.get('friendly_fire', False):
+                        if not entity.props.get('hostile', False):
+                            return False  # peaceful entity, FF off — don't attack
+                    target_entity = (entity_id, entity)
+                    break
+
+        if not target_entity:
+            return False  # No entity at target
 
         # Attack cooldown (1 second)
         if self.tick - self.player.get('last_attack_tick', 0) < 60:
@@ -78,73 +99,50 @@ class CombatMixin:
         self.player['last_attack_tick'] = self.tick
         self.sound.on_attack()
 
-        # Get target cell
-        target = self.get_target_cell()
-        if not target:
-            return False
+        entity_id, entity = target_entity
 
-        check_x, check_y = target
-        screen_key = f"{self.player['screen_x']},{self.player['screen_y']}"
+        # Damage: base + equipment-slot weapon + hotbar weapon bonus
+        equip_dmg = self.calculate_equipped_weapon_damage()
+        hotbar_weapon = self.inventory.selected_tool
+        hotbar_dmg = ITEMS.get(hotbar_weapon, {}).get('damage', 0) if hotbar_weapon else 0
+        weapon_damage = max(equip_dmg, hotbar_dmg)
 
-        # Unified zone system: player screen coords reflect current zone (incl. structure virtual coords)
-        entities_list = self.screen_entities.get(screen_key, [])
+        total_damage = self.player['base_damage'] + weapon_damage
 
-        # Check for entity at target
-        for entity_id in entities_list:
-            if entity_id in self.entities:
-                entity = self.entities[entity_id]
-                if entity.x == check_x and entity.y == check_y:
-                    # Friendly-fire guard: peaceful entities are protected when FF is OFF
-                    if not self.player.get('friendly_fire', False):
-                        if not entity.props.get('hostile', False):
-                            print(f"[FF blocked] {entity.type} is peaceful — press V to enable friendly fire")
-                            return False
-                    # Calculate damage: hotbar weapon + equipped weapon slot (take best)
-                    hotbar_dmg = ITEMS[weapon].get('damage', 0)
-                    equip_dmg = self.calculate_equipped_weapon_damage()
-                    weapon_damage = max(hotbar_dmg, equip_dmg)
-                    total_damage = self.player['base_damage'] + weapon_damage
+        # Add magic damage from runestones
+        runestone_types = ['lightning_rune', 'fire_rune', 'ice_rune', 'poison_rune', 'shadow_rune']
+        magic_damage = 0
+        magic_type = None
+        for rune_type in runestone_types:
+            if rune_type in self.inventory.items:
+                rune_count = self.inventory.items[rune_type]
+                magic_damage += rune_count * ITEMS[rune_type].get('damage', 3)
+                if not magic_type:
+                    magic_type = ITEMS[rune_type].get('magic_damage')
 
-                    # Add magic damage from runestones
-                    runestone_types = ['lightning_rune', 'fire_rune', 'ice_rune', 'poison_rune', 'shadow_rune']
-                    magic_damage = 0
-                    magic_type = None
-                    for rune_type in runestone_types:
-                        if rune_type in self.inventory.items:
-                            rune_count = self.inventory.items[rune_type]
-                            magic_damage += rune_count * ITEMS[rune_type].get('damage', 3)
-                            if not magic_type:  # Use first rune type for animation color
-                                magic_type = ITEMS[rune_type].get('magic_damage')
+        total_damage += magic_damage
 
-                    total_damage += magic_damage
+        # Apply blocking reduction
+        if entity.combat_state == 'blocking':
+            total_damage *= (1 - entity.block_reduction)
 
-                    # Apply blocking reduction
-                    if entity.combat_state == 'blocking':
-                        total_damage *= (1 - entity.block_reduction)
+        entity.take_damage(total_damage, 'player')
+        entity.last_attacked_tick = self.tick
 
-                    entity.take_damage(total_damage, 'player')
-                    entity.last_attacked_tick = self.tick
-                    # Favor penalty on hit
-                    if hasattr(entity, 'favor'):
-                        entity.favor = max(-100, entity.favor - 5)
+        if hasattr(entity, 'favor'):
+            entity.favor = max(-100, entity.favor - 5)
 
-                    # Temp energy cost for attacking
-                    self.player['energy'] = max(0, self.player.get('energy', 0) - 2)
+        self.player['energy'] = max(0, self.player.get('energy', 0) - 2)
+        self.show_attack_animation(check_x, check_y, target_entity=entity, magic_type=magic_type)
 
-                    # Show attack animation (with magic color if applicable)
-                    self.show_attack_animation(check_x, check_y, target_entity=entity, magic_type=magic_type)
+        if entity.health <= 0 and hasattr(entity, 'favor'):
+            entity.favor = max(-100, entity.favor - 20)
 
-                    # Additional favor penalty on kill
-                    if entity.health <= 0 and hasattr(entity, 'favor'):
-                        entity.favor = max(-100, entity.favor - 20)
-
-                    if magic_damage > 0:
-                        print(f"Hit {entity.type} for {int(total_damage)} damage ({int(magic_damage)} magic)! HP: {int(entity.health)}/{entity.max_health}")
-                    else:
-                        print(f"Hit {entity.type} for {int(total_damage)} damage! HP: {int(entity.health)}/{entity.max_health}")
-                    return True
-
-        return False
+        if magic_damage > 0:
+            print(f"Hit {entity.type} for {int(total_damage)} ({int(magic_damage)} magic)! HP: {int(entity.health)}/{entity.max_health}")
+        else:
+            print(f"Hit {entity.type} for {int(total_damage)}! HP: {int(entity.health)}/{entity.max_health}")
+        return True
 
     # -------------------------------------------------------------------------
     # Player damage & XP
