@@ -1172,27 +1172,29 @@ class GameCoreMixin:
                         _slot_item = None
                         if self.inventory.selected_tool_slot_idx is not None:
                             _slot_item = self.inventory.tool_slots[self.inventory.selected_tool_slot_idx]
-                        if _slot_item:
-                            if _slot_item in self.inventory.magic:
-                                _prev_magic = self.inventory.selected.get('magic')
-                                self.inventory.selected['magic'] = _slot_item
-                                if _slot_item == 'rain_spell':
-                                    self.cast_rain_spell()
-                                elif _slot_item == 'day_spell':
-                                    self.cast_day_spell()
-                                elif _slot_item == 'keeper_spell':
-                                    self.cast_keeper_spell()
-                                elif _slot_item.startswith('summon_'):
-                                    self.cast_summon_spell()
-                                elif _slot_item.startswith('transform_'):
-                                    self.cast_transform_spell()
-                                else:
-                                    self.cast_star_spell()
-                                self.inventory.selected['magic'] = _prev_magic
-                            elif _slot_item in self.inventory.actions:
-                                self.execute_action(_slot_item)
+                        if _slot_item and _slot_item in self.inventory.magic:
+                            _prev_magic = self.inventory.selected.get('magic')
+                            self.inventory.selected['magic'] = _slot_item
+                            if _slot_item == 'rain_spell':
+                                self.cast_rain_spell()
+                            elif _slot_item == 'day_spell':
+                                self.cast_day_spell()
+                            elif _slot_item == 'keeper_spell':
+                                self.cast_keeper_spell()
+                            elif _slot_item.startswith('summon_'):
+                                self.cast_summon_spell()
+                            elif _slot_item.startswith('transform_'):
+                                self.cast_transform_spell()
                             else:
-                                self.interact()
+                                self.cast_star_spell()
+                            self.inventory.selected['magic'] = _prev_magic
+                            self.gain_xp(1)
+                        elif _slot_item and _slot_item in self.inventory.actions:
+                            self.execute_action(_slot_item)
+                            self.gain_xp(1)
+                        else:
+                            # No tool slot item (or item is a regular item) — default interact
+                            self.interact()
                             self.gain_xp(1)
                     elif event.key == pygame.K_l:
                         selected = self.inventory.selected_magic

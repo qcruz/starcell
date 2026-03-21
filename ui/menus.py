@@ -315,6 +315,16 @@ class MenusMixin:
 
     def draw_inspected_npc(self):
         """Draw inspection info to the right of targeted NPC"""
+        keys = pygame.key.get_pressed()
+        shift_held = keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]
+        _ts_idx = self.inventory.selected_tool_slot_idx
+        inspect_tool_active = (
+            _ts_idx is not None and
+            _ts_idx < len(self.inventory.tool_slots) and
+            self.inventory.tool_slots[_ts_idx] == 'inspect'
+        )
+        if not (shift_held or inspect_tool_active):
+            return
         if not self.inspected_npc or self.inspected_npc not in self.entities:
             return
 
@@ -474,6 +484,17 @@ class MenusMixin:
 
     def draw_inspect_target(self):
         """Show cell name, items, and contextual prompts when inspecting a non-NPC cell."""
+        # Only draw when player is actively holding Shift or has inspect tool selected
+        keys = pygame.key.get_pressed()
+        shift_held = keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]
+        _ts_idx = self.inventory.selected_tool_slot_idx
+        inspect_tool_active = (
+            _ts_idx is not None and
+            _ts_idx < len(self.inventory.tool_slots) and
+            self.inventory.tool_slots[_ts_idx] == 'inspect'
+        )
+        if not (shift_held or inspect_tool_active):
+            return
         target = getattr(self, 'inspect_cell_target', None)
         if not target:
             return
