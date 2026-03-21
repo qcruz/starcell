@@ -2891,17 +2891,36 @@ class GameCoreMixin:
         if chest_id in self.opened_chests:
             print("This chest is empty.")
             return
-        
-        # Get loot table type
+
+        items_found = []
+
+        # NPC-stashed chests: contents stored directly in chest_contents
+        chest_contents = getattr(self, 'chest_contents', {})
+        if chest_id in chest_contents:
+            contents = chest_contents.pop(chest_id)
+            for item_name, count in contents.items():
+                if count > 0:
+                    self.inventory.add_item(item_name, count)
+                    item_label = ITEMS.get(item_name, {}).get('name', item_name)
+                    items_found.append(f"{count}x {item_label}")
+            self.opened_chests.add(chest_id)
+            if items_found:
+                print(f"Found: {', '.join(items_found)}")
+            else:
+                print("The chest was empty...")
+            self.sound.on_pickup()
+            return
+
+        # Structure/loot-table chests
         if self.player['in_structure']:
             current_structure = self.structures.get(self.player['structure_key'])
             loot_table_name = current_structure['chests'].get((chest_x, chest_y), 'HOUSE_CHEST')
         else:
-            loot_table_name = 'HOUSE_CHEST'  # Default
-        
+            loot_table_name = 'HOUSE_CHEST'
+
         # Generate loot
         loot_table = LOOT_TABLES.get(loot_table_name, [])
-        items_found = []
+
         
         for loot_entry in loot_table:
             if random.random() < loot_entry['chance']:

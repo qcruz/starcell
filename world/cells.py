@@ -346,10 +346,27 @@ class CellsMixin:
                         new_grid[y][x] = 'SAND'
 
                 # Flower pattern decay → biome base cell
+                # Faster when not touching water; slower near water
                 elif cell.startswith('FLOWER_PATTERN'):
                     _fp_base = {'DESERT': 'SAND', 'MOUNTAINS': 'DIRT'}.get(biome, 'GRASS')
-                    if random.random() < min(1.0, 0.0003 * _decay):
+                    _fp_near_water = any(
+                        0 <= _nx < GRID_WIDTH and 0 <= _ny < GRID_HEIGHT and
+                        screen['grid'][_ny][_nx] in ('WATER', 'DEEP_WATER', 'CAVE_FLOOR')
+                        for _nx, _ny in ((x, y-1), (x, y+1), (x-1, y), (x+1, y))
+                    )
+                    _fp_decay_rate = 0.0003 if _fp_near_water else 0.004
+                    if random.random() < min(1.0, _fp_decay_rate * _decay):
                         new_grid[y][x] = _fp_base
+
+                # Bush decay → grass when not touching water
+                elif cell == 'BUSH':
+                    _bush_near_water = any(
+                        0 <= _nx < GRID_WIDTH and 0 <= _ny < GRID_HEIGHT and
+                        screen['grid'][_ny][_nx] in ('WATER', 'DEEP_WATER', 'CAVE_FLOOR')
+                        for _nx, _ny in ((x, y-1), (x, y+1), (x-1, y), (x+1, y))
+                    )
+                    if not _bush_near_water and random.random() < min(1.0, 0.003 * _decay):
+                        new_grid[y][x] = 'GRASS'
 
                 # General neighbor-copy: base terrain may adopt a random NSEW neighbor's type
                 if new_grid[y][x] == cell and cell in ('GRASS', 'DIRT', 'SAND', 'WATER'):
