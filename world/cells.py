@@ -280,7 +280,8 @@ class CellsMixin:
                             new_grid[y][x] = 'CAVE_FLOOR' if random.random() < 0.15 else _water_decay_target
 
                 # Deep water evaporation — stable when fully surrounded; decays when exposed.
-                elif cell == 'DEEP_WATER':
+                # In LAKE biome deep water never evaporates on its own (only via interaction).
+                elif cell == 'DEEP_WATER' and biome != 'LAKE':
                     cardinal_water_dw = sum(
                         1 for cdx, cdy in ((0, -1), (0, 1), (-1, 0), (1, 0))
                         if 0 <= x + cdx < GRID_WIDTH and 0 <= y + cdy < GRID_HEIGHT
