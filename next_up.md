@@ -9,6 +9,10 @@
 
 Small additions using existing systems and minimal changes to code.
 
+- [ ] Review and formalize `dynamic_to_item_conversion` — audit all code paths that convert dynamic follower/entity state to inventory items; ensure consistent naming, cleanup on death, and no stale entries survive between sessions
+- [ ] NPC targeting priority function — replace ad-hoc target selection with a scored priority system; each candidate gets a score based on type (hostile, special, resource, quest target, water, food); NPC picks highest-scoring target; scores tunable per entity type via ai_params
+- [ ] NPC trader targeting and trade system — when NPC inventory is full, NPC seeks nearby chest (existing dump logic) or nearby TRADER; if TRADER is adjacent, NPC trades surplus inventory items for gold; if NPC gold exceeds threshold, buys a random item from the TRADER's inventory
+
 - [ ] NPC infection system: vampirism and lycanthropy — hostile bats can infect humanoid NPCs with vampirism (transforms to BAT at night, reverts at dawn); hostile wolves can infect with lycanthropy (transforms to WOLF at night, reverts at dawn); silver weapons prevent/cure infection
 - [ ] Add item level display in inventory UI — show level badge on leveled items in all tabs
 
