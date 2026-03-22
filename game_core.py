@@ -866,18 +866,11 @@ class GameCoreMixin:
         # Remove from entities dict
         del self.entities[entity_id]
 
-    # Named humanoid NPC types eligible for gravestone inscription
-    _GRAVESTONE_ELIGIBLE_TYPES = {
-        'FARMER', 'GUARD', 'WARRIOR', 'COMMANDER', 'KING', 'TRADER',
-        'BLACKSMITH', 'WIZARD', 'LUMBERJACK', 'MINER',
-    }
-
     def _maybe_spawn_gravestone(self, entity, screen_key):
         """Spawn or inscribe a gravestone when a named humanoid NPC dies."""
-        # Only named humanoid NPCs — skip animals, hostile types, and unnamed entities
-        if entity.type not in self._GRAVESTONE_ELIGIBLE_TYPES:
-            return
-        if not entity.name:
+        # Only peaceful, named humanoids — skip animals, hostile types, and unnamed entities
+        props = ENTITY_TYPES.get(entity.type, {})
+        if not props.get('humanoid') or props.get('hostile') or not entity.name:
             return
         name = entity.name
 

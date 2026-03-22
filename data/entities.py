@@ -92,6 +92,7 @@ ENTITY_TYPES = {
         'food_sources': ['CARROT1', 'CARROT2', 'CARROT3'],
         'water_sources': ['WATER', 'WELL'],
         'hostile': False,
+        'humanoid': True,
         'edible': False,
         'can_trade': True,
         'inventory': {'carrot': 5, 'wood': 3},
@@ -123,6 +124,7 @@ ENTITY_TYPES = {
         'food_sources': ['CARROT1', 'CARROT2', 'CARROT3'],
         'water_sources': ['WATER', 'WELL'],
         'hostile': False,
+        'humanoid': True,
         'edible': False,
         'attacks_hostile': True,
         'drops': [
@@ -154,6 +156,7 @@ ENTITY_TYPES = {
         'food_sources': ['CARROT1', 'CARROT2', 'CARROT3'],
         'water_sources': ['WATER', 'WELL'],
         'hostile': False,
+        'humanoid': True,
         'edible': False,
         'attacks_hostile': True,
         'drops': [
@@ -185,6 +188,7 @@ ENTITY_TYPES = {
         'food_sources': ['CARROT1', 'CARROT2', 'CARROT3'],
         'water_sources': ['WATER', 'WELL'],
         'hostile': False,
+        'humanoid': True,
         'edible': False,
         'attacks_hostile': True,
         'drops': [
@@ -217,6 +221,7 @@ ENTITY_TYPES = {
         'food_sources': ['CARROT1', 'CARROT2', 'CARROT3'],
         'water_sources': ['WATER', 'WELL'],
         'hostile': False,
+        'humanoid': True,
         'edible': False,
         'attacks_hostile': True,
         'drops': [
@@ -249,6 +254,7 @@ ENTITY_TYPES = {
         'food_sources': ['CARROT1', 'CARROT2', 'CARROT3'],
         'water_sources': ['WATER', 'WELL'],
         'hostile': False,
+        'humanoid': True,
         'edible': False,
         'can_trade': True,
         'inventory': {'wood': 10, 'planks': 5, 'axe': 1},
@@ -280,6 +286,7 @@ ENTITY_TYPES = {
         'food_sources': ['CARROT1', 'CARROT2', 'CARROT3'],
         'water_sources': ['WATER', 'WELL'],
         'hostile': False,
+        'humanoid': True,
         'edible': False,
         'can_trade': True,
         'is_blacksmith': True,
@@ -310,6 +317,7 @@ ENTITY_TYPES = {
         'food_sources': ['CARROT1', 'CARROT2', 'CARROT3'],
         'water_sources': ['WATER', 'WELL'],
         'hostile': False,
+        'humanoid': True,
         'edible': False,
         'attacks_hostile': True,
         'can_trade': True,
@@ -342,6 +350,7 @@ ENTITY_TYPES = {
         'food_sources': ['CARROT1', 'CARROT2', 'CARROT3'],
         'water_sources': ['WATER', 'WELL'],
         'hostile': False,
+        'humanoid': True,
         'edible': False,
         'can_trade': False,
         'inventory': {'wood': 5, 'axe': 1},
@@ -374,6 +383,7 @@ ENTITY_TYPES = {
         'food_sources': ['CARROT1', 'CARROT2', 'CARROT3'],
         'water_sources': ['WATER', 'WELL'],
         'hostile': False,
+        'humanoid': True,
         'edible': False,
         'can_trade': True,
         'inventory': {'stone': 5, 'pickaxe': 1},
@@ -407,6 +417,7 @@ ENTITY_TYPES = {
         'food_sources': [],
         'water_sources': ['WATER'],
         'hostile': True,
+        'humanoid': True,
         'edible': False,
         'attacks_structures': True,
         'drops': [
@@ -434,6 +445,7 @@ ENTITY_TYPES = {
         'food_sources': [],
         'water_sources': ['WATER'],
         'hostile': True,
+        'humanoid': True,
         'edible': False,
         'attacks_structures': True,
         'drops': [
@@ -462,6 +474,7 @@ ENTITY_TYPES = {
         'food_sources': [],
         'water_sources': [],
         'hostile': True,
+        'humanoid': True,
         'edible': False,
         'drops': [
             {'item': 'meat', 'amount': 1, 'chance': 0.5},  # Drop meat (rotten but edible)
