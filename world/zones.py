@@ -456,8 +456,22 @@ class ZonesMixin:
                         screen['grid'][y][x] = base_cell
                     continue
 
-                if cell in revert_targets and random.random() < 0.003:
-                    screen['grid'][y][x] = base_cell
+                if cell in revert_targets:
+                    # Count how many cardinal neighbours are native to this biome.
+                    # More native neighbours → faster revert (cell is stranded/surrounded).
+                    _native_adj = sum(
+                        1 for ddx, ddy in ((0, -1), (0, 1), (-1, 0), (1, 0))
+                        if 0 <= x + ddx < GRID_WIDTH and 0 <= y + ddy < GRID_HEIGHT
+                        and screen['grid'][y + ddy][x + ddx] in native_cells
+                    )
+                    if _native_adj >= 3:
+                        _revert_r = 0.12   # Deep in foreign territory — revert quickly
+                    elif _native_adj == 2:
+                        _revert_r = 0.035
+                    else:
+                        _revert_r = 0.003  # Edge cell — slow revert (biome boundary)
+                    if random.random() < _revert_r:
+                        screen['grid'][y][x] = base_cell
                     continue
 
                 # Revert stray interior/placeable cells that shouldn't appear in overworld
@@ -471,6 +485,16 @@ class ZonesMixin:
                     if 0 <= nx < GRID_WIDTH and 0 <= ny < GRID_HEIGHT:
                         neighbor = screen['grid'][ny][nx]
                         if neighbor not in protected_cells and neighbor not in native_cells:
+                            # SAND requires ≥2 same-type cardinal neighbours before spreading
+                            # (prevents desert invasion of deep forest from isolated border seeds)
+                            if cell == 'SAND':
+                                _sand_back = sum(
+                                    1 for ddx, ddy in ((0, -1), (0, 1), (-1, 0), (1, 0))
+                                    if 0 <= x + ddx < GRID_WIDTH and 0 <= y + ddy < GRID_HEIGHT
+                                    and screen['grid'][y + ddy][x + ddx] == 'SAND'
+                                )
+                                if _sand_back < 2:
+                                    continue
                             screen['grid'][ny][nx] = cell
 
         # Very sparse bush growth; rarer than trees, rarest in desert scrub

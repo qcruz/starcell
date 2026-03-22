@@ -866,9 +866,20 @@ class GameCoreMixin:
         # Remove from entities dict
         del self.entities[entity_id]
 
+    # Named humanoid NPC types eligible for gravestone inscription
+    _GRAVESTONE_ELIGIBLE_TYPES = {
+        'FARMER', 'GUARD', 'WARRIOR', 'COMMANDER', 'KING', 'TRADER',
+        'BLACKSMITH', 'WIZARD', 'LUMBERJACK', 'MINER',
+    }
+
     def _maybe_spawn_gravestone(self, entity, screen_key):
-        """Spawn or inscribe a gravestone when a peaceful entity dies."""
-        name = entity.name if entity.name else entity.type
+        """Spawn or inscribe a gravestone when a named humanoid NPC dies."""
+        # Only named humanoid NPCs — skip animals, hostile types, and unnamed entities
+        if entity.type not in self._GRAVESTONE_ELIGIBLE_TYPES:
+            return
+        if not entity.name:
+            return
+        name = entity.name
 
         # If entity died inside a structure zone, resolve to the parent overworld zone
         overworld_key = screen_key
@@ -3020,9 +3031,13 @@ class GameCoreMixin:
         self.screens = {}
         self.tick = 0
         self.inventory = Inventory()
-        # Add every item in ITEMS — covers tools, weapons, armour, spells, actions, consumables
+        # Purge stale dynamic follower entries injected into ITEMS by previous sessions
+        for _stale in [k for k, v in list(ITEMS.items()) if v.get('is_follower')]:
+            del ITEMS[_stale]
+        # Add every static item — skip is_follower (spawned later via _pending_follower_type)
         for _item_key in ITEMS:
-            self.inventory.add_item(_item_key, 1)
+            if not ITEMS[_item_key].get('is_follower'):
+                self.inventory.add_item(_item_key, 1)
         self.dropped_items = {}
         self.buried_items = {}
         self.enchanted_cells = {}
