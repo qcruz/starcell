@@ -408,28 +408,47 @@ class HudMixin:
                         ))
                         self.screen.blit(symbol_text, symbol_rect)
 
-                    # Draw health bar (always visible) at smooth position
-                    bar_width = CELL_SIZE - 4
-                    bar_height = 4
-                    bar_x = int(pixel_x + 2)
-                    bar_y = int(pixel_y - 6)
+                    # Draw stat bars stacked above the entity cell
+                    # Order top→bottom: health, energy, food, water
+                    bar_width  = CELL_SIZE - 4
+                    bar_height = 3
+                    bar_step   = bar_height + 1   # 4px per bar row
+                    bar_x      = int(pixel_x + 2)
+                    bar_y      = int(pixel_y - 18)  # top of stack (4 bars × 4px = 16px + 2 gap)
 
-                    # Background
+                    # Health (green)
                     pygame.draw.rect(self.screen, COLORS['BLACK'],
-                                   (bar_x, bar_y, bar_width, bar_height))
-                    # Health
+                                     (bar_x, bar_y, bar_width, bar_height))
                     health_width = int((entity.health / entity.max_health) * bar_width)
-                    pygame.draw.rect(self.screen, (0, 255, 0),
-                                   (bar_x, bar_y, health_width, bar_height))
+                    pygame.draw.rect(self.screen, (0, 220, 0),
+                                     (bar_x, bar_y, health_width, bar_height))
 
-                    # Energy bar (below health bar)
+                    # Energy (blue)
                     if hasattr(entity, 'energy') and hasattr(entity, 'max_energy') and entity.max_energy > 0:
-                        ebar_y = bar_y + bar_height + 1
+                        ebar_y = bar_y + bar_step
                         pygame.draw.rect(self.screen, COLORS['BLACK'],
-                                       (bar_x, ebar_y, bar_width, bar_height))
+                                         (bar_x, ebar_y, bar_width, bar_height))
                         energy_width = int((entity.energy / entity.max_energy) * bar_width)
                         pygame.draw.rect(self.screen, (80, 160, 255),
-                                       (bar_x, ebar_y, energy_width, bar_height))
+                                         (bar_x, ebar_y, energy_width, bar_height))
+
+                    # Food / hunger (orange)
+                    if hasattr(entity, 'hunger') and hasattr(entity, 'max_hunger') and entity.max_hunger > 0:
+                        fbar_y = bar_y + bar_step * 2
+                        pygame.draw.rect(self.screen, COLORS['BLACK'],
+                                         (bar_x, fbar_y, bar_width, bar_height))
+                        food_width = int((entity.hunger / entity.max_hunger) * bar_width)
+                        pygame.draw.rect(self.screen, (255, 160, 30),
+                                         (bar_x, fbar_y, food_width, bar_height))
+
+                    # Water / thirst (cyan)
+                    if hasattr(entity, 'thirst') and hasattr(entity, 'max_thirst') and entity.max_thirst > 0:
+                        wbar_y = bar_y + bar_step * 3
+                        pygame.draw.rect(self.screen, COLORS['BLACK'],
+                                         (bar_x, wbar_y, bar_width, bar_height))
+                        water_width = int((entity.thirst / entity.max_thirst) * bar_width)
+                        pygame.draw.rect(self.screen, (0, 210, 230),
+                                         (bar_x, wbar_y, water_width, bar_height))
 
                     # Draw level if > 1
                     if entity.level > 1:
@@ -449,37 +468,46 @@ class HudMixin:
                     if self.debug_entity_ai:
                         debug_y_offset = CELL_SIZE - 12 if entity.level > 1 else CELL_SIZE - 2
 
-                        # AI State
+                        # AI State (3-char abbreviation, colour-coded)
                         if hasattr(entity, 'ai_state'):
                             state_color = COLORS['WHITE']
                             if entity.ai_state == 'combat':
-                                state_color = (255, 0, 0)  # RED
+                                state_color = (255, 60, 60)    # red
                             elif entity.ai_state == 'targeting':
-                                state_color = (255, 165, 0)  # ORANGE
+                                state_color = (255, 165, 0)    # orange
                             elif entity.ai_state == 'wandering':
-                                state_color = COLORS['GRAY']
+                                state_color = (160, 160, 160)  # gray
                             elif entity.ai_state == 'idle':
-                                state_color = (192, 192, 192)  # LIGHT_GRAY
-                            elif entity.ai_state == 'fleeing':
-                                state_color = (255, 100, 255)  # PINK
+                                state_color = (200, 200, 200)  # light gray
+                            elif entity.ai_state in ('flee', 'fleeing'):
+                                state_color = (255, 100, 255)  # pink
 
-                            state_text = self.tiny_font.render(f"{entity.ai_state[:3].upper()}", True, state_color)
-                            self.screen.blit(state_text, (int(pixel_x + 2), int(pixel_y + debug_y_offset + 10)))
+                            state_text = self.tiny_font.render(
+                                f"{entity.ai_state[:3].upper()}", True, state_color)
+                            self.screen.blit(state_text,
+                                             (int(pixel_x + 2), int(pixel_y + debug_y_offset + 10)))
 
-                        # Target info
-                        target_info = ""
-                        if hasattr(entity, 'current_target') and entity.current_target:
-                            if isinstance(entity.current_target, int) and entity.current_target in self.entities:
-                                target_entity = self.entities[entity.current_target]
-                                target_info = f"→{target_entity.type[:3]}"
-                            elif entity.current_target == 'player':
-                                target_info = "→PLR"
-                        elif hasattr(entity, 'target_type') and entity.target_type:
-                            target_info = f"?{entity.target_type[:3]}"
+                        # Target type — always show if set (full string up to 8 chars)
+                        ttype = getattr(entity, 'target_type', None)
+                        if ttype:
+                            ttype_text = self.tiny_font.render(
+                                ttype[:8], True, (80, 220, 255))
+                            self.screen.blit(ttype_text,
+                                             (int(pixel_x + 2), int(pixel_y + debug_y_offset + 20)))
 
-                        if target_info:
-                            target_text = self.tiny_font.render(target_info, True, COLORS['CYAN'])
-                            self.screen.blit(target_text, (int(pixel_x + 24), int(pixel_y + debug_y_offset + 10)))
+                        # Current target entity label (→TYPE or →PLR)
+                        ct = getattr(entity, 'current_target', None)
+                        if ct:
+                            if isinstance(ct, int) and ct in self.entities:
+                                ct_label = f"\u2192{self.entities[ct].type[:4]}"
+                            elif ct == 'player':
+                                ct_label = "\u2192PLR"
+                            else:
+                                ct_label = ""
+                            if ct_label:
+                                ct_text = self.tiny_font.render(ct_label, True, (180, 255, 180))
+                                self.screen.blit(ct_text,
+                                                 (int(pixel_x + 2), int(pixel_y + debug_y_offset + 30)))
 
                     # Draw faction name if entity has one (debug display)
                     if hasattr(entity, 'faction') and entity.faction:
