@@ -469,10 +469,31 @@ class GameCoreMixin:
             'FLOWER_PATTERN1':       'flowerpattern1.png',
             'FLOWER_PATTERN2':       'flowerpattern2.png',
             'FLOWER_PATTERN3':       'flowerpattern3.png',
-            'CHEST':                 'chest.png',
+            # Chest variants: LOCKED_CHEST = old chest, CHEST = closeable, OPEN_CHEST = looted
+            'LOCKED_CHEST':          'chest.png',
+            'CHEST':                 'closed_chest.png',
+            'OPEN_CHEST':            'open_chest.png',
             'GRAVESTONE':            'gravestone.png',
+            'BROKEN_GRAVESTONE':     'broken_gravestone.png',
             'BED_BLUE':              'bed_blue.png',
+            'BED_WHITE':             'bed_white.png',
             'DESERT_WELL':           'desert_well.png',
+            'CLIFF':                 'cliff_wall.png',
+            'STAIRS_DOWN':           'stairs_down.png',
+            'STAIRS_UP':             'stairs_up.png',
+            'BOOKSHELF':             'bookshelf.png',
+            'WOOD_CHAIR':            'wood_chair.png',
+            'WOOD_TABLE':            'wood_table.png',
+            'WATER_TROUGH':          'water_trough.png',
+            'SMALL_POTTED_PLANT':    'small_potted_plant.png',
+            'BLUE_MUSHROOM':         'blue_mushroom.png',
+            # Item sprites
+            'bottle':                'bottle.png',
+            'bottles':               'bottles.png',
+            'pickaxe':               'pickaxe.png',
+            # UI sprites (faction banners — not items, so not found by the ITEMS loop)
+            'blue_banner':           'blue_banner.png',
+            'red_banner':            'red_banner.png',
         }
 
         # Weapon / armour sprites — subdir has a space so they can't be found by the
@@ -891,7 +912,17 @@ class GameCoreMixin:
                 zone_gs.setdefault(chosen, []).append(name)
             return
 
-        # Place a new gravestone in a random corner area
+        # Try to cluster near existing gravestones first, then fall back to corners
+        _open = {'GRASS', 'DIRT', 'SAND', 'COBBLESTONE', 'SOIL'}
+        cluster_pos = self.find_cluster_position(overworld_key, 'GRAVESTONE', radius=5)
+        if cluster_pos:
+            cx, cy = cluster_pos
+            if grid[cy][cx] in _open:
+                grid[cy][cx] = 'GRAVESTONE'
+                zone_gs[(cx, cy)] = [name]
+                return
+
+        # Fallback: place in a random corner area
         corners = [
             [(x, y) for x in range(0, 3)             for y in range(0, 3)],
             [(x, y) for x in range(GRID_WIDTH - 3, GRID_WIDTH) for y in range(0, 3)],
@@ -899,7 +930,6 @@ class GameCoreMixin:
             [(x, y) for x in range(GRID_WIDTH - 3, GRID_WIDTH) for y in range(GRID_HEIGHT - 3, GRID_HEIGHT)],
         ]
         random.shuffle(corners)
-        _open = {'GRASS', 'DIRT', 'SAND', 'COBBLESTONE', 'SOIL'}
         for corner in corners:
             candidates = [(x, y) for x, y in corner if grid[y][x] in _open]
             if candidates:
@@ -2373,12 +2403,17 @@ class GameCoreMixin:
             return
         
         # Check for chest/container interaction
-        if cell in ('CHEST', 'EMPTY_CRATE', 'BARREL'):
+        if cell in ('CHEST', 'OPEN_CHEST', 'EMPTY_CRATE', 'BARREL'):
             self.interact_with_chest(check_x, check_y)
             return
 
-        # WELL / DESERT_WELL — restore energy
-        if cell in ('WELL', 'DESERT_WELL'):
+        # LOCKED_CHEST — requires destruction to open
+        if cell == 'LOCKED_CHEST':
+            print("This chest is locked. Destroy it to get the contents.")
+            return
+
+        # WELL / DESERT_WELL / WATER_TROUGH — restore energy
+        if cell in ('WELL', 'DESERT_WELL', 'WATER_TROUGH'):
             restore = min(40, self.player['max_energy'] - self.player.get('energy', 0))
             self.player['energy'] = self.player.get('energy', 0) + restore
             label = "desert well" if cell == 'DESERT_WELL' else "well"
@@ -2892,7 +2927,13 @@ class GameCoreMixin:
             screen_key = f"{self.player['screen_x']},{self.player['screen_y']}"
             chest_id = f"{screen_key}:{chest_x},{chest_y}"
         
-        # Check if already opened
+        # OPEN_CHEST cell is already looted — visual state only
+        current_cell = self.current_screen['grid'][chest_y][chest_x]
+        if current_cell == 'OPEN_CHEST':
+            print("This chest is empty.")
+            return
+
+        # Check if already opened (fallback for older opened_chests set)
         if chest_id in self.opened_chests:
             print("This chest is empty.")
             return
@@ -2908,6 +2949,9 @@ class GameCoreMixin:
                     self.inventory.add_item(item_name, count)
                     item_label = ITEMS.get(item_name, {}).get('name', item_name)
                     items_found.append(f"{count}x {item_label}")
+            # Flip NPC-placed CHEST to OPEN_CHEST after looting
+            if not self.player['in_structure']:
+                self.current_screen['grid'][chest_y][chest_x] = 'OPEN_CHEST'
             self.opened_chests.add(chest_id)
             if items_found:
                 print(f"Found: {', '.join(items_found)}")
@@ -2934,12 +2978,11 @@ class GameCoreMixin:
                 self.inventory.add_item(item_name, amount)
                 items_found.append(f"{amount}x {ITEMS[item_name]['name']}")
         
-        # Mark chest as opened
+        # Mark chest as opened; NPC-placed overworld CHEST flips to OPEN_CHEST
         self.opened_chests.add(chest_id)
-        
-        # Chest stays as CHEST (doesn't convert to floor anymore)
-        # Player can see it was already looted from the "empty" message
-        
+        if not self.player['in_structure'] and self.current_screen['grid'][chest_y][chest_x] == 'CHEST':
+            self.current_screen['grid'][chest_y][chest_x] = 'OPEN_CHEST'
+
         if items_found:
             print(f"Found: {', '.join(items_found)}")
         else:

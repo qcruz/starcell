@@ -858,6 +858,29 @@ class HudMixin:
                 night_text = self.small_font.render("🌙 NIGHT", True, (180, 180, 200))
                 self.screen.blit(night_text, (SCREEN_WIDTH - 100, 30))
 
+            # Draw faction banners on top-left / top-right wall cells
+            if not self.player.get('in_structure'):
+                _sk = f"{self.player['screen_x']},{self.player['screen_y']}"
+                _cf = self.get_zone_controlling_faction(_sk)
+                if _cf:
+                    _hostile = self.factions.get(_cf, {}).get('hostile', False)
+                    _banner_key = 'red_banner' if _hostile else 'blue_banner'
+                    _banner_spr = self.sprite_manager.sprites.get(_banner_key)
+                    _abbrev = ''.join(w[0].upper() for w in _cf.split() if w)[:3]
+                    _banner_font = pygame.font.Font(None, max(12, CELL_SIZE // 2))
+                    _abbrev_surf = _banner_font.render(_abbrev, True, (255, 255, 255))
+                    _abbrev_rect = _abbrev_surf.get_rect()
+                    for _bx in (0, GRID_WIDTH - 1):
+                        _px = _bx * CELL_SIZE
+                        if _banner_spr:
+                            self.screen.blit(_banner_spr, (_px, 0))
+                        else:
+                            _bc = (180, 40, 40) if _hostile else (40, 80, 180)
+                            pygame.draw.rect(self.screen, _bc, (_px, 0, CELL_SIZE, CELL_SIZE))
+                        # Centre initials on the banner cell
+                        _abbrev_rect.center = (_px + CELL_SIZE // 2, CELL_SIZE // 2)
+                        self.screen.blit(_abbrev_surf, _abbrev_rect)
+
             # Draw inventory panels
             self.draw_inventory_panels()
 

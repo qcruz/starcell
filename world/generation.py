@@ -547,11 +547,35 @@ class WorldGenerationMixin:
         grid[GRID_HEIGHT - 2][GRID_WIDTH // 2 - 1] = 'FLOOR_WOOD'
         grid[GRID_HEIGHT - 2][GRID_WIDTH // 2 + 1] = 'FLOOR_WOOD'
 
-        # Place one bed against the top wall
+        # Place one bed against the top wall (50% blue, 50% white)
         _bed_candidates = [(x, 1) for x in range(2, GRID_WIDTH - 2) if grid[1][x] == 'FLOOR_WOOD']
         if _bed_candidates:
             bx, by = random.choice(_bed_candidates)
-            grid[by][bx] = 'BED_BLUE'
+            grid[by][bx] = random.choice(['BED_BLUE', 'BED_WHITE'])
+
+        # Place 0-2 furniture items (bookshelf, table, chair, potted plant) on floor
+        _furniture_cells = ['BOOKSHELF', 'WOOD_TABLE', 'WOOD_CHAIR', 'SMALL_POTTED_PLANT']
+        _furniture_count = random.randint(0, 2)
+        _furniture_placed = 0
+        _furniture_attempts = 0
+        while _furniture_placed < _furniture_count and _furniture_attempts < 30:
+            fx = random.randint(2, GRID_WIDTH - 3)
+            fy = random.randint(2, GRID_HEIGHT - 4)
+            if grid[fy][fx] == 'FLOOR_WOOD':
+                grid[fy][fx] = random.choice(_furniture_cells)
+                _furniture_placed += 1
+            _furniture_attempts += 1
+
+        # 15% chance to place a water trough
+        if random.random() < 0.15:
+            _wt_attempts = 0
+            while _wt_attempts < 20:
+                wx = random.randint(2, GRID_WIDTH - 3)
+                wy = random.randint(2, GRID_HEIGHT - 4)
+                if grid[wy][wx] == 'FLOOR_WOOD':
+                    grid[wy][wx] = 'WATER_TROUGH'
+                    break
+                _wt_attempts += 1
 
         # Place 0-2 empty crates in interior corners (against walls)
         _corner_candidates = [
@@ -613,6 +637,30 @@ class WorldGenerationMixin:
         grid[GRID_HEIGHT - 2][GRID_WIDTH // 2 - 1] = 'CAVE_FLOOR'
         grid[GRID_HEIGHT - 2][GRID_WIDTH // 2 + 1] = 'CAVE_FLOOR'
 
+        # Scatter a small mushroom cluster (1-3 seeds on CAVE_FLOOR; CA grows the rest)
+        _mush_seeds = random.randint(1, 3)
+        _mush_placed = 0
+        _mush_attempts = 0
+        while _mush_placed < _mush_seeds and _mush_attempts < 40:
+            mx = random.randint(2, GRID_WIDTH - 3)
+            my = random.randint(2, GRID_HEIGHT - 3)
+            if grid[my][mx] == 'CAVE_FLOOR':
+                grid[my][mx] = 'BLUE_MUSHROOM'
+                _mush_placed += 1
+            _mush_attempts += 1
+
+        # 20% chance to place a water trough if cave has humanoid presence (set later by spawning)
+        # Seed it unconditionally here; the CA + goblin system will make use of it
+        if random.random() < 0.20:
+            _wt_attempts = 0
+            while _wt_attempts < 20:
+                wx = random.randint(2, GRID_WIDTH - 3)
+                wy = random.randint(2, GRID_HEIGHT - 3)
+                if grid[wy][wx] == 'CAVE_FLOOR':
+                    grid[wy][wx] = 'WATER_TROUGH'
+                    break
+                _wt_attempts += 1
+
         # Deeper levels get STAIRS_UP
         if depth > 1:
             attempts = 0
@@ -665,7 +713,7 @@ class WorldGenerationMixin:
             y = random.randint(2, GRID_HEIGHT - 3)
 
             if grid[y][x] in ['FLOOR_WOOD', 'WOOD'] and y < GRID_HEIGHT - 4:
-                grid[y][x] = 'CHEST'
+                grid[y][x] = 'LOCKED_CHEST'
                 structure_data['chests'][(x, y)] = 'HOUSE_CHEST'
                 placed += 1
 
@@ -684,7 +732,7 @@ class WorldGenerationMixin:
             y = random.randint(2, GRID_HEIGHT - 3)
 
             if grid[y][x] == 'CAVE_FLOOR':
-                grid[y][x] = 'CHEST'
+                grid[y][x] = 'LOCKED_CHEST'
                 structure_data['chests'][(x, y)] = loot_type
                 placed += 1
 

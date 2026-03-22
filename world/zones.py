@@ -430,7 +430,11 @@ class ZonesMixin:
                            'COBBLESTONE', 'WATER', 'DEEP_WATER',
                            'CAVE_FLOOR', 'CAVE_WALL', 'STAIRS_UP',
                            'STAIRS_DOWN', 'HIDDEN_CAVE', 'SOIL', 'CARROT1', 'CARROT2', 'CARROT3',
-                           'CLIFF', 'STONE_HOUSE', 'BUSH', 'GRAVESTONE'}
+                           'CLIFF', 'STONE_HOUSE', 'BUSH', 'GRAVESTONE',
+                           # New permanent cells
+                           'BROKEN_GRAVESTONE', 'LOCKED_CHEST', 'OPEN_CHEST',
+                           'BOOKSHELF', 'WOOD_CHAIR', 'WOOD_TABLE', 'BED_WHITE',
+                           'WATER_TROUGH', 'SMALL_POTTED_PLANT', 'BLUE_MUSHROOM'}
 
         foreign_revert = {
             'DESERT': {'GRASS', 'TREE1', 'TREE2', 'FLOWER', 'DIRT'},

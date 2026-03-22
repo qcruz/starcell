@@ -87,6 +87,37 @@ class CellsMixin:
         biome_index = abs(adj_x + adj_y * 3) % len(biome_types)
         return biome_types[biome_index]
 
+    def find_cluster_position(self, screen_key, target_cell, radius=6):
+        """Return (x, y) of a free cell near an existing target_cell on screen_key.
+
+        Finds all existing instances of target_cell, picks one at random, then
+        collects passable cells within radius tiles.  Returns a random candidate,
+        or None if no existing target_cell is present on the screen.
+        This is the general-purpose 'place nearby' helper — reuse for any cell
+        type that should cluster with its own kind (gravestones, mushrooms, etc.).
+        """
+        if screen_key not in self.screens:
+            return None
+        grid = self.screens[screen_key]['grid']
+        _NO_PLACE = {'WALL', 'CAVE', 'CLIFF', 'GRAVESTONE', 'BROKEN_GRAVESTONE',
+                     'STONE', 'CAVE_WALL', 'IRON_ORE', 'WATER', 'DEEP_WATER'}
+        existing = [(x, y) for y in range(GRID_HEIGHT) for x in range(GRID_WIDTH)
+                    if grid[y][x] == target_cell]
+        if not existing:
+            return None
+        ox, oy = random.choice(existing)
+        candidates = []
+        for dy in range(-radius, radius + 1):
+            for dx in range(-radius, radius + 1):
+                nx, ny = ox + dx, oy + dy
+                if (1 <= nx < GRID_WIDTH - 1 and 1 <= ny < GRID_HEIGHT - 1
+                        and grid[ny][nx] not in _NO_PLACE
+                        and grid[ny][nx] != target_cell):
+                    candidates.append((nx, ny))
+        if candidates:
+            return random.choice(candidates)
+        return None
+
     # -------------------------------------------------------------------------
     # Cellular automata
     # -------------------------------------------------------------------------
@@ -134,7 +165,10 @@ class CellsMixin:
 
                 cell = screen['grid'][y][x]
 
-                if cell in ['WALL', 'HOUSE', 'CAVE', 'CLIFF', 'GRAVESTONE']:
+                if cell in ('WALL', 'HOUSE', 'CAVE', 'CLIFF', 'GRAVESTONE',
+                            'BROKEN_GRAVESTONE', 'LOCKED_CHEST', 'OPEN_CHEST',
+                            'BOOKSHELF', 'WOOD_CHAIR', 'WOOD_TABLE', 'BED_BLUE',
+                            'BED_WHITE', 'WATER_TROUGH', 'SMALL_POTTED_PLANT'):
                     continue
 
                 if self.is_cell_enchanted(x, y, key):
@@ -372,6 +406,23 @@ class CellsMixin:
                     )
                     if not _bush_near_water and random.random() < min(1.0, 0.003 * _decay):
                         new_grid[y][x] = 'GRASS'
+
+                # BLUE_MUSHROOM cluster growth — spreads slowly to adjacent CAVE_FLOOR cells
+                # when 1-2 mushroom neighbours are present (avoids overcrowding)
+                elif cell == 'CAVE_FLOOR' and _water_decay_target is None:
+                    _mush_adj = sum(
+                        1 for cdx, cdy in ((0,-1),(0,1),(-1,0),(1,0))
+                        if 0 <= x+cdx < GRID_WIDTH and 0 <= y+cdy < GRID_HEIGHT
+                        and screen['grid'][y+cdy][x+cdx] == 'BLUE_MUSHROOM'
+                    )
+                    if 1 <= _mush_adj <= 2 and random.random() < min(1.0, 0.0008 * _growth):
+                        new_grid[y][x] = 'BLUE_MUSHROOM'
+
+                # BLUE_MUSHROOM overcrowding — dies back when fully surrounded (keeps clusters patchy)
+                elif cell == 'BLUE_MUSHROOM':
+                    _mush_all = self.count_cell_type(neighbors, 'BLUE_MUSHROOM')
+                    if _mush_all >= 5 and random.random() < min(1.0, 0.002 * _decay):
+                        new_grid[y][x] = 'CAVE_FLOOR'
 
                 # General neighbor-copy: base terrain may adopt a random NSEW neighbor's type
                 if new_grid[y][x] == cell and cell in ('GRASS', 'DIRT', 'SAND', 'WATER'):

@@ -43,6 +43,17 @@ COLORS = {
     'BARREL': (120, 80, 40),
     'STONE_HOUSE': (110, 110, 120),
     'RUINED_SANDSTONE_COLUMN': (200, 160, 90),
+    # New cells
+    'BROKEN_GRAVESTONE': (105, 100, 108),
+    'LOCKED_CHEST':      (100, 50, 10),
+    'OPEN_CHEST':        (160, 100, 40),
+    'BOOKSHELF':         (130, 90, 50),
+    'WOOD_CHAIR':        (150, 100, 55),
+    'WOOD_TABLE':        (145, 95, 50),
+    'WATER_TROUGH':      (80, 110, 130),
+    'SMALL_POTTED_PLANT':(60, 120, 60),
+    'BED_WHITE':         (230, 225, 215),
+    'BLUE_MUSHROOM':     (60, 90, 180),
 }
 
 # Colors for entities
@@ -134,6 +145,62 @@ CELL_TYPES = {
         'color': (130, 125, 135),
         'label': 'GS',
         'solid': True,
+        'degrades_to': 'BROKEN_GRAVESTONE',
+        'degrade_rate': 0.000005,  # Very slow — centuries of weathering
+    },
+    'BROKEN_GRAVESTONE': {
+        'color': COLORS['BROKEN_GRAVESTONE'],
+        'label': 'BGS',
+        'solid': True,
+    },
+    'LOCKED_CHEST': {
+        'color': COLORS['LOCKED_CHEST'],
+        'label': 'LCh',
+        'solid': True,
+        'interactable': True,
+    },
+    'OPEN_CHEST': {
+        'color': COLORS['OPEN_CHEST'],
+        'label': 'Chst',
+        'solid': False,
+        'interactable': True,
+    },
+    'BOOKSHELF': {
+        'color': COLORS['BOOKSHELF'],
+        'label': 'Bkshlf',
+        'solid': True,
+    },
+    'WOOD_CHAIR': {
+        'color': COLORS['WOOD_CHAIR'],
+        'label': 'Chr',
+        'solid': True,
+    },
+    'WOOD_TABLE': {
+        'color': COLORS['WOOD_TABLE'],
+        'label': 'Tbl',
+        'solid': True,
+    },
+    'WATER_TROUGH': {
+        'color': COLORS['WATER_TROUGH'],
+        'label': 'WTrg',
+        'solid': True,
+        'interactable': True,
+    },
+    'SMALL_POTTED_PLANT': {
+        'color': COLORS['SMALL_POTTED_PLANT'],
+        'label': 'Plt',
+        'solid': True,
+    },
+    'BED_WHITE': {
+        'color': COLORS['BED_WHITE'],
+        'label': 'BedW',
+        'solid': True,
+    },
+    'BLUE_MUSHROOM': {
+        'color': COLORS['BLUE_MUSHROOM'],
+        'label': 'BMsh',
+        'solid': True,
+        'drops': [{'item': 'blue_mushroom', 'amount': 1, 'chance': 1.0}],
     },
     'BED_BLUE': {
         'color': (70, 130, 180),

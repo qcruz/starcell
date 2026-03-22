@@ -373,6 +373,17 @@ COLORS = {
     'CLIFF': (90, 80, 75),
     'BUSH': (34, 100, 34),
     'EMPTY_CRATE': (100, 65, 25),
+    # New cells
+    'BROKEN_GRAVESTONE': (105, 100, 108),
+    'LOCKED_CHEST':      (100, 50, 10),
+    'OPEN_CHEST':        (160, 100, 40),
+    'BOOKSHELF':         (130, 90, 50),
+    'WOOD_CHAIR':        (150, 100, 55),
+    'WOOD_TABLE':        (145, 95, 50),
+    'WATER_TROUGH':      (80, 110, 130),
+    'SMALL_POTTED_PLANT':(60, 120, 60),
+    'BED_WHITE':         (230, 225, 215),
+    'BLUE_MUSHROOM':     (60, 90, 180),
 }
 
 # Cell type properties with drop probabilities
@@ -459,6 +470,62 @@ CELL_TYPES = {
         'color': COLORS['GRAVESTONE'],
         'label': 'GS',
         'solid': True,
+        'degrades_to': 'BROKEN_GRAVESTONE',
+        'degrade_rate': 0.000005,
+    },
+    'BROKEN_GRAVESTONE': {
+        'color': COLORS['BROKEN_GRAVESTONE'],
+        'label': 'BGS',
+        'solid': True,
+    },
+    'LOCKED_CHEST': {
+        'color': COLORS['LOCKED_CHEST'],
+        'label': 'LCh',
+        'solid': True,
+        'interactable': True,
+    },
+    'OPEN_CHEST': {
+        'color': COLORS['OPEN_CHEST'],
+        'label': 'Chst',
+        'solid': False,
+        'interactable': True,
+    },
+    'BOOKSHELF': {
+        'color': COLORS['BOOKSHELF'],
+        'label': 'Bkshlf',
+        'solid': True,
+    },
+    'WOOD_CHAIR': {
+        'color': COLORS['WOOD_CHAIR'],
+        'label': 'Chr',
+        'solid': True,
+    },
+    'WOOD_TABLE': {
+        'color': COLORS['WOOD_TABLE'],
+        'label': 'Tbl',
+        'solid': True,
+    },
+    'WATER_TROUGH': {
+        'color': COLORS['WATER_TROUGH'],
+        'label': 'WTrg',
+        'solid': True,
+        'interactable': True,
+    },
+    'SMALL_POTTED_PLANT': {
+        'color': COLORS['SMALL_POTTED_PLANT'],
+        'label': 'Plt',
+        'solid': True,
+    },
+    'BED_WHITE': {
+        'color': COLORS['BED_WHITE'],
+        'label': 'BedW',
+        'solid': True,
+    },
+    'BLUE_MUSHROOM': {
+        'color': COLORS['BLUE_MUSHROOM'],
+        'label': 'BMsh',
+        'solid': True,
+        'drops': [{'item': 'blue_mushroom', 'amount': 1, 'chance': 1.0}],
     },
     'BED_BLUE': {
         'color': COLORS['BED_BLUE'],
@@ -1563,8 +1630,19 @@ ITEMS.update({
     'flower_pattern2': {'color': (180, 100, 220), 'name': 'Purple Flower'},
     'flower_pattern3': {'color': (255, 100, 100), 'name': 'Red Flower'},
     'gravestone': {'color': COLORS['GRAVESTONE'], 'name': 'Gravestone'},
-    'bed_blue': {'color': COLORS['BED_BLUE'], 'name': 'Bed'},
+    'broken_gravestone': {'color': COLORS['BROKEN_GRAVESTONE'], 'name': 'Broken Gravestone'},
+    'bed_blue': {'color': COLORS['BED_BLUE'], 'name': 'Bed (Blue)'},
+    'bed_white': {'color': COLORS['BED_WHITE'], 'name': 'Bed (White)'},
     'desert_well': {'color': COLORS['DESERT_WELL'], 'name': 'Desert Well'},
+    'water_trough': {'color': COLORS['WATER_TROUGH'], 'name': 'Water Trough'},
+    'bookshelf': {'color': COLORS['BOOKSHELF'], 'name': 'Bookshelf'},
+    'wood_chair': {'color': COLORS['WOOD_CHAIR'], 'name': 'Wood Chair'},
+    'wood_table': {'color': COLORS['WOOD_TABLE'], 'name': 'Wood Table'},
+    'small_potted_plant': {'color': COLORS['SMALL_POTTED_PLANT'], 'name': 'Potted Plant'},
+    'blue_mushroom': {'color': COLORS['BLUE_MUSHROOM'], 'name': 'Blue Mushroom',
+                      'is_food': True, 'food_value': 15, 'description': 'A glowing cave fungus. Edible.'},
+    'bottle': {'color': (160, 200, 220), 'name': 'Bottle'},
+    'bottles': {'color': (140, 180, 200), 'name': 'Bottles'},
     'magic_rune': {'color': (180, 120, 255), 'name': 'Magic Rune', 'magic_damage': 'arcane', 'damage': 5, 'sprite_name': 'magic_rune'},
 })
 
