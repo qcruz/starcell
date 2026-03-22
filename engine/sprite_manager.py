@@ -212,10 +212,11 @@ class SpriteManager:
         cave_wall.fill((30, 30, 30))
         self.sprites['CAVE_WALL'] = cave_wall
 
-        # CHEST - Brown
-        chest = pygame.Surface((self.cell_size, self.cell_size))
-        chest.fill((139, 69, 19))
-        self.sprites['CHEST'] = chest
+        # CHEST - Brown fallback (only if not already loaded from chest.png)
+        if 'CHEST' not in self.sprites:
+            chest = pygame.Surface((self.cell_size, self.cell_size))
+            chest.fill((139, 69, 19))
+            self.sprites['CHEST'] = chest
 
         # STAIRS_DOWN - Dark brown
         stairs_down = pygame.Surface((self.cell_size, self.cell_size))
@@ -248,7 +249,6 @@ class SpriteManager:
         _wa = 'weapons and armour'  # subdirectory shorthand
         _individual_sprites = {
             # Cells (uppercase = cell key, lowercase = item key alias)
-            'CHEST':           'chest.png',
             'IRON_ORE':        'ironore.png',
             'WELL':            'well.png',
             'DESERT_WELL':     'desert_well.png',
