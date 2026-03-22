@@ -115,6 +115,10 @@ class Entity:
         self.combat_chance = ai_params.get('combat_chance', 0.50)  # Default: 50% fight when threatened
         self.target_types = ai_params.get('target_types', ['water', 'food'])  # What this entity targets
 
+        # Special-tier targeting stickiness (managed by _evaluate_special_tier)
+        self._special_target_type = None
+        self._special_target_lock = 0
+
         # Pathfinding memory - humanoids get longer memory
         humanoid_types = ['FARMER', 'TRADER', 'GUARD', 'LUMBERJACK', 'MINER', 'BANDIT', 'GOBLIN', 'KING', 'SKELETON']
         max_memory = 25 if entity_type in humanoid_types else 10

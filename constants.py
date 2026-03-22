@@ -254,6 +254,35 @@ NPC_BASE_QUEST = {
 # Type 3 (zone): anchored to zone but no specific target — full-zone roam (default)
 KEEPER_RANGE = {1: 1, 2: 5, 3: None}
 
+# ── NPC targeting priority scoring constants ─────────────────────────────────
+# See ai/targeting_overview.md for full design doc and rationale.
+KEEPER_BASE          = {1: 60, 2: 40, 3: 20, 4: 15}  # base score per keeper type
+KEEPER_URGENCY_SCALE = {1: 8,  2: 5,  3: 0,  4: 0}   # score added per cell of drift past range
+QUEST_BASE           = 80    # flat score for active assigned/lore quest target
+ROLE_BASE            = 40    # flat score for archetype work (farming, mining, etc.)
+SPECIAL_BASE         = 50    # flat score per eligible special-pool candidate
+SPECIAL_LOCK_TICKS   = 60    # ticks a chosen special target type stays locked
+RESOURCE_BASE        = 100   # max resource score (at 0% remaining); quadratic urgency curve
+
+# Maps quest focus type → role target type for the role tier of targeting.
+ROLE_TARGET_BY_QUEST = {
+    'FARM':   'crop',
+    'LUMBER': 'tree',
+    'MINE':   'stone',
+    'GATHER': 'resource',
+}
+
+# Cells that clearing_action will NOT attack (structures, furniture, terrain walls).
+CLEARING_EXEMPT = frozenset({
+    'WALL', 'HOUSE', 'STONE_HOUSE', 'FORT', 'CAVE', 'CLIFF',
+    'GRAVESTONE', 'BROKEN_GRAVESTONE',
+    'LOCKED_CHEST', 'CHEST', 'OPEN_CHEST',
+    'BOOKSHELF', 'WOOD_CHAIR', 'WOOD_TABLE', 'BED_BLUE', 'BED_WHITE',
+    'WATER_TROUGH', 'SMALL_POTTED_PLANT',
+    'WELL', 'DESERT_WELL',
+    'WATER', 'DEEP_WATER',
+})
+
 # Maps entity type → keeper patrol type.  Defaults to 3 for anything not listed.
 # Type 1: cell guard — stays within 1 tile of anchor
 # Type 2: patrol    — stays within 5 tiles of anchor

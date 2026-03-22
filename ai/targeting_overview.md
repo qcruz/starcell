@@ -103,6 +103,9 @@ score = QUEST_BASE     (flat, regardless of distance)
 - `entity.quest_target is not None` (a specific target has been assigned)
 - Not in survival crisis (low_hunger or low_thirst bypasses — resource tier takes over)
 - Target still exists (entity alive, or cell still present)
+- **Keeper type 1 overrides QUEST:** if `keeper_type == 1` and the NPC is currently at or
+  near their anchor, keeper score wins and quest does not activate. QUEST can only redirect
+  a type-1 keeper if the keeper has significantly drifted (drift score > QUEST_BASE).
 
 **Two quest modes (unchanged from current logic):**
 - **SPECIFIC** — `quest_target` is a cell tuple or entity ID; navigate to within 2 cells,
@@ -113,6 +116,7 @@ score = QUEST_BASE     (flat, regardless of distance)
 **Note:** Base role quests (FARM, MINE, LUMBER archetype quests) are the current
 `quest_focus` general mode. They live in the ROLE tier below, not here. The QUEST tier
 is for player-assigned or LoreEngine-assigned special quests with explicit targets.
+Role/base quests never compete with keeper priority — they are always below it.
 
 **Result string:** `'quest_target'`
 
@@ -126,12 +130,24 @@ shuffled pool but **sticky** — once selected, the chosen special type locks fo
 
 **Candidate pool (checked for availability before scoring):**
 
-| Special type | Condition | Notes |
-|---|---|---|
-| `'chest_dump'` | Inventory ≥ CHEST_DUMP_THRESHOLD items, chest exists in zone | Existing NPC dump logic |
-| `'trade'` | Inventory full + TRADER within zone | New — sells to nearby TRADER |
-| `'shelter'` | `is_night == True` and not in structure | Night movement |
-| `'exit_structure'` | `is_day == True` and `in_structure == True` | Daytime exit |
+| Special type | Condition | Entity scope | Notes |
+|---|---|---|---|
+| `'chest_dump'` | Inventory ≥ CHEST_DUMP_THRESHOLD, chest in zone | All | Existing NPC dump logic |
+| `'trade'` | Inventory full + TRADER in zone | Non-animal | New — sells to nearby TRADER (stub until trade system built) |
+| `'shelter'` | `is_night == True` and not in structure | All | Night movement |
+| `'exit_structure'` | `is_day == True` and `in_structure == True` | All | Daytime exit |
+| `'clearing_action'` | Non-structure blocking cell directly adjacent | Non-animal | Attack adjacent blocking cell; low destroy chance; no item pickup; breaks stuck loops |
+
+**`clearing_action` details:**
+- Eligible cells: any `solid=True` cell that is NOT in the structure list (`WALL`, `HOUSE`,
+  `STONE_HOUSE`, `FORT`, `LOCKED_CHEST`). Targets: `TREE1`, `TREE2`, `STONE`, `IRON_ORE`,
+  `CAVE_WALL`, `CLIFF`, boulders, and any other collision cell.
+- Attack: call existing cell damage/destroy path; destroy chance ~15% per attempt
+- On destroy: cell removed, **no item drop** (drop suppressed with `silent=True` flag)
+- Purpose: nudge NPCs out of soft terrain lock-in; not a harvesting action
+- BANDIT and GOBLIN have a separate `'structure_attack'` path in their special branch that
+  handles actual structure destruction — `clearing_action` is distinct and applies to all
+  non-animal entities
 
 ```
 score = SPECIAL_BASE      (flat per eligible candidate)
@@ -225,7 +241,7 @@ food_score  = RESOURCE_BASE × food_urgency²
 | HOSTILE | `'hostile'` | 120 | × combat_chance × (1/dist+1) × aggressiveness |
 | KEEPER | `'keeper_target'` | 60–15 | + drift × urgency_scale |
 | QUEST | `'quest_target'` | 80 | flat |
-| SPECIAL | varies | 50 | flat per eligible type |
+| SPECIAL | varies (`chest_dump`, `trade`, `shelter`, `exit_structure`, `clearing_action`) | 50 | flat per eligible type, sticky for SPECIAL_LOCK_TICKS |
 | ROLE | varies | 40 | flat |
 | RESOURCE (water) | `'water'` | 100 | × urgency² |
 | RESOURCE (food) | `'food'` | 100 | × urgency² |
@@ -385,21 +401,23 @@ Add `'trade'` to TRADER's `target_types` list. Other entities get it only if the
 
 ---
 
-## Open Questions (resolve before implementation)
+## Design Decisions (locked)
 
-1. **Should WARRIOR/GUARD hostile score ignore distance entirely?** Their `combat_chance=0.90`
-   and `aggressiveness=0.95` already produce a very high hostile score at close range.
-   The current full-zone scan for warriors could become a modifier (`zone_scan_bonus`).
+1. **Hostile distance falloff for WARRIORS:** Correct and intentional. A warrior at 50%
+   thirst correctly prioritizes water over a hostile 30 cells away — survival must be able
+   to overtake low-urgency combat signals. Warriors still respond aggressively to nearby
+   hostiles. No zone_scan_bonus modifier needed.
 
-2. **Keeper vs. Quest interaction:** If an NPC has both a keeper anchor AND an active quest
-   target, keeper type 1 (base 60) loses to quest (flat 80) unless drift is high. Is this
-   correct? A door guard shouldn't abandon their post for a quest. May need
-   `keeper_overrides_quest` flag on keeper type 1.
+2. **Keeper type 1 vs. assigned/lore quests:** Keeper base (60) is lower than quest (80)
+   intentionally. An assigned/lore quest can redirect a type-1 guard. However, base role
+   quests are ROLE tier (40) and never compete with keeper — a guard stays at their post
+   during normal work cycles. Only a real quest assignment pulls them away, and only when
+   keeper urgency (drift) doesn't exceed QUEST_BASE.
 
-3. **Special tier — `trade` target type:** The new NPC-to-trader trade system (next_up item 3)
-   needs to be implemented before this target type is live. Wire the type but leave the
-   finder returning None until that system is built.
+3. **`trade` target type placeholder:** Wired now as a stub (finder returns None). Full
+   implementation comes with the NPC trader system (next_up item 3).
 
-4. **RESOURCE_BASE=100 quadratic vs. QUEST_BASE=80 flat:** At 10% thirst, resource score is
-   81 — just above quest. Is it desirable for a nearly-dead NPC to abandon a quest to drink?
-   Probably yes. But review thresholds once quest system is fully exercised.
+4. **Resource overriding quest at low levels:** At ~10% thirst/hunger, resource score (~81)
+   just exceeds quest (80). Correct — an NPC pursuing a quest stops to drink/eat before
+   dying. Adjust RESOURCE_BASE or QUEST_BASE if playtesting shows quests being abandoned
+   too easily.

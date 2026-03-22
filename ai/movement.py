@@ -2030,6 +2030,11 @@ class NpcAiMovementMixin:
         elif target_type == 'quest_target':
             # Direct passthrough — entity.quest_target is already the resolved target
             return getattr(entity, 'quest_target', None)
+        elif target_type == 'clearing_action':
+            return self._find_clearing_target(entity, screen_key)
+        elif target_type == 'trade':
+            # Stub — NPC trader trade system not yet built; always returns None
+            return None
         return None
 
     # ── Quest-focus target finders ────────────────────────────────────────────
