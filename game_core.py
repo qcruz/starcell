@@ -266,11 +266,10 @@ class GameCoreMixin:
                           'CARROT1', 'CARROT2', 'CARROT3',
                           'CAMP', 'HOUSE', 'STONE_HOUSE', 'WOOD', 'PLANKS',
                           'WALL', 'CAVE', 'MINESHAFT', 'SOIL', 'MEAT', 'FUR', 'BONES',
-                          'FLOOR_WOOD', 'CAVE_FLOOR', 'CAVE_WALL', 'CHEST',
+                          'FLOOR_WOOD', 'CAVE_FLOOR', 'CAVE_WALL',
                           'STAIRS_DOWN', 'STAIRS_UP',
                           'CACTUS', 'BARREL', 'RUINED_SANDSTONE_COLUMN', 'BUSH', 'EMPTY_CRATE',
-                          'FLOWER_PATTERN1', 'FLOWER_PATTERN2', 'FLOWER_PATTERN3',
-                          'GRAVESTONE', 'BED_BLUE', 'DESERT_WELL']:
+                          'FLOWER_PATTERN1', 'FLOWER_PATTERN2', 'FLOWER_PATTERN3']:
             
             # Skip if already loaded
             if cell_type in self.sprite_manager.sprites:
@@ -470,6 +469,10 @@ class GameCoreMixin:
             'FLOWER_PATTERN1':       'flowerpattern1.png',
             'FLOWER_PATTERN2':       'flowerpattern2.png',
             'FLOWER_PATTERN3':       'flowerpattern3.png',
+            'CHEST':                 'chest.png',
+            'GRAVESTONE':            'gravestone.png',
+            'BED_BLUE':              'bed_blue.png',
+            'DESERT_WELL':           'desert_well.png',
         }
 
         # Weapon / armour sprites — subdir has a space so they can't be found by the
