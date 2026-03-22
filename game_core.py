@@ -269,7 +269,8 @@ class GameCoreMixin:
                           'FLOOR_WOOD', 'CAVE_FLOOR', 'CAVE_WALL', 'CHEST',
                           'STAIRS_DOWN', 'STAIRS_UP',
                           'CACTUS', 'BARREL', 'RUINED_SANDSTONE_COLUMN', 'BUSH', 'EMPTY_CRATE',
-                          'FLOWER_PATTERN1', 'FLOWER_PATTERN2', 'FLOWER_PATTERN3']:
+                          'FLOWER_PATTERN1', 'FLOWER_PATTERN2', 'FLOWER_PATTERN3',
+                          'GRAVESTONE', 'BED_BLUE', 'DESERT_WELL']:
             
             # Skip if already loaded
             if cell_type in self.sprite_manager.sprites:

@@ -248,6 +248,7 @@ class SpriteManager:
         _wa = 'weapons and armour'  # subdirectory shorthand
         _individual_sprites = {
             # Cells (uppercase = cell key, lowercase = item key alias)
+            'CHEST':           'chest.png',
             'IRON_ORE':        'ironore.png',
             'WELL':            'well.png',
             'DESERT_WELL':     'desert_well.png',
