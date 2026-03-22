@@ -430,7 +430,7 @@ class ZonesMixin:
                            'COBBLESTONE', 'WATER', 'DEEP_WATER',
                            'CAVE_FLOOR', 'CAVE_WALL', 'STAIRS_UP',
                            'STAIRS_DOWN', 'HIDDEN_CAVE', 'SOIL', 'CARROT1', 'CARROT2', 'CARROT3',
-                           'CLIFF', 'STONE_HOUSE', 'BUSH'}
+                           'CLIFF', 'STONE_HOUSE', 'BUSH', 'GRAVESTONE'}
 
         foreign_revert = {
             'DESERT': {'GRASS', 'TREE1', 'TREE2', 'FLOWER', 'DIRT'},

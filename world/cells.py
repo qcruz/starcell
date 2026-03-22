@@ -134,7 +134,7 @@ class CellsMixin:
 
                 cell = screen['grid'][y][x]
 
-                if cell in ['WALL', 'HOUSE', 'CAVE', 'CLIFF']:
+                if cell in ['WALL', 'HOUSE', 'CAVE', 'CLIFF', 'GRAVESTONE']:
                     continue
 
                 if self.is_cell_enchanted(x, y, key):
