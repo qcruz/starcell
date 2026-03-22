@@ -470,6 +470,9 @@ class ZonesMixin:
                         _revert_r = 0.035
                     else:
                         _revert_r = 0.003  # Edge cell — slow revert (biome boundary)
+                    # Rain washes sand away quickly in non-desert biomes
+                    if cell == 'SAND' and biome != 'DESERT' and _zone_is_raining:
+                        _revert_r = max(_revert_r, 0.08)
                     if random.random() < _revert_r:
                         screen['grid'][y][x] = base_cell
                     continue
@@ -485,16 +488,6 @@ class ZonesMixin:
                     if 0 <= nx < GRID_WIDTH and 0 <= ny < GRID_HEIGHT:
                         neighbor = screen['grid'][ny][nx]
                         if neighbor not in protected_cells and neighbor not in native_cells:
-                            # SAND requires ≥2 same-type cardinal neighbours before spreading
-                            # (prevents desert invasion of deep forest from isolated border seeds)
-                            if cell == 'SAND':
-                                _sand_back = sum(
-                                    1 for ddx, ddy in ((0, -1), (0, 1), (-1, 0), (1, 0))
-                                    if 0 <= x + ddx < GRID_WIDTH and 0 <= y + ddy < GRID_HEIGHT
-                                    and screen['grid'][y + ddy][x + ddx] == 'SAND'
-                                )
-                                if _sand_back < 2:
-                                    continue
                             screen['grid'][ny][nx] = cell
 
         # Very sparse bush growth; rarer than trees, rarest in desert scrub
