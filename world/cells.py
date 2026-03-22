@@ -292,11 +292,16 @@ class CellsMixin:
                         # Evaporates to regular water; 80% chance the water bed (CAVE_FLOOR) forms instead.
                         new_grid[y][x] = 'CAVE_FLOOR' if random.random() < 0.80 else 'WATER'
 
-                # CAVE_FLOOR is a stable water-bed state (renders with water overlay).
-                # It only dries out when completely isolated from water neighbors.
-                elif cell == 'CAVE_FLOOR' and total_water == 0:
-                    if random.random() < min(1.0, WATER_TO_DIRT_RATE * _decay):
-                        new_grid[y][x] = _water_decay_target or 'DIRT'
+                # CAVE_FLOOR: stable in actual caves; decays and floods quickly in overworld.
+                elif cell == 'CAVE_FLOOR':
+                    if _water_decay_target is not None:
+                        # Overworld: rain rapidly fills it with water
+                        if self.is_raining and random.random() < min(1.0, 0.08 * _tp):
+                            new_grid[y][x] = 'WATER'
+                        # Overworld: dries back to biome base quickly when no water nearby
+                        elif not self.is_raining and total_water == 0 and random.random() < min(1.0, 0.10 * _decay):
+                            new_grid[y][x] = _water_decay_target
+                    # Cave structures: CAVE_FLOOR is permanent — no decay rule
 
                 # Flower spread
                 elif cell == 'GRASS' and 1 <= flower_count <= 2 and total_water >= 1:
