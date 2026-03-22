@@ -364,6 +364,8 @@ COLORS = {
     'IRON_ORE': (139, 90, 43),
     'WELL': (100, 80, 60),
     'GRAVESTONE': (130, 125, 135),
+    'BED_BLUE': (70, 130, 180),
+    'DESERT_WELL': (180, 140, 80),
     'CACTUS': (50, 120, 50),
     'BARREL': (120, 80, 40),
     'STONE_HOUSE': (110, 110, 120),
@@ -457,6 +459,17 @@ CELL_TYPES = {
         'color': COLORS['GRAVESTONE'],
         'label': 'GS',
         'solid': True,
+    },
+    'BED_BLUE': {
+        'color': COLORS['BED_BLUE'],
+        'label': 'Bed',
+        'solid': True,
+    },
+    'DESERT_WELL': {
+        'color': COLORS['DESERT_WELL'],
+        'label': 'DWel',
+        'solid': True,
+        'interactable': True,
     },
     'CACTUS': {
         'color': COLORS['CACTUS'],
@@ -1550,6 +1563,8 @@ ITEMS.update({
     'flower_pattern2': {'color': (180, 100, 220), 'name': 'Purple Flower'},
     'flower_pattern3': {'color': (255, 100, 100), 'name': 'Red Flower'},
     'gravestone': {'color': COLORS['GRAVESTONE'], 'name': 'Gravestone'},
+    'bed_blue': {'color': COLORS['BED_BLUE'], 'name': 'Bed'},
+    'desert_well': {'color': COLORS['DESERT_WELL'], 'name': 'Desert Well'},
     'magic_rune': {'color': (180, 120, 255), 'name': 'Magic Rune', 'magic_damage': 'arcane', 'damage': 5, 'sprite_name': 'magic_rune'},
 })
 
@@ -1635,6 +1650,8 @@ ITEM_TO_CELL = {
     'flower_pattern2': 'FLOWER_PATTERN2',
     'flower_pattern3': 'FLOWER_PATTERN3',
     'gravestone': 'GRAVESTONE',
+    'bed_blue': 'BED_BLUE',
+    'desert_well': 'DESERT_WELL',
     'iron_ore': 'IRON_ORE',
     'well': 'WELL',
     'cactus': 'CACTUS',

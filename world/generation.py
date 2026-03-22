@@ -547,6 +547,12 @@ class WorldGenerationMixin:
         grid[GRID_HEIGHT - 2][GRID_WIDTH // 2 - 1] = 'FLOOR_WOOD'
         grid[GRID_HEIGHT - 2][GRID_WIDTH // 2 + 1] = 'FLOOR_WOOD'
 
+        # Place one bed against the top wall
+        _bed_candidates = [(x, 1) for x in range(2, GRID_WIDTH - 2) if grid[1][x] == 'FLOOR_WOOD']
+        if _bed_candidates:
+            bx, by = random.choice(_bed_candidates)
+            grid[by][bx] = 'BED_BLUE'
+
         # Place 0-2 empty crates in interior corners (against walls)
         _corner_candidates = [
             (1, 1), (2, 1), (1, 2),

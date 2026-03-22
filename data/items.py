@@ -191,6 +191,8 @@ ITEMS.update({
     'flower_pattern2': {'color': (180, 100, 220), 'name': 'Purple Flower'},
     'flower_pattern3': {'color': (255, 100, 100), 'name': 'Red Flower'},
     'gravestone': {'color': COLORS['GRAVESTONE'], 'name': 'Gravestone'},
+    'bed_blue': {'color': COLORS['BED_BLUE'], 'name': 'Bed'},
+    'desert_well': {'color': COLORS['DESERT_WELL'], 'name': 'Desert Well'},
     'magic_rune': {'color': (180, 120, 255), 'name': 'Magic Rune', 'magic_damage': 'arcane', 'damage': 5, 'sprite_name': 'magic_rune'},
 })
 

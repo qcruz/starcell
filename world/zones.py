@@ -370,6 +370,8 @@ class ZonesMixin:
 
                     if 'grows_to' in cell_info and random.random() < min(1.0, cell_info.get('growth_rate', 0) * _tp):
                         self.set_grid_cell(screen, x, y, cell_info['grows_to'])
+                    elif cell == 'WELL' and _biome == 'DESERT' and random.random() < min(1.0, 0.00002 * _tp):
+                        self.set_grid_cell(screen, x, y, 'DESERT_WELL')
                     elif 'degrades_to' in cell_info and random.random() < min(1.0, cell_info.get('degrade_rate', 0) * _tp * _decay_factor):
                         if cell == 'COBBLESTONE':
                             center_x = GRID_WIDTH // 2

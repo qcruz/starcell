@@ -247,13 +247,19 @@ class SpriteManager:
         # Load individual PNG sprites for new cell/item types
         _wa = 'weapons and armour'  # subdirectory shorthand
         _individual_sprites = {
-            # Cells
+            # Cells (uppercase = cell key, lowercase = item key alias)
             'IRON_ORE':        'ironore.png',
             'WELL':            'well.png',
+            'DESERT_WELL':     'desert_well.png',
+            'BED_BLUE':        'bed_blue.png',
             'GRAVESTONE':      'gravestone.png',
-            'FLOWER_PATTERN1':  'flowerpattern1.png',
-            'FLOWER_PATTERN2':  'flowerpattern2.png',
-            'FLOWER_PATTERN3':  'flowerpattern3.png',
+            'FLOWER_PATTERN1': 'flowerpattern1.png',
+            'FLOWER_PATTERN2': 'flowerpattern2.png',
+            'FLOWER_PATTERN3': 'flowerpattern3.png',
+            'iron_ore':         'ironore.png',
+            'well':             'well.png',
+            'desert_well':      'desert_well.png',
+            'bed_blue':         'bed_blue.png',
             'flower_pattern1':  'flowerpattern1.png',
             'flower_pattern2':  'flowerpattern2.png',
             'flower_pattern3':  'flowerpattern3.png',

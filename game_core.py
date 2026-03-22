@@ -531,9 +531,9 @@ class GameCoreMixin:
                 has_alpha = sprite.get_flags() & pygame.SRCALPHA
                 print(f"  - {sprite_name}: {sprite.get_size()}, alpha={'YES' if has_alpha else 'NO'}")
             
-            # Don't generate structure sprites - only use actual sprite files
-            # This ensures cells without sprites show as colored rectangles with labels
-            
+            # Load individual cell/item PNG sprites
+            self.sprite_manager.create_structure_sprites()
+
             # Generate dev spell sprites (summon/transform for all NPC types)
             from data.entities import ENTITY_TYPES
             self.sprite_manager.create_dev_spell_sprites(ENTITY_TYPES)
@@ -2373,11 +2373,12 @@ class GameCoreMixin:
             self.interact_with_chest(check_x, check_y)
             return
 
-        # WELL — restore energy
-        if cell == 'WELL':
+        # WELL / DESERT_WELL — restore energy
+        if cell in ('WELL', 'DESERT_WELL'):
             restore = min(40, self.player['max_energy'] - self.player.get('energy', 0))
             self.player['energy'] = self.player.get('energy', 0) + restore
-            print(f"You drink from the well. (+{restore} energy)")
+            label = "desert well" if cell == 'DESERT_WELL' else "well"
+            print(f"You drink from the {label}. (+{restore} energy)")
             return
         
         # Check for enterable structure (HOUSE, CAVE)
