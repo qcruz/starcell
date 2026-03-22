@@ -169,15 +169,9 @@ class HudMixin:
                                 pygame.draw.rect(self.screen, COLORS['DEEP_WATER'],
                                                  (x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE))
                         elif cell == 'CAVE_FLOOR':
-                            # Render cave floor with a translucent water overlay on top
                             cave_spr = self.sprite_manager.sprites.get('CAVE_FLOOR')
                             if cave_spr:
                                 self.screen.blit(cave_spr, (x * CELL_SIZE, y * CELL_SIZE))
-                                water_spr = self.sprite_manager.sprites.get('WATER')
-                                if water_spr:
-                                    _w_overlay = water_spr.copy()
-                                    _w_overlay.set_alpha(120)
-                                    self.screen.blit(_w_overlay, (x * CELL_SIZE, y * CELL_SIZE))
                             else:
                                 pygame.draw.rect(self.screen, COLORS['CAVE_FLOOR'],
                                                  (x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE))
