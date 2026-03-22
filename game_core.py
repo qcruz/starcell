@@ -532,8 +532,8 @@ class GameCoreMixin:
                 has_alpha = sprite.get_flags() & pygame.SRCALPHA
                 print(f"  - {sprite_name}: {sprite.get_size()}, alpha={'YES' if has_alpha else 'NO'}")
             
-            # Load individual cell/item PNG sprites
-            self.sprite_manager.create_structure_sprites()
+            # Don't generate structure sprites - only use actual sprite files
+            # This ensures cells without sprites show as colored rectangles with labels
 
             # Generate dev spell sprites (summon/transform for all NPC types)
             from data.entities import ENTITY_TYPES
