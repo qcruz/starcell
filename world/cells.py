@@ -1,7 +1,10 @@
 import random
 
-# DEBUG: set to False to disable all CA rules for isolation testing
-CA_RULES_ENABLED = False
+# DEBUG: isolation testing flags
+# CA_RULES_ENABLED = False disables all CA
+# CA_SINGLE_RULE = restrict to one rule group ('sand_to_dirt_water', or None for all)
+CA_RULES_ENABLED = True
+CA_SINGLE_RULE = 'sand_to_dirt_water'
 
 from constants import (
     GRID_WIDTH, GRID_HEIGHT,
@@ -224,6 +227,11 @@ class CellsMixin:
 
                 # Debug tracer: rule name set by whichever branch fires; logged at end of cell block
                 _ca_rule = None
+
+                # Isolation testing: skip all cells that can't trigger the named rule
+                if CA_SINGLE_RULE == 'sand_to_dirt_water':
+                    if not (cell == 'SAND' and total_water >= 1):
+                        continue
 
                 # Dirt → Water (flooding, rain only — highest priority for dirt)
                 if cell == 'DIRT' and total_water >= 3 and self.is_raining:
