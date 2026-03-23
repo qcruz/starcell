@@ -238,9 +238,10 @@ class CellsMixin:
                         new_grid[y][x] = 'GRASS'
                         _dirt_rule = 'DIRT_TO_GRASS_WATER_RATE'
 
-                # Dirt → Stone (at water's edge touching a non-dirt/water cell — forms rocky rim)
-                # Produces natural grottos: sand→dirt near water, then dirt at sand interface hardens
-                elif cell == 'DIRT' and total_water >= 1:
+                # Dirt → Flower pattern (at water's edge touching a non-dirt/water cell — forms rocky rim)
+                # Disabled in desert: FLOWER_PATTERN decays to SAND in desert, creating an indirect
+                # DIRT→FLOWER→SAND chain that erases dirt cells over two CA cycles.
+                elif cell == 'DIRT' and total_water >= 1 and biome != 'DESERT':
                     _non_dirt_land = sum(1 for n in neighbors
                                          if n not in ('DIRT', 'WATER', 'DEEP_WATER'))
                     if _non_dirt_land >= 1 and random.random() < min(1.0, DIRT_TO_FLOWER_WATER_RATE * _growth):
@@ -400,6 +401,10 @@ class CellsMixin:
                     _fp_decay_rate = 0.3 * CA_DECAY_RATE if _fp_near_water else 4 * CA_DECAY_RATE
                     if random.random() < min(1.0, _fp_decay_rate * _decay):
                         new_grid[y][x] = _fp_base
+                        if biome == 'DESERT':
+                            self.bug_catcher.log_ca_mutation(
+                                self.tick, key, x, y, cell, _fp_base, 'FLOWER_PATTERN_DECAY', biome
+                            )
 
                 # Bush decay → grass when not touching water
                 elif cell == 'BUSH':
