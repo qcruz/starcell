@@ -53,23 +53,37 @@ NIGHT_OVERLAY_ALPHA = 40  # Darkness overlay opacity (0-255, subtle at 40)
 QUEST_COOLDOWN = 300      # Ticks before new quest target assigned after completion (5 seconds)
 QUEST_XP_MULTIPLIER = 10  # XP reward = target_level × this value
 
-# Cell Growth & Decay Rates (probability per tick) - SLOWED for subtle changes
-GRASS_TO_DIRT_RATE = 0.00001    # Grass decays to dirt without water (was 0.0001)
-DIRT_TO_SAND_RATE = 0.000005    # Dirt becomes sand in severe drought (was 0.00005)
-DIRT_TO_GRASS_RATE = 0.0001     # Dirt becomes grass with water (was 0.0005)
-TREE_GROWTH_RATE = 0.00005      # Grass becomes tree (was 0.0001)
-TREE_DECAY_RATE = 0.0005        # Trees decay when overcrowded (was 0.001)
-SAND_RECLAIM_RATE = 0.0005      # Sand becomes dirt with water (was 0.001)
-FLOWER_SPREAD_RATE = 0.0001     # Flowers spread to nearby grass (was 0.0005)
-FLOWER_DECAY_RATE = 0.0005      # Flowers die from overcrowding/drought (was 0.002)
-DEEP_WATER_FORM_RATE = 0.05     # Water becomes deep water (apply_cellular_automata)
-DEEP_WATER_EVAPORATE_RATE = 0.03 # Deep water becomes water (apply_cellular_automata)
-DEEP_WATER_COBBLE_RATE = 0.04   # Stable deep water forms cave floor (all 4 cardinal = water)
-WATER_TO_DIRT_RATE = 0.005      # Water slowly evaporates to dirt without neighbors (apply_cellular_automata)
-WATER_EDGE_ROCK_RATE = 0.08     # Dirt at water boundary (touching non-dirt) hardens to stone
-SAND_ROCK_TO_DIRT_RATE = 0.0002 # Sand touching stone/cobblestone very slowly becomes dirt
-BIOME_SPREAD_RATE = 0.001       # Chance per update a base cell copies a different NSEW neighbor type
-FLOODING_RATE = 0.015           # Water spreads to dirt (apply_cellular_automata)
+# ── Global CA base rate ────────────────────────────────────────────────────────
+# Single knob that scales all cellular automata probabilities up or down.
+# See docs/ca_rules.md for the full rule reference.
+CA_BASE_RATE = 0.001            # 0.1% per tick baseline
+BASE_DECAY_RATE = CA_BASE_RATE  # legacy alias
+
+# Cell Growth & Decay Rates — all expressed as multiples of CA_BASE_RATE
+# (synced to constants.py — constants.py is authoritative for world/cells.py)
+GRASS_TO_DIRT_RATE          = 0.01  * CA_BASE_RATE  # 0.00001
+DIRT_TO_SAND_RATE           = 0.005 * CA_BASE_RATE  # 0.000005
+DIRT_TO_GRASS_RATE          = 0.1   * CA_BASE_RATE  # 0.0001
+DIRT_WATER_EXTRA_GRASS_RATE = 0.2   * CA_BASE_RATE  # 0.0002
+TREE_GROWTH_RATE            = 0.1   * CA_BASE_RATE  # 0.0001
+TREE_DECAY_RATE             = 0.5   * CA_BASE_RATE  # 0.0005
+TREE_CROWD_DECAY_RATE       = 1     * CA_BASE_RATE  # 0.001
+TREE_DROUGHT_RATE           = 0.3   * CA_BASE_RATE  # 0.0003
+CACTUS_DROUGHT_RATE         = 0.3   * CA_BASE_RATE  # 0.0003
+SAND_RECLAIM_RATE           = 50    * CA_BASE_RATE  # 0.05
+SAND_ROCK_TO_DIRT_RATE      = 0.2   * CA_BASE_RATE  # 0.0002
+FLOWER_SPREAD_RATE          = 0.1   * CA_BASE_RATE  # 0.0001
+FLOWER_DECAY_RATE           = 0.5   * CA_BASE_RATE  # 0.0005
+DEEP_WATER_FORM_RATE        = 50    * CA_BASE_RATE  # 0.05
+DEEP_WATER_EVAPORATE_RATE   = 10    * CA_BASE_RATE  # 0.01
+DEEP_WATER_COBBLE_RATE      = 40    * CA_BASE_RATE  # 0.04 (unused legacy constant)
+WATER_TO_DIRT_RATE          = 20    * CA_BASE_RATE  # 0.02
+WATER_EDGE_ROCK_RATE        = 8     * CA_BASE_RATE  # 0.008
+FLOODING_RATE               = 15    * CA_BASE_RATE  # 0.015
+BIOME_SPREAD_RATE           = 4     * CA_BASE_RATE  # 0.004
+GRASS_SAND_DECAY_RATE       = 3     * CA_BASE_RATE  # 0.003
+DIRT_SAND_SPREAD_RATE       = 8     * CA_BASE_RATE  # 0.008
+GRASS_WATER_ABSORB_RATE     = 20    * CA_BASE_RATE  # 0.02
 
 # Entity Survival
 HUNGER_DECAY_RATE = 0.02        # Base hunger loss per decay call (humanoids get 6× this)
