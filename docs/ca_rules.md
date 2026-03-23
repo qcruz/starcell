@@ -35,28 +35,28 @@ CA cycle fires every `UPDATE_FREQUENCY` ticks (default 30).
 | Rule | Variable | Multiplier | Effective rate | Fires when |
 |---|---|---|---|---|
 | DIRT → GRASS | `DIRT_TO_GRASS_RATE` | 1× | 0.0001 × _growth | 2+ water/deep-water/cave-floor neighbors |
-| DIRT → GRASS (marginal) | `DIRT_WATER_EXTRA_GRASS_RATE` | 2× | 0.0002 × _growth | exactly 1 water neighbor, no sand neighbors |
-| GRASS → TREE | `TREE_GROWTH_RATE` | 1× | 0.0001 × _growth | biome ≠ DESERT, no cobblestone, 1–2 tree neighbors, 1+ water neighbor |
-| GRASS → FLOWER (spread) | `FLOWER_SPREAD_RATE` | 1× | 0.0001 × _growth | 1–2 flower neighbors, 1+ water neighbor |
-| SAND → DIRT (stone weathering) | `SAND_ROCK_TO_DIRT_RATE` | 2× | 0.0002 × _growth | 1+ cobblestone or stone neighbor |
+| DIRT → GRASS (marginal) | `DIRT_TO_GRASS_WATER_RATE` | 2× | 0.0002 × _growth | exactly 1 water neighbor, no sand neighbors |
+| GRASS → TREE | `GRASS_TO_TREE_RATE` | 1× | 0.0001 × _growth | biome ≠ DESERT, no cobblestone, 1–2 tree neighbors, 1+ water neighbor |
+| GRASS → FLOWER (spread) | `GRASS_TO_FLOWER_RATE` | 1× | 0.0001 × _growth | 1–2 flower neighbors, 1+ water neighbor |
+| SAND → DIRT (stone weathering) | `SAND_TO_DIRT_STONE_RATE` | 2× | 0.0002 × _growth | 1+ cobblestone or stone neighbor |
 
 ### Decay rules (× CA_DECAY_RATE = 0.0001)
 
 | Rule | Variable | Multiplier | Effective rate | Fires when |
 |---|---|---|---|---|
 | GRASS → DIRT | `GRASS_TO_DIRT_RATE` | 0.1× | 0.00001 × _decay | no water neighbors |
-| DIRT → SAND (severe drought) | `DIRT_TO_SAND_RATE` | 0.05× | 0.000005 × _decay | no water neighbors, no grass neighbors |
-| TREE → GRASS (crowding) | `TREE_CROWD_DECAY_RATE` | 10× | 0.001 × _decay | 1+ adjacent tree (no cobblestone) |
-| TREE → GRASS (road edge) | `TREE_CROWD_DECAY_RATE` | 10× | 0.001 × _decay | 1+ cobblestone neighbor |
-| TREE → GRASS (drought) | `TREE_DROUGHT_RATE` | 3× | 0.0003 × _decay | drought_severity > 0.5, no water neighbors |
-| CACTUS → SAND (drought) | `CACTUS_DROUGHT_RATE` | 3× | 0.0003 × _decay | drought_severity > 0.5, no water neighbors |
-| FLOWER → GRASS (overcrowding) | `FLOWER_DECAY_RATE` | 5× | 0.0005 × _decay | 4+ flower neighbors OR no water neighbors |
+| DIRT → SAND (severe drought) | `DIRT_TO_SAND_DROUGHT_RATE` | 0.05× | 0.000005 × _decay | no water neighbors, no grass neighbors |
+| TREE → GRASS (crowding) | `TREE_TO_GRASS_CROWD_RATE` | 10× | 0.001 × _decay | 1+ adjacent tree (no cobblestone) |
+| TREE → GRASS (road edge) | `TREE_TO_GRASS_CROWD_RATE` | 10× | 0.001 × _decay | 1+ cobblestone neighbor |
+| TREE → GRASS (drought) | `TREE_TO_GRASS_DROUGHT_RATE` | 3× | 0.0003 × _decay | drought_severity > 0.5, no water neighbors |
+| CACTUS → SAND (drought) | `CACTUS_TO_SAND_DROUGHT_RATE` | 3× | 0.0003 × _decay | drought_severity > 0.5, no water neighbors |
+| FLOWER → GRASS (overcrowding) | `FLOWER_TO_GRASS_RATE` | 5× | 0.0005 × _decay | 4+ flower neighbors OR no water neighbors |
 | BUSH → GRASS | inline | 3× | 0.0003 × _decay | no cardinal water neighbors |
 | FLOWER_PATTERN → base cell (wet) | inline | 3× | 0.0003 × _decay | FLOWER_PATTERN cell with water adjacent |
 | FLOWER_PATTERN → base cell (dry) | inline | 40× | 0.004 × _decay | FLOWER_PATTERN cell without water |
 | BLUE_MUSHROOM → CAVE_FLOOR | inline | 2× | 0.0002 × _decay | 5+ adjacent BLUE_MUSHROOM (overcrowding) |
 
-*Note: TREE_DROUGHT_RATE and CACTUS_DROUGHT_RATE are candidates for removal once CA_DECAY_RATE is
+*Note: TREE_TO_GRASS_DROUGHT_RATE and CACTUS_TO_SAND_DROUGHT_RATE are candidates for removal once CA_DECAY_RATE is
 tuned slightly above CA_GROWTH_RATE — the drought `_decay` modifier already accelerates all decay
 rules during dry periods. Left in for now as a safety net.*
 
@@ -64,16 +64,16 @@ rules during dry periods. Left in for now as a safety net.*
 
 | Rule | Variable | Multiplier | Effective rate | Fires when |
 |---|---|---|---|---|
-| WATER → biome base (isolated) | `WATER_TO_DIRT_RATE` | 2× CA_BASE_RATE | 0.002 × _decay × stone-shield | ≤1 water neighbor; biome ≠ LAKE |
+| WATER → biome base (isolated) | `WATER_TO_BASE_ISOLATED_RATE` | 2× CA_BASE_RATE | 0.002 × _decay × stone-shield | ≤1 water neighbor; biome ≠ LAKE |
 | WATER → biome base (volume) | inline | (count−4)× CA_BASE_RATE | scales with pool size | zone water count > 4 |
-| DEEP_WATER → CAVE_FLOOR/WATER | `DEEP_WATER_EVAPORATE_RATE` | 0.5× | 0.004 × _decay | < 4 cardinal water neighbors; biome ≠ LAKE |
-| WATER → DEEP_WATER | `DEEP_WATER_FORM_RATE` | 2.5× | 0.02 × _tp | all 4 cardinal neighbors are water/deep/cave_floor |
-| SAND → DIRT (near water) | `SAND_RECLAIM_RATE` | 2.5× | 0.02 × _growth | 1+ water/deep-water/cave-floor neighbor |
-| DIRT/SAND → WATER (rain flood) | `FLOODING_RATE` | 0.75× | 0.006 × _tp | raining, 3+ water neighbors |
-| SAND → WATER (rain, faster) | inline | 1.5× FLOODING_RATE | 0.012 × _tp | raining, 3+ water neighbors |
-| GRASS → WATER (rain absorption) | `GRASS_WATER_ABSORB_RATE` | 1× | 0.008 × _tp | raining, 1+ water neighbor |
-| Rain flood spread (secondary) | inline | 0.4× FLOODING_RATE | 0.0024 × _tp | raining, DIRT/SAND/COBBLESTONE with 1+ water neighbor, cell unchanged |
-| DIRT → FLOWER_PATTERN (water edge) | `WATER_EDGE_ROCK_RATE` | 0.4× | 0.0032 × _growth | 1+ water neighbor AND 1+ non-dirt/non-water neighbor |
+| DEEP_WATER → CAVE_FLOOR/WATER | `DEEP_WATER_TO_WATER_RATE` | 0.5× | 0.004 × _decay | < 4 cardinal water neighbors; biome ≠ LAKE |
+| WATER → DEEP_WATER | `WATER_TO_DEEP_WATER_RATE` | 2.5× | 0.02 × _tp | all 4 cardinal neighbors are water/deep/cave_floor |
+| SAND → DIRT (near water) | `SAND_TO_DIRT_WATER_RATE` | 2.5× | 0.02 × _growth | 1+ water/deep-water/cave-floor neighbor |
+| DIRT/SAND → WATER (rain flood) | `DIRT_TO_WATER_RAIN_RATE` | 0.75× | 0.006 × _tp | raining, 3+ water neighbors |
+| SAND → WATER (rain, faster) | inline | 1.5× DIRT_TO_WATER_RAIN_RATE | 0.012 × _tp | raining, 3+ water neighbors |
+| GRASS → WATER (rain absorption) | `GRASS_TO_WATER_RAIN_RATE` | 1× | 0.008 × _tp | raining, 1+ water neighbor |
+| Rain flood spread (secondary) | inline | 0.4× DIRT_TO_WATER_RAIN_RATE | 0.0024 × _tp | raining, DIRT/SAND/COBBLESTONE with 1+ water neighbor, cell unchanged |
+| DIRT → FLOWER_PATTERN (water edge) | `DIRT_TO_FLOWER_WATER_RATE` | 0.4× | 0.0032 × _growth | 1+ water neighbor AND 1+ non-dirt/non-water neighbor |
 
 *Stone/cobblestone neighbors reduce water evaporation rate (each stone cardinal: ×0.8, min 0.1)
 — natural grotto walls protect small pools.*
@@ -91,7 +91,7 @@ DEEP_WATER evaporation: 80% chance to become CAVE_FLOOR, 20% to become regular W
 | FLOWER_PATTERN natural growth | inline | 0.015× (non-desert) | 0.00003 × _growth | GRASS/DIRT/SAND/COBBLESTONE, cell unchanged this cycle |
 | FLOWER_PATTERN natural growth | inline | 0.003× (desert) | 0.000006 × _growth | GRASS/DIRT/SAND/COBBLESTONE, cell unchanged, biome=DESERT |
 | General terrain neighbor-copy | inline | 1× | 0.002 × _tp | GRASS/DIRT/SAND/WATER, cell unchanged; picks random NSEW neighbor |
-| Zone border biome seeding | `BIOME_SPREAD_RATE` | 2× | 0.004 × _tp | Cells at zone exit edges copy adjacent zone's primary biome cell |
+| Zone border biome seeding | `BIOME_BORDER_SPREAD_RATE` | 2× | 0.004 × _tp | Cells at zone exit edges copy adjacent zone's primary biome cell |
 
 *General neighbor-copy: picks one random NSEW neighbor. If that neighbor is a different base
 terrain type, cell copies it. Runs after all specific rules as a catch-all diffusion pass.*
@@ -107,10 +107,10 @@ any biome. Not limited to a single biome.
 
 | Rule | Variable | Multiplier | Effective rate | Fires when |
 |---|---|---|---|---|
-| GRASS → DIRT (sand erosion) | `GRASS_SAND_DECAY_RATE` | 1.5× | 0.003 × _decay | 1+ sand neighbor (any biome) |
-| DIRT → SAND (desert advance) | `DIRT_SAND_SPREAD_RATE` | 4× | 0.008 × _decay | no water, 1+ sand neighbor |
+| GRASS → DIRT (sand erosion) | `GRASS_TO_DIRT_SAND_RATE` | 1.5× | 0.003 × _decay | 1+ sand neighbor (any biome) |
+| DIRT → SAND (desert advance) | `DIRT_TO_SAND_SPREAD_RATE` | 4× | 0.008 × _decay | no water, 1+ sand neighbor |
 
-*DIRT_SAND_SPREAD_RATE at 4× CA_SPREAD_RATE — desert edges advance aggressively against dirt.*
+*DIRT_TO_SAND_SPREAD_RATE at 4× CA_SPREAD_RATE — desert edges advance aggressively against dirt.*
 
 ### Water formations (apply in any biome)
 
@@ -134,7 +134,7 @@ biome context (i.e., it's exposed on the overworld as a dried lake bed).*
 
 | Rule | Variable | Effective rate | Fires when |
 |---|---|---|---|
-| TREE → GRASS | `TREE_CROWD_DECAY_RATE` | 10× CA_DECAY_RATE × _decay | 1+ cobblestone neighbor (road-edge clearance) |
+| TREE → GRASS | `TREE_TO_GRASS_CROWD_RATE` | 10× CA_DECAY_RATE × _decay | 1+ cobblestone neighbor (road-edge clearance) |
 
 *Edge trees adjacent to a cobblestone road are cleared over time. The embedded-road rule
 (TREE → COBBLESTONE when 5+ neighbors cobblestone) has been removed — road clearance alone is sufficient.*
@@ -149,9 +149,9 @@ Apply only inside a single biome. Override or supplement global rules.
 
 | Rule | Variable | Effective rate | Notes |
 |---|---|---|---|
-| SAND → WATER (rain flood) | inline | 2× FLOODING_RATE = 0.012 × _tp | Sand absorbs rain faster than dirt |
+| SAND → WATER (rain flood) | inline | 2× DIRT_TO_WATER_RAIN_RATE = 0.012 × _tp | Sand absorbs rain faster than dirt |
 | TREE → SAND (sand neighbor) | inline | 150× CA_DECAY_RATE × _decay | Trees die rapidly at desert edges |
-| WATER → SAND (evaporation) | `WATER_TO_DIRT_RATE` | 0.002 × _decay | biome base cell is SAND, not GRASS |
+| WATER → SAND (evaporation) | `WATER_TO_BASE_ISOLATED_RATE` | 0.002 × _decay | biome base cell is SAND, not GRASS |
 | FLOWER_PATTERN growth | inline | 0.003× CA_GROWTH_RATE | 1/5 the rate of other biomes |
 | Tree growth | n/a | Never fires | Blocked by `biome != 'DESERT'` guard in tree spread rule |
 

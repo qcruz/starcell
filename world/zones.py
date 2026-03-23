@@ -1881,11 +1881,11 @@ class ZonesMixin:
     def update_single_cell(self, screen_x, screen_y, x, y):
         """Apply cellular automata rules to a single cell"""
         from constants import (
-            DIRT_TO_GRASS_RATE, GRASS_TO_DIRT_RATE, DIRT_TO_SAND_RATE,
-            TREE_GROWTH_RATE, SAND_RECLAIM_RATE, DEEP_WATER_FORM_RATE,
-            DEEP_WATER_EVAPORATE_RATE, WATER_TO_DIRT_RATE, FLOODING_RATE,
-            FLOWER_SPREAD_RATE, FLOWER_DECAY_RATE, TREE_DECAY_RATE,
-            BIOME_SPREAD_RATE,
+            DIRT_TO_GRASS_RATE, GRASS_TO_DIRT_RATE, DIRT_TO_SAND_DROUGHT_RATE,
+            GRASS_TO_TREE_RATE, SAND_TO_DIRT_WATER_RATE, WATER_TO_DEEP_WATER_RATE,
+            DEEP_WATER_TO_WATER_RATE, WATER_TO_BASE_ISOLATED_RATE, DIRT_TO_WATER_RAIN_RATE,
+            GRASS_TO_FLOWER_RATE, FLOWER_TO_GRASS_RATE, TREE_TO_GRASS_RATE,
+            BIOME_BORDER_SPREAD_RATE,
         )
 
         key = f"{screen_x},{screen_y}"
@@ -1923,13 +1923,13 @@ class ZonesMixin:
             if random.random() < GRASS_TO_DIRT_RATE:
                 new_cell = 'DIRT'
         elif cell == 'DIRT' and total_water == 0 and (sand_count >= 2 or grass_count == 0):
-            if random.random() < DIRT_TO_SAND_RATE:
+            if random.random() < DIRT_TO_SAND_DROUGHT_RATE:
                 new_cell = 'SAND'
         elif cell == 'GRASS' and 1 <= tree_count <= 2 and total_water >= 1:
-            if random.random() < TREE_GROWTH_RATE:
+            if random.random() < GRASS_TO_TREE_RATE:
                 new_cell = 'TREE1'
         elif cell == 'SAND' and total_water >= 2:
-            if random.random() < SAND_RECLAIM_RATE:
+            if random.random() < SAND_TO_DIRT_WATER_RATE:
                 new_cell = 'DIRT'
         elif cell == 'WATER':
             cardinal_water = sum(
@@ -1937,24 +1937,24 @@ class ZonesMixin:
                 if 0 <= x + cdx < GRID_WIDTH and 0 <= y + cdy < GRID_HEIGHT
                 and screen['grid'][y + cdy][x + cdx] in ('WATER', 'DEEP_WATER')
             )
-            if cardinal_water == 4 and random.random() < DEEP_WATER_FORM_RATE:
+            if cardinal_water == 4 and random.random() < WATER_TO_DEEP_WATER_RATE:
                 new_cell = 'DEEP_WATER'
-            elif total_water <= 1 and random.random() < WATER_TO_DIRT_RATE:
+            elif total_water <= 1 and random.random() < WATER_TO_BASE_ISOLATED_RATE:
                 new_cell = 'DIRT'
         elif cell == 'DEEP_WATER' and (water_count + deep_water_count) < 2:
-            if random.random() < DEEP_WATER_EVAPORATE_RATE:
+            if random.random() < DEEP_WATER_TO_WATER_RATE:
                 new_cell = 'WATER'
         elif cell == 'DIRT' and total_water >= 3:
-            if random.random() < FLOODING_RATE:
+            if random.random() < DIRT_TO_WATER_RAIN_RATE:
                 new_cell = 'WATER'
         elif cell == 'GRASS' and flower_count >= 1 and flower_count <= 2 and total_water >= 1:
-            if random.random() < FLOWER_SPREAD_RATE:
+            if random.random() < GRASS_TO_FLOWER_RATE:
                 new_cell = 'FLOWER'
         elif cell == 'FLOWER' and (flower_count >= 4 or total_water == 0):
-            if random.random() < FLOWER_DECAY_RATE:
+            if random.random() < FLOWER_TO_GRASS_RATE:
                 new_cell = 'GRASS'
         elif cell.startswith('TREE') and tree_count >= 4:
-            if random.random() < TREE_DECAY_RATE:
+            if random.random() < TREE_TO_GRASS_RATE:
                 new_cell = 'GRASS'
 
         # General neighbor-copy: base terrain may adopt a random NSEW neighbor's type
@@ -1963,7 +1963,7 @@ class ZonesMixin:
             if 0 <= nx < GRID_WIDTH and 0 <= ny < GRID_HEIGHT:
                 neighbor = screen['grid'][ny][nx]
                 if neighbor in ('GRASS', 'DIRT', 'SAND', 'WATER') and neighbor != cell:
-                    if random.random() < BIOME_SPREAD_RATE:
+                    if random.random() < BIOME_BORDER_SPREAD_RATE:
                         new_cell = neighbor
 
         if new_cell != cell:
