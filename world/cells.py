@@ -212,10 +212,14 @@ class CellsMixin:
                 # former deep water and should allow water to reform around it.
                 total_water = water_count + deep_water_count + cave_floor_count
 
+                # Debug tracer: tracks which rule converted this cell (used for desert DIRT logging below)
+                _dirt_rule = None
+
                 # Dirt → Water (flooding, rain only — highest priority for dirt)
                 if cell == 'DIRT' and total_water >= 3 and self.is_raining:
                     if random.random() < min(1.0, DIRT_TO_WATER_RAIN_RATE * _tp):
                         new_grid[y][x] = 'WATER'
+                        _dirt_rule = 'DIRT_TO_WATER_RAIN_RATE'
 
                 # Sand → Water (rain flooding — 2x dirt rate; sand absorbs water faster)
                 elif cell == 'SAND' and total_water >= 3 and self.is_raining:
@@ -226,11 +230,13 @@ class CellsMixin:
                 elif cell == 'DIRT' and total_water >= 2:
                     if random.random() < min(1.0, DIRT_TO_GRASS_RATE * _growth):
                         new_grid[y][x] = 'GRASS'
+                        _dirt_rule = 'DIRT_TO_GRASS_RATE'
 
                 # Dirt → Grass (water == 1, extra small chance)
                 elif cell == 'DIRT' and total_water == 1 and sand_count == 0:
                     if random.random() < min(1.0, DIRT_TO_GRASS_WATER_RATE * _growth):
                         new_grid[y][x] = 'GRASS'
+                        _dirt_rule = 'DIRT_TO_GRASS_WATER_RATE'
 
                 # Dirt → Stone (at water's edge touching a non-dirt/water cell — forms rocky rim)
                 # Produces natural grottos: sand→dirt near water, then dirt at sand interface hardens
@@ -239,18 +245,19 @@ class CellsMixin:
                                          if n not in ('DIRT', 'WATER', 'DEEP_WATER'))
                     if _non_dirt_land >= 1 and random.random() < min(1.0, DIRT_TO_FLOWER_WATER_RATE * _growth):
                         new_grid[y][x] = random.choice(['FLOWER_PATTERN1', 'FLOWER_PATTERN2', 'FLOWER_PATTERN3'])
+                        _dirt_rule = 'DIRT_TO_FLOWER_WATER_RATE'
 
                 # Dirt → Sand (any sand neighbor, no water — desertification spread, non-desert only)
                 elif cell == 'DIRT' and total_water == 0 and sand_count >= 1 and biome != 'DESERT':
                     if random.random() < min(1.0, DIRT_TO_SAND_SPREAD_RATE * _decay):
                         new_grid[y][x] = 'SAND'
-                        self.bug_catcher.log_ca_mutation(self.tick, key, x, y, 'DIRT', 'SAND', 'DIRT_TO_SAND_SPREAD_RATE', biome, sample_rate=0.1)
+                        _dirt_rule = 'DIRT_TO_SAND_SPREAD_RATE'
 
                 # Dirt → Sand (severe drought, no grass at all — non-desert only)
                 elif cell == 'DIRT' and total_water == 0 and grass_count == 0 and biome != 'DESERT':
                     if random.random() < min(1.0, DIRT_TO_SAND_DROUGHT_RATE * _decay):
                         new_grid[y][x] = 'SAND'
-                        self.bug_catcher.log_ca_mutation(self.tick, key, x, y, 'DIRT', 'SAND', 'DIRT_TO_SAND_DROUGHT_RATE', biome, sample_rate=0.1)
+                        _dirt_rule = 'DIRT_TO_SAND_DROUGHT_RATE'
 
                 # Grass → Dirt (sand erosion — desertification edge, higher rate)
                 elif cell == 'GRASS' and sand_count >= 1:
@@ -430,8 +437,14 @@ class CellsMixin:
                         if neighbor in ('GRASS', 'DIRT', 'SAND', 'WATER') and neighbor != cell:
                             if random.random() < min(1.0, TERRAIN_DIFFUSION_RATE * _tp):
                                 new_grid[y][x] = neighbor
-                                if cell == 'DIRT' and neighbor == 'SAND':
-                                    self.bug_catcher.log_ca_mutation(self.tick, key, x, y, 'DIRT', 'SAND', 'neighbor_copy', biome, sample_rate=0.1)
+                                if cell == 'DIRT':
+                                    _dirt_rule = 'neighbor_copy'
+
+                # Desert DIRT tracer: log any DIRT conversion in desert (no sampling — events are rare)
+                if biome == 'DESERT' and cell == 'DIRT' and _dirt_rule:
+                    self.bug_catcher.log_ca_mutation(
+                        self.tick, key, x, y, 'DIRT', new_grid[y][x], _dirt_rule, biome
+                    )
 
                 # Flower pattern growth: rare overlay on eligible unchanged cells
                 # [biome-specific: desert gets 1/5 rate] [cross-biome: water formation edge]
