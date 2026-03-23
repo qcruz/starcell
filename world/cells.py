@@ -373,7 +373,22 @@ class CellsMixin:
                         elif not self.is_raining and total_water == 0 and random.random() < min(1.0, 5 * CA_WATER_EVAP_RATE * _decay):
                             new_grid[y][x] = _water_decay_target
                             _ca_rule = 'CAVE_FLOOR_TO_BASE_DRY'
-                    # Cave structures: CAVE_FLOOR is permanent — no decay rule
+                    else:
+                        # Cave structures: BLUE_MUSHROOM cluster growth
+                        _mush_adj = sum(
+                            1 for cdx, cdy in ((0,-1),(0,1),(-1,0),(1,0))
+                            if 0 <= x+cdx < GRID_WIDTH and 0 <= y+cdy < GRID_HEIGHT
+                            and screen['grid'][y+cdy][x+cdx] == 'BLUE_MUSHROOM'
+                        )
+                        if 1 <= _mush_adj <= 2 and random.random() < min(1.0, 0.8 * CA_GROWTH_RATE * _growth):
+                            new_grid[y][x] = 'BLUE_MUSHROOM'
+                            _ca_rule = 'CAVE_FLOOR_TO_BLUE_MUSHROOM'
+
+                # Grass → Water (rain flooding only)
+                elif cell == 'GRASS' and total_water >= 1 and self.is_raining:
+                    if random.random() < min(1.0, GRASS_TO_WATER_RAIN_RATE * _tp):
+                        new_grid[y][x] = 'WATER'
+                        _ca_rule = 'GRASS_TO_WATER_RAIN_RATE'
 
                 # Flower spread
                 elif cell == 'GRASS' and 1 <= flower_count <= 2 and total_water >= 1:
@@ -386,12 +401,6 @@ class CellsMixin:
                     if random.random() < min(1.0, FLOWER_TO_GRASS_RATE * _decay):
                         new_grid[y][x] = 'GRASS'
                         _ca_rule = 'FLOWER_TO_GRASS_RATE'
-
-                # Grass → Water (rain flooding only)
-                elif cell == 'GRASS' and total_water >= 1 and self.is_raining:
-                    if random.random() < min(1.0, GRASS_TO_WATER_RAIN_RATE * _tp):
-                        new_grid[y][x] = 'WATER'
-                        _ca_rule = 'GRASS_TO_WATER_RAIN_RATE'
 
                 # Tree → Grass (drought)
                 elif cell.startswith('TREE') and total_water == 0 and drought_severity > 0.5:
@@ -446,17 +455,6 @@ class CellsMixin:
                     if not _bush_near_water and random.random() < min(1.0, 3 * CA_DECAY_RATE * _decay):
                         new_grid[y][x] = 'GRASS'
                         _ca_rule = 'BUSH_TO_GRASS'
-
-                # BLUE_MUSHROOM cluster growth
-                elif cell == 'CAVE_FLOOR' and _water_decay_target is None:
-                    _mush_adj = sum(
-                        1 for cdx, cdy in ((0,-1),(0,1),(-1,0),(1,0))
-                        if 0 <= x+cdx < GRID_WIDTH and 0 <= y+cdy < GRID_HEIGHT
-                        and screen['grid'][y+cdy][x+cdx] == 'BLUE_MUSHROOM'
-                    )
-                    if 1 <= _mush_adj <= 2 and random.random() < min(1.0, 0.8 * CA_GROWTH_RATE * _growth):
-                        new_grid[y][x] = 'BLUE_MUSHROOM'
-                        _ca_rule = 'CAVE_FLOOR_TO_BLUE_MUSHROOM'
 
                 # BLUE_MUSHROOM overcrowding
                 elif cell == 'BLUE_MUSHROOM':
