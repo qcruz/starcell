@@ -68,7 +68,7 @@ rules during dry periods. Left in for now as a safety net.*
 | WATER → biome base (volume) | inline | (count−4)× CA_BASE_RATE | scales with pool size | zone water count > 4 |
 | DEEP_WATER → CAVE_FLOOR/WATER | `DEEP_WATER_TO_WATER_RATE` | 0.5× | 0.004 × _decay | < 4 cardinal water neighbors; biome ≠ LAKE |
 | WATER → DEEP_WATER | `WATER_TO_DEEP_WATER_RATE` | 2.5× | 0.02 × _tp | all 4 cardinal neighbors are water/deep/cave_floor |
-| SAND → DIRT (near water) | `SAND_TO_DIRT_WATER_RATE` | 2.5× | 0.02 × _growth | 1+ water/deep-water/cave-floor neighbor |
+| SAND → DIRT (near water) | `SAND_TO_DIRT_WATER_RATE` | 10× | 0.08 × _growth | 1+ water/deep-water/cave-floor neighbor |
 | DIRT/SAND → WATER (rain flood) | `DIRT_TO_WATER_RAIN_RATE` | 0.75× | 0.006 × _tp | raining, 3+ water neighbors |
 | SAND → WATER (rain, faster) | inline | 1.5× DIRT_TO_WATER_RAIN_RATE | 0.012 × _tp | raining, 3+ water neighbors |
 | GRASS → WATER (rain absorption) | `GRASS_TO_WATER_RAIN_RATE` | 1× | 0.008 × _tp | raining, 1+ water neighbor |

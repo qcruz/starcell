@@ -68,43 +68,45 @@ class SpawningMixin:
             'FOREST': [
                 ('DEER', 0.75, 1, 3),
                 ('WOLF', 0.45, 0, 3),
-                ('SHEEP', 0.30, 0, 2),
+                ('SHEEP', 0.40, 0, 2),
+                ('CHICKEN', 0.30, 0, 2),
                 ('FARMER', 0.5, 0, 2),
                 ('LUMBERJACK', 0.6, 1, 2),
                 ('WIZARD', 0.25, 1, 2),
                 ('TRADER', 0.5, 1, 2),
                 ('BLACKSMITH', 0.5, 0, 1),
                 ('GUARD', 0.5, 1, 2),
-                ('BANDIT', 0.1, 0, 1),
-                ('GOBLIN', 0.15, 0, 2),
-                ('TERMITE', 0.4, 0, 2),   # Termites love forests (trees)
+                ('BANDIT', 0.07, 0, 1),
+                ('GOBLIN', 0.10, 0, 1),
+                ('TERMITE', 0.4, 0, 2),
                 ('RED_BIRD', 0.6, 1, 3),
                 ('BUTTERFLY', 0.5, 0, 2),
-                ('BLACK_SPIDER', 0.3, 0, 2),
+                ('BLACK_SPIDER', 0.20, 0, 1),
             ],
             'PLAINS': [
                 ('SHEEP', 0.9, 1, 4),
                 ('DEER', 0.6, 0, 3),
                 ('WOLF', 0.3, 0, 2),
+                ('CHICKEN', 0.7, 1, 3),
                 ('FARMER', 0.7, 1, 3),
                 ('LUMBERJACK', 0.3, 0, 1),
                 ('WIZARD', 0.25, 1, 2),
                 ('TRADER', 0.5, 1, 2),
                 ('BLACKSMITH', 0.5, 0, 1),
                 ('GUARD', 0.5, 1, 2),
-                ('BANDIT', 0.1, 0, 1),
-                ('GOBLIN', 0.1, 0, 1),
-                ('TERMITE', 0.2, 0, 1),   # Some termites in plains
-                ('CHICKEN', 0.7, 1, 3),
+                ('BANDIT', 0.07, 0, 1),
+                ('GOBLIN', 0.07, 0, 1),
+                ('TERMITE', 0.2, 0, 1),
                 ('RED_BIRD', 0.5, 0, 2),
                 ('BUTTERFLY', 0.6, 1, 3),
             ],
             'DESERT': [
-                ('SHEEP', 0.3, 0, 1),
-                ('DEER', 0.3, 0, 1),
-                ('WOLF', 0.3, 0, 1),
-                ('GOBLIN', 0.35, 0, 2),
-                ('BANDIT', 0.25, 0, 2),
+                ('SHEEP', 0.50, 0, 2),
+                ('DEER', 0.50, 0, 2),
+                ('WOLF', 0.40, 0, 2),
+                ('CHICKEN', 0.30, 0, 1),
+                ('GOBLIN', 0.25, 0, 2),
+                ('BANDIT', 0.18, 0, 1),
                 ('WIZARD', 0.25, 1, 2),
                 ('FARMER', 0.3, 0, 1),
                 ('LUMBERJACK', 0.2, 0, 1),
@@ -112,14 +114,15 @@ class SpawningMixin:
                 ('TRADER', 0.5, 1, 2),
                 ('BLACKSMITH', 0.4, 0, 1),
                 ('GUARD', 0.5, 1, 2),
-                ('BLACK_SPIDER', 0.4, 0, 2),
+                ('BLACK_SPIDER', 0.25, 0, 1),
             ],
             'MOUNTAINS': [
                 ('WOLF', 0.9, 1, 4),
-                ('DEER', 0.45, 0, 3),
-                ('SHEEP', 0.3, 0, 2),
-                ('GOBLIN', 0.3, 0, 2),
-                ('BANDIT', 0.15, 0, 2),
+                ('DEER', 0.55, 0, 3),
+                ('SHEEP', 0.40, 0, 2),
+                ('CHICKEN', 0.20, 0, 1),
+                ('GOBLIN', 0.20, 0, 2),
+                ('BANDIT', 0.10, 0, 1),
                 ('WIZARD', 0.25, 1, 2),
                 ('FARMER', 0.2, 0, 1),
                 ('LUMBERJACK', 0.4, 0, 2),
@@ -127,10 +130,17 @@ class SpawningMixin:
                 ('TRADER', 0.5, 1, 2),
                 ('BLACKSMITH', 0.6, 0, 1),
                 ('GUARD', 0.5, 1, 2),
-                ('BLACK_SPIDER', 0.5, 0, 2),
-                ('RED_BIRD', 0.3, 0, 1),
+                ('BLACK_SPIDER', 0.30, 0, 1),
+                ('RED_BIRD', 0.4, 0, 2),
             ],
-            'LAKE': []                    # No spawns in lake zones
+            'LAKE': [
+                ('DEER', 0.60, 1, 2),
+                ('SHEEP', 0.40, 0, 2),
+                ('CHICKEN', 0.50, 1, 2),
+                ('RED_BIRD', 0.70, 1, 3),
+                ('BUTTERFLY', 0.50, 0, 2),
+                ('WOLF', 0.20, 0, 1),
+            ],
         }
 
         spawn_list = spawn_tables.get(biome_name, [])
@@ -915,32 +925,36 @@ class SpawningMixin:
 
         spawn_tables = {
             'FOREST': [
-                ('DEER', 0.27), ('WOLF', 0.15), ('SHEEP', 0.08),
+                ('DEER', 0.27), ('WOLF', 0.15), ('SHEEP', 0.12), ('CHICKEN', 0.08),
                 ('FARMER', 0.12), ('LUMBERJACK', 0.15),
                 ('TRADER', 0.075), ('GUARD', 0.075),
-                ('BANDIT', 0.025), ('GOBLIN', 0.025),
-                ('RED_BIRD', 0.12), ('BUTTERFLY', 0.10), ('BLACK_SPIDER', 0.06)
+                ('BANDIT', 0.018), ('GOBLIN', 0.018),
+                ('RED_BIRD', 0.12), ('BUTTERFLY', 0.10), ('BLACK_SPIDER', 0.04)
             ],
             'PLAINS': [
-                ('SHEEP', 0.30), ('DEER', 0.18), ('WOLF', 0.08),
+                ('SHEEP', 0.30), ('DEER', 0.18), ('WOLF', 0.08), ('CHICKEN', 0.18),
                 ('FARMER', 0.18), ('LUMBERJACK', 0.05),
                 ('TRADER', 0.075), ('GUARD', 0.075),
-                ('BANDIT', 0.025), ('GOBLIN', 0.025),
-                ('CHICKEN', 0.14), ('RED_BIRD', 0.10), ('BUTTERFLY', 0.12)
+                ('BANDIT', 0.018), ('GOBLIN', 0.018),
+                ('RED_BIRD', 0.10), ('BUTTERFLY', 0.12)
             ],
             'DESERT': [
-                ('GOBLIN', 0.10), ('BANDIT', 0.07), ('MINER', 0.10),
-                ('SHEEP', 0.08), ('DEER', 0.08), ('WOLF', 0.08),
+                ('SHEEP', 0.15), ('DEER', 0.15), ('WOLF', 0.12), ('CHICKEN', 0.08),
+                ('GOBLIN', 0.07), ('BANDIT', 0.05), ('MINER', 0.10),
                 ('FARMER', 0.07), ('LUMBERJACK', 0.04),
                 ('TRADER', 0.09), ('GUARD', 0.06),
-                ('BLACK_SPIDER', 0.08)
+                ('BLACK_SPIDER', 0.05)
             ],
             'MOUNTAINS': [
-                ('WOLF', 0.27), ('GOBLIN', 0.08), ('MINER', 0.14),
-                ('BANDIT', 0.045), ('DEER', 0.11), ('SHEEP', 0.06),
+                ('WOLF', 0.27), ('DEER', 0.15), ('SHEEP', 0.10), ('CHICKEN', 0.06),
+                ('GOBLIN', 0.06), ('BANDIT', 0.03), ('MINER', 0.14),
                 ('FARMER', 0.03), ('LUMBERJACK', 0.09),
                 ('TRADER', 0.06), ('GUARD', 0.04),
-                ('BLACK_SPIDER', 0.08), ('RED_BIRD', 0.06)
+                ('BLACK_SPIDER', 0.05), ('RED_BIRD', 0.08)
+            ],
+            'LAKE': [
+                ('DEER', 0.25), ('SHEEP', 0.18), ('CHICKEN', 0.20),
+                ('RED_BIRD', 0.28), ('BUTTERFLY', 0.18), ('WOLF', 0.08)
             ]
         }
 
