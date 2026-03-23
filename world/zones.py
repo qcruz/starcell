@@ -1287,6 +1287,7 @@ class ZonesMixin:
 
         # Tier 2 & 3: Use bulk updates
         screen = self.screens[key]
+        biome = screen.get('biome', 'FOREST')
 
         neighbor_cache = {}
         for y in range(1, GRID_HEIGHT - 1):
@@ -1324,7 +1325,7 @@ class ZonesMixin:
                 elif cell == 'GRASS' and 1 <= counts.get('tree', 0) <= 2 and total_water >= 1:
                     change_prob = min(cycles_missed * 0.01, 0.5)
                     new_cell = 'TREE1'
-                elif cell == 'DIRT' and total_water == 0 and counts.get('sand', 0) >= 2:
+                elif cell == 'DIRT' and total_water == 0 and counts.get('sand', 0) >= 2 and biome != 'DESERT':
                     change_prob = min(cycles_missed * 0.02, 0.7)
                     new_cell = 'SAND'
                 elif cell == 'WATER' and counts.get('water', 0) >= 4:
@@ -1893,6 +1894,7 @@ class ZonesMixin:
             return
 
         screen = self.screens[key]
+        biome = screen.get('biome', 'FOREST')
         cell = screen['grid'][y][x]
 
         if cell in ['WALL', 'HOUSE', 'CAVE', 'CLIFF']:
@@ -1922,7 +1924,7 @@ class ZonesMixin:
         elif cell == 'GRASS' and total_water == 0:
             if random.random() < GRASS_TO_DIRT_RATE:
                 new_cell = 'DIRT'
-        elif cell == 'DIRT' and total_water == 0 and (sand_count >= 2 or grass_count == 0):
+        elif cell == 'DIRT' and total_water == 0 and (sand_count >= 2 or grass_count == 0) and biome != 'DESERT':
             if random.random() < DIRT_TO_SAND_DROUGHT_RATE:
                 new_cell = 'SAND'
         elif cell == 'GRASS' and 1 <= tree_count <= 2 and total_water >= 1:
