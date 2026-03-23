@@ -2479,8 +2479,13 @@ class NpcAiMixin:
             kscale = KEEPER_URGENCY_SCALE.get(ktype, 0)
             kpos   = entity.keeper_target_pos
             kdist  = abs(entity.x - kpos[0]) + abs(entity.y - kpos[1])
-            drift  = max(0, kdist - krange) if krange is not None else 0
-            candidates['keeper_target'] = kbase + drift * kscale
+            # Within range: near-zero score so food/water/role can take over
+            # Outside range: base + urgency scaling to pull them back
+            if krange is not None and kdist <= krange:
+                candidates['keeper_target'] = 1
+            else:
+                drift = max(0, kdist - krange) if krange is not None else 0
+                candidates['keeper_target'] = kbase + drift * kscale
 
         # ── Tier 3: Quest (assigned/lore only — not base role quests) ─────────
         quest_score = self._evaluate_quest_tier(entity, screen_key)

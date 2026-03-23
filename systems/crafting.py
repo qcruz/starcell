@@ -589,6 +589,21 @@ class CraftingMixin:
             'FLOWER_PATTERN1': 'flower',
             'FLOWER_PATTERN2': 'flower',
             'FLOWER_PATTERN3': 'flower',
+            # Furniture / interior cells
+            'BOOKSHELF':          'bookshelf',
+            'WOOD_CHAIR':         'wood_chair',
+            'WOOD_TABLE':         'wood_table',
+            'BED_WHITE':          'bed_white',
+            'BED_BLUE':           'bed_blue',
+            'WATER_TROUGH':       'water_trough',
+            'SMALL_POTTED_PLANT': 'small_potted_plant',
+            'BLUE_MUSHROOM':      'blue_mushroom',
+            # Outdoor special cells
+            'BROKEN_GRAVESTONE':  'broken_gravestone',
+            'GRAVESTONE':         'gravestone',
+            'LOCKED_CHEST':       'locked_chest',
+            'OPEN_CHEST':         'chest',
+            'DESERT_WELL':        'desert_well',
         }
 
         if cell_type in exact_pickup_map:

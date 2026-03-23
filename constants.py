@@ -183,7 +183,7 @@ WIZARD_SPELL_RANGE = 6          # Maximum spell casting range
 # Action Success Rates
 FARMER_HARVEST_SUCCESS = 0.4    # 40% harvest success
 FARMER_TILL_SUCCESS = 0.25      # 25% till success
-FARMER_PLANT_SUCCESS = 0.3      # 30% plant success
+FARMER_PLANT_SUCCESS = 0.45     # 45% plant success (increased)
 LUMBERJACK_CHOP_SUCCESS = 0.85   # 85% chop success (increased for much faster work)
 LUMBERJACK_BUILD_SUCCESS = 0.35 # 35% build success
 MINER_MINE_SUCCESS = 0.5        # 50% mine success (increased for aggression)
@@ -217,9 +217,9 @@ MOUNTAINS_BIOME_CHANCE = 0.15   # 15% of zones are mountains (generate_screen)
 DESERT_BIOME_CHANCE = 0.05      # 5% of zones are desert (generate_screen)
 
 # Raid Event System
-RAID_CHANCE_BASE = 0.02         # 2% base chance per zone update (scales with population)
+RAID_CHANCE_BASE = 0.05         # 5% base raid chance (reduced; structures lower it further)
 RAID_POPULATION_THRESHOLD = 4   # Minimum entities in zone to trigger raid check
-HIDDEN_CAVE_SPAWN_CHANCE = 0.20 # 20% chance to spawn hidden cave during raid
+HIDDEN_CAVE_SPAWN_CHANCE = 0.50 # 50% chance to spawn hidden cave during raid (caves primary source)
 NATURAL_CAVE_ZONE_CHANCE = 0.08 # 8% chance a zone gets a natural cave on generation
 PLAYER_MINESHAFT_BASE_CHANCE = 0.05 # 5% base chance for player mining to create mineshaft
 MINESHAFT_DEPTH_DIVISOR = 2.0  # Each depth level halves the mineshaft creation chance
@@ -331,7 +331,7 @@ KEEPER_ENTITY_TYPE = {
 # Miner & Structure Systems
 MINER_CAVE_CREATE_CHANCE = 0.10 # 10% chance to create cave when mining at zone corners
 CAMP_UPGRADE_CHANCE = 0.001     # 0.1% chance per update for camp to upgrade to house
-CAVE_HOSTILE_SPAWN_CHANCE = 0.005 # 0.5% chance per cave per update to spawn hostile
+CAVE_HOSTILE_SPAWN_CHANCE = 0.010 # 1.0% chance per cave per update to spawn hostile
 TERMITE_SPAWN_CHANCE = 0.001      # 0.1% chance per zone per update to spawn termite (near trees) - reduced spawn rate
 NIGHT_SKELETON_SPAWN_CHANCE = 0.01 # 1% chance per zone at night to spawn skeleton (higher near dropped items)
 SKELETON_DAYLIGHT_DAMAGE = 1       # HP damage per update to skeletons during daytime
@@ -1699,9 +1699,9 @@ CELL_PICKUP = {
     'TREE1': {'tool': None, 'item': 'tree_sapling', 'amount': 1},
     'TREE2': {'tool': None, 'item': 'tree_sapling', 'amount': 1},
     'BUSH': {'tool': None, 'item': 'bush', 'amount': 1},
-    'FLOWER_PATTERN1': {'tool': None, 'item': 'flower_pattern1'},
-    'FLOWER_PATTERN2': {'tool': None, 'item': 'flower_pattern2'},
-    'FLOWER_PATTERN3': {'tool': None, 'item': 'flower_pattern3'},
+    'FLOWER_PATTERN1': {'tool': None, 'item': 'flower'},
+    'FLOWER_PATTERN2': {'tool': None, 'item': 'flower'},
+    'FLOWER_PATTERN3': {'tool': None, 'item': 'flower'},
     'WALL': {'tool': None, 'item': 'wall'},
     'HOUSE': {'tool': None, 'item': 'house'},
     'CAVE': {'tool': None, 'item': 'cave'},

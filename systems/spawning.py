@@ -335,6 +335,15 @@ class SpawningMixin:
         npcs_over_threshold = human_count - RAID_POPULATION_THRESHOLD
         raid_chance = min(RAID_CHANCE_BASE + npcs_over_threshold * 0.005, 0.10)
 
+        # Each house/stone_house/mineshaft in the zone reduces raid chance (established zones safer)
+        if screen_key in self.screens:
+            grid = self.screens[screen_key]['grid']
+            structure_count = sum(
+                1 for row in grid for cell in row
+                if cell in ('HOUSE', 'STONE_HOUSE', 'MINESHAFT')
+            )
+            raid_chance = max(0.0, raid_chance - structure_count * 0.01)
+
         if random.random() < raid_chance:
             self.trigger_raid(screen_key)
 

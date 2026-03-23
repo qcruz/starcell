@@ -351,12 +351,14 @@ class ZonesMixin:
                     screen['grid'][y][x] = base_cell
                     continue
 
-                # Chest ↔ EMPTY_CRATE swap based on contents
+                # Chest lifecycle: restore background when empty (no EMPTY_CRATE)
                 if cell == 'CHEST':
                     chest_key = f"{zone_key}:{x},{y}"
                     contents = self.chest_contents.get(chest_key, {})
                     if not any(v > 0 for v in contents.values()):
-                        screen['grid'][y][x] = 'EMPTY_CRATE'
+                        bg = getattr(self, 'chest_backgrounds', {}).pop(chest_key, None)
+                        screen['grid'][y][x] = bg if bg else base_cell
+                        self.chest_contents.pop(chest_key, None)
                     continue
                 if cell == 'EMPTY_CRATE':
                     chest_key = f"{zone_key}:{x},{y}"

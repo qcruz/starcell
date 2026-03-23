@@ -916,7 +916,7 @@ class GameCoreMixin:
                 zone_gs.setdefault(chosen, []).append(name)
             return
 
-        # Try to cluster near existing gravestones first, then fall back to corners
+        # Only place near existing gravestones — no corner fallback
         _open = {'GRASS', 'DIRT', 'SAND', 'COBBLESTONE', 'SOIL'}
         cluster_pos = self.find_cluster_position(overworld_key, 'GRAVESTONE', radius=5)
         if cluster_pos:
@@ -924,23 +924,6 @@ class GameCoreMixin:
             if grid[cy][cx] in _open:
                 grid[cy][cx] = 'GRAVESTONE'
                 zone_gs[(cx, cy)] = [name]
-                return
-
-        # Fallback: place in a random corner area
-        corners = [
-            [(x, y) for x in range(0, 3)             for y in range(0, 3)],
-            [(x, y) for x in range(GRID_WIDTH - 3, GRID_WIDTH) for y in range(0, 3)],
-            [(x, y) for x in range(0, 3)             for y in range(GRID_HEIGHT - 3, GRID_HEIGHT)],
-            [(x, y) for x in range(GRID_WIDTH - 3, GRID_WIDTH) for y in range(GRID_HEIGHT - 3, GRID_HEIGHT)],
-        ]
-        random.shuffle(corners)
-        for corner in corners:
-            candidates = [(x, y) for x, y in corner if grid[y][x] in _open]
-            if candidates:
-                cx, cy = random.choice(candidates)
-                grid[cy][cx] = 'GRAVESTONE'
-                zone_gs[(cx, cy)] = [name]
-                return
 
     def check_follower_integrity(self):
         """Every-tick check: ensure followers are alive, non-hostile, not targeting player."""
