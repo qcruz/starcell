@@ -440,7 +440,7 @@ class ZonesMixin:
                            'APPLE_CRATE'}
 
         foreign_revert = {
-            'DESERT': {'GRASS', 'TREE1', 'TREE2', 'FLOWER', 'DIRT'},
+            'DESERT': {'GRASS', 'TREE1', 'TREE2', 'FLOWER'},
             'FOREST': {'SAND'},
             'PLAINS': {'SAND'},
             'MOUNTAINS': {'SAND'},

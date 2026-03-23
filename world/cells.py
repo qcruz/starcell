@@ -4,7 +4,7 @@ import random
 # CA_RULES_ENABLED = False disables all CA
 # CA_SINGLE_RULE = restrict to one rule group ('sand_to_dirt_water', or None for all)
 CA_RULES_ENABLED = True
-CA_SINGLE_RULE = 'sand_to_dirt_water'
+CA_SINGLE_RULE = None
 
 from constants import (
     GRID_WIDTH, GRID_HEIGHT,
