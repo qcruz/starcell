@@ -436,7 +436,8 @@ class ZonesMixin:
                            # New permanent cells
                            'BROKEN_GRAVESTONE', 'LOCKED_CHEST', 'OPEN_CHEST',
                            'BOOKSHELF', 'WOOD_CHAIR', 'WOOD_TABLE', 'BED_WHITE',
-                           'WATER_TROUGH', 'SMALL_POTTED_PLANT', 'BLUE_MUSHROOM'}
+                           'WATER_TROUGH', 'SMALL_POTTED_PLANT', 'BLUE_MUSHROOM',
+                           'APPLE_CRATE'}
 
         foreign_revert = {
             'DESERT': {'GRASS', 'TREE1', 'TREE2', 'FLOWER', 'DIRT'},

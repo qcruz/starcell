@@ -566,18 +566,17 @@ class WorldGenerationMixin:
                 _furniture_placed += 1
             _furniture_attempts += 1
 
-        # 15% chance to place a water trough
-        if random.random() < 0.15:
-            _wt_attempts = 0
-            while _wt_attempts < 20:
-                wx = random.randint(2, GRID_WIDTH - 3)
-                wy = random.randint(2, GRID_HEIGHT - 4)
-                if grid[wy][wx] == 'FLOOR_WOOD':
-                    grid[wy][wx] = 'WATER_TROUGH'
-                    break
-                _wt_attempts += 1
+        # Guaranteed water trough placement
+        _wt_attempts = 0
+        while _wt_attempts < 30:
+            wx = random.randint(2, GRID_WIDTH - 3)
+            wy = random.randint(2, GRID_HEIGHT - 4)
+            if grid[wy][wx] == 'FLOOR_WOOD':
+                grid[wy][wx] = 'WATER_TROUGH'
+                break
+            _wt_attempts += 1
 
-        # Place 0-2 empty crates in interior corners (against walls)
+        # Place 0-2 empty crates + 1 guaranteed apple crate in interior corners (against walls)
         _corner_candidates = [
             (1, 1), (2, 1), (1, 2),
             (GRID_WIDTH - 2, 1), (GRID_WIDTH - 3, 1), (GRID_WIDTH - 2, 2),
@@ -585,13 +584,19 @@ class WorldGenerationMixin:
             (GRID_WIDTH - 2, GRID_HEIGHT - 3), (GRID_WIDTH - 3, GRID_HEIGHT - 3),
         ]
         random.shuffle(_corner_candidates)
+        _apple_placed = False
         _crates_placed = 0
+        _crate_limit = random.randint(0, 2)
         for cx, cy in _corner_candidates:
-            if _crates_placed >= random.randint(0, 2):
-                break
             if 0 <= cy < GRID_HEIGHT and 0 <= cx < GRID_WIDTH and grid[cy][cx] == 'FLOOR_WOOD':
-                grid[cy][cx] = 'EMPTY_CRATE'
-                _crates_placed += 1
+                if not _apple_placed:
+                    grid[cy][cx] = 'APPLE_CRATE'
+                    _apple_placed = True
+                elif _crates_placed < _crate_limit:
+                    grid[cy][cx] = 'EMPTY_CRATE'
+                    _crates_placed += 1
+                else:
+                    break
 
         # Place 0-3 barrels on random FLOOR_WOOD cells
         num_barrels = random.randint(0, 3)

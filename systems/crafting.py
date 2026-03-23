@@ -604,6 +604,7 @@ class CraftingMixin:
             'LOCKED_CHEST':       'locked_chest',
             'OPEN_CHEST':         'chest',
             'DESERT_WELL':        'desert_well',
+            'APPLE_CRATE':        'apple_crate',
         }
 
         if cell_type in exact_pickup_map:

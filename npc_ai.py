@@ -430,13 +430,22 @@ class NpcAiMixin:
                             entity.ai_state_timer = 2
                             self._try_complete_assigned_quest(entity)
                         elif entity.target_type == 'food':
+                            # Check for infinite food source first (never consumed)
+                            if isinstance(entity.current_target, tuple) and len(entity.current_target) >= 4:
+                                cell_type = entity.current_target[3]
+                                cell_info = CELL_TYPES.get(cell_type, {})
+                                if cell_info.get('infinite_food'):
+                                    entity.eat(cell_info.get('food_value', 30))
+                                    entity.current_target = None
+                                    entity.ai_state = 'wandering'
+                                    entity.ai_state_timer = 2
+                                    continue
                             # Eat food — use behavior_config actions or direct consumption
                             behavior_config = entity.props.get('behavior_config')
                             if behavior_config:
                                 self.execute_entity_behavior(entity, behavior_config)
                             else:
                                 # Direct food consumption for entities without behavior_config
-                                food_sources = entity.props.get('food_sources', [])
                                 if isinstance(entity.current_target, tuple) and len(entity.current_target) >= 4:
                                     cell_type = entity.current_target[3]
                                     food_value = 40 if 'CARROT' in cell_type else 20

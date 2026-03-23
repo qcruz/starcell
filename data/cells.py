@@ -54,6 +54,7 @@ COLORS = {
     'SMALL_POTTED_PLANT':(60, 120, 60),
     'BED_WHITE':         (230, 225, 215),
     'BLUE_MUSHROOM':     (60, 90, 180),
+    'APPLE_CRATE':       (180, 80, 30),
 }
 
 # Colors for entities
@@ -257,6 +258,14 @@ CELL_TYPES = {
         'drops': [{'item': 'wood', 'amount': 1, 'chance': 0.6},
                   {'cell': 'GRASS', 'chance': 0.8}],
     },
+    'APPLE_CRATE': {
+        'color': (180, 80, 30),
+        'label': 'AplCrt',
+        'solid': True,
+        'interactable': True,
+        'infinite_food': True,
+        'food_value': 30,
+    },
 }
 
 # Cell pickup requirements
@@ -286,6 +295,7 @@ CELL_PICKUP = {
     'FLOWER_PATTERN1': {'tool': None, 'item': 'flower'},
     'FLOWER_PATTERN2': {'tool': None, 'item': 'flower'},
     'FLOWER_PATTERN3': {'tool': None, 'item': 'flower'},
+    'APPLE_CRATE':     {'tool': None, 'item': 'apple_crate'},
 }
 
 # Cell placement - what item places what cell

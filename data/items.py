@@ -202,6 +202,8 @@ ITEMS.update({
     'small_potted_plant': {'color': COLORS['SMALL_POTTED_PLANT'], 'name': 'Potted Plant'},
     'blue_mushroom': {'color': COLORS['BLUE_MUSHROOM'], 'name': 'Blue Mushroom',
                       'is_food': True, 'food_value': 15, 'description': 'A glowing cave fungus. Edible.'},
+    'apple_crate': {'color': (180, 80, 30), 'name': 'Apple Crate',
+                    'description': 'A crate of apples. Infinite food source when placed.'},
     'bottle': {'color': (160, 200, 220), 'name': 'Bottle'},
     'bottles': {'color': (140, 180, 200), 'name': 'Bottles'},
     'magic_rune': {'color': (180, 120, 255), 'name': 'Magic Rune', 'magic_damage': 'arcane', 'damage': 5, 'sprite_name': 'magic_rune'},
