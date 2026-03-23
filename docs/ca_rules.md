@@ -108,9 +108,7 @@ any biome. Not limited to a single biome.
 | Rule | Variable | Multiplier | Effective rate | Fires when |
 |---|---|---|---|---|
 | GRASS → DIRT (sand erosion) | `GRASS_TO_DIRT_SAND_RATE` | 1.5× | 0.003 × _decay | 1+ sand neighbor (any biome) |
-| DIRT → SAND (desert advance) | `DIRT_TO_SAND_SPREAD_RATE` | 4× | 0.008 × _decay | no water, 1+ sand neighbor |
-
-*DIRT_TO_SAND_SPREAD_RATE at 4× CA_SPREAD_RATE — desert edges advance aggressively against dirt.*
+| DIRT → SAND (desert advance) | `DIRT_TO_SAND_SPREAD_RATE` | 2× | 0.004 × _decay | no water, 1+ sand neighbor |
 
 ### Water formations (apply in any biome)
 

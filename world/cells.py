@@ -245,8 +245,8 @@ class CellsMixin:
                     if random.random() < min(1.0, DIRT_TO_SAND_SPREAD_RATE * _decay):
                         new_grid[y][x] = 'SAND'
 
-                # Dirt → Sand (severe drought, no grass at all — original fallback)
-                elif cell == 'DIRT' and total_water == 0 and grass_count == 0:
+                # Dirt → Sand (severe drought, no grass at all — non-desert only)
+                elif cell == 'DIRT' and total_water == 0 and grass_count == 0 and biome != 'DESERT':
                     if random.random() < min(1.0, DIRT_TO_SAND_DROUGHT_RATE * _decay):
                         new_grid[y][x] = 'SAND'
 

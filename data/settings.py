@@ -93,7 +93,7 @@ BIOME_BORDER_SPREAD_RATE = 2.0 * CA_SPREAD_RATE
 
 # Tier 2 — Cross-biome: desert edge
 GRASS_TO_DIRT_SAND_RATE  = 1.5 * CA_SPREAD_RATE
-DIRT_TO_SAND_SPREAD_RATE = 4.0 * CA_SPREAD_RATE
+DIRT_TO_SAND_SPREAD_RATE = 2.0 * CA_SPREAD_RATE
 
 # Entity Survival
 HUNGER_DECAY_RATE = 0.02        # Base hunger loss per decay call (humanoids get 6× this)

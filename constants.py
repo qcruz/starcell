@@ -157,7 +157,7 @@ BIOME_BORDER_SPREAD_RATE = 2.0 * CA_SPREAD_RATE  # 0.004 — base terrain copies
 # ── Tier 2: Cross-biome — desert edge interactions ──────────────────────────
 # Fire when desert-type cells (SAND) are adjacent to non-desert terrain.
 GRASS_TO_DIRT_SAND_RATE  = 1.5 * CA_SPREAD_RATE  # 0.003 — grass erodes to dirt near sand
-DIRT_TO_SAND_SPREAD_RATE = 4.0 * CA_SPREAD_RATE  # 0.008 — dry dirt converts to sand near sand
+DIRT_TO_SAND_SPREAD_RATE = 2.0 * CA_SPREAD_RATE  # 0.004 — dry dirt converts to sand near sand
 
 # Entity Survival
 HUNGER_DECAY_RATE = 0.02        # Base hunger loss per decay call (humanoids get 6× this)
