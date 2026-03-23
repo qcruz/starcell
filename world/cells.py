@@ -470,7 +470,7 @@ class CellsMixin:
                 if new_grid[y][x] == cell and cell in ('GRASS', 'SAND', 'DIRT'):
                     for _t, _n in (('SAND', sand_count), ('GRASS', grass_count), ('DIRT', dirt_count)):
                         if _t != cell and _n >= 3:
-                            if random.random() < min(1.0, CA_DECAY_RATE * _decay):
+                            if random.random() < min(1.0, 3 * CA_DECAY_RATE * _decay):
                                 new_grid[y][x] = _t
                                 _ca_rule = 'BASE_TERRAIN_PRESSURE'
                             break
