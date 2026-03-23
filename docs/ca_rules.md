@@ -90,11 +90,12 @@ DEEP_WATER evaporation: 80% chance to become CAVE_FLOOR, 20% to become regular W
 |---|---|---|---|---|
 | FLOWER_PATTERN natural growth | inline | 0.015× (non-desert) | 0.00003 × _growth | GRASS/DIRT/SAND/COBBLESTONE, cell unchanged this cycle |
 | FLOWER_PATTERN natural growth | inline | 0.003× (desert) | 0.000006 × _growth | GRASS/DIRT/SAND/COBBLESTONE, cell unchanged, biome=DESERT |
-| General terrain neighbor-copy | inline | 1× | 0.002 × _tp | GRASS/DIRT/SAND/WATER, cell unchanged; picks random NSEW neighbor |
+| General terrain neighbor-copy | `TERRAIN_DIFFUSION_RATE` | 1× CA_GROWTH_RATE | 0.0001 × _tp | GRASS/DIRT/SAND/WATER, cell unchanged; picks random NSEW neighbor |
 | Zone border biome seeding | `BIOME_BORDER_SPREAD_RATE` | 2× | 0.004 × _tp | Cells at zone exit edges copy adjacent zone's primary biome cell |
 
 *General neighbor-copy: picks one random NSEW neighbor. If that neighbor is a different base
-terrain type, cell copies it. Runs after all specific rules as a catch-all diffusion pass.*
+terrain type, cell copies it. Runs after all specific rules as a slow catch-all diffusion pass.
+Uses TERRAIN_DIFFUSION_RATE (tied to CA_GROWTH_RATE, not CA_SPREAD_RATE) — 40× slower than before.*
 
 ---
 

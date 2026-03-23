@@ -152,7 +152,8 @@ GRASS_TO_WATER_RAIN_RATE    = 1.0  * CA_WATER_EVAP_RATE  # 0.008 — grass → w
 DIRT_TO_FLOWER_WATER_RATE   = 0.4  * CA_WATER_EVAP_RATE  # 0.003 — dirt at water boundary → flower pattern
 
 # ── Tier 1: Spread (× CA_SPREAD_RATE) ───────────────────────────────────────
-BIOME_BORDER_SPREAD_RATE = 2.0 * CA_SPREAD_RATE  # 0.004 — base terrain copies a random NSEW neighbor each cycle
+BIOME_BORDER_SPREAD_RATE  = 2.0 * CA_SPREAD_RATE   # 0.004 — zone-edge cells copy adjacent zone's primary biome cell
+TERRAIN_DIFFUSION_RATE    = 1.0 * CA_GROWTH_RATE   # 0.0001 — slow catch-all: base terrain bleeds into unlike neighbors
 
 # ── Tier 2: Cross-biome — desert edge interactions ──────────────────────────
 # Fire when desert-type cells (SAND) are adjacent to non-desert terrain.

@@ -12,7 +12,7 @@ from constants import (
     WATER_TO_DEEP_WATER_RATE, DEEP_WATER_TO_WATER_RATE,
     WATER_TO_BASE_ISOLATED_RATE, DIRT_TO_FLOWER_WATER_RATE, DIRT_TO_WATER_RAIN_RATE,
     SAND_TO_DIRT_STONE_RATE,
-    BIOME_BORDER_SPREAD_RATE,
+    BIOME_BORDER_SPREAD_RATE, TERRAIN_DIFFUSION_RATE,
     GRASS_TO_DIRT_SAND_RATE, DIRT_TO_SAND_SPREAD_RATE,
     GRASS_TO_WATER_RAIN_RATE, DIRT_TO_GRASS_WATER_RATE,
     # Rain
@@ -428,7 +428,7 @@ class CellsMixin:
                     if 0 <= nx < GRID_WIDTH and 0 <= ny < GRID_HEIGHT:
                         neighbor = screen['grid'][ny][nx]
                         if neighbor in ('GRASS', 'DIRT', 'SAND', 'WATER') and neighbor != cell:
-                            if random.random() < min(1.0, BIOME_BORDER_SPREAD_RATE * _tp):
+                            if random.random() < min(1.0, TERRAIN_DIFFUSION_RATE * _tp):
                                 new_grid[y][x] = neighbor
                                 if cell == 'DIRT' and neighbor == 'SAND':
                                     self.bug_catcher.log_ca_mutation(self.tick, key, x, y, 'DIRT', 'SAND', 'neighbor_copy', biome, sample_rate=0.1)
