@@ -11,7 +11,7 @@ from constants import (
     CELL_TYPES, BIOMES,
     # CA master knob and class rates
     CA_BASE_RATE, CA_GROWTH_RATE, CA_DECAY_RATE, CA_SPREAD_RATE, CA_WATER_EVAP_RATE,
-    DIRT_TO_GRASS_RATE, GRASS_TO_DIRT_RATE, DIRT_TO_SAND_DROUGHT_RATE, DIRT_TO_SAND_DESERT_RATE,
+    DIRT_TO_GRASS_RATE, GRASS_TO_DIRT_RATE, DIRT_TO_SAND_DROUGHT_RATE,
     GRASS_TO_TREE_RATE, TREE_TO_GRASS_CROWD_RATE,
     SAND_TO_DIRT_WATER_RATE, CACTUS_TO_SAND_DROUGHT_RATE, TREE_TO_GRASS_DROUGHT_RATE,
     GRASS_TO_FLOWER_RATE, FLOWER_TO_GRASS_RATE,
@@ -144,6 +144,8 @@ class CellsMixin:
         screen = self.screens[key]
         new_grid = [row[:] for row in screen['grid']]  # shallow copy per row
         biome = screen.get('biome', 'FOREST')
+        _biome_base = {'FOREST': 'GRASS', 'PLAINS': 'GRASS', 'DESERT': 'SAND',
+                       'MOUNTAINS': 'DIRT', 'TUNDRA': 'DIRT', 'SWAMP': 'DIRT'}.get(biome, 'GRASS')
 
         # Debug: log all cell changes in the player zone so we can trace CA rule chains
         _is_player_zone = (screen_x == self.player['screen_x'] and
@@ -277,12 +279,6 @@ class CellsMixin:
                     if random.random() < min(1.0, DIRT_TO_SAND_DROUGHT_RATE * _decay):
                         new_grid[y][x] = 'SAND'
                         _ca_rule ='DIRT_TO_SAND_DROUGHT_RATE'
-
-                # Dirt → Sand (slow desert reclamation — cell engulfed by sand on 3+ sides)
-                elif cell == 'DIRT' and biome == 'DESERT' and sand_count >= 3:
-                    if random.random() < min(1.0, DIRT_TO_SAND_DESERT_RATE * _decay):
-                        new_grid[y][x] = 'SAND'
-                        _ca_rule = 'DIRT_TO_SAND_DESERT_RATE'
 
                 # Grass → Dirt (sand erosion — desertification edge, higher rate)
                 elif cell == 'GRASS' and sand_count >= 1:
@@ -468,6 +464,16 @@ class CellsMixin:
                     if _mush_all >= 5 and random.random() < min(1.0, 2 * CA_DECAY_RATE * _decay):
                         new_grid[y][x] = 'CAVE_FLOOR'
                         _ca_rule = 'BLUE_MUSHROOM_TO_CAVE_FLOOR'
+
+                # Base terrain pressure: any GRASS/SAND/DIRT cell with 3+ neighbors of a different
+                # base terrain type has a small chance to convert to that type.
+                if new_grid[y][x] == cell and cell in ('GRASS', 'SAND', 'DIRT'):
+                    for _t, _n in (('SAND', sand_count), ('GRASS', grass_count), ('DIRT', dirt_count)):
+                        if _t != cell and _n >= 3:
+                            if random.random() < min(1.0, CA_DECAY_RATE * _decay):
+                                new_grid[y][x] = _t
+                                _ca_rule = 'BASE_TERRAIN_PRESSURE'
+                            break
 
                 # General neighbor-copy: base terrain may adopt a random NSEW neighbor's type
                 if new_grid[y][x] == cell and cell in ('GRASS', 'DIRT', 'SAND', 'WATER'):
