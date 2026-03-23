@@ -423,15 +423,15 @@ class CellsMixin:
                         new_grid[y][x] = 'CAVE_FLOOR'
 
                 # General neighbor-copy: base terrain may adopt a random NSEW neighbor's type
-                # DIRT→SAND excluded in desert biome (every cell has sand neighbors, would erase all dirt)
                 if new_grid[y][x] == cell and cell in ('GRASS', 'DIRT', 'SAND', 'WATER'):
                     nx, ny = random.choice(((x, y - 1), (x, y + 1), (x - 1, y), (x + 1, y)))
                     if 0 <= nx < GRID_WIDTH and 0 <= ny < GRID_HEIGHT:
                         neighbor = screen['grid'][ny][nx]
                         if neighbor in ('GRASS', 'DIRT', 'SAND', 'WATER') and neighbor != cell:
-                            _skip = cell == 'DIRT' and neighbor == 'SAND' and biome == 'DESERT'
-                            if not _skip and random.random() < min(1.0, BIOME_BORDER_SPREAD_RATE * _tp):
+                            if random.random() < min(1.0, BIOME_BORDER_SPREAD_RATE * _tp):
                                 new_grid[y][x] = neighbor
+                                if cell == 'DIRT' and neighbor == 'SAND':
+                                    self.bug_catcher.log_ca_mutation(self.tick, key, x, y, 'DIRT', 'SAND', 'neighbor_copy', biome, sample_rate=0.1)
 
                 # Flower pattern growth: rare overlay on eligible unchanged cells
                 # [biome-specific: desert gets 1/5 rate] [cross-biome: water formation edge]
