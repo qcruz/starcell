@@ -1,5 +1,22 @@
 # StarCell — Cellular Automata Rules Reference
 
+## Three Cell-Mutation Systems
+
+Cell changes in StarCell come from **three independent systems**. All three must be considered
+when debugging unexpected terrain changes. The CA rate hierarchy only governs System 1.
+
+| System | Function | Frequency | File |
+|---|---|---|---|
+| **1 — Cellular Automata** | `apply_cellular_automata` | Every `UPDATE_FREQUENCY` ticks, probabilistic per-cell | `world/cells.py` |
+| **2 — Zone Update** | `update_zone_cells` | Every `UPDATE_FREQUENCY` ticks, deterministic + probabilistic per-cell | `world/zones.py` |
+| **3 — Rain Spawn** | `apply_rain` | Once per zone per rain tick (not every update) | `world/cells.py` |
+
+Zone Update (System 2) runs immediately after CA each cycle. It contains biome reversion,
+CELL_TYPES lifecycle chains, desert formation, and native-cell spreading — **none of which use
+the CA rate hierarchy**. Bug source for DIRT→SAND in desert was here, not in CA.
+
+---
+
 ## Rate Hierarchy
 
 All CA probabilities derive from a two-level hierarchy:
@@ -274,3 +291,147 @@ brown without rain to re-green them.*
 
 *Bones are placed when entities die and are not picked up. They decay to biome base terrain over
 time — equivalent to roughly half the lifespan of a WOOD cell.*
+
+---
+
+## Zone Update System (`update_zone_cells`)
+
+**System 2** — runs in `world/zones.py` immediately after `apply_cellular_automata` each update
+cycle. Does **not** use the CA rate hierarchy. Probabilities are hard-coded or come from
+`CELL_TYPES` data directly. `_tp` (time_pass_speed) still applies where shown.
+
+### CELL_TYPES lifecycle chains
+
+Cells with `grows_to` or `degrades_to` in `data/cells.py` advance each update cycle at
+`cell_info['growth_rate'] * _tp` or `cell_info['degrade_rate'] * _tp * _decay_factor`.
+
+| From | To | Rate | Notes |
+|---|---|---|---|
+| GRASS | TREE1 | 0.05% | grows_to |
+| DIRT | GRASS | 0.3% | grows_to |
+| DEEP_WATER | WATER | 0.1% | degrades_to |
+| CARROT1 | CARROT2 | 2% | grows_to |
+| CARROT2 | CARROT3 | 1.5% | grows_to |
+| CARROT1/2 | GRASS | 0.01% | degrades_to (very slow) |
+| CARROT3 | GRASS | 0.005% | degrades_to (very slow) |
+| COBBLESTONE | DIRT | 0.001% | degrades_to; protected on center road ±2 cells and near HOUSE/CAMP/CAVE/MINESHAFT |
+| HOUSE | STONE_HOUSE | 0.002% | grows_to; triggers `process_house_destruction` on old cell |
+| HIDDEN_CAVE | CAVE | 0.5% | degrades_to |
+| CAMP | HOUSE | 0.1% | grows_to |
+| FLOWER | GRASS | 0.01% | degrades_to |
+| FLOWER_PATTERN1/2/3 | GRASS | 0.015% | degrades_to |
+| GRAVESTONE | BROKEN_GRAVESTONE | 0.0005% | degrades_to |
+| RUINED_SANDSTONE_COLUMN | SAND | 0.002% | degrades_to |
+| WELL (desert) | DESERT_WELL | 0.002% | inline check, not CELL_TYPES |
+
+### Excess cave decay
+
+CAVE → biome base cell at 1% per update when zone cave count > 2. Prevents cave overgrowth
+from repeated raid spawns.
+
+### Chest and crate lifecycle
+
+- **CHEST** → saved background cell (or biome base) when chest_contents is empty
+- **EMPTY_CRATE** → CHEST when chest_contents gains items
+
+Neither uses a probability — both fire deterministically each update when the condition is met.
+
+### Stray interior cell reversion
+
+WOOD / PLANKS / FLOOR_WOOD found in the overworld → biome base cell at **10% per update**.
+Interior cells placed inside structures are only affected if they end up in an unprotected grid cell.
+
+### Desert formation
+
+Runs only in DESERT biome, each update cycle.
+
+| Rule | Constant | Rate | Notes |
+|---|---|---|---|
+| SAND → STONE | `DESERT_ROCK_FORMATION_RATE` | 0.008% × _tp | Sand slowly solidifies |
+| STONE → IRON_ORE | `DESERT_ORE_FORMATION_RATE` | 0.002% × _tp | Existing stone rarely yields ore |
+
+### Biome reversion (foreign cell purge)
+
+Foreign cells surrounded by native cells are reverted to the biome base. Rate scales with how
+many cardinal neighbors are native to the current biome.
+
+| Native cardinal neighbors | Revert rate per update |
+|---|---|
+| 3+ | 12% |
+| 2 | 3.5% |
+| 0–1 | 0.3% |
+
+SAND in non-desert biomes gets an additional boost during rain: rate raised to at least 8%.
+
+**Foreign cell definitions per biome** (all others are left alone or handled by CA):
+
+| Biome | Foreign cells | Reverts to |
+|---|---|---|
+| DESERT | GRASS, TREE1, TREE2, FLOWER | SAND |
+| FOREST | SAND | GRASS |
+| PLAINS | SAND | GRASS |
+| MOUNTAINS | SAND | DIRT |
+| TUNDRA | SAND, GRASS | DIRT |
+| SWAMP | SAND | DIRT |
+
+*Desert trees have a separate faster path: TREE1/TREE2 → SAND at 8% per update regardless of
+neighbor count, handled before the foreign_revert check.*
+
+*DIRT was previously incorrectly listed as foreign in DESERT, causing any newly-created DIRT
+(e.g. from sand_to_dirt_water CA) to be reverted to SAND at up to 12% per update. This was the
+root cause of the DIRT→SAND flickering bug. Fixed by removing DIRT from foreign_revert['DESERT'].*
+
+### Native cell biome spreading
+
+Every cell that is in `biome_native` for the current biome has a **0.5% chance per update** to
+spread a copy of itself to one random cardinal neighbor, if that neighbor is not in
+`protected_cells` and not already a native cell.
+
+This is separate from `TERRAIN_DIFFUSION_RATE` in the CA system. Both run each cycle.
+
+**Protected cells** (immune to native spreading): HOUSE, CAVE, MINESHAFT, CAMP, CHEST,
+EMPTY_CRATE, WALL, COBBLESTONE, WATER, DEEP_WATER, CAVE_FLOOR, CAVE_WALL, STAIRS_UP,
+STAIRS_DOWN, HIDDEN_CAVE, SOIL, CARROT1/2/3, CLIFF, STONE_HOUSE, BUSH, GRAVESTONE,
+BROKEN_GRAVESTONE, LOCKED_CHEST, OPEN_CHEST, BOOKSHELF, WOOD_CHAIR, WOOD_TABLE, BED_WHITE,
+WATER_TROUGH, SMALL_POTTED_PLANT, BLUE_MUSHROOM, APPLE_CRATE.
+
+### Bush growth
+
+| Rule | Rate | Biomes |
+|---|---|---|
+| GRASS → BUSH | 0.0005% × _tp | FOREST, PLAINS, SWAMP |
+| SAND → BUSH | 0.00008% × _tp | DESERT only |
+
+### Flower pattern growth (forest/plains)
+
+GRASS → FLOWER_PATTERN1/2/3 at **0.0008% × _tp** in FOREST and PLAINS biomes only. Separate
+from the CA `GRASS_TO_FLOWER_RATE` rule — both run per cycle, stacking the effective rate.
+
+---
+
+## Rain Spawn (`apply_rain`)
+
+**System 3** — called once per zone per rain tick from `update_zone_cells`. Separate from the
+CA cycle. Fires only when the zone's per-zone rain state is active.
+
+### Desert
+
+22% chance per tick to attempt 1–2 SAND→WATER conversions at random positions:
+- SAND adjacent to existing water: **75%** success
+- Isolated SAND: **40%** success
+
+### Non-desert
+
+Attempts are scaled by biome multiplier (Mountains: ×0.6 water / ×0.3 grass; Plains: ×1.2 / ×1.2).
+
+| Rule | Attempts per tick | Per-attempt rate | Setting |
+|---|---|---|---|
+| DIRT → WATER | `RAIN_WATER_SPAWNS` (default 5) × biome mult | 30% | overworld rain puddles |
+| DIRT → GRASS | `RAIN_GRASS_SPAWNS` (default 8) × biome mult | 40% | rain greening |
+
+*These are random-position scatter conversions — cells are chosen uniformly at random from
+the interior grid, not by adjacency rules. High water counts from rain are therefore spread
+across the zone rather than pooling from existing water bodies.*
+
+*Both desert and non-desert rain also restore full thirst for all living outdoor entities in
+the zone.*
