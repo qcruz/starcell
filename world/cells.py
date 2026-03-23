@@ -242,7 +242,7 @@ class CellsMixin:
 
                 # Dirt → Sand (any sand neighbor, no water — desertification spread)
                 elif cell == 'DIRT' and total_water == 0 and sand_count >= 1:
-                    if random.random() < min(1.0, DIRT_SAND_SPREAD_RATE * _decay):
+                    if random.random() < min(1.0, DIRT_TO_SAND_SPREAD_RATE * _decay):
                         new_grid[y][x] = 'SAND'
 
                 # Dirt → Sand (severe drought, no grass at all — original fallback)
