@@ -28,6 +28,7 @@ Usage
 
 import os
 import json
+import random
 import datetime
 
 _DEFAULT_LOG_PATH = os.path.join(os.path.dirname(__file__), 'bugcatcher.log')
@@ -220,6 +221,39 @@ class BugCatcher:
             })
 
         self._prev_zone_cells[screen_key] = current
+
+    # ------------------------------------------------------------------
+    # CA rule mutation logger (reusable for any cell transition)
+    # ------------------------------------------------------------------
+
+    def log_ca_mutation(self, tick: int, zone_key: str, x: int, y: int,
+                        from_cell: str, to_cell: str, rule: str, biome: str,
+                        sample_rate: float = 1.0):
+        """Log a CA-driven cell mutation with rule attribution.
+
+        Reusable for any from/to pair. Pass a low sample_rate (e.g. 0.05)
+        on hot paths to prevent log flooding — only ~5% of occurrences will
+        be recorded, which is enough to identify the dominant rules.
+
+        Example::
+            self.bug_catcher.log_ca_mutation(
+                self.tick, key, x, y,
+                'DIRT', 'SAND', 'neighbor_copy', biome,
+                sample_rate=0.05,
+            )
+        """
+        if sample_rate < 1.0 and random.random() > sample_rate:
+            return
+        self._record({
+            'tick': tick,
+            'category': 'ca_mutation',
+            'zone': zone_key,
+            'pos': [x, y],
+            'from': from_cell,
+            'to': to_cell,
+            'rule': rule,
+            'biome': biome,
+        })
 
     # ------------------------------------------------------------------
     # Generic structured log entry

@@ -244,11 +244,13 @@ class CellsMixin:
                 elif cell == 'DIRT' and total_water == 0 and sand_count >= 1 and biome != 'DESERT':
                     if random.random() < min(1.0, DIRT_TO_SAND_SPREAD_RATE * _decay):
                         new_grid[y][x] = 'SAND'
+                        self.bug_catcher.log_ca_mutation(self.tick, key, x, y, 'DIRT', 'SAND', 'DIRT_TO_SAND_SPREAD_RATE', biome, sample_rate=0.1)
 
                 # Dirt → Sand (severe drought, no grass at all — non-desert only)
                 elif cell == 'DIRT' and total_water == 0 and grass_count == 0 and biome != 'DESERT':
                     if random.random() < min(1.0, DIRT_TO_SAND_DROUGHT_RATE * _decay):
                         new_grid[y][x] = 'SAND'
+                        self.bug_catcher.log_ca_mutation(self.tick, key, x, y, 'DIRT', 'SAND', 'DIRT_TO_SAND_DROUGHT_RATE', biome, sample_rate=0.1)
 
                 # Grass → Dirt (sand erosion — desertification edge, higher rate)
                 elif cell == 'GRASS' and sand_count >= 1:
@@ -428,6 +430,8 @@ class CellsMixin:
                         if neighbor in ('GRASS', 'DIRT', 'SAND', 'WATER') and neighbor != cell:
                             if random.random() < min(1.0, BIOME_BORDER_SPREAD_RATE * _tp):
                                 new_grid[y][x] = neighbor
+                                if cell == 'DIRT' and neighbor == 'SAND':
+                                    self.bug_catcher.log_ca_mutation(self.tick, key, x, y, 'DIRT', 'SAND', 'neighbor_copy', biome, sample_rate=0.1)
 
                 # Flower pattern growth: rare overlay on eligible unchanged cells
                 # [biome-specific: desert gets 1/5 rate] [cross-biome: water formation edge]
