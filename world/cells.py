@@ -11,7 +11,7 @@ from constants import (
     CELL_TYPES, BIOMES,
     # CA master knob and class rates
     CA_BASE_RATE, CA_GROWTH_RATE, CA_DECAY_RATE, CA_SPREAD_RATE, CA_WATER_EVAP_RATE,
-    DIRT_TO_GRASS_RATE, GRASS_TO_DIRT_RATE, DIRT_TO_SAND_DROUGHT_RATE,
+    DIRT_TO_GRASS_RATE, GRASS_TO_DIRT_RATE, DIRT_TO_SAND_DROUGHT_RATE, DIRT_TO_SAND_DESERT_RATE,
     GRASS_TO_TREE_RATE, TREE_TO_GRASS_CROWD_RATE,
     SAND_TO_DIRT_WATER_RATE, CACTUS_TO_SAND_DROUGHT_RATE, TREE_TO_GRASS_DROUGHT_RATE,
     GRASS_TO_FLOWER_RATE, FLOWER_TO_GRASS_RATE,
@@ -277,6 +277,13 @@ class CellsMixin:
                     if random.random() < min(1.0, DIRT_TO_SAND_DROUGHT_RATE * _decay):
                         new_grid[y][x] = 'SAND'
                         _ca_rule ='DIRT_TO_SAND_DROUGHT_RATE'
+
+                # Dirt → Sand (slow desert reversion — desert biome, no water neighbors)
+                # DIRT near water is stable; DIRT with no water gradually reclaimed by desert.
+                elif cell == 'DIRT' and biome == 'DESERT' and total_water == 0:
+                    if random.random() < min(1.0, DIRT_TO_SAND_DESERT_RATE * _decay):
+                        new_grid[y][x] = 'SAND'
+                        _ca_rule = 'DIRT_TO_SAND_DESERT_RATE'
 
                 # Grass → Dirt (sand erosion — desertification edge, higher rate)
                 elif cell == 'GRASS' and sand_count >= 1:

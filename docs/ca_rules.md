@@ -63,6 +63,7 @@ CA cycle fires every `UPDATE_FREQUENCY` ticks (default 30).
 |---|---|---|---|---|
 | GRASS → DIRT | `GRASS_TO_DIRT_RATE` | 0.1× | 0.00001 × _decay | no water neighbors |
 | DIRT → SAND (severe drought) | `DIRT_TO_SAND_DROUGHT_RATE` | 0.05× | 0.000005 × _decay | no water neighbors, no grass neighbors |
+| DIRT → SAND (desert reclamation) | `DIRT_TO_SAND_DESERT_RATE` | 1× | 0.0001 × _decay | biome = DESERT, no water neighbors |
 | TREE → GRASS (crowding) | `TREE_TO_GRASS_CROWD_RATE` | 10× | 0.001 × _decay | 1+ adjacent tree (no cobblestone) |
 | TREE → GRASS (road edge) | `TREE_TO_GRASS_CROWD_RATE` | 10× | 0.001 × _decay | 1+ cobblestone neighbor |
 | TREE → GRASS (drought) | `TREE_TO_GRASS_DROUGHT_RATE` | 3× | 0.0003 × _decay | drought_severity > 0.5, no water neighbors |
@@ -170,6 +171,7 @@ Apply only inside a single biome. Override or supplement global rules.
 | WATER → SAND (evaporation) | `WATER_TO_BASE_ISOLATED_RATE` | 0.002 × _decay | biome base cell is SAND, not GRASS |
 | FLOWER_PATTERN growth | inline | 0.003× CA_GROWTH_RATE | 1/5 the rate of other biomes |
 | Tree growth | n/a | Never fires | Blocked by `biome != 'DESERT'` guard in tree spread rule |
+| DIRT → SAND (reclamation) | `DIRT_TO_SAND_DESERT_RATE` | 0.0001 × _decay | desert biome, no water neighbors — slow background pressure |
 
 ### LAKE biome
 

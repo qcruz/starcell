@@ -136,6 +136,7 @@ SAND_TO_DIRT_STONE_RATE  = 2.0 * CA_GROWTH_RATE  # 0.0002 — sand weathers to d
 # ── Tier 1: Global decay rules (× CA_DECAY_RATE) ────────────────────────────
 GRASS_TO_DIRT_RATE         = 0.1  * CA_DECAY_RATE  # 0.00001  — grass withers to dirt without water
 DIRT_TO_SAND_DROUGHT_RATE  = 0.05 * CA_DECAY_RATE  # 0.000005 — dirt → sand in severe drought (no water, no grass)
+DIRT_TO_SAND_DESERT_RATE   = 1.0  * CA_DECAY_RATE  # 0.0001   — slow desert reclamation of dry DIRT (desert biome, no water)
 TREE_TO_GRASS_RATE         = 5.0  * CA_DECAY_RATE  # 0.0005   — tree → grass in crowded zones (zones.py)
 TREE_TO_GRASS_CROWD_RATE   = 10   * CA_DECAY_RATE  # 0.001    — tree thins when touching any adjacent tree
 TREE_TO_GRASS_DROUGHT_RATE = 3.0  * CA_DECAY_RATE  # 0.0003   — tree dies to grass in drought (severity > 0.5, no water)
