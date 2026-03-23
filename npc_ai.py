@@ -2883,7 +2883,7 @@ class NpcAiMixin:
                         entity.trigger_action_animation()
                         self.show_attack_animation(check_x, check_y, entity=entity)
                         if random.random() < 0.15:  # 15% chance
-                            screen['grid'][check_y][check_x] = 'DIRT'  # Trees decay to dirt when termites destroy them
+                            screen['grid'][check_y][check_x] = 'SAND'  # Termites leave sandy debris when destroying trees
                             # Termite eats the tree
                             entity.hunger = min(entity.max_hunger, entity.hunger + 30)
                         return  # Only one action per update
@@ -3234,9 +3234,9 @@ class NpcAiMixin:
             
             # Upgrade dirt to cobblestone (guards help establish safe roads)
             elif current_cell == 'DIRT' and random.random() < TRADER_COBBLE_RATE:
-                on_horizontal_center = abs(entity.y - center_y) <= 2
-                on_vertical_center = abs(entity.x - center_x) <= 2
-                
+                on_horizontal_center = abs(entity.y - center_y) <= 1
+                on_vertical_center = abs(entity.x - center_x) <= 1
+
                 if on_horizontal_center or on_vertical_center:
                     screen['grid'][entity.y][entity.x] = 'COBBLESTONE'
         
@@ -3324,13 +3324,11 @@ class NpcAiMixin:
             if current_cell in ['GRASS', 'SOIL'] and random.random() < TRADER_PATH_BUILD_RATE:
                 screen['grid'][entity.y][entity.x] = 'DIRT'
             
-            # Upgrade dirt to cobblestone - ONLY in exact center lanes (±2 cells)
+            # Upgrade dirt to cobblestone - ONLY in exact center lanes (±1 cell)
             elif current_cell == 'DIRT' and random.random() < TRADER_COBBLE_RATE:
-                # Stricter alignment check for cobblestone (±2 instead of ±3)
-                on_horizontal_center = abs(entity.y - center_y) <= 2
-                on_vertical_center = abs(entity.x - center_x) <= 2
-                
-                # Only create cobblestone if on one of the main center lanes
+                on_horizontal_center = abs(entity.y - center_y) <= 1
+                on_vertical_center = abs(entity.x - center_x) <= 1
+
                 if on_horizontal_center or on_vertical_center:
                     screen['grid'][entity.y][entity.x] = 'COBBLESTONE'
         

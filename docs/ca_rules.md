@@ -136,11 +136,10 @@ biome context (i.e., it's exposed on the overworld as a dried lake bed).*
 
 | Rule | Effective rate | Fires when |
 |---|---|---|
-| TREE → COBBLESTONE | 5× CA_DECAY_RATE × _decay | 5+ cobblestone neighbors (tree fully embedded in road) |
-| TREE → GRASS | 10× CA_DECAY_RATE × _decay | 1+ cobblestone neighbor, < 5 (road-edge clearance) |
+| TREE → GRASS | 10× CA_DECAY_RATE × _decay | 1+ cobblestone neighbor (road-edge clearance) |
 
-*These rules are driven by NPC road-building — cobblestone expands and eventually engulfs isolated
-trees within it. Edge trees are preserved; only fully surrounded trees convert.*
+*Edge trees adjacent to a cobblestone road are cleared over time. The embedded-road rule
+(TREE → COBBLESTONE when 5+ neighbors cobblestone) has been removed — road clearance alone is sufficient.*
 
 ---
 
@@ -228,3 +227,49 @@ adjacent zone's primary biome cell — no probability involved, always overwrite
 | MOUNTAINS, TUNDRA, SWAMP | (no override — cell follows normal rules) |
 
 This ensures clean visual transitions at zone borders.
+
+---
+
+## NPC-Driven Cell Changes
+
+Cell mutations triggered by entity actions, not the CA clock. These fire during entity updates,
+not every CA cycle, so their effective rate depends on entity density and AI tick frequency.
+
+### Footstep erosion (all NPCs walking)
+
+| Rule | Probability | Fires when |
+|---|---|---|
+| GRASS → DIRT | `TRADER_PATH_BUILD_RATE` (0.6) | Any NPC/trader/guard walks on GRASS cell |
+| DIRT → COBBLESTONE | `TRADER_COBBLE_RATE` (0.35) | Trader/guard on DIRT, within ±1 cell of zone center axis |
+
+*Cobblestone is laid only in the 3-cell-wide center corridors (N–S and E–W) that align with zone
+exits. Guards and traders both contribute. Miners also build path while traveling.*
+
+### Termites
+
+| Rule | Probability | Fires when |
+|---|---|---|
+| TREE1/TREE2 → SAND | 15% per action | Termite attacks an adjacent tree cell |
+| CAMP → GRASS | 8% per action | Termite attacks a camp structure |
+
+*Termites leave sandy debris rather than dirt — their destruction degrades terrain toward barren ground.*
+
+### Animal grazing
+
+| Rule | Probability | Fires when |
+|---|---|---|
+| GRASS → DIRT | `GRASS_DECAY_ON_EAT` (0.6) | Herbivore (DEER, SHEEP, CHICKEN, etc.) eats a GRASS cell |
+| CARROT → DIRT | `GRASS_DECAY_ON_EAT` (0.6) | Any entity eats a CARROT cell (or SOIL on 40% miss) |
+
+*Animals grazing on GRASS have a 60% chance to convert it to DIRT. Heavily grazed zones slowly
+brown without rain to re-green them.*
+
+### Dropped bones / debris
+
+| Rule | Rate | Target |
+|---|---|---|
+| BONES → DIRT (forest/plains) | 20× CA_BASE_RATE × _tp | BONES cell with biome FOREST/PLAINS/MOUNTAINS |
+| BONES → SAND (desert) | 20× CA_BASE_RATE × _tp | BONES cell with biome DESERT |
+
+*Bones are placed when entities die and are not picked up. They decay to biome base terrain over
+time — equivalent to roughly half the lifespan of a WOOD cell.*

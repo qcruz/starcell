@@ -6,7 +6,7 @@ from constants import (
     # CA master knob and class rates
     CA_BASE_RATE, CA_GROWTH_RATE, CA_DECAY_RATE, CA_SPREAD_RATE, CA_WATER_EVAP_RATE,
     DIRT_TO_GRASS_RATE, GRASS_TO_DIRT_RATE, DIRT_TO_SAND_RATE,
-    TREE_GROWTH_RATE, TREE_DECAY_RATE, TREE_CROWD_DECAY_RATE,
+    TREE_GROWTH_RATE, TREE_CROWD_DECAY_RATE,
     SAND_RECLAIM_RATE, CACTUS_DROUGHT_RATE, TREE_DROUGHT_RATE,
     FLOWER_SPREAD_RATE, FLOWER_DECAY_RATE,
     DEEP_WATER_FORM_RATE, DEEP_WATER_EVAPORATE_RATE,
@@ -357,12 +357,6 @@ class CellsMixin:
                     if random.random() < min(1.0, TREE_DROUGHT_RATE * _decay):
                         new_grid[y][x] = 'GRASS'
 
-                # Tree → Cobblestone (tree stranded inside a cobblestone road — 5+ of 8 neighbors cobblestone)
-                # High threshold prevents cascade: edge trees are untouched, only truly embedded ones convert
-                elif cell.startswith('TREE') and cobblestone_count >= 5:
-                    if random.random() < min(1.0, TREE_DECAY_RATE * _decay):
-                        new_grid[y][x] = 'COBBLESTONE'
-
                 # Tree → Grass (near cobblestone road but not embedded — clears treeline)
                 elif cell.startswith('TREE') and cobblestone_count > 0:
                     if random.random() < min(1.0, TREE_CROWD_DECAY_RATE * _decay):
@@ -459,6 +453,12 @@ class CellsMixin:
                 elif cell == 'PLANKS' and not self.is_near_structure(x, y, key):
                     if random.random() < min(1.0, 30 * CA_BASE_RATE * _tp):
                         new_grid[y][x] = 'DIRT'
+
+                # Bones decay to biome base cell [constructed: decay]
+                elif cell == 'BONES':  # [constructed: decay]
+                    _bones_base = {'DESERT': 'SAND', 'MOUNTAINS': 'DIRT'}.get(biome, 'DIRT')
+                    if random.random() < min(1.0, 20 * CA_BASE_RATE * _tp):
+                        new_grid[y][x] = _bones_base
 
                 # Rain flood spread: any terrain adjacent to water while raining gets a small
                 # extra conversion chance. Independent of main elif chain.

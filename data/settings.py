@@ -164,7 +164,7 @@ ENHANCED_SETTLEMENT_RATE = 0.25 # Settlement rate when zone needs specific role 
 
 # Trader Path Building (Cellular Automata)
 TRADER_PATH_BUILD_RATE = 0.6    # Chance to convert cell to dirt while walking (increased for traders/guards/miners)
-TRADER_COBBLE_RATE = 0.25       # Chance to upgrade dirt to cobblestone (increased for faster road building)
+TRADER_COBBLE_RATE = 0.35       # Chance to upgrade dirt to cobblestone
 TRADER_TRAVEL_MODE = True       # Traders prioritize traveling between zone exits
 
 # Entity Movement & Exploration

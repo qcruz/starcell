@@ -66,9 +66,9 @@ class SpawningMixin:
         # Biome-based spawning probabilities
         spawn_tables = {
             'FOREST': [
-                ('DEER', 0.5, 1, 2),
-                ('WOLF', 0.3, 0, 2),
-                ('SHEEP', 0.2, 0, 1),
+                ('DEER', 0.75, 1, 3),
+                ('WOLF', 0.45, 0, 3),
+                ('SHEEP', 0.30, 0, 2),
                 ('FARMER', 0.5, 0, 2),
                 ('LUMBERJACK', 0.6, 1, 2),
                 ('WIZARD', 0.25, 1, 2),
@@ -83,9 +83,9 @@ class SpawningMixin:
                 ('BLACK_SPIDER', 0.3, 0, 2),
             ],
             'PLAINS': [
-                ('SHEEP', 0.6, 1, 3),
-                ('DEER', 0.4, 0, 2),
-                ('WOLF', 0.2, 0, 1),
+                ('SHEEP', 0.9, 1, 4),
+                ('DEER', 0.6, 0, 3),
+                ('WOLF', 0.3, 0, 2),
                 ('FARMER', 0.7, 1, 3),
                 ('LUMBERJACK', 0.3, 0, 1),
                 ('WIZARD', 0.25, 1, 2),
@@ -100,9 +100,9 @@ class SpawningMixin:
                 ('BUTTERFLY', 0.6, 1, 3),
             ],
             'DESERT': [
-                ('SHEEP', 0.2, 0, 1),
-                ('DEER', 0.2, 0, 1),
-                ('WOLF', 0.2, 0, 1),
+                ('SHEEP', 0.3, 0, 1),
+                ('DEER', 0.3, 0, 1),
+                ('WOLF', 0.3, 0, 1),
                 ('GOBLIN', 0.35, 0, 2),
                 ('BANDIT', 0.25, 0, 2),
                 ('WIZARD', 0.25, 1, 2),
@@ -115,9 +115,9 @@ class SpawningMixin:
                 ('BLACK_SPIDER', 0.4, 0, 2),
             ],
             'MOUNTAINS': [
-                ('WOLF', 0.6, 1, 3),
-                ('DEER', 0.3, 0, 2),
-                ('SHEEP', 0.2, 0, 1),
+                ('WOLF', 0.9, 1, 4),
+                ('DEER', 0.45, 0, 3),
+                ('SHEEP', 0.3, 0, 2),
                 ('GOBLIN', 0.3, 0, 2),
                 ('BANDIT', 0.15, 0, 2),
                 ('WIZARD', 0.25, 1, 2),
@@ -915,14 +915,14 @@ class SpawningMixin:
 
         spawn_tables = {
             'FOREST': [
-                ('DEER', 0.18), ('WOLF', 0.10), ('SHEEP', 0.05),
+                ('DEER', 0.27), ('WOLF', 0.15), ('SHEEP', 0.08),
                 ('FARMER', 0.12), ('LUMBERJACK', 0.15),
                 ('TRADER', 0.075), ('GUARD', 0.075),
                 ('BANDIT', 0.025), ('GOBLIN', 0.025),
                 ('RED_BIRD', 0.12), ('BUTTERFLY', 0.10), ('BLACK_SPIDER', 0.06)
             ],
             'PLAINS': [
-                ('SHEEP', 0.20), ('DEER', 0.12), ('WOLF', 0.05),
+                ('SHEEP', 0.30), ('DEER', 0.18), ('WOLF', 0.08),
                 ('FARMER', 0.18), ('LUMBERJACK', 0.05),
                 ('TRADER', 0.075), ('GUARD', 0.075),
                 ('BANDIT', 0.025), ('GOBLIN', 0.025),
@@ -930,14 +930,14 @@ class SpawningMixin:
             ],
             'DESERT': [
                 ('GOBLIN', 0.10), ('BANDIT', 0.07), ('MINER', 0.10),
-                ('SHEEP', 0.05), ('DEER', 0.05), ('WOLF', 0.05),
+                ('SHEEP', 0.08), ('DEER', 0.08), ('WOLF', 0.08),
                 ('FARMER', 0.07), ('LUMBERJACK', 0.04),
                 ('TRADER', 0.09), ('GUARD', 0.06),
                 ('BLACK_SPIDER', 0.08)
             ],
             'MOUNTAINS': [
-                ('WOLF', 0.18), ('GOBLIN', 0.08), ('MINER', 0.14),
-                ('BANDIT', 0.045), ('DEER', 0.07), ('SHEEP', 0.04),
+                ('WOLF', 0.27), ('GOBLIN', 0.08), ('MINER', 0.14),
+                ('BANDIT', 0.045), ('DEER', 0.11), ('SHEEP', 0.06),
                 ('FARMER', 0.03), ('LUMBERJACK', 0.09),
                 ('TRADER', 0.06), ('GUARD', 0.04),
                 ('BLACK_SPIDER', 0.08), ('RED_BIRD', 0.06)
