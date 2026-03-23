@@ -1,5 +1,8 @@
 import random
 
+# DEBUG: set to False to disable all CA rules for isolation testing
+CA_RULES_ENABLED = False
+
 from constants import (
     GRID_WIDTH, GRID_HEIGHT,
     CELL_TYPES, BIOMES,
@@ -128,6 +131,9 @@ class CellsMixin:
         cell_coverage: fraction of cells to process this cycle (0.0–1.0).
         1.0 = all cells, 0.5 = half skipped at random (player zone default), etc.
         """
+        if not CA_RULES_ENABLED:
+            return
+
         key = f"{screen_x},{screen_y}"
         if key not in self.screens:
             return

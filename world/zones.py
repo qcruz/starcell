@@ -1272,6 +1272,9 @@ class ZonesMixin:
 
     def catch_up_screen(self, screen_x, screen_y, cycles_missed):
         """Apply catch-up updates efficiently"""
+        from world.cells import CA_RULES_ENABLED
+        if not CA_RULES_ENABLED:
+            return
         key = f"{screen_x},{screen_y}"
         if key not in self.screens:
             return
