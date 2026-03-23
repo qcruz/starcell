@@ -882,6 +882,10 @@ class NpcAiMovementMixin:
                     if final_cell in ['CARROT1', 'CARROT2', 'CARROT3']:
                         if random.random() < 0.02:  # 2% chance
                             screen['grid'][new_y][new_x] = 'DIRT'
+
+                    # Grass trampling - small chance any NPC wears grass to dirt
+                    elif final_cell == 'GRASS' and random.random() < 0.005:  # 0.5% per step
+                        screen['grid'][new_y][new_x] = 'DIRT'
                 else:
                     # Target became solid - don't move
                     entity.stuck_counter += 1

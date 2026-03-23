@@ -239,20 +239,23 @@ not every CA cycle, so their effective rate depends on entity density and AI tic
 
 | Rule | Probability | Fires when |
 |---|---|---|
-| GRASS → DIRT | `TRADER_PATH_BUILD_RATE` (0.6) | Any NPC/trader/guard walks on GRASS cell |
+| GRASS → DIRT (trampling) | 0.5% per step | Any NPC steps onto a GRASS cell |
+| GRASS → DIRT (path-building) | `TRADER_PATH_BUILD_RATE` (0.6) | Trader/guard/miner steps onto GRASS near center axis |
 | DIRT → COBBLESTONE | `TRADER_COBBLE_RATE` (0.35) | Trader/guard on DIRT, within ±1 cell of zone center axis |
 
-*Cobblestone is laid only in the 3-cell-wide center corridors (N–S and E–W) that align with zone
-exits. Guards and traders both contribute. Miners also build path while traveling.*
+*All NPCs have a small (0.5%) chance to wear grass to dirt as they walk — high-traffic areas
+brown naturally over time. Traders, guards, and miners additionally apply the full 60% path-build
+rate when near the center road corridor, and can upgrade dirt to cobblestone.*
 
 ### Termites
 
 | Rule | Probability | Fires when |
 |---|---|---|
-| TREE1/TREE2 → SAND | 15% per action | Termite attacks an adjacent tree cell |
+| TREE1/TREE2 → DIRT | 15% per action | Termite attacks an adjacent tree cell |
 | CAMP → GRASS | 8% per action | Termite attacks a camp structure |
 
-*Termites leave sandy debris rather than dirt — their destruction degrades terrain toward barren ground.*
+*Termites leave dirt when they destroy trees. They also have a separate death drop that sometimes
+leaves SAND (handled by entity death loot, not CA).*
 
 ### Animal grazing
 

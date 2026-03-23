@@ -2883,7 +2883,7 @@ class NpcAiMixin:
                         entity.trigger_action_animation()
                         self.show_attack_animation(check_x, check_y, entity=entity)
                         if random.random() < 0.15:  # 15% chance
-                            screen['grid'][check_y][check_x] = 'SAND'  # Termites leave sandy debris when destroying trees
+                            screen['grid'][check_y][check_x] = 'DIRT'  # Trees decay to dirt when termites destroy them
                             # Termite eats the tree
                             entity.hunger = min(entity.max_hunger, entity.hunger + 30)
                         return  # Only one action per update
