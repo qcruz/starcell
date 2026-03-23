@@ -439,7 +439,7 @@ class NpcAiMixin:
                                     entity.current_target = None
                                     entity.ai_state = 'wandering'
                                     entity.ai_state_timer = 2
-                                    continue
+                                    return
                             # Eat food — use behavior_config actions or direct consumption
                             behavior_config = entity.props.get('behavior_config')
                             if behavior_config:
