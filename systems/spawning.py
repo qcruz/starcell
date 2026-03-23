@@ -70,6 +70,8 @@ class SpawningMixin:
                 ('WOLF', 0.45, 0, 3),
                 ('SHEEP', 0.40, 0, 2),
                 ('CHICKEN', 0.30, 0, 2),
+                ('BUTTERFLY', 0.90, 1, 4),
+                ('BAT', 0.60, 1, 3),
                 ('FARMER', 0.5, 0, 2),
                 ('LUMBERJACK', 0.6, 1, 2),
                 ('WIZARD', 0.25, 1, 2),
@@ -80,7 +82,6 @@ class SpawningMixin:
                 ('GOBLIN', 0.10, 0, 1),
                 ('TERMITE', 0.4, 0, 2),
                 ('RED_BIRD', 0.6, 1, 3),
-                ('BUTTERFLY', 0.5, 0, 2),
                 ('BLACK_SPIDER', 0.20, 0, 1),
             ],
             'PLAINS': [
@@ -88,6 +89,8 @@ class SpawningMixin:
                 ('DEER', 0.6, 0, 3),
                 ('WOLF', 0.3, 0, 2),
                 ('CHICKEN', 0.7, 1, 3),
+                ('BUTTERFLY', 0.90, 1, 4),
+                ('BAT', 0.50, 1, 2),
                 ('FARMER', 0.7, 1, 3),
                 ('LUMBERJACK', 0.3, 0, 1),
                 ('WIZARD', 0.25, 1, 2),
@@ -98,13 +101,14 @@ class SpawningMixin:
                 ('GOBLIN', 0.07, 0, 1),
                 ('TERMITE', 0.2, 0, 1),
                 ('RED_BIRD', 0.5, 0, 2),
-                ('BUTTERFLY', 0.6, 1, 3),
             ],
             'DESERT': [
                 ('SHEEP', 0.50, 0, 2),
                 ('DEER', 0.50, 0, 2),
                 ('WOLF', 0.40, 0, 2),
                 ('CHICKEN', 0.30, 0, 1),
+                ('BUTTERFLY', 0.70, 1, 3),
+                ('BAT', 0.60, 1, 3),
                 ('GOBLIN', 0.25, 0, 2),
                 ('BANDIT', 0.18, 0, 1),
                 ('WIZARD', 0.25, 1, 2),
@@ -121,6 +125,8 @@ class SpawningMixin:
                 ('DEER', 0.55, 0, 3),
                 ('SHEEP', 0.40, 0, 2),
                 ('CHICKEN', 0.20, 0, 1),
+                ('BUTTERFLY', 0.80, 1, 3),
+                ('BAT', 0.80, 1, 4),
                 ('GOBLIN', 0.20, 0, 2),
                 ('BANDIT', 0.10, 0, 1),
                 ('WIZARD', 0.25, 1, 2),
@@ -137,8 +143,9 @@ class SpawningMixin:
                 ('DEER', 0.60, 1, 2),
                 ('SHEEP', 0.40, 0, 2),
                 ('CHICKEN', 0.50, 1, 2),
+                ('BUTTERFLY', 0.90, 1, 4),
+                ('BAT', 0.50, 0, 2),
                 ('RED_BIRD', 0.70, 1, 3),
-                ('BUTTERFLY', 0.50, 0, 2),
                 ('WOLF', 0.20, 0, 1),
             ],
         }
@@ -926,20 +933,23 @@ class SpawningMixin:
         spawn_tables = {
             'FOREST': [
                 ('DEER', 0.27), ('WOLF', 0.15), ('SHEEP', 0.12), ('CHICKEN', 0.08),
+                ('BUTTERFLY', 0.35), ('BAT', 0.22),
                 ('FARMER', 0.12), ('LUMBERJACK', 0.15),
                 ('TRADER', 0.075), ('GUARD', 0.075),
                 ('BANDIT', 0.018), ('GOBLIN', 0.018),
-                ('RED_BIRD', 0.12), ('BUTTERFLY', 0.10), ('BLACK_SPIDER', 0.04)
+                ('RED_BIRD', 0.12), ('BLACK_SPIDER', 0.04)
             ],
             'PLAINS': [
                 ('SHEEP', 0.30), ('DEER', 0.18), ('WOLF', 0.08), ('CHICKEN', 0.18),
+                ('BUTTERFLY', 0.35), ('BAT', 0.18),
                 ('FARMER', 0.18), ('LUMBERJACK', 0.05),
                 ('TRADER', 0.075), ('GUARD', 0.075),
                 ('BANDIT', 0.018), ('GOBLIN', 0.018),
-                ('RED_BIRD', 0.10), ('BUTTERFLY', 0.12)
+                ('RED_BIRD', 0.10)
             ],
             'DESERT': [
                 ('SHEEP', 0.15), ('DEER', 0.15), ('WOLF', 0.12), ('CHICKEN', 0.08),
+                ('BUTTERFLY', 0.28), ('BAT', 0.22),
                 ('GOBLIN', 0.07), ('BANDIT', 0.05), ('MINER', 0.10),
                 ('FARMER', 0.07), ('LUMBERJACK', 0.04),
                 ('TRADER', 0.09), ('GUARD', 0.06),
@@ -947,6 +957,7 @@ class SpawningMixin:
             ],
             'MOUNTAINS': [
                 ('WOLF', 0.27), ('DEER', 0.15), ('SHEEP', 0.10), ('CHICKEN', 0.06),
+                ('BUTTERFLY', 0.30), ('BAT', 0.30),
                 ('GOBLIN', 0.06), ('BANDIT', 0.03), ('MINER', 0.14),
                 ('FARMER', 0.03), ('LUMBERJACK', 0.09),
                 ('TRADER', 0.06), ('GUARD', 0.04),
@@ -954,7 +965,8 @@ class SpawningMixin:
             ],
             'LAKE': [
                 ('DEER', 0.25), ('SHEEP', 0.18), ('CHICKEN', 0.20),
-                ('RED_BIRD', 0.28), ('BUTTERFLY', 0.18), ('WOLF', 0.08)
+                ('BUTTERFLY', 0.35), ('BAT', 0.18),
+                ('RED_BIRD', 0.28), ('WOLF', 0.08)
             ]
         }
 
