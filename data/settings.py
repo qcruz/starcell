@@ -61,7 +61,7 @@ BASE_DECAY_RATE = CA_BASE_RATE  # legacy alias
 CA_GROWTH_RATE     = 0.1 * CA_BASE_RATE
 CA_DECAY_RATE      = 0.1 * CA_BASE_RATE
 CA_SPREAD_RATE     = 2   * CA_BASE_RATE
-CA_WATER_EVAP_RATE = 20  * CA_BASE_RATE
+CA_WATER_EVAP_RATE = 8   * CA_BASE_RATE
 
 # Tier 1 — Growth
 DIRT_TO_GRASS_RATE          = 1.0 * CA_GROWTH_RATE
@@ -94,7 +94,7 @@ BIOME_SPREAD_RATE = 2.0 * CA_SPREAD_RATE
 
 # Tier 2 — Cross-biome: desert edge
 GRASS_SAND_DECAY_RATE = 1.5 * CA_SPREAD_RATE
-DIRT_SAND_SPREAD_RATE = 4.0 * CA_SPREAD_RATE
+DIRT_SAND_SPREAD_RATE = 2.0 * CA_SPREAD_RATE
 
 # Entity Survival
 HUNGER_DECAY_RATE = 0.02        # Base hunger loss per decay call (humanoids get 6× this)

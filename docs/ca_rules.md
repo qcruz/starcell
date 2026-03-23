@@ -10,7 +10,7 @@ CA_BASE_RATE = 0.001       # master knob — change this to speed/slow the entir
 CA_GROWTH_RATE     = 0.1  × CA_BASE_RATE   (0.0001)
 CA_DECAY_RATE      = 0.1  × CA_BASE_RATE   (0.0001)  ← tune slightly above CA_GROWTH_RATE for natural long-term drift
 CA_SPREAD_RATE     = 2    × CA_BASE_RATE   (0.002)
-CA_WATER_EVAP_RATE = 20   × CA_BASE_RATE   (0.02)
+CA_WATER_EVAP_RATE = 8    × CA_BASE_RATE   (0.008)
 ```
 
 **CA_GROWTH_RATE** and **CA_DECAY_RATE** should be roughly equal. Set CA_DECAY_RATE slightly above
@@ -61,20 +61,20 @@ CA cycle fires every `UPDATE_FREQUENCY` ticks (default 30).
 tuned slightly above CA_GROWTH_RATE — the drought `_decay` modifier already accelerates all decay
 rules during dry periods. Left in for now as a safety net.*
 
-### Water dynamics (× CA_WATER_EVAP_RATE = 0.02)
+### Water dynamics (× CA_WATER_EVAP_RATE = 0.008)
 
 | Rule | Multiplier | Effective rate | Fires when |
 |---|---|---|---|
-| WATER → biome base (isolated) | 1× | 0.02 × _decay × stone-shield | ≤1 water neighbor; biome ≠ LAKE |
+| WATER → biome base (isolated) | 1× | 0.008 × _decay × stone-shield | ≤1 water neighbor; biome ≠ LAKE |
 | WATER → biome base (volume) | (count−4)× CA_BASE_RATE | scales with pool size | zone water count > 4 |
-| DEEP_WATER → CAVE_FLOOR/WATER | 0.5× | 0.01 × _decay | < 4 cardinal water neighbors; biome ≠ LAKE |
-| WATER → DEEP_WATER | 2.5× | 0.05 × _tp | all 4 cardinal neighbors are water/deep/cave_floor |
-| SAND → DIRT (near water) | 2.5× | 0.05 × _growth | 1+ water/deep-water/cave-floor neighbor |
-| DIRT/SAND → WATER (rain flood) | 0.75× | 0.015 × _tp | raining, 3+ water neighbors |
-| SAND → WATER (rain, faster) | 1.5× dirt rate | 0.03 × _tp | raining, 3+ water neighbors |
-| GRASS → WATER (rain absorption) | 1× | 0.02 × _tp | raining, 1+ water neighbor |
-| Rain flood spread (secondary) | 0.3× | 0.006 × _tp | raining, DIRT/SAND/COBBLESTONE with 1+ water neighbor, cell unchanged |
-| DIRT → FLOWER_PATTERN (water edge) | 0.4× | 0.008 × _growth | 1+ water neighbor AND 1+ non-dirt/non-water neighbor |
+| DEEP_WATER → CAVE_FLOOR/WATER | 0.5× | 0.004 × _decay | < 4 cardinal water neighbors; biome ≠ LAKE |
+| WATER → DEEP_WATER | 2.5× | 0.02 × _tp | all 4 cardinal neighbors are water/deep/cave_floor |
+| SAND → DIRT (near water) | 2.5× | 0.02 × _growth | 1+ water/deep-water/cave-floor neighbor |
+| DIRT/SAND → WATER (rain flood) | 0.75× | 0.006 × _tp | raining, 3+ water neighbors |
+| SAND → WATER (rain, faster) | 1.5× dirt rate | 0.012 × _tp | raining, 3+ water neighbors |
+| GRASS → WATER (rain absorption) | 1× | 0.008 × _tp | raining, 1+ water neighbor |
+| Rain flood spread (secondary) | 0.3× | 0.0024 × _tp | raining, DIRT/SAND/COBBLESTONE with 1+ water neighbor, cell unchanged |
+| DIRT → FLOWER_PATTERN (water edge) | 0.4× | 0.0032 × _growth | 1+ water neighbor AND 1+ non-dirt/non-water neighbor |
 
 *Stone/cobblestone neighbors reduce water evaporation rate (each stone cardinal: ×0.8, min 0.1)
 — natural grotto walls protect small pools.*
@@ -109,10 +109,10 @@ any biome. Not limited to a single biome.
 | Rule | Multiplier | Effective rate | Fires when |
 |---|---|---|---|
 | GRASS → DIRT (sand erosion) | 1.5× | 0.003 × _decay | 1+ sand neighbor (any biome) |
-| DIRT → SAND (desert advance) | 4× | 0.008 × _decay | no water, 1+ sand neighbor (must exceed BIOME_SPREAD_RATE to hold) |
+| DIRT → SAND (desert advance) | 2× | 0.004 × _decay | no water, 1+ sand neighbor |
 
-*DIRT_SAND_SPREAD_RATE is intentionally set to 4× CA_SPREAD_RATE (twice BIOME_SPREAD_RATE) so
-desert expansion at edges consistently wins against the general diffusion pass.*
+*DIRT_SAND_SPREAD_RATE matches BIOME_SPREAD_RATE at 2× CA_SPREAD_RATE — desert edges advance
+steadily without overwhelming dirt cells too quickly.*
 
 ### Water formations (apply in any biome)
 
@@ -151,7 +151,7 @@ Apply only inside a single biome. Override or supplement global rules.
 
 | Rule | Effective rate | Notes |
 |---|---|---|
-| SAND → WATER (rain flood) | 2× FLOODING_RATE = 0.03 × _tp | Sand absorbs rain faster than dirt |
+| SAND → WATER (rain flood) | 2× FLOODING_RATE = 0.012 × _tp | Sand absorbs rain faster than dirt |
 | TREE → SAND (sand neighbor) | 150× CA_DECAY_RATE × _decay | Trees die rapidly at desert edges |
 | WATER → SAND (evaporation) | Same as WATER_TO_DIRT_RATE | biome base cell is SAND, not GRASS |
 | FLOWER_PATTERN growth | 0.003× CA_GROWTH_RATE | 1/5 the rate of other biomes |

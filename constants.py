@@ -124,7 +124,7 @@ BASE_DECAY_RATE = CA_BASE_RATE  # legacy alias — do not use in new code
 CA_GROWTH_RATE     = 0.1 * CA_BASE_RATE   # 0.0001 — base cell upgrade rate
 CA_DECAY_RATE      = 0.1 * CA_BASE_RATE   # 0.0001 — base cell downgrade rate
 CA_SPREAD_RATE     = 2   * CA_BASE_RATE   # 0.002  — natural neighbor-copy diffusion
-CA_WATER_EVAP_RATE = 20  * CA_BASE_RATE   # 0.02   — water → biome base cell baseline
+CA_WATER_EVAP_RATE = 8   * CA_BASE_RATE   # 0.008  — water → biome base cell baseline
 
 # ── Tier 1: Global growth rules (× CA_GROWTH_RATE) ──────────────────────────
 DIRT_TO_GRASS_RATE          = 1.0 * CA_GROWTH_RATE  # 0.0001 — dirt → grass with 2+ water neighbors
@@ -158,7 +158,7 @@ BIOME_SPREAD_RATE = 2.0 * CA_SPREAD_RATE  # 0.004 — base terrain copies a rand
 # ── Tier 2: Cross-biome — desert edge interactions ──────────────────────────
 # Fire when desert-type cells (SAND) are adjacent to non-desert terrain.
 GRASS_SAND_DECAY_RATE = 1.5 * CA_SPREAD_RATE  # 0.003 — grass erodes to dirt near sand
-DIRT_SAND_SPREAD_RATE = 4.0 * CA_SPREAD_RATE  # 0.008 — dry dirt converts to sand near sand (must overpower BIOME_SPREAD_RATE)
+DIRT_SAND_SPREAD_RATE = 2.0 * CA_SPREAD_RATE  # 0.004 — dry dirt converts to sand near sand
 
 # Entity Survival
 HUNGER_DECAY_RATE = 0.02        # Base hunger loss per decay call (humanoids get 6× this)
