@@ -278,9 +278,8 @@ class CellsMixin:
                         new_grid[y][x] = 'SAND'
                         _ca_rule ='DIRT_TO_SAND_DROUGHT_RATE'
 
-                # Dirt → Sand (slow desert reversion — desert biome, no water neighbors)
-                # DIRT near water is stable; DIRT with no water gradually reclaimed by desert.
-                elif cell == 'DIRT' and biome == 'DESERT' and total_water == 0:
+                # Dirt → Sand (slow desert reclamation — cell engulfed by sand on 3+ sides)
+                elif cell == 'DIRT' and biome == 'DESERT' and sand_count >= 3:
                     if random.random() < min(1.0, DIRT_TO_SAND_DESERT_RATE * _decay):
                         new_grid[y][x] = 'SAND'
                         _ca_rule = 'DIRT_TO_SAND_DESERT_RATE'
