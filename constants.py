@@ -147,7 +147,7 @@ WATER_TO_DIRT_RATE        = 2    * CA_BASE_RATE         # 0.002 — isolated wat
 DEEP_WATER_EVAPORATE_RATE = 0.5  * CA_WATER_EVAP_RATE  # 0.004 — deep water recedes when edge exposed
 DEEP_WATER_FORM_RATE      = 2.5  * CA_WATER_EVAP_RATE  # 0.02  — water deepens when all 4 cardinals are water
 DEEP_WATER_COBBLE_RATE    = 2.0  * CA_WATER_EVAP_RATE  # legacy unused (kept for reference)
-SAND_RECLAIM_RATE         = 50   * CA_BASE_RATE         # 0.05  — sand → dirt near any water (high, decoupled)
+SAND_RECLAIM_RATE         = 2.5  * CA_WATER_EVAP_RATE   # 0.02  — sand → dirt near any water (universal)
 FLOODING_RATE             = 0.75 * CA_WATER_EVAP_RATE  # 0.015 — rain floods dirt/sand near 3+ water cells
 GRASS_WATER_ABSORB_RATE   = 1.0  * CA_WATER_EVAP_RATE  # 0.02  — grass → water during rain near water
 WATER_EDGE_ROCK_RATE      = 0.4  * CA_WATER_EVAP_RATE  # 0.008 — dirt at water boundary → flower pattern
@@ -158,7 +158,7 @@ BIOME_SPREAD_RATE = 2.0 * CA_SPREAD_RATE  # 0.004 — base terrain copies a rand
 # ── Tier 2: Cross-biome — desert edge interactions ──────────────────────────
 # Fire when desert-type cells (SAND) are adjacent to non-desert terrain.
 GRASS_SAND_DECAY_RATE = 1.5 * CA_SPREAD_RATE  # 0.003 — grass erodes to dirt near sand
-DIRT_SAND_SPREAD_RATE = 0.0  # disabled — dirt→sand advance turned off for testing
+DIRT_SAND_SPREAD_RATE = 2.0 * CA_SPREAD_RATE  # 0.004 — dry dirt converts to sand near sand
 
 # Entity Survival
 HUNGER_DECAY_RATE = 0.02        # Base hunger loss per decay call (humanoids get 6× this)
