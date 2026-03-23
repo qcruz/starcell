@@ -136,6 +136,10 @@ class CellsMixin:
         new_grid = [row[:] for row in screen['grid']]  # shallow copy per row
         biome = screen.get('biome', 'FOREST')
 
+        # Debug: log all cell changes in the player zone so we can trace CA rule chains
+        _is_player_zone = (screen_x == self.player['screen_x'] and
+                           screen_y == self.player['screen_y'])
+
         _tp = getattr(self, 'time_pass_speed', 1.0)
 
         # Drought modifier: growth slows and decay accelerates the longer it hasn't rained.
@@ -212,14 +216,14 @@ class CellsMixin:
                 # former deep water and should allow water to reform around it.
                 total_water = water_count + deep_water_count + cave_floor_count
 
-                # Debug tracer: tracks which rule converted this cell (used for desert DIRT logging below)
-                _dirt_rule = None
+                # Debug tracer: rule name set by whichever branch fires; logged at end of cell block
+                _ca_rule = None
 
                 # Dirt → Water (flooding, rain only — highest priority for dirt)
                 if cell == 'DIRT' and total_water >= 3 and self.is_raining:
                     if random.random() < min(1.0, DIRT_TO_WATER_RAIN_RATE * _tp):
                         new_grid[y][x] = 'WATER'
-                        _dirt_rule = 'DIRT_TO_WATER_RAIN_RATE'
+                        _ca_rule ='DIRT_TO_WATER_RAIN_RATE'
 
                 # Sand → Water (rain flooding — 2x dirt rate; sand absorbs water faster)
                 elif cell == 'SAND' and total_water >= 3 and self.is_raining:
@@ -230,13 +234,13 @@ class CellsMixin:
                 elif cell == 'DIRT' and total_water >= 2:
                     if random.random() < min(1.0, DIRT_TO_GRASS_RATE * _growth):
                         new_grid[y][x] = 'GRASS'
-                        _dirt_rule = 'DIRT_TO_GRASS_RATE'
+                        _ca_rule ='DIRT_TO_GRASS_RATE'
 
                 # Dirt → Grass (water == 1, extra small chance)
                 elif cell == 'DIRT' and total_water == 1 and sand_count == 0:
                     if random.random() < min(1.0, DIRT_TO_GRASS_WATER_RATE * _growth):
                         new_grid[y][x] = 'GRASS'
-                        _dirt_rule = 'DIRT_TO_GRASS_WATER_RATE'
+                        _ca_rule ='DIRT_TO_GRASS_WATER_RATE'
 
                 # Dirt → Flower pattern (at water's edge touching a non-dirt/water cell — forms rocky rim)
                 # Disabled in desert: FLOWER_PATTERN decays to SAND in desert, creating an indirect
@@ -246,19 +250,19 @@ class CellsMixin:
                                          if n not in ('DIRT', 'WATER', 'DEEP_WATER'))
                     if _non_dirt_land >= 1 and random.random() < min(1.0, DIRT_TO_FLOWER_WATER_RATE * _growth):
                         new_grid[y][x] = random.choice(['FLOWER_PATTERN1', 'FLOWER_PATTERN2', 'FLOWER_PATTERN3'])
-                        _dirt_rule = 'DIRT_TO_FLOWER_WATER_RATE'
+                        _ca_rule ='DIRT_TO_FLOWER_WATER_RATE'
 
                 # Dirt → Sand (any sand neighbor, no water — desertification spread, non-desert only)
                 elif cell == 'DIRT' and total_water == 0 and sand_count >= 1 and biome != 'DESERT':
                     if random.random() < min(1.0, DIRT_TO_SAND_SPREAD_RATE * _decay):
                         new_grid[y][x] = 'SAND'
-                        _dirt_rule = 'DIRT_TO_SAND_SPREAD_RATE'
+                        _ca_rule ='DIRT_TO_SAND_SPREAD_RATE'
 
                 # Dirt → Sand (severe drought, no grass at all — non-desert only)
                 elif cell == 'DIRT' and total_water == 0 and grass_count == 0 and biome != 'DESERT':
                     if random.random() < min(1.0, DIRT_TO_SAND_DROUGHT_RATE * _decay):
                         new_grid[y][x] = 'SAND'
-                        _dirt_rule = 'DIRT_TO_SAND_DROUGHT_RATE'
+                        _ca_rule ='DIRT_TO_SAND_DROUGHT_RATE'
 
                 # Grass → Dirt (sand erosion — desertification edge, higher rate)
                 elif cell == 'GRASS' and sand_count >= 1:
@@ -269,32 +273,37 @@ class CellsMixin:
                 elif cell == 'GRASS' and total_water == 0:
                     if random.random() < min(1.0, GRASS_TO_DIRT_RATE * _decay):
                         new_grid[y][x] = 'DIRT'
+                        _ca_rule = 'GRASS_TO_DIRT_RATE'
 
                 # Tree spread (needs grass, water, no cobblestone, and not desert)
                 elif cell == 'GRASS' and biome != 'DESERT' and cobblestone_count == 0 and 1 <= tree_count <= 2 and total_water >= 1:
                     if random.random() < min(1.0, GRASS_TO_TREE_RATE * _growth):
                         new_grid[y][x] = 'TREE1'
+                        _ca_rule = 'GRASS_TO_TREE_RATE'
 
                 # Sand → Dirt (any water neighbor — universal rule, supercedes biome-specific rules)
                 elif cell == 'SAND' and total_water >= 1:
                     if random.random() < min(1.0, SAND_TO_DIRT_WATER_RATE * _growth):
                         new_grid[y][x] = 'DIRT'
+                        _ca_rule = 'SAND_TO_DIRT_WATER_RATE'
 
                 # Sand → Dirt (grass neighbor — vegetation slowly reclaims desert edges)
-                # Half the water-reclaim rate so deserts don't erode too quickly
                 elif cell == 'SAND' and grass_count >= 1:
                     if random.random() < min(1.0, SAND_TO_DIRT_WATER_RATE * 0.05 * _growth):
                         new_grid[y][x] = 'DIRT'
+                        _ca_rule = 'SAND_TO_DIRT_GRASS_RATE'
 
-                # Sand → Dirt (touching stone/cobblestone — rock weathers adjacent sand)
+                # Sand → Dirt (touching stone/cobblestone)
                 elif cell == 'SAND' and cobblestone_count >= 1:
                     if random.random() < min(1.0, SAND_TO_DIRT_STONE_RATE * _growth):
                         new_grid[y][x] = 'DIRT'
+                        _ca_rule = 'SAND_TO_DIRT_STONE_RATE(cobble)'
 
                 elif cell == 'SAND':
                     _stone_adj = sum(1 for n in neighbors if n == 'STONE')
                     if _stone_adj >= 1 and random.random() < min(1.0, SAND_TO_DIRT_STONE_RATE * _growth):
                         new_grid[y][x] = 'DIRT'
+                        _ca_rule = 'SAND_TO_DIRT_STONE_RATE(stone)'
 
                 # Deep water formation: all 4 cardinal neighbors must be water/deep_water/cave_floor
                 elif cell == 'WATER':
@@ -311,9 +320,11 @@ class CellsMixin:
                     ))
                     if cardinal_water == 4 and random.random() < min(1.0, WATER_TO_DEEP_WATER_RATE * _tp):
                         new_grid[y][x] = 'DEEP_WATER'
+                        _ca_rule = 'WATER_TO_DEEP_WATER_RATE'
                     elif total_water <= 1 and random.random() < min(1.0, WATER_TO_BASE_ISOLATED_RATE * _decay * _stone_shield):
                         # 20% chance to leave a cave floor water bed when isolated water dries
                         new_grid[y][x] = 'CAVE_FLOOR' if random.random() < 0.20 else 'DIRT'
+                        _ca_rule = 'WATER_TO_BASE_ISOLATED_RATE'
                     elif _water_decay_target and zone_water_count > 4:
                         # Volume-based decay: large water bodies drain toward biome base cell.
                         # Rate = (zone_water_count - 4) * BASE_DECAY_RATE, scaled by drought.
@@ -322,6 +333,7 @@ class CellsMixin:
                         if random.random() < min(1.0, _wdr * _decay):
                             # 15% chance to leave cave floor as the lake bed dries out
                             new_grid[y][x] = 'CAVE_FLOOR' if random.random() < 0.15 else _water_decay_target
+                            _ca_rule = 'WATER_VOLUME_DECAY'
 
                 # Deep water evaporation — stable when fully surrounded; decays when exposed.
                 # In LAKE biome deep water never evaporates on its own (only via interaction).
@@ -335,6 +347,7 @@ class CellsMixin:
                     if cardinal_water_dw < 4 and random.random() < min(1.0, DEEP_WATER_TO_WATER_RATE * _decay):
                         # Evaporates to regular water; 80% chance the water bed (CAVE_FLOOR) forms instead.
                         new_grid[y][x] = 'CAVE_FLOOR' if random.random() < 0.80 else 'WATER'
+                        _ca_rule = 'DEEP_WATER_TO_WATER_RATE'
 
                 # CAVE_FLOOR: stable in actual caves; decays and floods quickly in overworld.
                 elif cell == 'CAVE_FLOOR':
@@ -342,54 +355,62 @@ class CellsMixin:
                         # Overworld: rain rapidly fills it with water [cross-biome: water formation]
                         if self.is_raining and random.random() < min(1.0, 4 * CA_WATER_EVAP_RATE * _tp):
                             new_grid[y][x] = 'WATER'
+                            _ca_rule = 'CAVE_FLOOR_TO_WATER_RAIN'
                         # Overworld: dries back to biome base quickly when no water nearby [cross-biome: water formation]
                         elif not self.is_raining and total_water == 0 and random.random() < min(1.0, 5 * CA_WATER_EVAP_RATE * _decay):
                             new_grid[y][x] = _water_decay_target
+                            _ca_rule = 'CAVE_FLOOR_TO_BASE_DRY'
                     # Cave structures: CAVE_FLOOR is permanent — no decay rule
 
                 # Flower spread
                 elif cell == 'GRASS' and 1 <= flower_count <= 2 and total_water >= 1:
                     if random.random() < min(1.0, GRASS_TO_FLOWER_RATE * _growth):
                         new_grid[y][x] = 'FLOWER'
+                        _ca_rule = 'GRASS_TO_FLOWER_RATE'
 
                 # Flower death (overcrowding or drought)
                 elif cell == 'FLOWER' and (flower_count >= 4 or total_water == 0):
                     if random.random() < min(1.0, FLOWER_TO_GRASS_RATE * _decay):
                         new_grid[y][x] = 'GRASS'
+                        _ca_rule = 'FLOWER_TO_GRASS_RATE'
 
                 # Grass → Water (rain flooding only)
                 elif cell == 'GRASS' and total_water >= 1 and self.is_raining:
                     if random.random() < min(1.0, GRASS_TO_WATER_RAIN_RATE * _tp):
                         new_grid[y][x] = 'WATER'
+                        _ca_rule = 'GRASS_TO_WATER_RAIN_RATE'
 
-                # Tree → Grass (drought — mirrors Cactus drought decay; fires when no water and drought is moderate+)
+                # Tree → Grass (drought)
                 elif cell.startswith('TREE') and total_water == 0 and drought_severity > 0.5:
                     if random.random() < min(1.0, TREE_TO_GRASS_DROUGHT_RATE * _decay):
                         new_grid[y][x] = 'GRASS'
+                        _ca_rule = 'TREE_TO_GRASS_DROUGHT_RATE'
 
-                # Tree → Grass (near cobblestone road but not embedded — clears treeline)
+                # Tree → Grass (near cobblestone road)
                 elif cell.startswith('TREE') and cobblestone_count > 0:
                     if random.random() < min(1.0, TREE_TO_GRASS_CROWD_RATE * _decay):
                         new_grid[y][x] = 'GRASS'
+                        _ca_rule = 'TREE_TO_GRASS_CROWD_RATE(road)'
 
                 # Trees on/near sand decay fast to SAND [biome-specific: desert]
                 elif cell.startswith('TREE') and sand_count >= 1:
                     if random.random() < min(1.0, 150 * CA_DECAY_RATE * _decay):
                         new_grid[y][x] = 'SAND'
+                        _ca_rule = 'TREE_TO_SAND_DESERT'
 
-                # Tree crowding decay — any adjacent tree triggers decay chance
-                # Naturally produces checkerboard spacing as isolated trees survive
+                # Tree crowding decay
                 elif cell.startswith('TREE') and tree_count >= 1:
                     if random.random() < min(1.0, TREE_TO_GRASS_CROWD_RATE * _decay):
                         new_grid[y][x] = 'GRASS'
+                        _ca_rule = 'TREE_TO_GRASS_CROWD_RATE'
 
-                # Cactus → Sand (drought — mirrors tree drought decay in lush biomes)
+                # Cactus → Sand (drought)
                 elif cell == 'CACTUS' and total_water == 0 and drought_severity > 0.5:
                     if random.random() < min(1.0, CACTUS_TO_SAND_DROUGHT_RATE * _decay):
                         new_grid[y][x] = 'SAND'
+                        _ca_rule = 'CACTUS_TO_SAND_DROUGHT_RATE'
 
                 # Flower pattern decay → biome base cell
-                # Faster when not touching water; slower near water
                 elif cell.startswith('FLOWER_PATTERN'):
                     _fp_base = {'DESERT': 'SAND', 'MOUNTAINS': 'DIRT'}.get(biome, 'GRASS')
                     _fp_near_water = any(
@@ -397,14 +418,10 @@ class CellsMixin:
                         screen['grid'][_ny][_nx] in ('WATER', 'DEEP_WATER', 'CAVE_FLOOR')
                         for _nx, _ny in ((x, y-1), (x, y+1), (x-1, y), (x+1, y))
                     )
-                    # [cross-biome: water formation edge] slower near water, faster away
                     _fp_decay_rate = 0.3 * CA_DECAY_RATE if _fp_near_water else 4 * CA_DECAY_RATE
                     if random.random() < min(1.0, _fp_decay_rate * _decay):
                         new_grid[y][x] = _fp_base
-                        if biome == 'DESERT':
-                            self.bug_catcher.log_ca_mutation(
-                                self.tick, key, x, y, cell, _fp_base, 'FLOWER_PATTERN_DECAY', biome
-                            )
+                        _ca_rule = 'FLOWER_PATTERN_DECAY'
 
                 # Bush decay → grass when not touching water
                 elif cell == 'BUSH':
@@ -415,24 +432,25 @@ class CellsMixin:
                     )
                     if not _bush_near_water and random.random() < min(1.0, 3 * CA_DECAY_RATE * _decay):
                         new_grid[y][x] = 'GRASS'
+                        _ca_rule = 'BUSH_TO_GRASS'
 
-                # BLUE_MUSHROOM cluster growth — spreads slowly to adjacent CAVE_FLOOR cells
-                # when 1-2 mushroom neighbours are present (avoids overcrowding)
+                # BLUE_MUSHROOM cluster growth
                 elif cell == 'CAVE_FLOOR' and _water_decay_target is None:
                     _mush_adj = sum(
                         1 for cdx, cdy in ((0,-1),(0,1),(-1,0),(1,0))
                         if 0 <= x+cdx < GRID_WIDTH and 0 <= y+cdy < GRID_HEIGHT
                         and screen['grid'][y+cdy][x+cdx] == 'BLUE_MUSHROOM'
                     )
-                    # [cross-biome: cave formations]
                     if 1 <= _mush_adj <= 2 and random.random() < min(1.0, 0.8 * CA_GROWTH_RATE * _growth):
                         new_grid[y][x] = 'BLUE_MUSHROOM'
+                        _ca_rule = 'CAVE_FLOOR_TO_BLUE_MUSHROOM'
 
-                # BLUE_MUSHROOM overcrowding — dies back when fully surrounded (keeps clusters patchy)
+                # BLUE_MUSHROOM overcrowding
                 elif cell == 'BLUE_MUSHROOM':
                     _mush_all = self.count_cell_type(neighbors, 'BLUE_MUSHROOM')
                     if _mush_all >= 5 and random.random() < min(1.0, 2 * CA_DECAY_RATE * _decay):
                         new_grid[y][x] = 'CAVE_FLOOR'
+                        _ca_rule = 'BLUE_MUSHROOM_TO_CAVE_FLOOR'
 
                 # General neighbor-copy: base terrain may adopt a random NSEW neighbor's type
                 if new_grid[y][x] == cell and cell in ('GRASS', 'DIRT', 'SAND', 'WATER'):
@@ -443,12 +461,12 @@ class CellsMixin:
                             if random.random() < min(1.0, TERRAIN_DIFFUSION_RATE * _tp):
                                 new_grid[y][x] = neighbor
                                 if cell == 'DIRT':
-                                    _dirt_rule = 'neighbor_copy'
+                                    _ca_rule ='neighbor_copy'
 
-                # Desert DIRT tracer: log any DIRT conversion in desert (no sampling — events are rare)
-                if biome == 'DESERT' and cell == 'DIRT' and _dirt_rule:
+                # Player zone cell tracer: log every CA rule firing in the player's current zone
+                if _is_player_zone and _ca_rule and new_grid[y][x] != cell:
                     self.bug_catcher.log_ca_mutation(
-                        self.tick, key, x, y, 'DIRT', new_grid[y][x], _dirt_rule, biome
+                        self.tick, key, x, y, cell, new_grid[y][x], _ca_rule, biome
                     )
 
                 # Flower pattern growth: rare overlay on eligible unchanged cells
@@ -481,6 +499,7 @@ class CellsMixin:
                     _bones_base = {'DESERT': 'SAND', 'MOUNTAINS': 'DIRT'}.get(biome, 'DIRT')
                     if random.random() < min(1.0, 20 * CA_BASE_RATE * _tp):
                         new_grid[y][x] = _bones_base
+                        _ca_rule = 'BONES_DECAY'
 
                 # Rain flood spread: any terrain adjacent to water while raining gets a small
                 # extra conversion chance. Independent of main elif chain.
@@ -489,6 +508,7 @@ class CellsMixin:
                         and total_water >= 1):
                     if random.random() < min(1.0, DIRT_TO_WATER_RAIN_RATE * 0.4 * _tp):
                         new_grid[y][x] = 'WATER'
+                        _ca_rule = 'RAIN_FLOOD_SPREAD'
 
                 # Crop decay without rain (drought)
                 elif cell in ['CARROT1', 'CARROT2', 'CARROT3']:
@@ -501,17 +521,17 @@ class CellsMixin:
                         if eid in self.entities
                     )
 
-                    # [agricultural: drought tiers]
-                    decay_rate = 0.1 * CA_DECAY_RATE   # 0.00001 — normal
+                    decay_rate = 0.1 * CA_DECAY_RATE
                     if ticks_since_rain > 1200:
-                        decay_rate = 1 * CA_DECAY_RATE  # 0.0001  — moderate drought
+                        decay_rate = 1 * CA_DECAY_RATE
                     if ticks_since_rain > 3600:
-                        decay_rate = 10 * CA_DECAY_RATE # 0.001   — severe drought
+                        decay_rate = 10 * CA_DECAY_RATE
                     if not has_farmer:
                         decay_rate *= 2.0
 
                     if random.random() < min(1.0, decay_rate * _tp):
                         new_grid[y][x] = 'DIRT'
+                        _ca_rule = 'CROP_DROUGHT_DECAY'
 
         # Sync variant_grid for any cells whose type changed
         if 'variant_grid' in screen:
