@@ -143,11 +143,11 @@ CACTUS_DROUGHT_RATE   = 3.0  * CA_DECAY_RATE  # 0.0003   — cactus dies to sand
 FLOWER_DECAY_RATE     = 5.0  * CA_DECAY_RATE  # 0.0005   — flowers die from overcrowding (4+) or no water
 
 # ── Tier 1: Water dynamics (× CA_WATER_EVAP_RATE) ───────────────────────────
-WATER_TO_DIRT_RATE        = 1.0  * CA_WATER_EVAP_RATE  # 0.02  — isolated water (≤1 neighbor) → biome base cell
-DEEP_WATER_EVAPORATE_RATE = 0.5  * CA_WATER_EVAP_RATE  # 0.01  — deep water recedes when edge exposed
-DEEP_WATER_FORM_RATE      = 2.5  * CA_WATER_EVAP_RATE  # 0.05  — water deepens when all 4 cardinals are water
-DEEP_WATER_COBBLE_RATE    = 2.0  * CA_WATER_EVAP_RATE  # 0.04  — legacy unused (kept for reference)
-SAND_RECLAIM_RATE         = 2.5  * CA_WATER_EVAP_RATE  # 0.05  — sand → dirt near any water (universal)
+WATER_TO_DIRT_RATE        = 2    * CA_BASE_RATE         # 0.002 — isolated water (≤1 neighbor) → biome base cell
+DEEP_WATER_EVAPORATE_RATE = 0.5  * CA_WATER_EVAP_RATE  # 0.004 — deep water recedes when edge exposed
+DEEP_WATER_FORM_RATE      = 2.5  * CA_WATER_EVAP_RATE  # 0.02  — water deepens when all 4 cardinals are water
+DEEP_WATER_COBBLE_RATE    = 2.0  * CA_WATER_EVAP_RATE  # legacy unused (kept for reference)
+SAND_RECLAIM_RATE         = 50   * CA_BASE_RATE         # 0.05  — sand → dirt near any water (high, decoupled)
 FLOODING_RATE             = 0.75 * CA_WATER_EVAP_RATE  # 0.015 — rain floods dirt/sand near 3+ water cells
 GRASS_WATER_ABSORB_RATE   = 1.0  * CA_WATER_EVAP_RATE  # 0.02  — grass → water during rain near water
 WATER_EDGE_ROCK_RATE      = 0.4  * CA_WATER_EVAP_RATE  # 0.008 — dirt at water boundary → flower pattern

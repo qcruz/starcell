@@ -65,11 +65,11 @@ rules during dry periods. Left in for now as a safety net.*
 
 | Rule | Multiplier | Effective rate | Fires when |
 |---|---|---|---|
-| WATER → biome base (isolated) | 1× | 0.008 × _decay × stone-shield | ≤1 water neighbor; biome ≠ LAKE |
+| WATER → biome base (isolated) | 2× CA_BASE_RATE | 0.002 × _decay × stone-shield | ≤1 water neighbor; biome ≠ LAKE |
 | WATER → biome base (volume) | (count−4)× CA_BASE_RATE | scales with pool size | zone water count > 4 |
-| DEEP_WATER → CAVE_FLOOR/WATER | 0.5× | 0.004 × _decay | < 4 cardinal water neighbors; biome ≠ LAKE |
-| WATER → DEEP_WATER | 2.5× | 0.02 × _tp | all 4 cardinal neighbors are water/deep/cave_floor |
-| SAND → DIRT (near water) | 2.5× | 0.02 × _growth | 1+ water/deep-water/cave-floor neighbor |
+| DEEP_WATER → CAVE_FLOOR/WATER | 0.5× CA_WATER_EVAP_RATE | 0.004 × _decay | < 4 cardinal water neighbors; biome ≠ LAKE |
+| WATER → DEEP_WATER | 2.5× CA_WATER_EVAP_RATE | 0.02 × _tp | all 4 cardinal neighbors are water/deep/cave_floor |
+| SAND → DIRT (near water) | 50× CA_BASE_RATE | 0.05 × _growth | 1+ water/deep-water/cave-floor neighbor |
 | DIRT/SAND → WATER (rain flood) | 0.75× | 0.006 × _tp | raining, 3+ water neighbors |
 | SAND → WATER (rain, faster) | 1.5× dirt rate | 0.012 × _tp | raining, 3+ water neighbors |
 | GRASS → WATER (rain absorption) | 1× | 0.008 × _tp | raining, 1+ water neighbor |
