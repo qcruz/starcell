@@ -1521,9 +1521,34 @@ class NpcAiMixin:
                 entity.ai_state_timer = 1
                 return
 
+        # ── Survival interrupt ──────────────────────────────────────────────────
+        # At critical thirst/hunger, redirect any non-survival targeting to
+        # water/food immediately — overrides keeper anchor before it fires.
+        if entity.ai_state not in ('combat', 'flee'):
+            _sv_thirst = entity.thirst < entity.max_thirst * 0.20
+            _sv_hunger = entity.hunger < entity.max_hunger * 0.15
+            if _sv_thirst and 'water' in entity.target_types and entity.target_type != 'water':
+                _wt = self.find_closest_target_by_type(entity, 'water', screen_key)
+                if _wt:
+                    entity.ai_state = 'targeting'
+                    entity.target_type = 'water'
+                    entity.current_target = None
+                    entity.ai_state_timer = 1
+                    return
+            if _sv_hunger and 'food' in entity.target_types and entity.target_type != 'food':
+                _ft = self.find_closest_target_by_type(entity, 'food', screen_key)
+                if _ft:
+                    entity.ai_state = 'targeting'
+                    entity.target_type = 'food'
+                    entity.current_target = None
+                    entity.ai_state_timer = 1
+                    return
+
         # =====================================================================
         if (getattr(entity, 'keeper', False) and
-                entity.ai_state not in ('combat', 'flee')):
+                entity.ai_state not in ('combat', 'flee') and
+                entity.thirst >= entity.max_thirst * 0.20 and
+                entity.hunger >= entity.max_hunger * 0.15):
             ktype = getattr(entity, 'keeper_type', 3)
             ktarget = getattr(entity, 'keeper_target_pos', None)
             krange = KEEPER_RANGE.get(ktype)
@@ -2511,15 +2536,21 @@ class NpcAiMixin:
         if role_type:
             candidates[role_type] = ROLE_BASE
 
-        # ── Tier 6: Resource (quadratic urgency) ──────────────────────────────
+        # ── Tier 6: Resource (quadratic urgency + proximity + health bonus) ─────
+        # proximity_mult: up to 3× for adjacent cells, 1× at 8+ cells away
+        # health_mult:    up to 2× when near death (HP regen needs fed/hydrated)
+        _hp_mult = 1.0 + max(0.0, 1.0 - entity.hp / max(1, entity.max_hp))
         for res_type, level, maxv in (
             ('water', entity.thirst,  entity.max_thirst),
             ('food',  entity.hunger,  entity.max_hunger),
         ):
             if res_type in entity.target_types:
-                if self.find_closest_target_by_type(entity, res_type, screen_key):
+                _res_target = self.find_closest_target_by_type(entity, res_type, screen_key)
+                if _res_target:
                     urgency = max(0.0, 1.0 - level / max(1, maxv))
-                    candidates[res_type] = RESOURCE_BASE * urgency * urgency
+                    _rdist  = self.get_target_distance(entity, _res_target)
+                    _prox   = 1.0 + max(0.0, 8.0 - _rdist) / 4.0
+                    candidates[res_type] = RESOURCE_BASE * urgency * urgency * _prox * _hp_mult
 
         if not candidates:
             return None
