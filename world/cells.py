@@ -322,17 +322,14 @@ class CellsMixin:
                         new_grid[y][x] = 'DEEP_WATER'
                         _ca_rule = 'WATER_TO_DEEP_WATER_RATE'
                     elif total_water <= 1 and random.random() < min(1.0, WATER_TO_BASE_ISOLATED_RATE * _decay * _stone_shield):
-                        # 20% chance to leave a cave floor water bed when isolated water dries
-                        new_grid[y][x] = 'CAVE_FLOOR' if random.random() < 0.20 else 'DIRT'
+                        # Cave floor neighbor means this water is sitting over an eroded deep water bed
+                        new_grid[y][x] = 'CAVE_FLOOR' if cave_floor_count >= 1 else 'DIRT'
                         _ca_rule = 'WATER_TO_BASE_ISOLATED_RATE'
-                    elif _water_decay_target and zone_water_count > 4:
-                        # Volume-based decay: large water bodies drain toward biome base cell.
-                        # Rate = (zone_water_count - 4) * BASE_DECAY_RATE, scaled by drought.
-                        # Pools of ≤ 4 cells are fully stable (rate = 0).
+                    elif biome != 'LAKE' and zone_water_count > 4:
+                        # Volume-based decay: pools > 4 cells drain; ≤ 4 are stable.
                         _wdr = (zone_water_count - 4) * CA_BASE_RATE * _stone_shield
                         if random.random() < min(1.0, _wdr * _decay):
-                            # 15% chance to leave cave floor as the lake bed dries out
-                            new_grid[y][x] = 'CAVE_FLOOR' if random.random() < 0.15 else _water_decay_target
+                            new_grid[y][x] = 'CAVE_FLOOR' if cave_floor_count >= 1 else 'DIRT'
                             _ca_rule = 'WATER_VOLUME_DECAY'
 
                 # Deep water evaporation — stable when fully surrounded; decays when exposed.
