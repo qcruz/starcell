@@ -3,8 +3,8 @@ import random
 from constants import (
     GRID_WIDTH, GRID_HEIGHT,
     CELL_TYPES, BIOMES,
-    # Cellular automata rates
-    CA_BASE_RATE,
+    # CA master knob and class rates
+    CA_BASE_RATE, CA_GROWTH_RATE, CA_DECAY_RATE, CA_SPREAD_RATE, CA_WATER_EVAP_RATE,
     DIRT_TO_GRASS_RATE, GRASS_TO_DIRT_RATE, DIRT_TO_SAND_RATE,
     TREE_GROWTH_RATE, TREE_DECAY_RATE, TREE_CROWD_DECAY_RATE,
     SAND_RECLAIM_RATE, CACTUS_DROUGHT_RATE, TREE_DROUGHT_RATE,
@@ -329,11 +329,11 @@ class CellsMixin:
                 # CAVE_FLOOR: stable in actual caves; decays and floods quickly in overworld.
                 elif cell == 'CAVE_FLOOR':
                     if _water_decay_target is not None:
-                        # Overworld: rain rapidly fills it with water
-                        if self.is_raining and random.random() < min(1.0, 80 * CA_BASE_RATE * _tp):
+                        # Overworld: rain rapidly fills it with water [cross-biome: water formation]
+                        if self.is_raining and random.random() < min(1.0, 4 * CA_WATER_EVAP_RATE * _tp):
                             new_grid[y][x] = 'WATER'
-                        # Overworld: dries back to biome base quickly when no water nearby
-                        elif not self.is_raining and total_water == 0 and random.random() < min(1.0, 100 * CA_BASE_RATE * _decay):
+                        # Overworld: dries back to biome base quickly when no water nearby [cross-biome: water formation]
+                        elif not self.is_raining and total_water == 0 and random.random() < min(1.0, 5 * CA_WATER_EVAP_RATE * _decay):
                             new_grid[y][x] = _water_decay_target
                     # Cave structures: CAVE_FLOOR is permanent — no decay rule
 
@@ -368,9 +368,9 @@ class CellsMixin:
                     if random.random() < min(1.0, TREE_CROWD_DECAY_RATE * _decay):
                         new_grid[y][x] = 'GRASS'
 
-                # Trees on/near sand decay fast to SAND (desert kills trees)
+                # Trees on/near sand decay fast to SAND [biome-specific: desert]
                 elif cell.startswith('TREE') and sand_count >= 1:
-                    if random.random() < min(1.0, 150 * CA_BASE_RATE * _decay):
+                    if random.random() < min(1.0, 150 * CA_DECAY_RATE * _decay):
                         new_grid[y][x] = 'SAND'
 
                 # Tree crowding decay — any adjacent tree triggers decay chance
@@ -393,7 +393,8 @@ class CellsMixin:
                         screen['grid'][_ny][_nx] in ('WATER', 'DEEP_WATER', 'CAVE_FLOOR')
                         for _nx, _ny in ((x, y-1), (x, y+1), (x-1, y), (x+1, y))
                     )
-                    _fp_decay_rate = 0.3 * CA_BASE_RATE if _fp_near_water else 4 * CA_BASE_RATE
+                    # [cross-biome: water formation edge] slower near water, faster away
+                    _fp_decay_rate = 0.3 * CA_DECAY_RATE if _fp_near_water else 4 * CA_DECAY_RATE
                     if random.random() < min(1.0, _fp_decay_rate * _decay):
                         new_grid[y][x] = _fp_base
 
@@ -404,7 +405,7 @@ class CellsMixin:
                         screen['grid'][_ny][_nx] in ('WATER', 'DEEP_WATER', 'CAVE_FLOOR')
                         for _nx, _ny in ((x, y-1), (x, y+1), (x-1, y), (x+1, y))
                     )
-                    if not _bush_near_water and random.random() < min(1.0, 3 * CA_BASE_RATE * _decay):
+                    if not _bush_near_water and random.random() < min(1.0, 3 * CA_DECAY_RATE * _decay):
                         new_grid[y][x] = 'GRASS'
 
                 # BLUE_MUSHROOM cluster growth — spreads slowly to adjacent CAVE_FLOOR cells
@@ -415,13 +416,14 @@ class CellsMixin:
                         if 0 <= x+cdx < GRID_WIDTH and 0 <= y+cdy < GRID_HEIGHT
                         and screen['grid'][y+cdy][x+cdx] == 'BLUE_MUSHROOM'
                     )
-                    if 1 <= _mush_adj <= 2 and random.random() < min(1.0, 0.8 * CA_BASE_RATE * _growth):
+                    # [cross-biome: cave formations]
+                    if 1 <= _mush_adj <= 2 and random.random() < min(1.0, 0.8 * CA_GROWTH_RATE * _growth):
                         new_grid[y][x] = 'BLUE_MUSHROOM'
 
                 # BLUE_MUSHROOM overcrowding — dies back when fully surrounded (keeps clusters patchy)
                 elif cell == 'BLUE_MUSHROOM':
                     _mush_all = self.count_cell_type(neighbors, 'BLUE_MUSHROOM')
-                    if _mush_all >= 5 and random.random() < min(1.0, 2 * CA_BASE_RATE * _decay):
+                    if _mush_all >= 5 and random.random() < min(1.0, 2 * CA_DECAY_RATE * _decay):
                         new_grid[y][x] = 'CAVE_FLOOR'
 
                 # General neighbor-copy: base terrain may adopt a random NSEW neighbor's type
@@ -434,7 +436,8 @@ class CellsMixin:
                                 new_grid[y][x] = neighbor
 
                 # Flower pattern growth: rare overlay on eligible unchanged cells
-                _fp_rate = 0.003 * CA_BASE_RATE if biome == 'DESERT' else 0.015 * CA_BASE_RATE
+                # [biome-specific: desert gets 1/5 rate] [cross-biome: water formation edge]
+                _fp_rate = 0.003 * CA_GROWTH_RATE if biome == 'DESERT' else 0.015 * CA_GROWTH_RATE
                 if new_grid[y][x] == cell and cell in ('GRASS', 'DIRT', 'SAND', 'COBBLESTONE'):
                     if random.random() < _fp_rate * _growth:
                         new_grid[y][x] = random.choice(
@@ -442,17 +445,17 @@ class CellsMixin:
                         )
 
                 # Empty crate decay — high rate, reverts to base terrain
-                elif cell == 'EMPTY_CRATE':
+                elif cell == 'EMPTY_CRATE':  # [constructed: decay]
                     _ec_base = {'DESERT': 'SAND', 'MOUNTAINS': 'DIRT'}.get(biome, 'GRASS')
                     if random.random() < min(1.0, 80 * CA_BASE_RATE * _tp):
                         new_grid[y][x] = _ec_base
 
                 # Wood decay to dirt (outside structures)
-                elif cell == 'WOOD' and not self.is_near_structure(x, y, key):
+                elif cell == 'WOOD' and not self.is_near_structure(x, y, key):  # [constructed: decay]
                     if random.random() < min(1.0, 50 * CA_BASE_RATE * _tp):
                         new_grid[y][x] = 'DIRT'
 
-                # Planks decay to dirt (outside structures)
+                # Planks decay to dirt (outside structures) [constructed: decay]
                 elif cell == 'PLANKS' and not self.is_near_structure(x, y, key):
                     if random.random() < min(1.0, 30 * CA_BASE_RATE * _tp):
                         new_grid[y][x] = 'DIRT'
@@ -476,11 +479,12 @@ class CellsMixin:
                         if eid in self.entities
                     )
 
-                    decay_rate = 0.1 * CA_BASE_RATE
+                    # [agricultural: drought tiers]
+                    decay_rate = 0.1 * CA_DECAY_RATE   # 0.00001 — normal
                     if ticks_since_rain > 1200:
-                        decay_rate = 1 * CA_BASE_RATE
+                        decay_rate = 1 * CA_DECAY_RATE  # 0.0001  — moderate drought
                     if ticks_since_rain > 3600:
-                        decay_rate = 10 * CA_BASE_RATE
+                        decay_rate = 10 * CA_DECAY_RATE # 0.001   — severe drought
                     if not has_farmer:
                         decay_rate *= 2.0
 

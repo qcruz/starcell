@@ -98,37 +98,67 @@ NIGHT_OVERLAY_ALPHA = 40  # Darkness overlay opacity (0-255, subtle at 40)
 QUEST_COOLDOWN = 300      # Ticks before new quest target assigned after completion (5 seconds)
 QUEST_XP_MULTIPLIER = 10  # XP reward = target_level × this value
 
-# ── Global CA base rate ────────────────────────────────────────────────────────
-# Single knob that scales all cellular automata probabilities up or down.
-# Every rule is expressed as  N × CA_BASE_RATE  so tuning one value shifts the
-# whole system. See docs/ca_rules.md for the full rule reference.
-CA_BASE_RATE = 0.001            # 0.1% per tick baseline (tune to speed/slow all CA)
+# ═══════════════════════════════════════════════════════════════════════════════
+# CELLULAR AUTOMATA — RATE HIERARCHY
+# See docs/ca_rules.md for full rule descriptions and firing conditions.
+#
+# Structure:
+#   CA_BASE_RATE          — master knob, scales the entire CA system
+#   Tier 1 class rates    — CA_GROWTH_RATE, CA_DECAY_RATE, CA_SPREAD_RATE,
+#                           CA_WATER_EVAP_RATE — tune a whole class of rules
+#   Tier 1 named rules    — global rules expressed as N × class rate
+#   Tier 2 cross-biome    — rules that fire at biome-type boundaries
+#   Tier 3 biome-specific — rules that only apply inside one biome
+#   Constructed / Agri.   — placed-cell decay, crop drought tiers
+# ═══════════════════════════════════════════════════════════════════════════════
+
+CA_BASE_RATE = 0.001            # master knob — tune to speed/slow all CA at once
 BASE_DECAY_RATE = CA_BASE_RATE  # legacy alias — do not use in new code
 
-# Cell Growth & Decay Rates — all expressed as multiples of CA_BASE_RATE
-GRASS_TO_DIRT_RATE          = 0.01  * CA_BASE_RATE  # 0.00001  — grass withers to dirt without water
-DIRT_TO_SAND_RATE           = 0.005 * CA_BASE_RATE  # 0.000005 — severe drought, no grass
-DIRT_TO_GRASS_RATE          = 0.1   * CA_BASE_RATE  # 0.0001   — dirt greens with 2+ water neighbors
-DIRT_WATER_EXTRA_GRASS_RATE = 0.2   * CA_BASE_RATE  # 0.0002   — 1 water neighbor, marginal growth
-TREE_GROWTH_RATE            = 0.1   * CA_BASE_RATE  # 0.0001   — grass sprouts tree with water + tree neighbor
-TREE_DECAY_RATE             = 0.5   * CA_BASE_RATE  # 0.0005   — crowded tree converts to cobblestone (5+ cobble neighbors)
-TREE_CROWD_DECAY_RATE       = 1     * CA_BASE_RATE  # 0.001    — any adjacent tree thins the stand
-TREE_DROUGHT_RATE           = 0.3   * CA_BASE_RATE  # 0.0003   — tree dies to grass in drought (severity > 0.5, no water)
-CACTUS_DROUGHT_RATE         = 0.3   * CA_BASE_RATE  # 0.0003   — cactus dies to sand in drought
-SAND_RECLAIM_RATE           = 50    * CA_BASE_RATE  # 0.05     — sand reclaimed to dirt when touching water
-SAND_ROCK_TO_DIRT_RATE      = 0.2   * CA_BASE_RATE  # 0.0002   — sand weathers to dirt near stone/cobblestone
-FLOWER_SPREAD_RATE          = 0.1   * CA_BASE_RATE  # 0.0001   — flowers spread to grass with water nearby
-FLOWER_DECAY_RATE           = 0.5   * CA_BASE_RATE  # 0.0005   — flowers die from overcrowding or drought
-DEEP_WATER_FORM_RATE        = 50    * CA_BASE_RATE  # 0.05     — water deepens when all 4 cardinals are water
-DEEP_WATER_EVAPORATE_RATE   = 10    * CA_BASE_RATE  # 0.01     — deep water recedes when edge is exposed
-DEEP_WATER_COBBLE_RATE      = 40    * CA_BASE_RATE  # 0.04     — unused legacy constant (kept for reference)
-WATER_TO_DIRT_RATE          = 20    * CA_BASE_RATE  # 0.02     — isolated water evaporates to biome base cell
-WATER_EDGE_ROCK_RATE        = 8     * CA_BASE_RATE  # 0.008    — dirt at water boundary forms flower pattern
-FLOODING_RATE               = 15    * CA_BASE_RATE  # 0.015    — rain floods dirt/sand near 3+ water cells
-BIOME_SPREAD_RATE           = 4     * CA_BASE_RATE  # 0.004    — base terrain copies a random NSEW neighbor
-GRASS_SAND_DECAY_RATE       = 3     * CA_BASE_RATE  # 0.003    — grass near sand erodes to dirt
-DIRT_SAND_SPREAD_RATE       = 8     * CA_BASE_RATE  # 0.008    — dry dirt near sand converts to sand
-GRASS_WATER_ABSORB_RATE     = 20    * CA_BASE_RATE  # 0.02     — grass floods during rain when touching water
+# ── Tier 1 class rates ──────────────────────────────────────────────────────
+# Adjust these to shift a whole class of rules simultaneously.
+# CA_GROWTH_RATE and CA_DECAY_RATE should stay roughly equal;
+# set CA_DECAY_RATE slightly above CA_GROWTH_RATE to cause long-term natural
+# drift toward decay — combined with the rain boost to _growth this creates
+# zones that green up during rain and slowly dry without it.
+CA_GROWTH_RATE     = 0.1 * CA_BASE_RATE   # 0.0001 — base cell upgrade rate
+CA_DECAY_RATE      = 0.1 * CA_BASE_RATE   # 0.0001 — base cell downgrade rate
+CA_SPREAD_RATE     = 2   * CA_BASE_RATE   # 0.002  — natural neighbor-copy diffusion
+CA_WATER_EVAP_RATE = 20  * CA_BASE_RATE   # 0.02   — water → biome base cell baseline
+
+# ── Tier 1: Global growth rules (× CA_GROWTH_RATE) ──────────────────────────
+DIRT_TO_GRASS_RATE          = 1.0 * CA_GROWTH_RATE  # 0.0001 — dirt → grass with 2+ water neighbors
+DIRT_WATER_EXTRA_GRASS_RATE = 2.0 * CA_GROWTH_RATE  # 0.0002 — dirt → grass with 1 water neighbor (marginal)
+TREE_GROWTH_RATE            = 1.0 * CA_GROWTH_RATE  # 0.0001 — grass → tree (needs water + tree neighbor, not desert)
+FLOWER_SPREAD_RATE          = 1.0 * CA_GROWTH_RATE  # 0.0001 — flowers spread to grass near water
+SAND_ROCK_TO_DIRT_RATE      = 2.0 * CA_GROWTH_RATE  # 0.0002 — sand weathers to dirt near stone/cobblestone
+
+# ── Tier 1: Global decay rules (× CA_DECAY_RATE) ────────────────────────────
+GRASS_TO_DIRT_RATE    = 0.1  * CA_DECAY_RATE  # 0.00001  — grass withers to dirt without water
+DIRT_TO_SAND_RATE     = 0.05 * CA_DECAY_RATE  # 0.000005 — dirt → sand in severe drought (no water, no grass)
+TREE_DECAY_RATE       = 5.0  * CA_DECAY_RATE  # 0.0005   — tree → cobblestone when embedded (5+ cobble neighbors)
+TREE_CROWD_DECAY_RATE = 10   * CA_DECAY_RATE  # 0.001    — tree thins when touching any adjacent tree
+TREE_DROUGHT_RATE     = 3.0  * CA_DECAY_RATE  # 0.0003   — tree dies to grass in drought (severity > 0.5, no water)
+CACTUS_DROUGHT_RATE   = 3.0  * CA_DECAY_RATE  # 0.0003   — cactus dies to sand in drought (mirrors tree)
+FLOWER_DECAY_RATE     = 5.0  * CA_DECAY_RATE  # 0.0005   — flowers die from overcrowding (4+) or no water
+
+# ── Tier 1: Water dynamics (× CA_WATER_EVAP_RATE) ───────────────────────────
+WATER_TO_DIRT_RATE        = 1.0  * CA_WATER_EVAP_RATE  # 0.02  — isolated water (≤1 neighbor) → biome base cell
+DEEP_WATER_EVAPORATE_RATE = 0.5  * CA_WATER_EVAP_RATE  # 0.01  — deep water recedes when edge exposed
+DEEP_WATER_FORM_RATE      = 2.5  * CA_WATER_EVAP_RATE  # 0.05  — water deepens when all 4 cardinals are water
+DEEP_WATER_COBBLE_RATE    = 2.0  * CA_WATER_EVAP_RATE  # 0.04  — legacy unused (kept for reference)
+SAND_RECLAIM_RATE         = 2.5  * CA_WATER_EVAP_RATE  # 0.05  — sand → dirt near any water (universal)
+FLOODING_RATE             = 0.75 * CA_WATER_EVAP_RATE  # 0.015 — rain floods dirt/sand near 3+ water cells
+GRASS_WATER_ABSORB_RATE   = 1.0  * CA_WATER_EVAP_RATE  # 0.02  — grass → water during rain near water
+WATER_EDGE_ROCK_RATE      = 0.4  * CA_WATER_EVAP_RATE  # 0.008 — dirt at water boundary → flower pattern
+
+# ── Tier 1: Spread (× CA_SPREAD_RATE) ───────────────────────────────────────
+BIOME_SPREAD_RATE = 2.0 * CA_SPREAD_RATE  # 0.004 — base terrain copies a random NSEW neighbor each cycle
+
+# ── Tier 2: Cross-biome — desert edge interactions ──────────────────────────
+# Fire when desert-type cells (SAND) are adjacent to non-desert terrain.
+GRASS_SAND_DECAY_RATE = 1.5 * CA_SPREAD_RATE  # 0.003 — grass erodes to dirt near sand
+DIRT_SAND_SPREAD_RATE = 4.0 * CA_SPREAD_RATE  # 0.008 — dry dirt converts to sand near sand (must overpower BIOME_SPREAD_RATE)
 
 # Entity Survival
 HUNGER_DECAY_RATE = 0.02        # Base hunger loss per decay call (humanoids get 6× this)
