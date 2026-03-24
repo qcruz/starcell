@@ -409,11 +409,19 @@ class Entity:
                 self.health -= OLD_AGE_DAMAGE
 
     def regenerate_health(self, boost=1.0):
-        """Regenerate health when well-fed and hydrated"""
-        # Only heal if food and water are at max
-        if self.hunger >= self.max_hunger and self.thirst >= self.max_thirst:
-            base_heal = BASE_HEALING_RATE * boost
-            self.heal(base_heal)
+        """Regenerate health scaled by combined food+water level.
+
+        Full hunger+thirst → fast regen (BASE_HEALING_RATE).
+        Drops off quadratically as combined level falls; zero when both empty.
+        """
+        if self.health >= self.max_health:
+            return
+        h_frac = self.hunger / max(1, self.max_hunger)
+        t_frac = self.thirst / max(1, self.max_thirst)
+        combined = (h_frac + t_frac) / 2.0  # 0.0–1.0
+        regen = BASE_HEALING_RATE * boost * combined * combined
+        if regen > 0:
+            self.heal(regen)
 
     def is_alive(self):
         return self.health > 0
