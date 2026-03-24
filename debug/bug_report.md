@@ -5,6 +5,28 @@ Reviewed from `debug/bugcatcher.log` after each session.
 
 ---
 
+## Session 54 — PENDING (cave/structure bug focus)
+
+**Fixes applied before this run:**
+- Offscreen-only spawning: cave hostile, night skeleton, termite, and population maintenance now all skipped for the player's current zone. Only raids still fire in current zone.
+- Death drops: all items now land at exact death cell (no ±2 scatter).
+- Resource priority: linear urgency (NPCs pursue water/food at 30% missing, not 60%).
+- Chest decay: 0.5%/update chance to dump contents as dropped items.
+- WARRIOR added to all biome initial spawn tables (0.35–0.40).
+- Hostile spawns reduced ~25%; raid base halved (0.05→0.025).
+- Watchdog enhanced: structures now log `ai_state_timer`, `frozen_flag` (>600 ticks), `world_x/y`, `in_subscreen`, `in_combat`, `facing`, `anim_frame` per entity. Entity sample adds `in_subscreen`, `subscreen_key`, `ai_state_timer`. New integrity check: `entity_frozen_in_structure` fires when timer >600.
+
+**Watchdog focus this session: structure/cave behavior**
+- `watchdog_structure_sample`: look for entities with `frozen_flag: true` — these are freezing bugs
+- `integrity_anomaly / entity_frozen_in_structure`: direct freeze reports
+- `integrity_anomaly / entity_in_subscreen_but_in_screen_entities`: teleport/ghost candidates
+- `watchdog_entity_sample`: look for entities with `in_subscreen: true` while their zone is an overworld key
+- Target: spend session inside a cave. Document any freeze, teleport, or ghost entity seen.
+
+**Run stats:** TBD
+
+---
+
 ## Session 53 — 2026-03-20 (proxy death → respawn)
 
 **Fixes applied before this run:**

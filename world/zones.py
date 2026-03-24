@@ -276,11 +276,17 @@ class ZonesMixin:
         _decay_factor = 1.0 + _dist_from_player * 0.02  # +2% per zone, no cap
 
         # === ZONE-LEVEL UPDATES ===
+        # Spawning only happens in offscreen zones — entities diffuse into the player's
+        # zone naturally through exploration.  Raids are the only exception.
+        _player_zone = f"{self.player['screen_x']},{self.player['screen_y']}"
+        _is_player_zone = (zone_key == _player_zone)
+
         self.check_zone_threats(zone_key)
-        self.check_raid_event(zone_key)
-        self.check_cave_spawn_hostile(zone_key)
-        self.check_night_skeleton_spawn(zone_key)
-        self.check_termite_spawn(zone_key)
+        self.check_raid_event(zone_key)           # raids fire everywhere
+        if not _is_player_zone:
+            self.check_cave_spawn_hostile(zone_key)
+            self.check_night_skeleton_spawn(zone_key)
+            self.check_termite_spawn(zone_key)
         self.decay_dropped_items(zone_x, zone_y, _decay_factor)
         self.decay_items_to_buried(zone_key, _decay_factor)
         self.decay_buried_items(zone_key, _decay_factor)
@@ -834,7 +840,7 @@ class ZonesMixin:
         if zone_key not in self.zone_last_spawn_check:
             self.zone_last_spawn_check[zone_key] = 0
 
-        if self.tick - self.zone_last_spawn_check[zone_key] >= 300:
+        if self.tick - self.zone_last_spawn_check[zone_key] >= 300 and not _is_player_zone:
             self.zone_last_spawn_check[zone_key] = self.tick
 
             if npc_count == 0:

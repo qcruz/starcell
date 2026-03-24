@@ -145,6 +145,9 @@ class Watchdog:
                 'keeper_type': getattr(entity, 'keeper_type', None),
                 'keeper_target_type': getattr(entity, 'keeper_target', {}).get('type') if getattr(entity, 'keeper_target', None) else None,
                 'keeper_target_ref': getattr(entity, 'keeper_target', {}).get('ref') if getattr(entity, 'keeper_target', None) else None,
+                'in_subscreen': getattr(entity, 'in_subscreen', False),
+                'subscreen_key': getattr(entity, 'subscreen_key', None),
+                'ai_state_timer': getattr(entity, 'ai_state_timer', None),
             })
 
     def _sample_cells(self, tick: int, game) -> None:
@@ -277,7 +280,7 @@ class Watchdog:
             self._last_proxy_tick = None
 
     def _sample_structures(self, tick: int, game) -> None:
-        """Log full state for ALL structures (type, cells, entities)."""
+        """Log full state for ALL structures (type, cells, entities, movement/AI health)."""
         if not game.structures:
             self.bug_catcher.log({
                 'tick': tick,
@@ -294,13 +297,25 @@ class Watchdog:
             for eid in entity_ids:
                 if eid in game.entities:
                     e = game.entities[eid]
+                    timer = getattr(e, 'ai_state_timer', 0) or 0
                     entity_details.append({
                         'id': eid,
                         'type': e.type,
                         'grid': [e.x, e.y],
+                        'world': [round(getattr(e, 'world_x', e.x), 2),
+                                  round(getattr(e, 'world_y', e.y), 2)],
                         'health': e.health,
+                        'hunger': getattr(e, 'hunger', None),
+                        'thirst': getattr(e, 'thirst', None),
                         'ai_state': getattr(e, 'ai_state', None),
+                        'ai_state_timer': timer,
+                        'frozen_flag': timer > 600,   # stuck in one state >10 s
                         'in_structure': getattr(e, 'in_structure', False),
+                        'in_subscreen': getattr(e, 'in_subscreen', False),
+                        'current_target': getattr(e, 'current_target', None),
+                        'in_combat': getattr(e, 'in_combat', False),
+                        'facing': getattr(e, 'facing', None),
+                        'anim_frame': getattr(e, 'anim_frame', None),
                     })
             grid = sub_data.get('grid', [])
             cell_counts: dict = {}
@@ -317,6 +332,7 @@ class Watchdog:
                 'parent_cell': str(sub_data.get('parent_cell')),
                 'entity_count': len(entity_ids),
                 'entities': entity_details,
+                'frozen_count': sum(1 for e in entity_details if e.get('frozen_flag')),
                 'cell_counts': cell_counts,
             })
 
@@ -634,7 +650,31 @@ class Watchdog:
                     'found_in_structures': entity_in_structures[eid],
                 })
 
-        # Check 3: follower integrity
+        # Check 3: frozen entities inside structures (ai_state_timer stuck >600 ticks)
+        for sub_key in structure_keys:
+            for eid in screen_entities.get(sub_key, []):
+                if eid not in game.entities:
+                    continue
+                e = game.entities[eid]
+                timer = getattr(e, 'ai_state_timer', 0) or 0
+                if timer > 600:
+                    self.bug_catcher.log({
+                        'tick': tick,
+                        'category': 'integrity_anomaly',
+                        'check': 'entity_frozen_in_structure',
+                        'entity_id': eid,
+                        'entity_type': e.type,
+                        'structure_key': sub_key,
+                        'interior_type': game.structures.get(sub_key, {}).get('interior_type'),
+                        'ai_state': getattr(e, 'ai_state', None),
+                        'ai_state_timer': timer,
+                        'grid': [e.x, e.y],
+                        'health': e.health,
+                        'in_structure': getattr(e, 'in_structure', False),
+                        'in_subscreen': getattr(e, 'in_subscreen', False),
+                    })
+
+        # Check 4: follower integrity
         followers = getattr(game, 'followers', [])
         for fid in followers:
             if fid not in game.entities:
