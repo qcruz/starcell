@@ -1557,9 +1557,16 @@ class NpcAiMixin:
         if entity.ai_state_timer > 0:
             return
         
+        # Survival urgency: low food+water boosts chance to enter targeting
+        _h_missing = 1.0 - entity.hunger / max(1, entity.max_hunger)
+        _t_missing = 1.0 - entity.thirst / max(1, entity.max_thirst)
+        _survival_urgency = (_h_missing + _t_missing) / 2.0
+        _eff_aggr = min(1.0, aggressiveness + _survival_urgency)
+
         if entity.ai_state == 'idle':
+            entity.current_target = None  # always clear target while idle
             roll = random.random()
-            if roll < aggressiveness:
+            if roll < _eff_aggr:
                 target_type = self.determine_target_type(entity)
                 if target_type:
                     entity.ai_state = 'targeting'
@@ -1569,18 +1576,17 @@ class NpcAiMixin:
                 else:
                     # Nothing to target — wander instead
                     entity.ai_state = 'wandering'
-                    entity.current_target = None
                     entity.ai_state_timer = 3
-            elif roll < aggressiveness + passiveness:
+            elif roll < _eff_aggr + passiveness:
                 entity.ai_state = 'wandering'
-                entity.current_target = None
                 entity.ai_state_timer = 2
             else:
                 entity.ai_state_timer = random.randint(2, 4)  # Stay idle with variable duration
 
         elif entity.ai_state == 'wandering':
+            entity.current_target = None  # always clear target while wandering
             roll = random.random()
-            if roll < aggressiveness:
+            if roll < _eff_aggr:
                 # Try to find something to target
                 target_type = self.determine_target_type(entity)
                 if target_type:
@@ -1591,7 +1597,7 @@ class NpcAiMixin:
                 else:
                     # Nothing to target — keep wandering longer
                     entity.ai_state_timer = 3
-            elif roll < aggressiveness + idleness:
+            elif roll < _eff_aggr + idleness:
                 entity.ai_state = 'idle'
                 entity.ai_state_timer = random.randint(2, 4)  # Variable idle duration
             else:
