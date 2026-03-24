@@ -2536,11 +2536,16 @@ class GameCoreMixin:
         if not existing_key and structure_type == 'CAVE':
             parent_key = f"{parent_screen_x},{parent_screen_y}"
             if parent_key in self.zone_cave_systems:
-                existing_key = self.zone_cave_systems[parent_key]
-                # Add this entrance to the cave system's entrance list
-                structure = self.structures.get(existing_key)
-                if structure and (cell_x, cell_y) not in structure.get('entrances', []):
-                    structure.setdefault('entrances', []).append((cell_x, cell_y))
+                candidate = self.zone_cave_systems[parent_key]
+                if candidate in self.structures:
+                    existing_key = candidate
+                    # Add this entrance to the cave system's entrance list
+                    structure = self.structures[existing_key]
+                    if (cell_x, cell_y) not in structure.get('entrances', []):
+                        structure.setdefault('entrances', []).append((cell_x, cell_y))
+                else:
+                    # Stale reference — purge so a fresh interior gets generated
+                    del self.zone_cave_systems[parent_key]
 
         # Generate or retrieve structure
         if existing_key:
