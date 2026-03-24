@@ -58,7 +58,7 @@ class Entity:
         self.stuck_counter = 0  # Tracks consecutive ticks with no valid move
 
         # Stats (scaled by level)
-        self.max_health = self.props['max_health'] * level
+        self.max_health = self.props['max_health'] * level + int(3 ** level)
         self.health = self.max_health
         self.max_hunger = self.props['max_hunger']
         self.hunger = self.max_hunger
@@ -580,7 +580,7 @@ class Entity:
     def _sync_level(self):
         """Recompute continuous level and derived stats from cumulative XP."""
         self.level = 1.0 + self.xp / 100.0
-        self.max_health = self.props['max_health'] * self.level
+        self.max_health = self.props['max_health'] * self.level + int(3 ** self.level)
         self.strength = self.props['strength'] * self.level
 
     def level_up(self):
