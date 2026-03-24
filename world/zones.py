@@ -980,8 +980,6 @@ class ZonesMixin:
         self.check_raid_event(struct_zone_key)
 
         entity_list = self.screen_entities.get(struct_zone_key, [])
-        if not entity_list:
-            entity_list = self.screen_entities.get(struct_zone_key, [])
 
         if getattr(self, 'autopilot', False):
             for eid in list(entity_list):
@@ -994,6 +992,17 @@ class ZonesMixin:
         _tp = getattr(self, 'time_pass_speed', 1.0)
         _age_interval = max(1, int(600 / _tp))
 
+        # Overcrowding: compute once per cycle — extra decay passes if structure is packed
+        _live_pop = sum(
+            1 for eid in entity_list
+            if eid in self.entities and self.entities[eid].is_alive()
+        )
+        _overcrowd_extra = max(0, min(4, (_live_pop - 3) // 2)) if _live_pop > 3 else 0
+
+        # Healing multiplier depends on structure type
+        _structure_type = screen.get('type', '')
+        _heal_boost = HOUSE_HEALING_MULTIPLIER if _structure_type == 'HOUSE_INTERIOR' else 1.0
+
         entities_to_remove = []
         for entity_id in list(entity_list):
             if entity_id not in self.entities:
@@ -1001,22 +1010,34 @@ class ZonesMixin:
 
             entity = self.entities[entity_id]
 
-            # Age increment (mirrors overworld logic so structure entities age too)
+            # Age increment (mirrors overworld logic)
             if self.tick % _age_interval == 0 and entity.type != 'SKELETON':
                 entity.age += 1
 
+            # Hunger/thirst decay — plus extra passes when structure is overcrowded
             entity.decay_stats()
+            for _ in range(_overcrowd_extra):
+                entity.decay_stats()
 
-            # Item consumption (same rate as overworld)
-            if random.random() < 0.10 and entity.inventory:
+            # Item consumption — same rate as overworld
+            if random.random() < 0.25 and entity.inventory:
                 _item = random.choice(list(entity.inventory.keys()))
                 _count = entity.inventory.pop(_item)
                 if _item in ('meat', 'carrot', 'cooked_meat', 'stew', 'bones'):
                     if (self.tick - getattr(entity, 'last_attacked_tick', 0)) > 60:
                         entity.health = min(entity.max_health, entity.health + 5 * min(_count, 10))
 
+            # Health regen — only when not recently attacked; house boost for peaceful NPCs
             if (self.tick - getattr(entity, 'last_attacked_tick', 0)) > 60:
-                entity.regenerate_health(1.0)
+                _boost = _heal_boost if not entity.props.get('hostile', False) else 1.0
+                entity.regenerate_health(_boost)
+
+            # Energy regen — mirrors overworld
+            if hasattr(entity, 'energy') and entity.energy < entity.max_energy:
+                if entity.ai_state == 'idle':
+                    entity.energy = min(entity.max_energy, entity.energy + 2)
+                elif not entity.is_moving:
+                    entity.energy = min(entity.max_energy, entity.energy + 1)
 
             if not entity.is_alive():
                 entities_to_remove.append(entity_id)

@@ -603,10 +603,14 @@ class NpcAiMixin:
                                 break
             
             if wants_to_exit:
-                # Actively move toward exit and leave
+                # Actively move toward exit and leave.
+                # Track position before the call — only use move_npc_toward_structure_exit
+                # as a fallback when try_npc_exit_structure is blocked (both move entity.x/y;
+                # calling both when unblocked causes 2-cell jumps per update → visual flicker).
+                _pre_x, _pre_y = entity.x, entity.y
                 self.try_npc_exit_structure(entity)
-                if entity.in_structure:
-                    # Still inside — keep trying to path toward exit
+                if entity.in_structure and entity.x == _pre_x and entity.y == _pre_y:
+                    # Blocked — try alternative pathfinding
                     self.move_npc_toward_structure_exit(entity)
             else:
                 # Low chance to exit anyway (restless NPCs)
