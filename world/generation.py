@@ -415,7 +415,7 @@ class WorldGenerationMixin:
     # Subscreen (interior) generation
     # -------------------------------------------------------------------------
 
-    def generate_structure_zone(self, parent_screen_x, parent_screen_y, cell_x, cell_y, structure_type, depth=1):
+    def generate_structure_zone(self, parent_screen_x, parent_screen_y, cell_x, cell_y, structure_type, depth=1, align_x=None, align_y=None):
         """Generate interior for house/cave as a real zone at virtual coordinates.
 
         Structure zones are assigned coordinates far in the negative-x range
@@ -441,14 +441,18 @@ class WorldGenerationMixin:
             return zone_key
 
         # Generate interior grid
+        stairs_down_pos = None
         if structure_type == 'HOUSE_INTERIOR':
             grid = self.generate_house_interior(depth)
+            entrance_pos = (GRID_WIDTH // 2, GRID_HEIGHT - 2)
         elif structure_type == 'CAVE':
-            grid = self.generate_cave_interior(depth)
+            ax = align_x if align_x is not None else cell_x
+            ay = align_y if align_y is not None else cell_y
+            grid, stairs_down_pos = self.generate_cave_interior(depth, ax, ay)
+            entrance_pos = (max(2, min(GRID_WIDTH - 3, ax)), max(2, min(GRID_HEIGHT - 3, ay)))
         else:
             grid = [['FLOOR_WOOD' for _ in range(GRID_WIDTH)] for _ in range(GRID_HEIGHT)]
-
-        entrance_pos = (GRID_WIDTH // 2, GRID_HEIGHT - 2)
+            entrance_pos = (GRID_WIDTH // 2, GRID_HEIGHT - 2)
 
         parent_zone_name = self.screens.get(parent_key, {}).get('name', 'Unknown')
         structure_data = {
@@ -460,7 +464,7 @@ class WorldGenerationMixin:
             'depth': depth,
             'entrance': entrance_pos,
             'exit': entrance_pos,
-            'stairs_down': None,
+            'stairs_down': stairs_down_pos,
             'chests': {},
             'entrances': [(cell_x, cell_y)],
             'entities': [],
@@ -612,18 +616,18 @@ class WorldGenerationMixin:
 
         return grid
 
-    def generate_cave_interior(self, depth):
-        """Generate a cave interior layout"""
+    def generate_cave_interior(self, depth, entrance_x=None, entrance_y=None):
+        """Generate a cave interior layout with fully walled borders.
+
+        entrance_x/y: parent cell coordinates used to align STAIRS_UP position.
+        STAIRS_UP is always placed at the aligned position (all depths).
+        Returns (grid, stairs_down_pos) where stairs_down_pos is (x, y) or None.
+        """
         grid = []
         for y in range(GRID_HEIGHT):
             row = []
             for x in range(GRID_WIDTH):
-                if y == GRID_HEIGHT - 1 or x == 0 or x == GRID_WIDTH - 1:
-                    if depth == 1 and y == GRID_HEIGHT - 1 and GRID_WIDTH // 2 - 1 <= x <= GRID_WIDTH // 2 + 1:
-                        row.append('CAVE_FLOOR')
-                    else:
-                        row.append('CAVE_WALL')
-                elif y == 0:
+                if y == 0 or y == GRID_HEIGHT - 1 or x == 0 or x == GRID_WIDTH - 1:
                     row.append('CAVE_WALL')
                 else:
                     rand = random.random()
@@ -637,10 +641,16 @@ class WorldGenerationMixin:
                         row.append('CAVE_FLOOR')
             grid.append(row)
 
-        # Ensure exit area is accessible
-        grid[GRID_HEIGHT - 2][GRID_WIDTH // 2] = 'CAVE_FLOOR'
-        grid[GRID_HEIGHT - 2][GRID_WIDTH // 2 - 1] = 'CAVE_FLOOR'
-        grid[GRID_HEIGHT - 2][GRID_WIDTH // 2 + 1] = 'CAVE_FLOOR'
+        # STAIRS_UP: aligned with parent entrance, clamped to interior bounds
+        up_x = max(2, min(GRID_WIDTH - 3, entrance_x if entrance_x is not None else GRID_WIDTH // 2))
+        up_y = max(2, min(GRID_HEIGHT - 3, entrance_y if entrance_y is not None else GRID_HEIGHT // 2))
+        # Clear 3x3 area around stairs to ensure walkability
+        for dy in range(-1, 2):
+            for dx in range(-1, 2):
+                ny, nx = up_y + dy, up_x + dx
+                if 0 < ny < GRID_HEIGHT - 1 and 0 < nx < GRID_WIDTH - 1:
+                    grid[ny][nx] = 'CAVE_FLOOR'
+        grid[up_y][up_x] = 'STAIRS_UP'
 
         # Scatter a small mushroom cluster (1-3 seeds on CAVE_FLOOR; CA grows the rest)
         _mush_seeds = random.randint(1, 3)
@@ -654,8 +664,7 @@ class WorldGenerationMixin:
                 _mush_placed += 1
             _mush_attempts += 1
 
-        # 20% chance to place a water trough if cave has humanoid presence (set later by spawning)
-        # Seed it unconditionally here; the CA + goblin system will make use of it
+        # 20% chance to place a water trough
         if random.random() < 0.20:
             _wt_attempts = 0
             while _wt_attempts < 20:
@@ -666,41 +675,26 @@ class WorldGenerationMixin:
                     break
                 _wt_attempts += 1
 
-        # Deeper levels get STAIRS_UP
-        if depth > 1:
-            attempts = 0
-            while attempts < 20:
-                stairs_x = random.randint(3, GRID_WIDTH - 4)
-                stairs_y = random.randint(3, GRID_HEIGHT - 6)
-                if grid[stairs_y][stairs_x] == 'CAVE_FLOOR':
-                    grid[stairs_y][stairs_x] = 'STAIRS_UP'
-                    for dy in [-1, 0, 1]:
-                        for dx in [-1, 0, 1]:
-                            ny, nx = stairs_y + dy, stairs_x + dx
-                            if 0 < ny < GRID_HEIGHT - 1 and 0 < nx < GRID_WIDTH - 1:
-                                if grid[ny][nx] not in ['STAIRS_UP']:
-                                    grid[ny][nx] = 'CAVE_FLOOR'
-                    break
-                attempts += 1
-
         # 70% chance to add STAIRS_DOWN for deeper exploration
+        stairs_down_pos = None
         if random.random() < 0.7:
             attempts = 0
             while attempts < 20:
-                stairs_x = random.randint(3, GRID_WIDTH - 4)
-                stairs_y = random.randint(3, GRID_HEIGHT - 4)
-                if grid[stairs_y][stairs_x] == 'CAVE_FLOOR':
-                    grid[stairs_y][stairs_x] = 'STAIRS_DOWN'
-                    for dy in [-1, 0, 1]:
-                        for dx in [-1, 0, 1]:
-                            ny, nx = stairs_y + dy, stairs_x + dx
+                sx = random.randint(3, GRID_WIDTH - 4)
+                sy = random.randint(3, GRID_HEIGHT - 4)
+                if grid[sy][sx] == 'CAVE_FLOOR':
+                    grid[sy][sx] = 'STAIRS_DOWN'
+                    for dy in range(-1, 2):
+                        for dx in range(-1, 2):
+                            ny, nx = sy + dy, sx + dx
                             if 0 < ny < GRID_HEIGHT - 1 and 0 < nx < GRID_WIDTH - 1:
-                                if grid[ny][nx] not in ['STAIRS_DOWN', 'STAIRS_UP']:
+                                if grid[ny][nx] not in ('STAIRS_DOWN', 'STAIRS_UP'):
                                     grid[ny][nx] = 'CAVE_FLOOR'
+                    stairs_down_pos = (sx, sy)
                     break
                 attempts += 1
 
-        return grid
+        return grid, stairs_down_pos
 
     # -------------------------------------------------------------------------
     # Chest placement

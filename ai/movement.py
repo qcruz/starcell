@@ -1032,11 +1032,13 @@ class NpcAiMovementMixin:
                 if len(entity.memory_lane) < entity.max_memory_length:
                     entity.memory_lane.append(mem_cell)
 
-        # Position in structure (near entrance)
-        entity.x = GRID_WIDTH // 2
-        entity.y = GRID_HEIGHT - 2
-        entity.world_x = float(entity.x)
-        entity.world_y = float(entity.y)
+        # Position in structure at STAIRS_UP / entrance
+        structure_data = self.structures.get(structure_key, {})
+        ent_x, ent_y = structure_data.get('entrance', (GRID_WIDTH // 2, GRID_HEIGHT - 2))
+        entity.x = ent_x
+        entity.y = ent_y
+        entity.world_x = float(ent_x)
+        entity.world_y = float(ent_y)
 
 
     def npc_exit_structure(self, entity):

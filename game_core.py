@@ -2691,13 +2691,16 @@ class GameCoreMixin:
                 deeper_key = key
                 break
         
-        # If not found, generate new deeper level
+        # If not found, generate new deeper level aligned with current STAIRS_DOWN position
         if not deeper_key:
+            stairs_down = current_structure.get('stairs_down')
+            align_kwargs = {'align_x': stairs_down[0], 'align_y': stairs_down[1]} if stairs_down else {}
             deeper_key = self.generate_structure_zone(
                 parent_screen_x, parent_screen_y,
                 parent_cell_x, parent_cell_y,
                 'CAVE',
-                depth=new_depth
+                depth=new_depth,
+                **align_kwargs
             )
         
         # Update player to new structure zone
