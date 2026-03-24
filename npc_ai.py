@@ -605,6 +605,7 @@ class NpcAiMixin:
                                 wants_to_exit = True
                                 break
             
+            _restless_moved = False
             if wants_to_exit:
                 # Actively move toward exit and leave.
                 # Track position before the call — only use move_npc_toward_structure_exit
@@ -618,7 +619,9 @@ class NpcAiMixin:
             else:
                 # Low chance to exit anyway (restless NPCs)
                 if random.random() < 0.05:
+                    _rx, _ry = entity.x, entity.y
                     self.try_npc_exit_structure(entity)
+                    _restless_moved = (entity.x != _rx or entity.y != _ry)
 
             # If still in structure after exit attempt, do structure behavior
             if entity.in_structure:
@@ -629,8 +632,8 @@ class NpcAiMixin:
                     if behavior_config:
                         self.execute_entity_behavior(entity, behavior_config)
                 else:
-                    # Rest/wander in structure
-                    if random.random() < 0.1:
+                    # Rest/wander — skip if restless exit already moved this entity this tick
+                    if not _restless_moved and random.random() < 0.1:
                         self.wander_entity(entity)
 
             # Always return here — never fall through to overworld AI with stale screen_key

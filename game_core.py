@@ -2194,8 +2194,10 @@ class GameCoreMixin:
             # Exit when walking out the bottom (doorway area)
             # Only for houses or cave depth 1 (deeper caves use STAIRS_UP)
             if current_structure:
-                is_depth_1 = current_structure.get('depth', 1) == 1
-                if is_depth_1 and new_y >= GRID_HEIGHT - 1:
+                # Caves now have solid CAVE_WALL borders — exit only via STAIRS_UP.
+                # House interiors still use the bottom-edge walkout.
+                is_house = current_structure.get('type') != 'CAVE'
+                if is_house and new_y >= GRID_HEIGHT - 1:
                     self.exit_structure()
                     return
         

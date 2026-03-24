@@ -1351,12 +1351,15 @@ class NpcAiMovementMixin:
                     entity.y = new_y
                     entity.facing = 'down' if dy > 0 else 'up'
                     return
-        if entity.x < exit_x:
-            entity.x += 1
-            entity.facing = 'right'
-        elif entity.x > exit_x:
-            entity.x -= 1
-            entity.facing = 'left'
+        # x-axis fallback — must check for solid cells like y-axis does
+        if entity.x != exit_x:
+            step_x = 1 if entity.x < exit_x else -1
+            new_x = entity.x + step_x
+            if 0 <= new_x < GRID_WIDTH:
+                cell = structure['grid'][entity.y][new_x]
+                if not CELL_TYPES.get(cell, {}).get('solid', False):
+                    entity.facing = 'right' if step_x > 0 else 'left'
+                    entity.x = new_x
 
     def try_travel_behavior(self, entity, screen_key):
         """Move entity toward zone exit (used by traders and other traveling NPCs)"""
