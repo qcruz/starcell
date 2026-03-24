@@ -157,6 +157,9 @@ class NpcAiMixin:
                                 if entity.props.get('hostile', False):
                                     damage *= 1.2
                                 self.player_take_damage(damage)
+                                if entity.props.get('hostile', False):
+                                    entity.hunger = min(entity.max_hunger, entity.hunger + random.randint(1, 2))
+                                    entity.thirst = min(entity.max_thirst, entity.thirst + random.randint(1, 2))
                                 self.show_attack_animation(self.player['x'], self.player['y'], entity=entity, magic_type=magic_type)
                                 # Bat disengage after hitting
                                 if entity.props.get('flying', False) and random.random() < 0.4:
@@ -959,6 +962,9 @@ class NpcAiMixin:
                                     damage *= 1.2
 
                                 self.player_take_damage(damage)
+                                if entity.props.get('hostile', False):
+                                    entity.hunger = min(entity.max_hunger, entity.hunger + random.randint(1, 2))
+                                    entity.thirst = min(entity.max_thirst, entity.thirst + random.randint(1, 2))
                                 self.show_attack_animation(self.player['x'], self.player['y'], entity=entity, magic_type=magic_type)
                             else:
                                 # Move toward player
@@ -989,6 +995,9 @@ class NpcAiMixin:
                                 if attacker.combat_state == 'blocking':
                                     damage *= (1 - attacker.block_reduction)
                                 attacker.take_damage(damage, entity_id)
+                                if entity.props.get('hostile', False):
+                                    entity.hunger = min(entity.max_hunger, entity.hunger + random.randint(1, 2))
+                                    entity.thirst = min(entity.max_thirst, entity.thirst + random.randint(1, 2))
                                 self.show_attack_animation(attacker.x, attacker.y, entity=entity, target_entity=attacker, magic_type=magic_type)
                             else:
                                 # Move toward attacker
@@ -2127,6 +2136,9 @@ class NpcAiMixin:
                         damage *= _tp
 
                         self.player_take_damage(damage)
+                        if entity.props.get('hostile', False):
+                            entity.hunger = min(entity.max_hunger, entity.hunger + random.randint(1, 2))
+                            entity.thirst = min(entity.max_thirst, entity.thirst + random.randint(1, 2))
                         self.show_attack_animation(self.player['x'], self.player['y'], entity=entity, magic_type=magic_type)
                         entity.energy = max(0, getattr(entity, 'energy', 1) - 2)
                     else:
@@ -2150,6 +2162,9 @@ class NpcAiMixin:
                         if closest_enemy.combat_state == 'blocking':
                             damage *= (1 - closest_enemy.block_reduction)
                         closest_enemy.take_damage(damage, entity_id)
+                        if entity.props.get('hostile', False):
+                            entity.hunger = min(entity.max_hunger, entity.hunger + random.randint(1, 2))
+                            entity.thirst = min(entity.max_thirst, entity.thirst + random.randint(1, 2))
                         closest_enemy.last_attacked_tick = self.tick
                         entity.energy = max(0, getattr(entity, 'energy', 1) - 2)
                         self.show_attack_animation(closest_enemy.x, closest_enemy.y, entity=entity, target_entity=closest_enemy, magic_type=magic_type)
