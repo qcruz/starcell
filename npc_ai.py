@@ -1521,34 +1521,9 @@ class NpcAiMixin:
                 entity.ai_state_timer = 1
                 return
 
-        # ── Survival interrupt ──────────────────────────────────────────────────
-        # At critical thirst/hunger, redirect any non-survival targeting to
-        # water/food immediately — overrides keeper anchor before it fires.
-        if entity.ai_state not in ('combat', 'flee'):
-            _sv_thirst = entity.thirst < entity.max_thirst * 0.20
-            _sv_hunger = entity.hunger < entity.max_hunger * 0.15
-            if _sv_thirst and 'water' in entity.target_types and entity.target_type != 'water':
-                _wt = self.find_closest_target_by_type(entity, 'water', screen_key)
-                if _wt:
-                    entity.ai_state = 'targeting'
-                    entity.target_type = 'water'
-                    entity.current_target = None
-                    entity.ai_state_timer = 1
-                    return
-            if _sv_hunger and 'food' in entity.target_types and entity.target_type != 'food':
-                _ft = self.find_closest_target_by_type(entity, 'food', screen_key)
-                if _ft:
-                    entity.ai_state = 'targeting'
-                    entity.target_type = 'food'
-                    entity.current_target = None
-                    entity.ai_state_timer = 1
-                    return
-
         # =====================================================================
         if (getattr(entity, 'keeper', False) and
-                entity.ai_state not in ('combat', 'flee') and
-                entity.thirst >= entity.max_thirst * 0.20 and
-                entity.hunger >= entity.max_hunger * 0.15):
+                entity.ai_state not in ('combat', 'flee')):
             ktype = getattr(entity, 'keeper_type', 3)
             ktarget = getattr(entity, 'keeper_target_pos', None)
             krange = KEEPER_RANGE.get(ktype)
