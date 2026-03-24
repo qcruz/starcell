@@ -2514,7 +2514,7 @@ class NpcAiMixin:
         # ── Tier 6: Resource (quadratic urgency + proximity + health bonus) ─────
         # proximity_mult: up to 3× for adjacent cells, 1× at 8+ cells away
         # health_mult:    up to 2× when near death (HP regen needs fed/hydrated)
-        _hp_mult = 1.0 + max(0.0, 1.0 - entity.hp / max(1, entity.max_hp))
+        _hp_mult = 1.0 + max(0.0, 1.0 - entity.health / max(1, entity.max_health))
         for res_type, level, maxv in (
             ('water', entity.thirst,  entity.max_thirst),
             ('food',  entity.hunger,  entity.max_hunger),
