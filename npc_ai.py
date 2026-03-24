@@ -2514,7 +2514,9 @@ class NpcAiMixin:
         if role_type:
             candidates[role_type] = ROLE_BASE
 
-        # ── Tier 6: Resource (quadratic urgency + proximity + health bonus) ─────
+        # ── Tier 6: Resource (linear urgency + proximity + health bonus) ──────────
+        # Linear so NPCs pursue food/water at ~30% missing (beats ROLE_BASE=40),
+        # not ~60% missing as the old quadratic curve required.
         # proximity_mult: up to 3× for adjacent cells, 1× at 8+ cells away
         # health_mult:    up to 2× when near death (HP regen needs fed/hydrated)
         _hp_mult = 1.0 + max(0.0, 1.0 - entity.health / max(1, entity.max_health))
@@ -2528,7 +2530,7 @@ class NpcAiMixin:
                     urgency = max(0.0, 1.0 - level / max(1, maxv))
                     _rdist  = self.get_target_distance(entity, _res_target)
                     _prox   = 1.0 + max(0.0, 8.0 - _rdist) / 4.0
-                    candidates[res_type] = RESOURCE_BASE * urgency * urgency * _prox * _hp_mult
+                    candidates[res_type] = RESOURCE_BASE * urgency * _prox * _hp_mult
 
         if not candidates:
             return None
