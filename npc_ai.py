@@ -2099,7 +2099,7 @@ class NpcAiMixin:
                         self.show_attack_animation(closest_enemy.x, closest_enemy.y, entity=entity, target_entity=closest_enemy, magic_type=magic_type)
 
                         # Grant XP from hit (chance-based, one roll per hit)
-                        entity.gain_xp()
+                        entity.gain_xp(1)
 
                         # Auto meat consumption for combat entities (Warriors/Guards/Commanders/Kings)
                         if entity.type in ['WARRIOR', 'COMMANDER', 'KING', 'GUARD']:
