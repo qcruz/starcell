@@ -450,10 +450,9 @@ class HudMixin:
                         pygame.draw.rect(self.screen, (0, 210, 230),
                                          (bar_x, wbar_y, water_width, bar_height))
 
-                    # Draw level if > 1
-                    if entity.level > 1:
-                        level_text = self.tiny_font.render(f"L{entity.level}", True, COLORS['YELLOW'])
-                        self.screen.blit(level_text, (int(pixel_x + 2), int(pixel_y + CELL_SIZE - 12)))
+                    # Draw level (blue, 2 decimal places)
+                    level_text = self.tiny_font.render(f"L{entity.level:.2f}", True, (100, 180, 255))
+                    self.screen.blit(level_text, (int(pixel_x + 2), int(pixel_y + CELL_SIZE - 12)))
 
                     # Enchantment marker — golden rect in top-right corner
                     if self.is_entity_enchanted(entity_id):

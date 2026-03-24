@@ -574,7 +574,7 @@ class ZonesMixin:
                     item = random.choice(list(entity.inventory.keys()))
                     count = entity.inventory.pop(item)
                     if item in ('meat', 'carrot', 'cooked_meat', 'stew', 'bones'):
-                        if (self.tick - getattr(entity, 'last_attacked_tick', 0)) > 120:
+                        if (self.tick - getattr(entity, 'last_attacked_tick', 0)) > 60:
                             entity.health = min(entity.max_health, entity.health + 5 * min(count, 10))
 
                 # Skeletons burn in daylight
@@ -603,7 +603,7 @@ class ZonesMixin:
                             break
 
                 # Regen health only if not recently attacked (120 ticks = ~2s)
-                if (self.tick - getattr(entity, 'last_attacked_tick', 0)) > 120:
+                if (self.tick - getattr(entity, 'last_attacked_tick', 0)) > 60:
                     entity.regenerate_health(heal_boost)
 
                 # Energy regen: idle = +2/tick, stationary = +1/tick, moving = no regen
@@ -994,10 +994,10 @@ class ZonesMixin:
                 _item = random.choice(list(entity.inventory.keys()))
                 _count = entity.inventory.pop(_item)
                 if _item in ('meat', 'carrot', 'cooked_meat', 'stew', 'bones'):
-                    if (self.tick - getattr(entity, 'last_attacked_tick', 0)) > 120:
+                    if (self.tick - getattr(entity, 'last_attacked_tick', 0)) > 60:
                         entity.health = min(entity.max_health, entity.health + 5 * min(_count, 10))
 
-            if (self.tick - getattr(entity, 'last_attacked_tick', 0)) > 120:
+            if (self.tick - getattr(entity, 'last_attacked_tick', 0)) > 60:
                 entity.regenerate_health(1.0)
 
             if not entity.is_alive():
@@ -1214,7 +1214,7 @@ class ZonesMixin:
                         if heal_boost > 1.0:
                             break
 
-                if (self.tick - getattr(entity, 'last_attacked_tick', 0)) > 120:
+                if (self.tick - getattr(entity, 'last_attacked_tick', 0)) > 60:
                     entity.regenerate_health(heal_boost)
 
                 if entity.hunger <= 0:

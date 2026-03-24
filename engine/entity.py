@@ -22,7 +22,9 @@ class Entity:
         # Handle _double types by using base type for props lookup
         base_type = entity_type.replace('_double', '')
         self.props = ENTITY_TYPES[base_type]
-        self.level = level
+        # Continuous level: level = 1 + cumulative_xp / 100
+        # level is always a float; integer crossings trigger level-up effects.
+        self.level = float(level)
 
         # Position - GRID coordinates (logical cell position)
         self.x = x  # Grid X (integer)
@@ -227,9 +229,8 @@ class Entity:
         else:
             self.name = None  # Animals don't have names
 
-        # Experience
-        self.xp = 0
-        self.xp_to_level = 100 * level
+        # Experience — cumulative total; level = 1 + xp/100
+        self.xp = max(0, (level - 1) * 100)  # back-compute XP from initial level
 
         # Age (in years) - start at random age
         if entity_type == 'SKELETON':
@@ -499,42 +500,23 @@ class Entity:
             activity_type: 'harvest', 'chop', 'kill', 'build', 'travel'
             game: Game instance for logging
         """
-        # Grant XP based on activity type
-        xp_rewards = {
-            'harvest': 5,
-            'chop': 7,
-            'mine': 6,
-            'build': 10,
-            'travel': 3,
-            'kill': 15
-        }
+        # Roll for 1 XP using the universal chance formula; track integer crossings
+        old_level_int = int(self.level)
+        self.gain_xp()
+        new_level_int = int(self.level)
 
-        xp_amount = xp_rewards.get(activity_type, 5)
-        self.xp += xp_amount
+        # Check if crossed an integer level boundary (triggers level-up effects)
+        if new_level_int <= old_level_int:
+            return
 
-        # Check if leveled up
-        if self.xp >= self.xp_to_level:
-            old_level = self.level
-            self.level += 1
+        name_str = self.name if self.name else self.type
+        print(f"{name_str} leveled up! {old_level_int} -> {new_level_int} (Lv {self.level:.2f})")
 
-            # Reset XP for next level
-            self.xp = 0
-            self.xp_to_level = 100 * self.level
-
-            # Scale stats with new level
-            self.max_health = self.props['max_health'] * self.level
-            self.health = self.max_health  # Full heal on level up
-            self.strength = self.props['strength'] * self.level
-
-            # Reduce age by 10% and extend max_age by 20% (leveling extends lifespan)
-            age_reduction = max(1, int(self.age * 0.1))
-            self.age = max(20, self.age - age_reduction)
-            if hasattr(self, 'max_age'):
-                self.max_age = int(self.max_age * 1.2)
-
-            # Log level up with name if available
-            name_str = self.name if self.name else self.type
-            print(f"{name_str} leveled up! {old_level} -> {self.level} (max age = {self.max_age})")
+        # Reduce age by 10% and extend max_age by 20% (leveling extends lifespan)
+        age_reduction = max(1, int(self.age * 0.1))
+        self.age = max(20, self.age - age_reduction)
+        if hasattr(self, 'max_age'):
+            self.max_age = int(self.max_age * 1.2)
 
             # Level up items in inventory (20% chance per item)
             for item_name in list(self.inventory.keys()):
@@ -587,29 +569,30 @@ class Entity:
         """
         self.thirst = min(self.max_thirst, self.thirst + water_value)
 
-    def gain_xp(self, amount):
-        self.xp += amount
-        if self.xp >= self.xp_to_level:
-            self.level_up()
+    def gain_xp(self, amount=1):
+        """Attempt to gain 1 XP. Chance = 100/level %.
+        `amount` param kept for API compatibility but ignored — always rolls for 1 XP.
+        """
+        if random.random() < 1.0 / max(1.0, self.level):
+            self.xp += 1
+            self._sync_level()
+
+    def _sync_level(self):
+        """Recompute continuous level and derived stats from cumulative XP."""
+        self.level = 1.0 + self.xp / 100.0
+        self.max_health = self.props['max_health'] * self.level
+        self.strength = self.props['strength'] * self.level
 
     def level_up(self):
-        self.level += 1
-        self.xp = 0
-        self.xp_to_level = 100 * self.level
-
-        # Guard promotion: 30% chance to become Warrior on level up
+        """Legacy shim — syncs stats. Guard promotion kept for combat code."""
+        self._sync_level()
+        # Guard promotion
         if self.type == 'GUARD' and random.random() < 0.30:
             old_name = self.name if self.name else "Guard"
             self.type = 'WARRIOR'
             self.props = ENTITY_TYPES['WARRIOR']
+            self._sync_level()
             print(f"{old_name} was promoted to WARRIOR after leveling up!")
-
-        # Increase stats
-        self.max_health = self.props['max_health'] * self.level
-        self.health = self.max_health
-        self.strength = self.props['strength'] * self.level
-
-        # Increase max_age by 20% (leveling extends lifespan)
         if hasattr(self, 'max_age'):
             self.max_age = int(self.max_age * 1.2)
 

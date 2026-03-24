@@ -2098,11 +2098,8 @@ class NpcAiMixin:
                         entity.energy = max(0, getattr(entity, 'energy', 1) - 2)
                         self.show_attack_animation(closest_enemy.x, closest_enemy.y, entity=entity, target_entity=closest_enemy, magic_type=magic_type)
 
-                        # Grant XP from hit: only target's level (scaled by time pass speed)
-                        xp_gain = int(closest_enemy.level * _tp)
-                        entity.xp += xp_gain
-                        if entity.xp >= entity.xp_to_level:
-                            entity.level_up()
+                        # Grant XP from hit (chance-based, one roll per hit)
+                        entity.gain_xp()
 
                         # Auto meat consumption for combat entities (Warriors/Guards/Commanders/Kings)
                         if entity.type in ['WARRIOR', 'COMMANDER', 'KING', 'GUARD']:
@@ -3676,7 +3673,7 @@ class NpcAiMixin:
             caster_id = next((eid for eid, e in self.entities.items() if e is caster), None)
             target.take_damage(spell_data['amount'], caster_id)
             if target.health <= 0 and hasattr(caster, 'xp'):
-                caster.xp += target.level * 10
+                caster.gain_xp()
         elif spell_data['type'] == 'enchant':
             cell_key = (target.screen_x, target.screen_y, target.x, target.y)
             self.enchanted_cells[cell_key] = True  # Just mark as enchanted, no duration
