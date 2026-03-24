@@ -369,8 +369,9 @@ class SaveLoadMixin:
                 entity.thirst = entity_data['thirst']
                 entity.inventory = entity_data.get('inventory', {})
                 entity.xp = entity_data.get('xp', 0)
-                entity.level = 1.0 + entity.xp / 100.0  # resync continuous level from XP
-                entity._sync_level()  # propagate to max_health / strength
+                entity.level = 1.0 + entity.xp / 100.0
+                entity.max_health = entity.props['max_health'] * entity.level + int(3 ** entity.level)
+                entity.strength = entity.props['strength'] * entity.level
 
                 # Restore new attributes (with backward compatibility)
                 entity.faction = entity_data.get('faction', None)
