@@ -258,15 +258,20 @@ class CellsMixin:
                         new_grid[y][x] = 'GRASS'
                         _ca_rule ='DIRT_TO_GRASS_WATER_RATE'
 
-                # Dirt → Flower pattern (at water's edge touching a non-dirt/water cell — forms rocky rim)
-                # Disabled in desert: FLOWER_PATTERN decays to SAND in desert, creating an indirect
-                # DIRT→FLOWER→SAND chain that erases dirt cells over two CA cycles.
+                # Dirt → Flower/Bush/Rock pattern at water's edge (forms natural oasis rim)
+                # Non-desert: picks from flowers, bush, or stone
                 elif cell == 'DIRT' and total_water >= 1 and biome != 'DESERT':
                     _non_dirt_land = sum(1 for n in neighbors
                                          if n not in ('DIRT', 'WATER', 'DEEP_WATER'))
                     if _non_dirt_land >= 1 and random.random() < min(1.0, DIRT_TO_FLOWER_WATER_RATE * _growth):
-                        new_grid[y][x] = random.choice(['FLOWER_PATTERN1', 'FLOWER_PATTERN2', 'FLOWER_PATTERN3'])
-                        _ca_rule ='DIRT_TO_FLOWER_WATER_RATE'
+                        new_grid[y][x] = random.choice(['FLOWER_PATTERN1', 'FLOWER_PATTERN2', 'FLOWER_PATTERN3', 'BUSH', 'STONE'])
+                        _ca_rule = 'DIRT_TO_FLOWER_WATER_RATE'
+
+                # Desert: Dirt at water's edge → Stone (FLOWER_PATTERN decays to SAND in desert)
+                elif cell == 'DIRT' and total_water >= 1 and biome == 'DESERT':
+                    if random.random() < min(1.0, DIRT_TO_FLOWER_WATER_RATE * _growth):
+                        new_grid[y][x] = 'STONE'
+                        _ca_rule = 'DIRT_TO_STONE_WATER_DESERT'
 
                 # Dirt → Sand (any sand neighbor, no water — desertification spread, non-desert only)
                 elif cell == 'DIRT' and total_water == 0 and sand_count >= 1 and biome != 'DESERT':
