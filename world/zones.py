@@ -351,11 +351,27 @@ class ZonesMixin:
                     screen['grid'][y][x] = base_cell
                     continue
 
-                # Chest lifecycle: restore background when empty (no EMPTY_CRATE)
+                # Chest lifecycle: decay with contents, restore background when empty
                 if cell == 'CHEST':
                     chest_key = f"{zone_key}:{x},{y}"
                     contents = self.chest_contents.get(chest_key, {})
-                    if not any(v > 0 for v in contents.values()):
+                    if any(v > 0 for v in contents.values()):
+                        if random.random() < 0.005 * _tp:
+                            # Dump all contents as dropped items at this position
+                            if zone_key not in self.dropped_items:
+                                self.dropped_items[zone_key] = {}
+                            pos = (x, y)
+                            if pos not in self.dropped_items[zone_key]:
+                                self.dropped_items[zone_key][pos] = {}
+                            for item_name, count in contents.items():
+                                if count > 0:
+                                    self.dropped_items[zone_key][pos][item_name] = (
+                                        self.dropped_items[zone_key][pos].get(item_name, 0) + count
+                                    )
+                            self.chest_contents.pop(chest_key, None)
+                            bg = getattr(self, 'chest_backgrounds', {}).pop(chest_key, None)
+                            screen['grid'][y][x] = bg if bg else base_cell
+                    else:
                         bg = getattr(self, 'chest_backgrounds', {}).pop(chest_key, None)
                         screen['grid'][y][x] = bg if bg else base_cell
                         self.chest_contents.pop(chest_key, None)
@@ -841,6 +857,8 @@ class ZonesMixin:
                     spawned = self.spawn_single_entity_at_entrance(zone_x, zone_y, biome, force_type='TRADER')
                 elif 'GUARD' not in types_in_zone:
                     spawned = self.spawn_single_entity_at_entrance(zone_x, zone_y, biome, force_type='GUARD')
+                elif 'WARRIOR' not in types_in_zone and random.random() < 0.5:
+                    spawned = self.spawn_single_entity_at_entrance(zone_x, zone_y, biome, force_type='WARRIOR')
 
                 if not spawned:
                     spawned = self.spawn_single_entity_at_entrance(zone_x, zone_y, biome)

@@ -404,7 +404,7 @@ class CraftingMixin:
         _UNIQUE_FLAGS = ('is_tool', 'is_spell', 'is_follower', 'magic_damage', 'armor')
         for pos, items in list(self.dropped_items[screen_key].items()):
             for item_name in list(items.keys()):
-                if random.random() > 0.0003 * decay_factor:  # 0.03% per item per update, scaled by distance
+                if random.random() > 0.003 * decay_factor:  # 0.3% per item per update, scaled by distance
                     continue
                 amt = items.pop(item_name, 0)
                 if not items:
