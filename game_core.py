@@ -819,32 +819,15 @@ class GameCoreMixin:
             if screen_key not in self.dropped_items:
                 self.dropped_items[screen_key] = {}
 
-            # Scatter 1-2 individual items nearby so they display as item sprites
-            scatter_pool = [(k, v) for k, v in all_item_drops.items() if v >= 1]
-            n_scatter = min(random.randint(1, 2), len(scatter_pool))
-            scattered = random.sample(scatter_pool, n_scatter)
-            for item_name, _ in scattered:
-                all_item_drops[item_name] -= 1
-                if all_item_drops[item_name] <= 0:
-                    del all_item_drops[item_name]
-                sx = max(1, min(GRID_WIDTH - 2, entity.x + random.randint(-2, 2)))
-                sy = max(1, min(GRID_HEIGHT - 2, entity.y + random.randint(-2, 2)))
-                cell_key = (sx, sy)
-                if cell_key not in self.dropped_items[screen_key]:
-                    self.dropped_items[screen_key][cell_key] = {}
-                self.dropped_items[screen_key][cell_key][item_name] = \
-                    self.dropped_items[screen_key][cell_key].get(item_name, 0) + 1
-
-            # Consolidate remaining items into one pile at entity position → shows as itembag
-            if all_item_drops:
-                pile_x = max(1, min(GRID_WIDTH - 2, entity.x))
-                pile_y = max(1, min(GRID_HEIGHT - 2, entity.y))
-                pile_key = (pile_x, pile_y)
-                if pile_key not in self.dropped_items[screen_key]:
-                    self.dropped_items[screen_key][pile_key] = {}
-                for item_name, count in all_item_drops.items():
-                    self.dropped_items[screen_key][pile_key][item_name] = \
-                        self.dropped_items[screen_key][pile_key].get(item_name, 0) + count
+            # Drop everything at the exact cell where the entity died
+            pile_x = max(1, min(GRID_WIDTH - 2, entity.x))
+            pile_y = max(1, min(GRID_HEIGHT - 2, entity.y))
+            pile_key = (pile_x, pile_y)
+            if pile_key not in self.dropped_items[screen_key]:
+                self.dropped_items[screen_key][pile_key] = {}
+            for item_name, count in all_item_drops.items():
+                self.dropped_items[screen_key][pile_key][item_name] = \
+                    self.dropped_items[screen_key][pile_key].get(item_name, 0) + count
         
         # Remove from screen entities list
         if screen_key in self.screen_entities:

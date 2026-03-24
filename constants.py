@@ -160,6 +160,12 @@ TERRAIN_DIFFUSION_RATE    = 1.0 * CA_GROWTH_RATE   # 0.0001 — slow catch-all: 
 GRASS_TO_DIRT_SAND_RATE  = 1.5 * CA_SPREAD_RATE  # 0.003 — grass erodes to dirt near sand
 DIRT_TO_SAND_SPREAD_RATE = 2.0 * CA_SPREAD_RATE  # 0.004 — dry dirt converts to sand near sand
 
+# ── Tier 1: Ambient erosion (very slow background decay, all biomes) ─────────
+DIRT_TO_SAND_AMBIENT_RATE        = 0.03 * CA_DECAY_RATE  # 0.000003 — global baseline dirt→sand erosion
+DIRT_TO_SAND_DESERT_AMBIENT_RATE = 0.10 * CA_DECAY_RATE  # 0.00001  — slightly faster in desert
+SAND_TO_STONE_AMBIENT_RATE       = 0.01 * CA_DECAY_RATE  # 0.000001 — very slow sand lithification (global)
+STONE_SAND_TO_DIRT_RATE          = 0.05 * CA_DECAY_RATE  # 0.000005 — sand adjacent to stone weathers to dirt
+
 # Entity Survival
 HUNGER_DECAY_RATE = 0.02        # Base hunger loss per decay call (humanoids get 6× this)
 THIRST_DECAY_RATE = 0.5         # Base thirst loss per decay call — drains in ~200 calls (~half max rain gap)

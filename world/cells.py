@@ -20,6 +20,8 @@ from constants import (
     SAND_TO_DIRT_STONE_RATE,
     BIOME_BORDER_SPREAD_RATE, TERRAIN_DIFFUSION_RATE,
     GRASS_TO_DIRT_SAND_RATE, DIRT_TO_SAND_SPREAD_RATE,
+    DIRT_TO_SAND_AMBIENT_RATE, DIRT_TO_SAND_DESERT_AMBIENT_RATE,
+    SAND_TO_STONE_AMBIENT_RATE, STONE_SAND_TO_DIRT_RATE,
     GRASS_TO_WATER_RAIN_RATE, DIRT_TO_GRASS_WATER_RATE,
     # Rain
     RAIN_WATER_SPAWNS, RAIN_GRASS_SPAWNS,
@@ -222,6 +224,7 @@ class CellsMixin:
                 sand_count = self.count_cell_type(neighbors, 'SAND')
                 flower_count = self.count_cell_type(neighbors, 'FLOWER')
                 cobblestone_count = self.count_cell_type(neighbors, 'COBBLESTONE')
+                stone_count = self.count_cell_type(neighbors, 'STONE')
 
                 # CAVE_FLOOR counts as water for spread calculations — it is the dried bed of
                 # former deep water and should allow water to reform around it.
@@ -279,6 +282,13 @@ class CellsMixin:
                         new_grid[y][x] = 'SAND'
                         _ca_rule ='DIRT_TO_SAND_DROUGHT_RATE'
 
+                # Dirt → Sand (ambient baseline — all biomes, very slow erosion when dry)
+                elif cell == 'DIRT' and total_water == 0:
+                    _ambient = DIRT_TO_SAND_DESERT_AMBIENT_RATE if biome == 'DESERT' else DIRT_TO_SAND_AMBIENT_RATE
+                    if random.random() < min(1.0, _ambient * _decay):
+                        new_grid[y][x] = 'SAND'
+                        _ca_rule = 'DIRT_TO_SAND_AMBIENT_RATE'
+
                 # Grass → Dirt (sand erosion — desertification edge, higher rate)
                 elif cell == 'GRASS' and sand_count >= 1:
                     if random.random() < min(1.0, GRASS_TO_DIRT_SAND_RATE * _decay):
@@ -315,10 +325,20 @@ class CellsMixin:
                         _ca_rule = 'SAND_TO_DIRT_STONE_RATE(cobble)'
 
                 elif cell == 'SAND':
-                    _stone_adj = sum(1 for n in neighbors if n == 'STONE')
-                    if _stone_adj >= 1 and random.random() < min(1.0, SAND_TO_DIRT_STONE_RATE * _growth):
+                    if stone_count >= 1 and random.random() < min(1.0, SAND_TO_DIRT_STONE_RATE * _growth):
+                        # Sand adjacent to stone weathers to dirt (rock on sand → rock on dirt)
                         new_grid[y][x] = 'DIRT'
                         _ca_rule = 'SAND_TO_DIRT_STONE_RATE(stone)'
+                    elif stone_count == 0 and random.random() < min(1.0, SAND_TO_STONE_AMBIENT_RATE * _decay):
+                        # Isolated sand slowly lithifies (very slow global sand → rock)
+                        new_grid[y][x] = 'STONE'
+                        _ca_rule = 'SAND_TO_STONE_AMBIENT_RATE'
+
+                # Stone near sand weathers back to dirt (rock on sand → rock on dirt)
+                elif cell == 'STONE' and sand_count >= 1:
+                    if random.random() < min(1.0, STONE_SAND_TO_DIRT_RATE * _decay):
+                        new_grid[y][x] = 'DIRT'
+                        _ca_rule = 'STONE_SAND_TO_DIRT_RATE'
 
                 # Deep water formation: all 4 cardinal neighbors must be water/deep_water/cave_floor
                 elif cell == 'WATER':
