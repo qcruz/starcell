@@ -24,6 +24,37 @@ class NpcAiMixin:
     # ACTION PRIMITIVES — Reusable building blocks for NPC and player actions
     # ══════════════════════════════════════════════════════════════════════
 
+    def _npc_seek_shelter(self, entity, screen_key):
+        """Night shelter-seeking: move toward nearest house and enter at high probability."""
+        if screen_key not in self.screens:
+            return
+        grid = self.screens[screen_key]['grid']
+
+        # Scan for closest enterable house cell
+        best_dist = 999
+        best_x = best_y = best_cell = None
+        for sy in range(GRID_HEIGHT):
+            for sx in range(GRID_WIDTH):
+                c = grid[sy][sx]
+                if CELL_TYPES.get(c, {}).get('enterable', False) and c not in ('CAVE', 'MINESHAFT'):
+                    d = abs(entity.x - sx) + abs(entity.y - sy)
+                    if d < best_dist:
+                        best_dist = d
+                        best_x, best_y, best_cell = sx, sy, c
+
+        if best_x is None:
+            # No house in zone — use normal low-chance entry as fallback
+            self.try_npc_enter_structure(entity, screen_key)
+            return
+
+        if best_dist <= 1:
+            # Adjacent — 80% chance to enter immediately
+            if random.random() < 0.80:
+                self.npc_enter_structure(entity, screen_key, best_x, best_y, best_cell)
+        else:
+            # Move toward house
+            self.move_toward_position(entity, best_x, best_y, screen_key)
+
     def update_entity_ai(self, entity_id, entity):
         """Update entity AI - targeting, pathfinding, actions"""
         # Guard against double-updates in the same tick (can happen with priority queue)
@@ -543,9 +574,13 @@ class NpcAiMixin:
                 if local_pop > 3 and random.random() < local_pop * 0.10:
                     wants_to_exit = True
 
-            # Hostile entities are cave/structure residents — they don't leave on their own
+            # Hostile entities: emerge from caves at night, shelter during day
             if entity.props.get('hostile', False):
-                wants_to_exit = False
+                zone_biome = self.screens.get(f"{entity.screen_x},{entity.screen_y}", {}).get('biome', '')
+                if zone_biome == 'CAVE':
+                    wants_to_exit = self.is_night   # night → ascend/exit; day → stay
+                else:
+                    wants_to_exit = False           # non-cave structures: stay regardless
 
             # Combat-capable NPCs (guards/warriors) detect nearby hostiles outside and rush to defend
             if not wants_to_exit and entity.type in ('GUARD', 'WARRIOR') \
@@ -594,8 +629,14 @@ class NpcAiMixin:
             # Always return here — never fall through to overworld AI with stale screen_key
             return
         else:
-            # In overworld - occasionally try to enter structures
-            self.try_npc_enter_structure(entity, screen_key)
+            # In overworld
+            is_peaceful = not entity.props.get('hostile', False)
+            is_nocturnal = entity.props.get('nocturnal', False)
+            if self.is_night and is_peaceful and not is_nocturnal:
+                # Night: high-priority shelter-seeking — find and move toward nearest house
+                self._npc_seek_shelter(entity, screen_key)
+            else:
+                self.try_npc_enter_structure(entity, screen_key)
         
         # Warrior home zone return behavior
         if entity.type == 'WARRIOR' and hasattr(entity, 'home_zone'):

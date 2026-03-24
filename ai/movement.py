@@ -1074,6 +1074,37 @@ class NpcAiMovementMixin:
         if not parent_screen:
             return
 
+        # Multi-level cave ascent: depth > 1 goes to level above, not straight to overworld
+        depth = sub_data.get('depth', 1)
+        if depth > 1 and sub_data.get('type') == 'CAVE':
+            upper_key = None
+            for key, s in self.structures.items():
+                if (s.get('parent_screen') == parent_screen and
+                        s.get('parent_cell') == parent_cell and
+                        s.get('type') == 'CAVE' and
+                        s.get('depth') == depth - 1):
+                    upper_key = key
+                    break
+            if upper_key:
+                upper_entrance = self.structures[upper_key].get('entrance', (GRID_WIDTH // 2, GRID_HEIGHT // 2))
+                if structure_key in self.screen_entities and entity_id in self.screen_entities[structure_key]:
+                    self.screen_entities[structure_key].remove(entity_id)
+                if upper_key not in self.screen_entities:
+                    self.screen_entities[upper_key] = []
+                if entity_id not in self.screen_entities[upper_key]:
+                    self.screen_entities[upper_key].append(entity_id)
+                vx, vy = map(int, upper_key.split(','))
+                entity.screen_x = vx
+                entity.screen_y = vy
+                entity.structure_key = upper_key
+                entity.in_structure = True
+                entity.x, entity.y = upper_entrance
+                entity.world_x = float(upper_entrance[0])
+                entity.world_y = float(upper_entrance[1])
+                entity.last_structure_change_tick = self.tick
+                return
+            # Upper level not generated yet — fall through to overworld exit
+
         parent_key = f"{parent_screen[0]},{parent_screen[1]}"
 
         # Move entity from structure zone to parent overworld zone
