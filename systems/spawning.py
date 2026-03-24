@@ -595,12 +595,19 @@ class SpawningMixin:
                 self.spawn_cave_hostile(screen_key, cave_x, cave_y)
 
     def spawn_cave_hostile(self, screen_key, cave_x, cave_y):
-        """Spawn a hostile entity from a cave — bats are most common"""
-        if screen_key not in self.screens:
-            return
+        """Spawn a hostile entity inside the cave subscreen (not on the overworld surface).
 
-        screen = self.screens[screen_key]
-        screen_x, screen_y = map(int, screen_key.split(','))
+        Requires the cave interior to already exist (zone_cave_systems populated when
+        a player or NPC first entered the cave).  Skips if no interior exists yet.
+        """
+        structure_key = getattr(self, 'zone_cave_systems', {}).get(screen_key)
+        if not structure_key or structure_key not in self.structures:
+            return  # cave interior not generated yet — nothing to spawn into
+
+        sub_data = self.structures[structure_key]
+        grid = sub_data.get('grid')
+        if not grid:
+            return
 
         roll = random.random()
         if roll < 0.40:
@@ -615,32 +622,42 @@ class SpawningMixin:
         is_flying = ENTITY_TYPES.get(hostile_type, {}).get('flying', False)
         fly_blocked = {'WALL', 'CAVE_WALL', 'DEEP_WATER'}
 
-        for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
-            spawn_x = cave_x + dx
-            spawn_y = cave_y + dy
-
-            if not (0 < spawn_x < GRID_WIDTH - 1 and 0 < spawn_y < GRID_HEIGHT - 1):
-                continue
-
-            cell = screen['grid'][spawn_y][spawn_x]
-            if CELL_TYPES[cell].get('solid', False):
-                if not is_flying or cell in fly_blocked:
+        # Collect walkable positions inside the cave, avoiding the entrance area
+        # (bottom-center rows where the player arrives).
+        entrance_y_min = GRID_HEIGHT - 4
+        entrance_x_mid = GRID_WIDTH // 2
+        candidates = []
+        for y in range(1, GRID_HEIGHT - 1):
+            for x in range(1, GRID_WIDTH - 1):
+                # Skip entrance zone
+                if y >= entrance_y_min and abs(x - entrance_x_mid) <= 3:
                     continue
+                cell = grid[y][x]
+                if CELL_TYPES[cell].get('solid', False):
+                    if not is_flying or cell in fly_blocked:
+                        continue
+                if not self.is_entity_at_position(x, y, structure_key):
+                    candidates.append((x, y))
 
-            if self.is_entity_at_position(spawn_x, spawn_y, screen_key):
-                continue
-
-            entity = Entity(hostile_type, spawn_x, spawn_y, screen_x, screen_y, level=1)
-            entity_id = self.next_entity_id
-            self.next_entity_id += 1
-            self.entities[entity_id] = entity
-
-            if screen_key not in self.screen_entities:
-                self.screen_entities[screen_key] = []
-            self.screen_entities[screen_key].append(entity_id)
-
-            self.zone_has_hostiles[screen_key] = True
+        if not candidates:
             return
+
+        spawn_x, spawn_y = random.choice(candidates)
+        vx, vy = map(int, structure_key.split(','))
+
+        entity = Entity(hostile_type, spawn_x, spawn_y, vx, vy, level=1)
+        entity.in_structure = True
+        entity.structure_key = structure_key
+
+        entity_id = self.next_entity_id
+        self.next_entity_id += 1
+        self.entities[entity_id] = entity
+
+        if structure_key not in self.screen_entities:
+            self.screen_entities[structure_key] = []
+        self.screen_entities[structure_key].append(entity_id)
+
+        self.zone_has_hostiles[screen_key] = True
 
     # -------------------------------------------------------------------------
     # Night skeleton spawning
