@@ -1163,53 +1163,52 @@ class NpcAiMovementMixin:
                     self.npc_exit_structure(entity)
 
     def move_npc_toward_structure_exit(self, entity):
-        """Move NPC toward the structure exit point (bottom center)"""
+        """Move NPC one step toward the structure exit (STAIRS_UP / entrance position)."""
         if not entity.in_structure or not entity.structure_key:
             return
 
         structure_key = entity.structure_key
-        structure = self.structures.get(structure_key)
-        if not structure:
-            # Also check self.screens for structure zones
-            structure = self.screens.get(structure_key)
+        structure = self.structures.get(structure_key) or self.screens.get(structure_key)
         if not structure:
             return
 
-        # Exit is at bottom center
-        exit_x = GRID_WIDTH // 2
-        exit_y = GRID_HEIGHT - 2
+        # Use the stored exit position — matches STAIRS_UP placement after cave redesign
+        exit_x, exit_y = structure.get('exit', (GRID_WIDTH // 2, GRID_HEIGHT // 2))
 
-        # If already at exit position, try actual exit
-        if abs(entity.x - exit_x) <= 1 and entity.y >= exit_y - 1:
+        # If already at exit position, trigger actual exit
+        if abs(entity.x - exit_x) <= 1 and abs(entity.y - exit_y) <= 1:
             self.try_npc_exit_structure(entity)
             return
 
-        # Move toward exit — one step at a time
-        dx = exit_x - entity.x
         dy = exit_y - entity.y
+        dx = exit_x - entity.x
 
-        # Prioritize vertical movement (get to bottom first)
-        if dy > 0:
-            new_y = entity.y + 1
+        # Prioritize the axis with the larger gap; try both if blocked
+        # Do NOT update world_x/y — smooth movement handles visual interpolation
+        if abs(dy) >= abs(dx) and dy != 0:
+            new_y = entity.y + (1 if dy > 0 else -1)
             if 0 <= new_y < GRID_HEIGHT:
                 cell = structure['grid'][new_y][entity.x]
                 if not CELL_TYPES.get(cell, {}).get('solid', False):
                     entity.y = new_y
-                    entity.world_y = float(new_y)
-                    entity.facing = 'down'
+                    entity.facing = 'down' if dy > 0 else 'up'
                     return
-
-        # Then horizontal
         if dx != 0:
-            step_x = 1 if dx > 0 else -1
-            new_x = entity.x + step_x
+            new_x = entity.x + (1 if dx > 0 else -1)
             if 0 <= new_x < GRID_WIDTH:
                 cell = structure['grid'][entity.y][new_x]
                 if not CELL_TYPES.get(cell, {}).get('solid', False):
                     entity.x = new_x
-                    entity.world_x = float(new_x)
-                    entity.facing = 'right' if step_x > 0 else 'left'
+                    entity.facing = 'right' if dx > 0 else 'left'
                     return
+        # Fallback: try remaining y direction if x was tried first
+        if abs(dy) < abs(dx) and dy != 0:
+            new_y = entity.y + (1 if dy > 0 else -1)
+            if 0 <= new_y < GRID_HEIGHT:
+                cell = structure['grid'][new_y][entity.x]
+                if not CELL_TYPES.get(cell, {}).get('solid', False):
+                    entity.y = new_y
+                    entity.facing = 'down' if dy > 0 else 'up'
 
     def has_target_in_structure(self, entity, screen_key, check_x, check_y):
         """Check if entity's current_target is inside the structure at (check_x, check_y)."""
@@ -1311,14 +1310,16 @@ class NpcAiMovementMixin:
             self.npc_exit_structure(entity)
             return
 
-        # Move toward exit one step at a time (vertical priority — get to exit row first)
-        if entity.y < exit_y:
-            new_y = entity.y + 1
-            cell = structure['grid'][new_y][entity.x]
-            if not CELL_TYPES.get(cell, {}).get('solid', False):
-                entity.y = new_y
-                entity.facing = 'down'
-                return
+        # Move toward exit one step at a time — handle both up and down
+        dy = exit_y - entity.y
+        if dy != 0:
+            new_y = entity.y + (1 if dy > 0 else -1)
+            if 0 <= new_y < GRID_HEIGHT:
+                cell = structure['grid'][new_y][entity.x]
+                if not CELL_TYPES.get(cell, {}).get('solid', False):
+                    entity.y = new_y
+                    entity.facing = 'down' if dy > 0 else 'up'
+                    return
         if entity.x < exit_x:
             entity.x += 1
             entity.facing = 'right'

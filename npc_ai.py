@@ -543,6 +543,10 @@ class NpcAiMixin:
                 if local_pop > 3 and random.random() < local_pop * 0.10:
                     wants_to_exit = True
 
+            # Hostile entities are cave/structure residents — they don't leave on their own
+            if entity.props.get('hostile', False):
+                wants_to_exit = False
+
             # Combat-capable NPCs (guards/warriors) detect nearby hostiles outside and rush to defend
             if not wants_to_exit and entity.type in ('GUARD', 'WARRIOR') \
                     and entity.structure_key in self.structures:
@@ -569,12 +573,11 @@ class NpcAiMixin:
                 if entity.in_structure:
                     # Still inside — keep trying to path toward exit
                     self.move_npc_toward_structure_exit(entity)
-                    return  # Skip normal AI
             else:
                 # Low chance to exit anyway (restless NPCs)
                 if random.random() < 0.05:
                     self.try_npc_exit_structure(entity)
-            
+
             # If still in structure after exit attempt, do structure behavior
             if entity.in_structure:
                 # Miners mine in caves, peaceful NPCs rest in houses
@@ -587,7 +590,9 @@ class NpcAiMixin:
                     # Rest/wander in structure
                     if random.random() < 0.1:
                         self.wander_entity(entity)
-                return  # Skip normal overworld AI
+
+            # Always return here — never fall through to overworld AI with stale screen_key
+            return
         else:
             # In overworld - occasionally try to enter structures
             self.try_npc_enter_structure(entity, screen_key)
