@@ -38,50 +38,51 @@ class NpcAiMixin:
         center_x = GRID_WIDTH // 2
         center_y = GRID_HEIGHT // 2
 
-        # ── SKELETON — bleaches grass to bare dirt ────────────────────────
+        # ── SKELETON — every step bleaches eligible cell to dirt ─────────
         if entity.type == 'SKELETON':
-            if cell == 'GRASS' and random.random() < 0.25:
+            if cell == 'GRASS':
                 grid[cy][cx] = 'DIRT'
 
-        # ── TERMITE — drops sand, aerates dirt into grass ─────────────────
+        # ── TERMITE — every 4th step: drops sand or aerates dirt ─────────
         elif entity.type == 'TERMITE':
-            if cell in ('GRASS', 'DIRT') and random.random() < 0.15:
-                grid[cy][cx] = 'SAND'     # organic matter consumed → sandy residue
-            elif cell == 'DIRT' and random.random() < 0.08:
-                grid[cy][cx] = 'GRASS'    # disturbed dirt catches seeds → grass
+            if random.random() < 0.25:
+                if cell in ('GRASS', 'DIRT'):
+                    grid[cy][cx] = 'SAND'
+                elif cell == 'DIRT':
+                    grid[cy][cx] = 'GRASS'
 
-        # ── FLYING ANIMALS — fertilise dirt into grass ────────────────────
+        # ── FLYING ANIMALS — every ~4th step fertilise dirt into grass ───
         elif entity.type == 'BUTTERFLY':
-            if cell == 'DIRT' and random.random() < 0.12:
+            if cell == 'DIRT' and random.random() < 0.25:
                 grid[cy][cx] = 'GRASS'
         elif entity.type == 'RED_BIRD':
-            if cell == 'DIRT' and random.random() < 0.06:
+            if cell == 'DIRT' and random.random() < 0.25:
                 grid[cy][cx] = 'GRASS'
         elif entity.type == 'BAT':
-            if cell == 'DIRT' and random.random() < 0.02:
+            if cell == 'DIRT' and random.random() < 0.25:
                 grid[cy][cx] = 'GRASS'
 
-        # ── FARMER — slowly reclaims and tills land; auto-plants on SOIL ──
+        # ── FARMER — every ~4th step reclaims/tills land; auto-plants ────
         elif entity.type == 'FARMER':
-            if cell == 'SAND' and random.random() < 0.05:
-                grid[cy][cx] = 'DIRT'
-            elif cell == 'DIRT' and random.random() < 0.03:
-                grid[cy][cx] = 'SOIL'
-            elif cell == 'SOIL' and random.random() < 0.04:
-                # Auto-plant: place CARROT1 and consume one carrot from inventory
-                if entity.inventory.get('carrot', 0) > 0:
+            if random.random() < 0.25:
+                if cell == 'SAND':
+                    grid[cy][cx] = 'DIRT'
+                elif cell == 'DIRT':
+                    grid[cy][cx] = 'SOIL'
+                elif cell == 'SOIL' and entity.inventory.get('carrot', 0) > 0:
                     grid[cy][cx] = 'CARROT1'
                     entity.inventory['carrot'] = entity.inventory['carrot'] - 1
 
-        # ── OTHER HUMANOIDS — lay cobblestone through center cross ─────────
+        # ── OTHER HUMANOIDS — every ~4th step pave center cross ──────────
         elif entity.type in ('WARRIOR', 'COMMANDER', 'KING', 'BLACKSMITH',
                              'WIZARD', 'LUMBERJACK', 'MINER'):
-            on_center = abs(cx - center_x) <= 1 or abs(cy - center_y) <= 1
-            if on_center:
-                if cell in ('GRASS', 'SOIL') and random.random() < 0.08:
-                    grid[cy][cx] = 'DIRT'
-                elif cell == 'DIRT' and random.random() < 0.05:
-                    grid[cy][cx] = 'COBBLESTONE'
+            if random.random() < 0.25:
+                on_center = abs(cx - center_x) <= 1 or abs(cy - center_y) <= 1
+                if on_center:
+                    if cell in ('GRASS', 'SOIL'):
+                        grid[cy][cx] = 'DIRT'
+                    elif cell == 'DIRT':
+                        grid[cy][cx] = 'COBBLESTONE'
 
     # ══════════════════════════════════════════════════════════════════════
     # ACTION PRIMITIVES — Reusable building blocks for NPC and player actions
@@ -585,9 +586,8 @@ class NpcAiMixin:
         if hasattr(entity, 'action_animation_timer') and entity.action_animation_timer > 0:
             entity.action_animation_timer -= 1
         
-        # Walk cell effects — fire on actual steps only, 25% of the time
-        if (not entity.in_structure and screen_key in self.screens
-                and entity.moved_this_update and random.random() < 0.25):
+        # Walk cell effects — fire on actual steps only
+        if not entity.in_structure and screen_key in self.screens and entity.moved_this_update:
             self._apply_walk_cell_effects(entity, screen_key)
 
         # Automatic item pickup — runs for all entities (overworld and in-structure).
