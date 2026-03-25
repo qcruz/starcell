@@ -412,13 +412,20 @@ class CombatMixin:
         else:
             location_key = f"{self.player['screen_x']},{self.player['screen_y']}"
 
+        # Resolve attacker facing for directional swipe sprite
+        if entity:
+            facing = getattr(entity, 'facing', 'down')
+        else:
+            facing = self.player.get('facing', 'down')
+
         self.attack_animations.append({
-            'x': display_x,  # Now using world coordinates
+            'x': display_x,
             'y': display_y,
             'start_tick': self.tick,
             'duration': 10,
             'location_key': location_key,
-            'magic_type': magic_type
+            'magic_type': magic_type,
+            'facing': facing,
         })
 
     def draw_attack_animations(self):
@@ -450,15 +457,28 @@ class CombatMixin:
             else:
                 color = COLORS['WHITE']
 
-            # Draw swipe lines
-            x_pos = anim['x'] * CELL_SIZE
-            y_pos = anim['y'] * CELL_SIZE
+            x_pos = int(anim['x'] * CELL_SIZE)
+            y_pos = int(anim['y'] * CELL_SIZE)
 
-            # Draw diagonal swipe lines
-            pygame.draw.line(self.screen, color,
-                             (x_pos + 5, y_pos + 10), (x_pos + 35, y_pos + 30), 3)
-            pygame.draw.line(self.screen, color,
-                             (x_pos + 10, y_pos + 5), (x_pos + 30, y_pos + 35), 3)
+            # Use directional swipe sprite; fall back to placeholder lines if not loaded
+            facing = anim.get('facing', 'down')
+            sprite_key = f"swipe_{facing}"
+            swipe_sprite = self.sprite_manager.sprites.get(sprite_key) if hasattr(self, 'sprite_manager') else None
+
+            if swipe_sprite:
+                # Tint magic attacks by drawing a colored overlay
+                if anim.get('magic_type') and anim['magic_type'] in magic_colors:
+                    tinted = swipe_sprite.copy()
+                    tinted.fill((*magic_colors[anim['magic_type']], 140), special_flags=pygame.BLEND_RGBA_MULT)
+                    self.screen.blit(tinted, (x_pos, y_pos))
+                else:
+                    self.screen.blit(swipe_sprite, (x_pos, y_pos))
+            else:
+                # Placeholder lines (no sprite loaded)
+                pygame.draw.line(self.screen, color,
+                                 (x_pos + 5, y_pos + 10), (x_pos + 35, y_pos + 30), 3)
+                pygame.draw.line(self.screen, color,
+                                 (x_pos + 10, y_pos + 5), (x_pos + 30, y_pos + 35), 3)
 
     def draw_death_screen(self):
         """Draw death screen with years passing — no game world rendered."""

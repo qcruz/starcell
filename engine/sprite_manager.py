@@ -287,6 +287,11 @@ class SpriteManager:
             'blue_mushroom':      'blue_mushroom.png',
             'open_chest':         'open_chest.png',
             'apple_crate':        'applecrate.png',
+            # Attack swipe animations — keyed by direction
+            'swipe_down':  'down_swipe.png',
+            'swipe_up':    'up_swipe.png',
+            'swipe_left':  'left_swipe.png',
+            'swipe_right': 'right_swipe.png',
             # Weapons — keyed by item name so inventory/drop lookup finds them directly
             'iron_sword':       f'{_wa}/sword_red_handle.png',
             'bone_sword':       f'{_wa}/sword_red_handle.png',
