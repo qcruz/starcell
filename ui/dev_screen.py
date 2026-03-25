@@ -26,7 +26,7 @@ class DevScreenMixin:
                 continue
             alive_count += 1
             type_counts[entity.type] = type_counts.get(entity.type, 0) + 1
-            lv = getattr(entity, 'level', 1)
+            lv = int(getattr(entity, 'level', 1))
             level_counts[lv] = level_counts.get(lv, 0) + 1
             inv = getattr(entity, 'inventory', {})
             if isinstance(inv, dict):
@@ -293,7 +293,8 @@ class DevScreenMixin:
         cy += 8
         cy = _h("BY LEVEL", cx, cy)
         for lv, count in stats['level_counts'].items():
-            cy = _t(f"  L{lv}  {count}", cx, cy)
+            bar = '█' * min(count, 18)
+            cy = _t(f"  L{lv:<3} {count:>4}  {bar}", cx, cy)
 
         cy += 8
         cy = _h("TOP NPC INVENTORY ITEMS", cx, cy)
