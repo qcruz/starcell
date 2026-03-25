@@ -146,6 +146,12 @@ class DevScreenMixin:
                 item_totals[iname] = item_totals.get(iname, 0) + icount
         top_npc_items = sorted(item_totals.items(), key=lambda x: -x[1])[:12]
 
+        # Completed quests by type (cumulative, tracked in lore/engine.py)
+        quests_completed_by_type = dict(sorted(
+            getattr(self, 'quests_completed_by_type', {}).items(),
+            key=lambda x: -x[1]
+        ))
+
         return {
             'total_domains':     len(getattr(self, 'domains', {})),
             'biome_counts':      dict(sorted(biome_counts.items())),
@@ -172,7 +178,8 @@ class DevScreenMixin:
             'zones_deleted':     getattr(self, 'zones_deleted', 0),
             'faction_data':      faction_data,
             'domain_data':       domain_data,
-            'top_npc_items':     top_npc_items,
+            'top_npc_items':              top_npc_items,
+            'quests_completed_by_type':   quests_completed_by_type,
         }
 
     # ── Renderer ───────────────────────────────────────────────────────────────
@@ -286,8 +293,7 @@ class DevScreenMixin:
         cy += 8
         cy = _h("BY LEVEL", cx, cy)
         for lv, count in stats['level_counts'].items():
-            bar = '█' * min(count, 18)
-            cy = _t(f"  L{lv:<3} {count:>4}  {bar}", cx, cy)
+            cy = _t(f"  L{lv}  {count}", cx, cy)
 
         cy += 8
         cy = _h("TOP NPC INVENTORY ITEMS", cx, cy)
@@ -309,6 +315,14 @@ class DevScreenMixin:
                 cy = _t(f"  {qt:<22} {count}", cx, cy)
         else:
             cy = _t("  (none)", cx, cy)
+
+        cy += 8
+        cy = _h("QUESTS COMPLETED (session)", cx, cy)
+        if stats['quests_completed_by_type']:
+            for qt, count in stats['quests_completed_by_type'].items():
+                cy = _t(f"  {qt:<22} {count}", cx, cy)
+        else:
+            cy = _t("  (none yet)", cx, cy)
 
         cy += 8
         cy = _h("BLOAT WATCH", cx, cy)
