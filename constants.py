@@ -127,10 +127,11 @@ CA_SPREAD_RATE     = 2   * CA_BASE_RATE   # 0.002  — natural neighbor-copy dif
 CA_WATER_EVAP_RATE = 8   * CA_BASE_RATE   # 0.008  — water → biome base cell baseline
 
 # ── Tier 1: Global growth rules (× CA_GROWTH_RATE) ──────────────────────────
-DIRT_TO_GRASS_RATE          = 1.0 * CA_GROWTH_RATE  # 0.0001 — dirt → grass with 2+ water neighbors
-DIRT_TO_GRASS_WATER_RATE = 2.0 * CA_GROWTH_RATE  # 0.0002 — dirt → grass with 1 water neighbor (marginal)
+DIRT_TO_GRASS_RATE          = 20.0 * CA_GROWTH_RATE  # 0.002 — dirt → grass with 2+ water neighbors
+DIRT_TO_GRASS_WATER_RATE = 10.0 * CA_GROWTH_RATE  # 0.001 — dirt → grass with 1 water neighbor
 GRASS_TO_TREE_RATE       = 1.0 * CA_GROWTH_RATE  # 0.0001 — grass → tree (needs water + tree neighbor, not desert)
 GRASS_TO_FLOWER_RATE     = 1.0 * CA_GROWTH_RATE  # 0.0001 — flowers spread to grass near water
+GRASS_TO_FLOWER_PATTERN_RATE = 5.0 * CA_GROWTH_RATE  # 0.0005 — grass near water spontaneously grows flower patterns
 SAND_TO_DIRT_STONE_RATE  = 2.0 * CA_GROWTH_RATE  # 0.0002 — sand weathers to dirt near stone/cobblestone
 
 # ── Tier 1: Global decay rules (× CA_DECAY_RATE) ────────────────────────────

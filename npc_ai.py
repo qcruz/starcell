@@ -585,8 +585,9 @@ class NpcAiMixin:
         if hasattr(entity, 'action_animation_timer') and entity.action_animation_timer > 0:
             entity.action_animation_timer -= 1
         
-        # Walk cell effects — overworld only (structures have fixed interiors)
-        if not entity.in_structure and screen_key in self.screens:
+        # Walk cell effects — fire on actual steps only, 25% of the time
+        if (not entity.in_structure and screen_key in self.screens
+                and entity.moved_this_update and random.random() < 0.25):
             self._apply_walk_cell_effects(entity, screen_key)
 
         # Automatic item pickup — runs for all entities (overworld and in-structure).
