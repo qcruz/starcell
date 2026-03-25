@@ -11,13 +11,13 @@ The project owner (@qcruz) handles creative direction: roadmap additions, system
 
 | Branch | Purpose | Push rules |
 |---|---|---|
-| `main` | Stable release | **Never push without explicit user confirmation** |
-| `dev` | Active development | Push freely after each work session |
-| `dev-observation` | AUTO_DEBUG headless testing | Push after observation sessions; AUTO_DEBUG controlled by `debug/auto_debug.cfg` (git-ignored) |
+| `main` | Well-tested, stable release. Minimal files and docs — no drafts, no dev artifacts. Pushed code includes custom constants (follower costs, no E-button pickup, etc.). | **Never push without explicit user confirmation** |
+| `dev` | Initially tested updates. Not pushed to `main` until a significant feature is complete or a batch of fixes is verified. | Push after @qcruz reviews and approves Q branch work |
+| `dev-q-updates` | @qcruz personal testing branch. Claude works here by default. Other contributors may have their own branches; @qcruz decides what gets integrated to `dev`. | Claude works here; @qcruz reviews before merging to dev |
 
-**After any coding session:** commit and push to `dev`.
-**Before observation run:** sync `dev-observation` from `dev` (see Observation Workflow below).
-**Stale branches** (`NPC-behavior-updates`, `autopilot-fixes-and-improvements`, `feature/subscreen-overhaul`): these have been merged into dev. Can be deleted from origin when convenient.
+**Default work branch:** `dev-q-updates`. All feature work and bug fixes land here first.
+**Flow:** `dev-q-updates` → (user reviews) → `dev` → (user tests) → `main`
+**Stale branches** (`NPC-behavior-updates`, `autopilot-fixes-and-improvements`, `feature/subscreen-overhaul`, `dev-observation`): these have been merged or are no longer active. Can be deleted from origin when convenient.
 
 ---
 
@@ -26,11 +26,13 @@ The project owner (@qcruz) handles creative direction: roadmap additions, system
 ```
 1. Read next_up.md → pick the first unchecked Tier 1 item
 2. Read relevant source files → understand current code
-3. Implement → commit to dev
-4. Sync dev-observation and run observation session (see below)
-5. Review debug/bug_report.md → fix confirmed bugs → commit to dev
-6. Periodic: code cleanup session (see Code Cleanup below)
-7. User reviews dev manually → pushes to main when satisfied
+3. Implement → commit to dev-q-updates
+4. @qcruz reviews dev-q-updates manually
+5. When approved: merge dev-q-updates → dev → push
+6. Run observation session locally (see below) → commit bug_report.md to dev-q-updates
+7. Review debug/bug_report.md → fix confirmed bugs → commit to dev-q-updates
+8. Periodic: code cleanup session (see Code Cleanup below)
+9. @qcruz tests dev → pushes to main when satisfied
 ```
 
 ---
@@ -82,24 +84,16 @@ Issues in `held_back.md` are **not abandoned** — they get a clear symptom, sus
 
 **Purpose:** Stress-test new features by running the autopilot headlessly for 2–3 min sessions and reviewing the Watchdog log.
 
-**To update dev-observation from dev:**
+**To run a session:**
 ```bash
-git checkout dev-observation
-git merge dev --no-edit
-git push origin dev-observation
-git checkout dev
-# Then enable AUTO_DEBUG locally (git-ignored, never committed):
+# Enable AUTO_DEBUG locally (git-ignored, never committed):
 echo "True" > debug/auto_debug.cfg
+cd /path/to/starcell
+python3 main.py
 # After the session, disable it:
 echo "False" > debug/auto_debug.cfg
 ```
-
-**To run a session:**
-```bash
-cd /path/to/starcell
-python3 main.py   # runs on dev-observation branch
-```
-Session ends automatically (2–3 min timer). Review `debug/bug_catcher.log` and update `debug/bug_report.md` with findings. Document as `Session N` with CONFIRMED / OBSERVATION / BUG entries.
+Session ends automatically (2–3 min timer). Review `debug/bug_catcher.log` and update `debug/bug_report.md` with findings. Commit `debug/bug_report.md` to `dev-q-updates` after each run. Document as `Session N` with CONFIRMED / OBSERVATION / BUG entries.
 
 **Observation run process:**
 1. Choose 2–3 features from nextup randomly
@@ -156,7 +150,7 @@ Run a cleanup session every ~5 feature additions or when the codebase shows sign
 |---|---|
 | `roadmap.md` | Big-picture feature vision. Owner-maintained. Do not edit during development. |
 | `next_up.md` | Two-tier work list: Tier 1 (autonomous) and Tier 2 (needs approval). Claude reads Tier 1 top to bottom. Owner-maintained. |
-| `current_features_and_planned.md` | Technical implementation notes for completed + in-progress features |
+| `current_features.md` | Technical implementation notes for completed and in-progress features. No planned items — those belong in `roadmap.md`. |
 | `debug/bug_report.md` | Session-by-session autopilot observations and confirmed bug fixes |
 | `debug/held_back.md` | Issues held back from advancement: 3+ sessions unresolved, adverse impact, or pending code review |
 | `constants.py` | Legacy all-in-one data file. Still used by `game_core.py`, `npc_ai.py` |

@@ -12,6 +12,7 @@ import random
 from constants import (
     QUEST_TYPES, ITEMS,
     GRID_WIDTH, GRID_HEIGHT,
+    NPC_BASE_QUEST, NPC_QUEST_QUEUE_MAX,
 )
 
 
@@ -504,18 +505,15 @@ class LoreEngineMixin:
 
         # Check entity-based quests
         if quest.target_entity_id:
-            if quest.target_entity_id not in self.entities:
-                quest.clear_target()
-                return
+            entity = self.entities.get(quest.target_entity_id)
+            if entity is None or entity.is_dead:
+                # Entity killed or removed from world — credit as completed
+                completed = True
+                xp_reward = 1
             else:
-                entity = self.entities[quest.target_entity_id]
-                if entity.is_dead:
-                    if entity.killed_by == 'player':
-                        completed = True
-                        xp_reward = 1
-                    else:
-                        quest.clear_target()
-                        return
+                # Still alive — track progress as missing health %
+                if entity.max_health > 0:
+                    quest.progress = (entity.max_health - entity.health) / entity.max_health
 
         # Check cell-based quests (explore/gather/farm/search)
         elif quest.target_cell:
@@ -561,6 +559,35 @@ class LoreEngineMixin:
             quest.complete()
             self.sound.on_quest_complete()
 
+    def get_surface_pos_for_entity(self, entity):
+        """Trace entity through parent structures until reaching an overworld zone.
+
+        Returns (screen_x, screen_y, cell_x, cell_y) of the surface entrance
+        cell.  For entities already on the overworld, returns their current
+        position.  Handles arbitrarily deep cave/dungeon chains.
+        """
+        if not getattr(entity, 'in_structure', False):
+            return entity.screen_x, entity.screen_y, entity.x, entity.y
+
+        structure_key = getattr(entity, 'structure_key', None)
+        for _ in range(20):  # cap at 20 levels deep to prevent infinite loops
+            if not structure_key or structure_key not in self.structures:
+                break
+            structure = self.structures[structure_key]
+            parent_screen = structure.get('parent_screen')
+            parent_cell = structure.get('parent_cell')
+            if not parent_screen or not parent_cell:
+                break
+            parent_sx, parent_sy = parent_screen
+            parent_key = f"{parent_sx},{parent_sy}"
+            if self.is_overworld_zone(parent_key):
+                return parent_sx, parent_sy, parent_cell[0], parent_cell[1]
+            # Parent is another structure — keep climbing
+            structure_key = parent_key
+
+        # Fallback — return entity's current coords as-is
+        return entity.screen_x, entity.screen_y, entity.x, entity.y
+
     def update_quests(self):
         """Update quest system — assign targets, check completion, run lore events."""
         # Update cooldowns
@@ -569,6 +596,31 @@ class LoreEngineMixin:
                 quest.cooldown_remaining -= 1
                 if quest.cooldown_remaining == 0:
                     quest.status = 'inactive'
+
+        # Guard: entity-based quest types must never be active with a cell target
+        # or without an entity target. If detected, reset to inactive so
+        # loreEngine reassigns a proper entity target immediately.
+        _entity_quest_types = {'HUNT', 'SLAY', 'COMBAT_HOSTILE', 'COMBAT_ALL', 'RESCUE'}
+        for quest_type, quest in self.quests.items():
+            if (quest_type in _entity_quest_types and
+                    quest.status == 'active' and
+                    not quest.target_entity_id):
+                quest.status = 'inactive'
+
+        # Live-track entity targets: refresh target_zone every tick.
+        # Dead entities stay in self.entities (health <= 0) until cleaned up —
+        # let check_quest_completion detect them and credit the kill.
+        for quest in self.quests.values():
+            if quest.status != 'active' or not quest.target_entity_id:
+                continue
+            entity = self.entities.get(quest.target_entity_id)
+            if entity is None:
+                # Fully removed from world — check_quest_completion will complete
+                continue
+            # Keep target_zone in sync — use surface overworld zone even when
+            # entity is inside a cave/structure so the arrow stays meaningful.
+            sx, sy, _, _ = self.get_surface_pos_for_entity(entity)
+            quest.target_zone = f"{sx},{sy}"
 
         # Check for quest completion
         self.check_quest_completion()
@@ -736,6 +788,230 @@ class LoreEngineMixin:
                 key = f"{px + dx},{py + dy}"
                 if key in self.screens:
                     self.check_secret_entrances(key)
+
+        # ~5% chance each lore cycle to assign a random quest to a nearby idle NPC
+        self._lore_assign_random_npc_quest()
+
+        # Overburdened NPC delivery and goblin chest raids
+        self._lore_overburdened_delivery()
+        self._lore_rich_chest_raid()
+        self._lore_ensure_commander_factions()
+        self._lore_hostile_entity_factions()
+        self._lore_sync_faction_registry()
+
+    def _lore_assign_random_npc_quest(self):
+        """World-event: pick a random nearby peaceful NPC with no active quest target
+        and assign it a quest appropriate to its type.
+
+        This generates organic NPC activity independent of the player's quest system.
+        Each lore cycle has a 5% chance to trigger; at most one NPC is assigned per cycle.
+        """
+        if random.random() >= 0.25:
+            return
+
+        candidates = []
+        for eid, entity in self.entities.items():
+            if entity is None or entity.health <= 0:
+                continue
+            if entity.type not in NPC_BASE_QUEST:
+                continue
+            if getattr(entity, 'keeper', False):
+                continue
+            if entity.ai_state in ('targeting', 'combat'):
+                continue
+            if entity.quest_target is not None:
+                continue
+            candidates.append((eid, entity))
+
+        if not candidates:
+            return
+
+        eid, entity = random.choice(candidates)
+        # Pick a quest matching the NPC's role (base quest) or a random quest type
+        qt = NPC_BASE_QUEST.get(entity.type)
+        if not qt:
+            return
+
+        # Init queue if needed and insert at front if not already queued
+        if not hasattr(entity, 'quest_queue') or not entity.quest_queue:
+            entity.quest_queue = [{'type': qt, 'base': True, 'slot': None}]
+        elif any(e['type'] == qt for e in entity.quest_queue):
+            return  # already queued
+
+        if len(entity.quest_queue) < NPC_QUEST_QUEUE_MAX:
+            entity.quest_queue.insert(0, {'type': qt, 'base': False, 'slot': None})
+
+        entity.quest_focus = qt
+        entity.quest_target = None
+        entity._quest_update_counter = 10
+        screen_key = f"{entity.screen_x},{entity.screen_y}"
+        self._assign_specific_quest_target(entity, screen_key)
+        print(f"[LoreEngine] Assigned {qt} quest to {entity.type}(id={eid}) at {screen_key}")
+
+    def _lore_overburdened_delivery(self):
+        """Scan nearby overburdened peaceful NPCs and assign DELIVER_ITEMS quest to
+        walk to the nearest chest. If no chest is reachable, the NPC places one.
+
+        Threshold: 20 total inventory items. Night boost: 3x likelihood (NPCs indoors).
+        """
+        night_mult = 3.0 if getattr(self, 'is_night', False) else 1.0
+        if random.random() > 0.15 * night_mult:
+            return
+
+        candidates = []
+        for eid, entity in self.entities.items():
+            if entity is None or entity.health <= 0:
+                continue
+            if entity.props.get('hostile', False) or getattr(entity, 'keeper', False):
+                continue
+            inv_count = sum(entity.inventory.values()) if entity.inventory else 0
+            if any(q.get('type') == 'DELIVER_ITEMS'
+                   for q in getattr(entity, 'quest_queue', [])):
+                continue
+            candidates.append((eid, entity, inv_count))
+
+        if not candidates:
+            return
+
+        # Pick most overburdened candidate
+        eid, entity, _ = max(candidates, key=lambda x: x[2])
+        screen_key = f"{entity.screen_x},{entity.screen_y}"
+        if screen_key not in self.screens:
+            return
+
+        grid = self.screens[screen_key]['grid']
+        best_chest, best_dist = None, 9999
+        for cy in range(GRID_HEIGHT):
+            for cx in range(GRID_WIDTH):
+                if grid[cy][cx] == 'CHEST':
+                    d = abs(cx - entity.x) + abs(cy - entity.y)
+                    if d < best_dist:
+                        best_dist, best_chest = d, (cx, cy)
+
+        if best_chest:
+            quest_entry = {'type': 'DELIVER_ITEMS', 'base': False, 'slot': None}
+            if not hasattr(entity, 'quest_queue') or entity.quest_queue is None:
+                entity.quest_queue = []
+            if len(entity.quest_queue) < NPC_QUEST_QUEUE_MAX:
+                entity.quest_queue.insert(0, quest_entry)
+            entity.quest_focus = 'DELIVER_ITEMS'
+            entity.quest_target = ('cell', best_chest[0], best_chest[1], 'CHEST')
+            entity._quest_update_counter = 10
+            print(f"[LoreEngine] DELIVER_ITEMS → {entity.type}(id={eid}) chest at {best_chest}")
+        else:
+            # No chest in zone — place one adjacent to NPC
+            self.try_place_npc_chest(entity, screen_key)
+            print(f"[LoreEngine] No chest found — {entity.type}(id={eid}) placed one")
+
+    def _lore_rich_chest_raid(self):
+        """Scan zones near player for overfull chests and assign RAID_CHEST quest
+        to a nearby goblin or bandit.
+
+        Chest threshold: 15+ total items. Raid chance scales with fullness.
+        At most one raider assigned per lore cycle.
+        """
+        px, py = self.player['screen_x'], self.player['screen_y']
+        for dx in range(-3, 4):
+            for dy in range(-3, 4):
+                key = f"{px + dx},{py + dy}"
+                if key not in self.screens:
+                    continue
+                grid = self.screens[key]['grid']
+                for cy in range(GRID_HEIGHT):
+                    for cx in range(GRID_WIDTH):
+                        if grid[cy][cx] != 'CHEST':
+                            continue
+                        ck = f"{key}:{cx},{cy}"
+                        total = sum(self.chest_contents.get(ck, {}).values())
+                        if total < 15:
+                            continue
+                        # Raid chance: 1% per item beyond threshold, cap 30%
+                        if random.random() > min(0.30, (total - 15) * 0.01):
+                            continue
+                        # Find a goblin/bandit in the same zone with no raid quest
+                        for eid in self.screen_entities.get(key, []):
+                            raider = self.entities.get(eid)
+                            if raider is None or raider.health <= 0:
+                                continue
+                            if raider.type not in ('GOBLIN', 'BANDIT'):
+                                continue
+                            if any(q.get('type') == 'RAID_CHEST'
+                                   for q in getattr(raider, 'quest_queue', [])):
+                                continue
+                            quest_entry = {'type': 'RAID_CHEST', 'base': False, 'slot': None}
+                            if not hasattr(raider, 'quest_queue') or raider.quest_queue is None:
+                                raider.quest_queue = []
+                            if len(raider.quest_queue) < NPC_QUEST_QUEUE_MAX:
+                                raider.quest_queue.insert(0, quest_entry)
+                            raider.quest_focus = 'RAID_CHEST'
+                            raider.quest_target = ('cell', cx, cy, 'CHEST')
+                            raider._quest_update_counter = 10
+                            print(f"[LoreEngine] RAID_CHEST → {raider.type}(id={eid}) targeting {ck}")
+                            return  # One raider per lore cycle
+
+    def _lore_ensure_commander_factions(self):
+        """Ensure every living COMMANDER has a named faction registered in self.factions.
+        Scans all loaded entities (not just nearby) so newly loaded zones are covered."""
+        for eid, entity in list(self.entities.items()):
+            if entity is None or entity.health <= 0:
+                continue
+            if entity.type != 'COMMANDER':
+                continue
+            efaction = getattr(entity, 'faction', None)
+            if efaction and efaction in self.factions:
+                continue  # Faction exists and is registered — nothing to do
+            # Either no faction or faction name not registered
+            faction_name = efaction or getattr(entity, 'name', None) or f"faction_{eid}"
+            if faction_name not in self.factions:
+                self.factions[faction_name] = {'warriors': [eid], 'zones': set(), 'hostile': False}
+            else:
+                if eid not in self.factions[faction_name]['warriors']:
+                    self.factions[faction_name]['warriors'].append(eid)
+            entity.faction = faction_name
+            print(f"[LoreEngine] Registered faction '{faction_name}' for COMMANDER(id={eid})")
+
+    def _lore_hostile_entity_factions(self):
+        """Level 2+ hostile entities have a per-lore-cycle chance to form a new faction.
+        Chance scales with level: level * 0.001 per cycle (level 2 = 0.2%, level 5 = 0.5%)."""
+        px, py = self.player['screen_x'], self.player['screen_y']
+        for dx in range(-4, 5):
+            for dy in range(-4, 5):
+                key = f"{px + dx},{py + dy}"
+                for eid in self.screen_entities.get(key, []):
+                    entity = self.entities.get(eid)
+                    if entity is None or entity.health <= 0:
+                        continue
+                    if not entity.props.get('hostile'):
+                        continue
+                    if getattr(entity, 'faction', None):
+                        continue
+                    level = getattr(entity, 'level', 1)
+                    if level < 2:
+                        continue
+                    if random.random() < level * 0.001:
+                        self.create_hostile_faction(entity, key)
+                        print(f"[LoreEngine] {entity.type}(lv{level}) formed faction '{entity.faction}'")
+
+    def _lore_sync_faction_registry(self):
+        """Ensure self.factions is consistent with entity.faction attributes.
+        Registers any faction present on a live entity but missing from self.factions,
+        and ensures every such entity appears in its faction's warriors list.
+        Catches post-load gaps and any code path that sets entity.faction without
+        updating self.factions."""
+        for eid, entity in list(self.entities.items()):
+            if entity is None or entity.health <= 0:
+                continue
+            efaction = getattr(entity, 'faction', None)
+            if not efaction:
+                continue
+            if efaction not in self.factions:
+                self.factions[efaction] = {
+                    'warriors': [eid],
+                    'zones': set(),
+                    'hostile': entity.props.get('hostile', False),
+                }
+            elif eid not in self.factions[efaction]['warriors']:
+                self.factions[efaction]['warriors'].append(eid)
 
     def check_secret_entrances(self, screen_key):
         """~10 % chance: if a zone has 2+ house structures, secretly add a

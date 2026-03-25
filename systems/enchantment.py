@@ -109,7 +109,6 @@ class EnchantmentMixin:
                 print(f"Enchanted {entity.type} - now following you! (enchant level {self.enchanted_entities[entity_id]})")
             else:
                 print(f"Increased {entity.type} enchant to level {self.enchanted_entities[entity_id]}")
-            self.gain_xp(1)
             return
 
         # Otherwise, enchant cell
@@ -127,7 +126,6 @@ class EnchantmentMixin:
         self.player['max_energy'] = max(1, self.player.get('max_energy', 100) - 1)
 
         print(f"Enchanted {cell} at ({check_x}, {check_y}) to level {self.enchanted_cells[screen_key][(check_x, check_y)]}")
-        self.gain_xp(1)
 
     def release_enchantments(self):
         """Release enchantment from target cell/entity (K key) - decreases by 1 level"""
@@ -237,3 +235,46 @@ class EnchantmentMixin:
             print(f"Released {entity.type} follower! Restored {energy_restored} max energy.")
         else:
             print(f"Released {entity.type} follower!")
+
+    # -------------------------------------------------------------------------
+    # Dev spells
+    # -------------------------------------------------------------------------
+
+    def cast_summon_spell(self):
+        """Spawn a default NPC of the selected summon type adjacent to the player."""
+        selected = self.inventory.selected_magic
+        if not selected or not selected.startswith('summon_'):
+            return
+        npc_type = ITEMS[selected].get('npc_type')
+        if not npc_type:
+            return
+        px, py = self.player['x'], self.player['y']
+        sx, sy = self.player['screen_x'], self.player['screen_y']
+        screen_key = f"{sx},{sy}"
+        for dx, dy in [(1,0),(-1,0),(0,1),(0,-1),(1,1),(-1,1),(1,-1),(-1,-1)]:
+            nx, ny = px + dx, py + dy
+            from constants import GRID_WIDTH, GRID_HEIGHT, CELL_TYPES
+            if not (0 <= nx < GRID_WIDTH and 0 <= ny < GRID_HEIGHT):
+                continue
+            if screen_key not in self.screens:
+                continue
+            cell = self.screens[screen_key]['grid'][ny][nx]
+            if not CELL_TYPES[cell].get('solid', False):
+                self.spawn_quest_entity(npc_type, sx, sy, nx, ny)
+                print(f"[Summon] Spawned {npc_type} at ({nx},{ny})")
+                return
+
+    def cast_transform_spell(self):
+        """Toggle player sprite to the selected NPC type; recast the same spell to revert."""
+        selected = self.inventory.selected_magic
+        if not selected or not selected.startswith('transform_'):
+            return
+        npc_type = ITEMS[selected].get('npc_type')
+        if not npc_type:
+            return
+        if self.player.get('transform') == npc_type:
+            self.player['transform'] = None
+            print(f"[Transform] Reverted to player sprite")
+        else:
+            self.player['transform'] = npc_type
+            print(f"[Transform] Now appearing as {npc_type}")

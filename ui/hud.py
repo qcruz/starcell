@@ -308,7 +308,7 @@ class HudMixin:
                         continue
 
                     # BugCatcher: log every frame for tracked entity types + autopilot proxy
-                    _STUTTER_TRACKED = ('BAT', 'BAT_double', 'WOLF', 'WOLF_double')
+                    _STUTTER_TRACKED = ('BAT', 'BAT_double', 'WOLF', 'WOLF_double', 'BLACK_SPIDER')
                     is_proxy = (entity_id == getattr(self, 'autopilot_proxy_id', None))
                     if entity.type in _STUTTER_TRACKED or is_proxy:
                         self.bug_catcher.log_bat_state(self.tick, entity_id, entity, screen_key)
@@ -415,6 +415,15 @@ class HudMixin:
                     health_width = int((entity.health / entity.max_health) * bar_width)
                     pygame.draw.rect(self.screen, (0, 255, 0),
                                    (bar_x, bar_y, health_width, bar_height))
+
+                    # Energy bar (below health bar)
+                    if hasattr(entity, 'energy') and hasattr(entity, 'max_energy') and entity.max_energy > 0:
+                        ebar_y = bar_y + bar_height + 1
+                        pygame.draw.rect(self.screen, COLORS['BLACK'],
+                                       (bar_x, ebar_y, bar_width, bar_height))
+                        energy_width = int((entity.energy / entity.max_energy) * bar_width)
+                        pygame.draw.rect(self.screen, (80, 160, 255),
+                                       (bar_x, ebar_y, energy_width, bar_height))
 
                     # Draw level if > 1
                     if entity.level > 1:
@@ -589,24 +598,45 @@ class HudMixin:
                 px = int(self.player['world_x'] * CELL_SIZE)
                 py = int(self.player['world_y'] * CELL_SIZE)
 
-            # Sprite lookup (same logic as entity draw loop)
-            if self.use_sprites and hasattr(self, 'sprite_manager'):
-                sprite_name = f"wizard_{facing}_{anim_frame}"
-                if sprite_name in self.sprite_manager.sprites:
-                    player_sprite = self.sprite_manager.get_sprite(sprite_name)
+            # Check transform state — use NPC sprite/color instead of player sprite
+            _transform = self.player.get('transform')
+            if _transform:
+                # Try walking sprite for the NPC type first, fall back to still, then color block
+                if self.use_sprites and hasattr(self, 'sprite_manager'):
+                    for _sname in (f"{_transform.lower()}_{facing}_{anim_frame}",
+                                   f"{_transform.lower()}_{facing}_still",
+                                   f"{_transform.lower()}_down_still"):
+                        _sp = self.sprite_manager.sprites.get(_sname)
+                        if _sp:
+                            player_sprite = _sp
+                            break
+                if player_sprite:
+                    self.screen.blit(player_sprite, (px, py))
                 else:
-                    sprite_name_fallback = f"wizard_{facing}_still"
-                    if sprite_name_fallback in self.sprite_manager.sprites:
-                        player_sprite = self.sprite_manager.get_sprite(sprite_name_fallback)
-
-            if player_sprite:
-                self.screen.blit(player_sprite, (px, py))
+                    from data.entities import ENTITY_TYPES
+                    _c = ENTITY_TYPES.get(_transform, {}).get('color', (200, 200, 200))
+                    pygame.draw.rect(self.screen, _c, (px, py, CELL_SIZE, CELL_SIZE))
+                    _lbl = self.tiny_font.render(_transform[:3], True, (255, 255, 255))
+                    self.screen.blit(_lbl, (px + 2, py + CELL_SIZE // 2 - 4))
             else:
-                # Fallback to yellow @ symbol
-                pygame.draw.rect(self.screen, COLORS['YELLOW'], (px, py, CELL_SIZE, CELL_SIZE))
-                player_text = self.font.render('@', True, COLORS['BLACK'])
-                player_rect = player_text.get_rect(center=(px + CELL_SIZE // 2, py + CELL_SIZE // 2))
-                self.screen.blit(player_text, player_rect)
+                # Sprite lookup (same logic as entity draw loop)
+                if self.use_sprites and hasattr(self, 'sprite_manager'):
+                    sprite_name = f"wizard_{facing}_{anim_frame}"
+                    if sprite_name in self.sprite_manager.sprites:
+                        player_sprite = self.sprite_manager.get_sprite(sprite_name)
+                    else:
+                        sprite_name_fallback = f"wizard_{facing}_still"
+                        if sprite_name_fallback in self.sprite_manager.sprites:
+                            player_sprite = self.sprite_manager.get_sprite(sprite_name_fallback)
+
+                if player_sprite:
+                    self.screen.blit(player_sprite, (px, py))
+                else:
+                    # Fallback to yellow @ symbol
+                    pygame.draw.rect(self.screen, COLORS['YELLOW'], (px, py, CELL_SIZE, CELL_SIZE))
+                    player_text = self.font.render('@', True, COLORS['BLACK'])
+                    player_rect = player_text.get_rect(center=(px + CELL_SIZE // 2, py + CELL_SIZE // 2))
+                    self.screen.blit(player_text, player_rect)
 
             # Draw autopilot indicator
             if self.autopilot:
@@ -615,6 +645,15 @@ class HudMixin:
 
             # Draw attack animations
             self.draw_attack_animations()
+
+            # Draw zone/structure name at top center
+            zone_name = self.current_screen.get('name', '') if self.current_screen else ''
+            if zone_name:
+                shadow_surf = self.small_font.render(zone_name, True, (30, 30, 30))
+                name_surf = self.small_font.render(zone_name, True, (255, 255, 255))
+                name_x = SCREEN_WIDTH // 2 - name_surf.get_width() // 2
+                self.screen.blit(shadow_surf, (name_x + 1, 9))
+                self.screen.blit(name_surf, (name_x, 8))
 
             # Draw UI bar at bottom (80px tall)
             ui_y = GRID_HEIGHT * CELL_SIZE
@@ -694,6 +733,11 @@ class HudMixin:
                 controlling_faction = self.get_zone_controlling_faction(screen_key)
                 if controlling_faction:
                     info_text += f" | {controlling_faction}"
+                zone_data = self.screens.get(screen_key)
+                if zone_data:
+                    domain_id = zone_data.get('faction_domain_id') or zone_data.get('biome_domain_id')
+                    if domain_id and domain_id in self.domains:
+                        info_text += f" | {self.domains[domain_id]['name']}"
 
             if self.player['blocking']:
                 info_text += " | [BLOCKING]"
@@ -731,6 +775,19 @@ class HudMixin:
                 quest_color = quest_info.get('color', (200, 200, 200))
                 if quest.status == 'active' and quest.target_info:
                     quest_display = f"Quest [{quest_name}]: {quest.target_info}"
+                    # Append live entity health + location for entity targets
+                    if quest.target_entity_id:
+                        t_ent = self.entities.get(quest.target_entity_id)
+                        if t_ent:
+                            hp_str = f"HP:{int(t_ent.health)}/{int(t_ent.max_health)}"
+                            loc_str = f"Zone:{t_ent.screen_x},{t_ent.screen_y} ({t_ent.x},{t_ent.y})"
+                            if getattr(t_ent, 'in_structure', False):
+                                sk = getattr(t_ent, 'structure_key', None)
+                                depth = self.structures.get(sk, {}).get('depth', '?') if sk else '?'
+                                cave_hint = f" [CAVE D{depth}]"
+                            else:
+                                cave_hint = ""
+                            quest_display += f"  |  {hp_str}  {loc_str}{cave_hint}"
                 elif quest.status == 'active':
                     quest_display = f"Quest [{quest_name}]: Tracking..."
                 elif quest.status == 'inactive':
@@ -814,7 +871,10 @@ class HudMixin:
 
             # Draw trader UI if active
             if self.trader_display:
-                self.draw_trader_ui()
+                if self.trader_display.get('mode') == 'inventory':
+                    self.draw_npc_inventory_trade_ui()
+                else:
+                    self.draw_trader_ui()
 
             # Draw NPC inspection if targeting peaceful NPC
             self.draw_inspected_npc()

@@ -55,7 +55,7 @@ from entity import *
 from systems import (SaveLoadMixin, CraftingMixin, CombatMixin,
                      EnchantmentMixin, FactionsMixin, SpawningMixin)
 from world import WorldGenerationMixin, ZonesMixin, CellsMixin
-from ui import HudMixin, InventoryUIMixin, MenusMixin
+from ui import HudMixin, InventoryUIMixin, MenusMixin, DevScreenMixin
 from ai import NpcAiActionsMixin, NpcAiMovementMixin
 from lore import LoreEngineMixin
 
@@ -67,7 +67,7 @@ from autopilot import AutopilotMixin
 
 class Game(
     # New modular mixins take precedence over legacy duplicates via MRO
-    HudMixin, InventoryUIMixin, MenusMixin,           # ui/
+    HudMixin, InventoryUIMixin, MenusMixin, DevScreenMixin,  # ui/
     WorldGenerationMixin, ZonesMixin, CellsMixin,     # world/
     SaveLoadMixin, CraftingMixin, CombatMixin,        # systems/
     EnchantmentMixin, FactionsMixin, SpawningMixin,   # systems/
@@ -93,8 +93,8 @@ if __name__ == '__main__':
     except FileNotFoundError:
         AUTO_DEBUG = False
     _STATE_FILE = 'debug/auto_debug_state.json'
-    _MIN_SECS   = 30    # floor: 30 s
-    _MAX_CAP    = 45    # ceiling: 45 s
+    _MIN_SECS   = 180   # floor: 3 min
+    _MAX_CAP    = 300   # ceiling: 5 min
     # ──────────────────────────────────────────────────────────────────────────
 
     game = Game()

@@ -33,7 +33,7 @@ from debug.fixes import fix_entity_subscreen_flag
 
 
 class Watchdog:
-    CATEGORIES = ['entities', 'cells', 'zones', 'player', 'structures', 'followers', 'npc_actions']
+    CATEGORIES = ['entities', 'cells', 'zones', 'player', 'structures', 'followers', 'npc_actions', 'keepers', 'npc_quests']
     SAMPLE_INTERVAL   = 300    # ticks between cycles (~5 s at 60 fps)
     MAX_ENTRIES_PER_SAMPLE = 200  # max JSON entries per category per cycle
     BACKUP1_INTERVAL  = 3600   # ~60 s at 60 fps
@@ -68,9 +68,12 @@ class Watchdog:
             'structures': self._sample_structures,
             'followers':  self._sample_followers,
             'npc_actions': self._sample_npc_actions,
+            'keepers':    self._sample_keepers,
+            'npc_quests': self._sample_npc_quests,
         }
         _SAMPLERS[category](tick, game)
 
+        self._sample_spiders(tick, game)
         self._check_integrity(tick, game)
         self._maybe_backup(tick, game)
         self.bug_catcher.flush()
@@ -129,9 +132,17 @@ class Watchdog:
                 'in_structure': getattr(entity, 'in_structure', False),
                 'structure_key': getattr(entity, 'structure_key', None),
                 'anim_frame': getattr(entity, 'anim_frame', None),
+                'anim_timer': getattr(entity, 'anim_timer', None),
                 'facing': getattr(entity, 'facing', None),
+                'sprite_base': entity.props.get('sprite_name', entity.type).lower(),
                 'faction': getattr(entity, 'faction', None),
                 'quest_focus': getattr(entity, 'quest_focus', None),
+                'quest_queue': [e.get('type') for e in getattr(entity, 'quest_queue', [])] or None,
+                'quest_target': getattr(entity, 'quest_target', None),
+                'keeper': getattr(entity, 'keeper', False),
+                'keeper_type': getattr(entity, 'keeper_type', None),
+                'keeper_target_type': getattr(entity, 'keeper_target', {}).get('type') if getattr(entity, 'keeper_target', None) else None,
+                'keeper_target_ref': getattr(entity, 'keeper_target', {}).get('ref') if getattr(entity, 'keeper_target', None) else None,
             })
 
     def _sample_cells(self, tick: int, game) -> None:
@@ -379,6 +390,148 @@ class Watchdog:
                 'is_follower': eid in followers,
                 'last_ai_tick': getattr(entity, 'last_ai_tick', None),
                 'stuck_counter': getattr(entity, 'stuck_counter', 0),
+            })
+
+    def _sample_keepers(self, tick: int, game) -> None:
+        """Log all keeper NPCs: target type, target ref, resolved pos, zone, quest queue.
+
+        Captures cross-zone chase state, quest progress, and any keepers that are
+        stuck (keeper=True but keeper_target=None for more than one sample cycle).
+        """
+        keepers = [
+            (eid, e) for eid, e in game.entities.items()
+            if getattr(e, 'keeper', False)
+        ]
+        if not keepers:
+            self.bug_catcher.log({
+                'tick': tick, 'category': 'watchdog_keepers',
+                'note': 'no active keepers',
+            })
+            return
+        for eid, entity in keepers:
+            kt = getattr(entity, 'keeper_target', None)
+            kt_type = kt.get('type') if kt else None
+            kt_ref  = kt.get('ref')  if kt else None
+            kt_pos  = kt.get('pos')  if kt else None
+            kt_screen = kt.get('screen') if kt else None
+            my_screen = (entity.screen_x, entity.screen_y)
+            cross_zone = kt_screen is not None and kt_screen != my_screen
+
+            # Compute target health % if entity target is alive
+            target_hp_pct = None
+            if kt_type == 'entity' and kt_ref in game.entities:
+                t = game.entities[kt_ref]
+                target_hp_pct = round(t.health / max(t.max_health, 1) * 100, 1)
+
+            queue = getattr(entity, 'quest_queue', None)
+            queue_snapshot = [
+                {'type': e.get('type'), 'base': e.get('base')}
+                for e in queue
+            ] if queue else None
+
+            self.bug_catcher.log({
+                'tick': tick,
+                'category': 'watchdog_keepers',
+                'id': eid,
+                'type': entity.type,
+                'zone': f"{my_screen[0]},{my_screen[1]}",
+                'grid': [entity.x, entity.y],
+                'keeper_type': getattr(entity, 'keeper_type', None),
+                'kt_type': kt_type,
+                'kt_ref': kt_ref,
+                'kt_pos': list(kt_pos) if kt_pos else None,
+                'kt_screen': list(kt_screen) if kt_screen else None,
+                'cross_zone': cross_zone,
+                'target_hp_pct': target_hp_pct,
+                'keeper_target_pos': list(entity.keeper_target_pos) if getattr(entity, 'keeper_target_pos', None) else None,
+                'quest_focus': getattr(entity, 'quest_focus', None),
+                'quest_queue': queue_snapshot,
+                'ai_state': getattr(entity, 'ai_state', None),
+                'current_target': str(getattr(entity, 'current_target', None)),
+            })
+
+            # Integrity: flag keepers with no target reference
+            if not kt:
+                self.bug_catcher.log({
+                    'tick': tick, 'category': 'watchdog_integrity',
+                    'check': 'keeper_no_target',
+                    'id': eid, 'type': entity.type,
+                    'note': 'keeper=True but keeper_target is None — still searching or bug',
+                })
+
+    def _sample_npc_quests(self, tick: int, game) -> None:
+        """Log all NPCs that have an active quest queue or quest target.
+
+        Captures lore-assigned and player-assigned quest state: queue contents,
+        current target, focus type, progress toward completion, and whether the
+        NPC is keeper-anchored to the target.
+        """
+        from constants import NPC_BASE_QUEST
+        active = [
+            (eid, e) for eid, e in game.entities.items()
+            if e.type in NPC_BASE_QUEST
+            and (getattr(e, 'quest_queue', None) or getattr(e, 'quest_target', None))
+        ]
+        if not active:
+            self.bug_catcher.log({
+                'tick': tick, 'category': 'watchdog_npc_quests',
+                'note': 'no NPCs with active quest queues',
+            })
+            return
+        for eid, entity in active:
+            queue = getattr(entity, 'quest_queue', None)
+            qt = entity.quest_target
+            # Resolve target description
+            if isinstance(qt, int) and qt in game.entities:
+                t = game.entities[qt]
+                target_desc = f"{t.type}(id={qt}) HP:{int(t.health)}/{int(t.max_health)}"
+            elif isinstance(qt, tuple):
+                target_desc = str(qt)
+            else:
+                target_desc = str(qt) if qt is not None else None
+            self.bug_catcher.log({
+                'tick': tick,
+                'category': 'watchdog_npc_quests',
+                'id': eid,
+                'type': entity.type,
+                'zone': f"{entity.screen_x},{entity.screen_y}",
+                'grid': [entity.x, entity.y],
+                'quest_focus': getattr(entity, 'quest_focus', None),
+                'quest_queue': [{'type': e.get('type'), 'base': e.get('base')} for e in queue] if queue else None,
+                'quest_target': target_desc,
+                'ai_state': getattr(entity, 'ai_state', None),
+                'keeper': getattr(entity, 'keeper', False),
+                'keeper_type': getattr(entity, 'keeper_type', None),
+            })
+
+    def _sample_spiders(self, tick: int, game) -> None:
+        """Log full animation + AI state for every BLACK_SPIDER every cycle — no trimming."""
+        player_zone = f"{game.player.get('screen_x', 0)},{game.player.get('screen_y', 0)}"
+        spider_types = {'BLACK_SPIDER', 'BLACK_SPIDER_double'}
+        spiders = [(eid, e) for eid, e in game.entities.items() if e.type in spider_types]
+        if not spiders:
+            return
+        for eid, entity in spiders:
+            entity_zone = f"{entity.screen_x},{entity.screen_y}"
+            self.bug_catcher.log({
+                'tick': tick,
+                'category': 'spider_sample',
+                'id': eid,
+                'type': entity.type,
+                'zone': entity_zone,
+                'on_player_screen': entity_zone == player_zone,
+                'grid': [entity.x, entity.y],
+                'world': [round(entity.world_x, 2), round(entity.world_y, 2)],
+                'facing': getattr(entity, 'facing', None),
+                'anim_frame': getattr(entity, 'anim_frame', None),
+                'anim_timer': getattr(entity, 'anim_timer', None),
+                'sprite_base': entity.props.get('sprite_name', entity.type).lower(),
+                'is_moving': getattr(entity, 'is_moving', None),
+                'ai_state': getattr(entity, 'ai_state', None),
+                'in_combat': getattr(entity, 'in_combat', False),
+                'current_target': getattr(entity, 'current_target', None),
+                'health': entity.health,
+                'is_alive': entity.is_alive(),
             })
 
     # ------------------------------------------------------------------

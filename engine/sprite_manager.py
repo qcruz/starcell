@@ -261,6 +261,32 @@ class SpriteManager:
                 except Exception as e:
                     print(f"  ✗ Failed to load {filename}: {e}")
 
+    def create_dev_spell_sprites(self, entity_types):
+        """Generate summon/transform spell sprites for each NPC type.
+        Each sprite is a solid-color square (entity color) with an 'S' or 'T' overlay.
+        """
+        font = pygame.font.Font(None, self.cell_size // 2)
+        for npc_type, type_data in entity_types.items():
+            color = type_data.get('color', (150, 150, 150))
+            key = npc_type.lower()
+
+            # Summon sprite: entity color + white 'S' in top-left
+            summon_surf = pygame.Surface((self.cell_size, self.cell_size))
+            summon_surf.fill(color)
+            s_text = font.render('S', True, (255, 255, 255))
+            summon_surf.blit(s_text, (2, 2))
+            # Dark border so the letter reads clearly on light backgrounds
+            pygame.draw.rect(summon_surf, (0, 0, 0), (0, 0, self.cell_size, self.cell_size), 1)
+            self.sprites[f'summon_{key}'] = summon_surf
+
+            # Transform sprite: entity color + white 'T' in top-left
+            transform_surf = pygame.Surface((self.cell_size, self.cell_size))
+            transform_surf.fill(color)
+            t_text = font.render('T', True, (255, 255, 255))
+            transform_surf.blit(t_text, (2, 2))
+            pygame.draw.rect(transform_surf, (0, 0, 0), (0, 0, self.cell_size, self.cell_size), 1)
+            self.sprites[f'transform_{key}'] = transform_surf
+
     def get_all_sprite_names(self):
         """Return list of all loaded sprite names"""
         return list(self.sprites.keys())

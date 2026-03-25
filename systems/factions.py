@@ -58,7 +58,6 @@ class FactionsMixin:
 
         if entity_id:
             self.factions[new_faction] = {'warriors': [entity_id], 'zones': set(), 'hostile': True}
-            print(f"{entity.name} formed the {new_faction} hostile faction!")
 
     def assign_warrior_faction(self, warrior, screen_key):
         """Assign faction to a new warrior based on zone warriors"""
@@ -204,31 +203,62 @@ class FactionsMixin:
     # -------------------------------------------------------------------------
 
     def get_zone_controlling_faction(self, screen_key):
-        """Get the faction that controls a zone (majority of warriors/hostiles)"""
-        if screen_key not in self.screen_entities:
+        """Return the persisted controlling faction for a zone.
+
+        Returns the cached value on the zone dict so control is stable between
+        checks. Call update_zone_faction_control() to recompute and persist.
+        """
+        if screen_key not in self.screens:
             return None
+        return self.screens[screen_key].get('controlling_faction')
+
+    def update_zone_faction_control(self, screen_key):
+        """Recompute faction majority for a zone and persist the result.
+
+        If control changes, assigns the first eligible member of the new faction
+        as a zone keeper (keeper_type 3) and triggers a faction domain rebuild.
+        If no faction holds the zone, clears controlling_faction.
+        """
+        if screen_key not in self.screen_entities or screen_key not in self.screens:
+            return
 
         faction_counts = {}
-        for entity_id in self.screen_entities[screen_key]:
-            if entity_id in self.entities:
+        for entity_id in self.screen_entities.get(screen_key, []):
+            if entity_id not in self.entities:
+                continue
+            entity = self.entities[entity_id]
+            if not entity.faction:
+                continue
+            if entity.type in ['WARRIOR', 'COMMANDER', 'KING']:
+                faction_counts[entity.faction] = faction_counts.get(entity.faction, 0) + 1
+            elif entity.props.get('hostile') and entity.faction:
+                faction_counts[entity.faction] = faction_counts.get(entity.faction, 0) + 1
+
+        new_faction = max(faction_counts, key=faction_counts.get) if faction_counts else None
+        old_faction = self.screens[screen_key].get('controlling_faction')
+
+        if new_faction == old_faction:
+            return  # No change
+
+        self.screens[screen_key]['controlling_faction'] = new_faction
+
+        # Assign zone keeper from the new faction's first eligible member
+        if new_faction:
+            for entity_id in self.screen_entities.get(screen_key, []):
+                if entity_id not in self.entities:
+                    continue
                 entity = self.entities[entity_id]
-                # Count warriors, commanders, kings AND hostile faction members
-                if entity.faction:
-                    if entity.type in ['WARRIOR', 'COMMANDER', 'KING']:
-                        if entity.faction not in faction_counts:
-                            faction_counts[entity.faction] = 0
-                        faction_counts[entity.faction] += 1
-                    # Hostile entities with factions also count for control
-                    elif entity.props.get('hostile') and entity.faction:
-                        if entity.faction not in faction_counts:
-                            faction_counts[entity.faction] = 0
-                        faction_counts[entity.faction] += 1
+                if entity.faction == new_faction and not getattr(entity, 'keeper', False):
+                    entity.keeper = True
+                    entity.keeper_type = 3  # Zone keeper
+                    break
 
-        if not faction_counts:
-            return None
-
-        # Return faction with most members (simple majority)
-        return max(faction_counts, key=faction_counts.get)
+        # Rebuild faction domains for both old and new faction
+        if hasattr(self, 'update_faction_domain'):
+            if new_faction:
+                self.update_faction_domain(new_faction)
+            if old_faction:
+                self.update_faction_domain(old_faction)
 
     def get_faction_leader(self, faction_name):
         """Get the leader (KING or highest COMMANDER) of a faction"""
@@ -466,6 +496,12 @@ class FactionsMixin:
 
                     # Commanders stay in their zone (like guards)
                     best_warrior.home_zone = screen_key
+
+                    # Reset quest state for new role
+                    if hasattr(best_warrior, 'quest_queue'):
+                        del best_warrior.quest_queue
+                    best_warrior.quest_focus = None
+                    best_warrior.quest_target = None
 
                     print(f"{old_name} promoted to COMMANDER of {faction} in [{screen_key}]!")
 

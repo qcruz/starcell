@@ -37,10 +37,10 @@ AI_TIMER_BASE = 10  # Base unit for all AI timers
 # ============================================================================
 
 # Weather System
-RAIN_FREQUENCY_MIN = 30  # Minimum ticks between rain (1 minute at 60 FPS)
-RAIN_FREQUENCY_MAX = 250  # Maximum ticks between rain (2 minutes at 60 FPS)
-RAIN_DURATION_MIN = 10    # Minimum rain duration (5 seconds)
-RAIN_DURATION_MAX = 60    # Maximum rain duration (15 seconds)
+RAIN_FREQUENCY_MIN = 120  # Minimum zone updates between rains (per zone)
+RAIN_FREQUENCY_MAX = 2000 # Maximum zone updates between rains — long drought periods possible
+RAIN_DURATION_MIN = 30    # Minimum rain duration in zone updates
+RAIN_DURATION_MAX = 180   # Maximum rain duration in zone updates
 RAIN_WATER_SPAWNS = 5      # Water cells created per rain tick per screen
 RAIN_GRASS_SPAWNS = 8      # Dirt→Grass conversions per rain tick
 
@@ -69,10 +69,12 @@ BIOME_SPREAD_RATE = 0.001       # Chance per update a base cell copies a differe
 FLOODING_RATE = 0.015           # Water spreads to dirt (apply_cellular_automata)
 
 # Entity Survival
-HUNGER_DECAY_RATE = 0.02        # Hunger loss per tick (slowed down further)
-THIRST_DECAY_RATE = 0.015       # Thirst loss per tick (slowed down further)
-STARVATION_DAMAGE = 0.1         # HP loss per tick when starving (was 0.3)
-DEHYDRATION_DAMAGE = 0.15       # HP loss per tick when dehydrated (was 0.5)
+HUNGER_DECAY_RATE = 0.02        # Base hunger loss per decay call (humanoids get 6× this)
+THIRST_DECAY_RATE = 0.5         # Base thirst loss per decay call — drains in ~200 calls (~half max rain gap)
+HUMANOID_DRAIN_MULTIPLIER = 6.0 # Humanoid hunger multiplier
+HUMANOID_THIRST_MULTIPLIER = 2.0 # Humanoid thirst multiplier (2× base — drain in ~100 calls)
+STARVATION_DAMAGE = 1.0         # HP loss per decay call when hunger==0
+DEHYDRATION_DAMAGE = 1.5        # HP loss per decay call when thirst==0
 BASE_HEALING_RATE = 1.5         # HP regen per tick when fed/hydrated
 CAMP_HEALING_MULTIPLIER = 2.0   # Healing boost near camps
 HOUSE_HEALING_MULTIPLIER = 3.0  # Healing boost near houses
@@ -156,7 +158,7 @@ DESERT_BIOME_CHANCE = 0.05      # 5% of zones are desert (generate_screen)
 # Raid Event System
 RAID_CHECK_INTERVAL = 600       # Ticks between raid checks (10 seconds at 60 FPS)
 RAID_CHANCE_BASE = 0.08         # 8% chance for raid when zone has 5+ entities
-RAID_POPULATION_THRESHOLD = 6   # Minimum entities in zone to trigger raid check
+RAID_POPULATION_THRESHOLD = 4   # Minimum entities in zone to trigger raid check
 HIDDEN_CAVE_SPAWN_CHANCE = 0.20 # 20% chance to spawn hidden cave during raid
 NATURAL_CAVE_ZONE_CHANCE = 0.08 # 8% chance a zone gets a natural cave on generation
 PLAYER_MINESHAFT_BASE_CHANCE = 0.05 # 5% base chance for player mining to create mineshaft
@@ -189,6 +191,7 @@ DISTANCE_2_ENTITY_COVERAGE = 0.8    # Update 80% of entities at distance 2
 DISTANCE_3_CELL_COVERAGE = 0.6      # Update 60% of cells at distance 3+
 DISTANCE_3_ENTITY_COVERAGE = 0.6    # Update 60% of entities at distance 3+
 NEW_ZONE_INSTANTIATE_CHANCE = 0.05  # 5% chance to instantiate a new random zone per update cycle
+ZONE_SOFT_CAP = 200                 # Overworld zone count above which new instantiation drops sharply
 
 # ============================================================================
 # END GAME BALANCE CONFIGURATION

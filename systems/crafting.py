@@ -1,6 +1,6 @@
 import random
 
-from constants import CELL_TYPES, ITEM_DECAY_CONFIG, ITEM_TO_CELL, ITEMS, RECIPES
+from constants import CELL_TYPES, ITEM_TO_CELL, ITEMS, RECIPES
 from constants import GRID_WIDTH, GRID_HEIGHT
 
 
@@ -215,61 +215,22 @@ class CraftingMixin:
                     self.current_screen['grid'][y][x] = drop['cell']
                 break
 
-    def decay_dropped_items(self, screen_x, screen_y):
-        """General function to decay dropped items based on item decay configuration"""
-        screen_key = f"{screen_x},{screen_y}"
+    ITEM_DECAY_RATE = 0.01  # 1% chance per item per zone update
 
+    def decay_dropped_items(self, screen_x, screen_y, decay_factor=1.0):
+        """Decay all dropped items at a flat rate, scaled by decay_factor for distant zones."""
+        screen_key = f"{screen_x},{screen_y}"
         if screen_key not in self.dropped_items or screen_key not in self.screens:
             return
 
-        screen = self.screens[screen_key]
-        cells_to_update = []
-
-        # Check each position with dropped items
         for cell_pos, items in list(self.dropped_items[screen_key].items()):
-            x, y = cell_pos
-            current_cell = screen['grid'][y][x]
-
-            # Process each item type at this position
             for item_name, item_count in list(items.items()):
-                # Check if this item type has decay config
-                if item_name not in ITEM_DECAY_CONFIG:
-                    continue
-
-                config = ITEM_DECAY_CONFIG[item_name]
-
-                # Calculate decay chance (base rate * item count)
-                decay_chance = config['decay_rate'] * item_count
-
-                if random.random() < decay_chance:
-                    # Decay one item
+                if random.random() < self.ITEM_DECAY_RATE * item_count * decay_factor:
                     items[item_name] -= 1
                     if items[item_name] <= 0:
                         del items[item_name]
-
-                    # Remove empty items dict
-                    if not items:
-                        del self.dropped_items[screen_key][cell_pos]
-
-                    # Determine decay result based on current cell type
-                    decay_results = config['decay_results']
-
-                    # Get results for this cell type, or default
-                    results = decay_results.get(current_cell, decay_results.get('default', [(None, 1.0)]))
-
-                    # Weighted random selection of result
-                    roll = random.random()
-                    cumulative = 0.0
-                    for result_cell, weight in results:
-                        cumulative += weight
-                        if roll < cumulative:
-                            if result_cell is not None:
-                                cells_to_update.append((x, y, result_cell))
-                            break
-
-        # Apply cell updates
-        for x, y, new_cell in cells_to_update:
-            self.set_grid_cell(screen, x, y, new_cell)
+            if not items:
+                del self.dropped_items[screen_key][cell_pos]
 
     def consolidate_dropped_items(self, screen_key):
         """Merge ALL dropped items within 3-cell range into the largest nearby pile.
@@ -343,6 +304,147 @@ class CraftingMixin:
                             items[pos][item_name] = items[pos].get(item_name, 0) + count
                         del items[best_target]
                         changed = True
+
+    def consolidate_chests(self, zone_key):
+        """Merge nearby chest contents (within 5 cells) into the chest with most items.
+        Secondary chests are emptied so they decay quickly via the cell decay system."""
+        if zone_key not in self.screens:
+            return
+        screen = self.screens[zone_key]
+        grid = screen['grid']
+
+        chests = [
+            (x, y)
+            for y in range(GRID_HEIGHT)
+            for x in range(GRID_WIDTH)
+            if grid[y][x] == 'CHEST'
+        ]
+        if len(chests) < 2:
+            return
+
+        merged = set()
+        for i, (x1, y1) in enumerate(chests):
+            if (x1, y1) in merged:
+                continue
+            key1 = f"{zone_key}:{x1},{y1}"
+            contents1 = self.chest_contents.get(key1, {})
+            count1 = sum(contents1.values())
+
+            for x2, y2 in chests:
+                if (x2, y2) == (x1, y1) or (x2, y2) in merged:
+                    continue
+                if abs(x2 - x1) + abs(y2 - y1) > 5:
+                    continue
+                key2 = f"{zone_key}:{x2},{y2}"
+                contents2 = self.chest_contents.get(key2, {})
+                count2 = sum(contents2.values())
+
+                if count1 >= count2:
+                    for item, count in contents2.items():
+                        contents1[item] = contents1.get(item, 0) + count
+                    self.chest_contents[key1] = contents1
+                    self.chest_contents[key2] = {}
+                    merged.add((x2, y2))
+                else:
+                    for item, count in contents1.items():
+                        contents2[item] = contents2.get(item, 0) + count
+                    self.chest_contents[key2] = contents2
+                    self.chest_contents[key1] = {}
+                    merged.add((x1, y1))
+                    break  # x1,y1 is now empty; stop pairing it
+
+    def decay_overworld_chests(self, screen_key):
+        """Small chance for overworld CHEST cells to decay.
+        Applies 40% destruction to chest contents; survivors fall into dropped_items
+        (rendered by the existing item-bag system) and the cell reverts to its background."""
+        if not self.is_overworld_zone(screen_key):
+            return
+        if screen_key not in self.screens:
+            return
+        screen = self.screens[screen_key]
+        grid = screen['grid']
+        _UNIQUE_FLAGS = ('is_tool', 'is_spell', 'is_follower', 'magic_damage', 'armor')
+        for cy in range(GRID_HEIGHT):
+            for cx in range(GRID_WIDTH):
+                if grid[cy][cx] != 'CHEST':
+                    continue
+                if random.random() > 0.001:  # 0.1% per update (5× faster decay)
+                    continue
+                ck = f"{screen_key}:{cx},{cy}"
+                contents = self.chest_contents.pop(ck, {})
+                bg = self.chest_backgrounds.pop(ck, 'GRASS')
+                # Apply destruction check
+                survivors = {}
+                for item, amt in contents.items():
+                    item_data = ITEMS.get(item, {})
+                    if any(item_data.get(f) for f in _UNIQUE_FLAGS):
+                        survivors[item] = amt
+                    else:
+                        kept = sum(1 for _ in range(amt) if random.random() > 0.40)
+                        if kept > 0:
+                            survivors[item] = kept
+                # Restore background cell; survivors land as dropped items
+                grid[cy][cx] = bg
+                if survivors:
+                    if screen_key not in self.dropped_items:
+                        self.dropped_items[screen_key] = {}
+                    pos = (cx, cy)
+                    if pos not in self.dropped_items[screen_key]:
+                        self.dropped_items[screen_key][pos] = {}
+                    for item, amt in survivors.items():
+                        self.dropped_items[screen_key][pos][item] = (
+                            self.dropped_items[screen_key][pos].get(item, 0) + amt
+                        )
+
+    def decay_items_to_buried(self, screen_key, decay_factor=1.0):
+        """Dropped items on ground have a small chance per update to become buried.
+        Applies 40% destruction first; survivors go into self.buried_items."""
+        if screen_key not in self.dropped_items:
+            return
+        _UNIQUE_FLAGS = ('is_tool', 'is_spell', 'is_follower', 'magic_damage', 'armor')
+        for pos, items in list(self.dropped_items[screen_key].items()):
+            for item_name in list(items.keys()):
+                if random.random() > 0.0003 * decay_factor:  # 0.03% per item per update, scaled by distance
+                    continue
+                amt = items.pop(item_name, 0)
+                if not items:
+                    del self.dropped_items[screen_key][pos]
+                if amt <= 0:
+                    continue
+                item_data = ITEMS.get(item_name, {})
+                if any(item_data.get(f) for f in _UNIQUE_FLAGS):
+                    surviving = amt
+                else:
+                    surviving = sum(1 for _ in range(amt) if random.random() > 0.40)
+                if surviving <= 0:
+                    continue
+                if not hasattr(self, 'buried_items'):
+                    self.buried_items = {}
+                if screen_key not in self.buried_items:
+                    self.buried_items[screen_key] = {}
+                if pos not in self.buried_items[screen_key]:
+                    self.buried_items[screen_key][pos] = {}
+                self.buried_items[screen_key][pos][item_name] = (
+                    self.buried_items[screen_key][pos].get(item_name, 0) + surviving
+                )
+
+    def decay_buried_items(self, screen_key, decay_factor=1.0):
+        """Buried items have a very small chance per update to be permanently destroyed."""
+        if not hasattr(self, 'buried_items') or screen_key not in self.buried_items:
+            return
+        _UNIQUE_FLAGS = ('is_tool', 'is_spell', 'is_follower', 'magic_damage', 'armor')
+        for pos, items in list(self.buried_items[screen_key].items()):
+            for item_name in list(items.keys()):
+                if random.random() > 0.0001 * decay_factor:  # 0.01% per update, scaled by distance
+                    continue
+                item_data = ITEMS.get(item_name, {})
+                if any(item_data.get(f) for f in _UNIQUE_FLAGS):
+                    continue  # Never destroy unique buried items
+                items[item_name] -= 1
+                if items[item_name] <= 0:
+                    del items[item_name]
+            if not items:
+                del self.buried_items[screen_key][pos]
 
     # -------------------------------------------------------------------------
     # Player item interactions (pickup / place / drop)
@@ -482,11 +584,31 @@ class CraftingMixin:
             'STONE_HOUSE': 'stone_house',
             'RUINED_SANDSTONE_COLUMN': 'ruined_sandstone_column',
             'FORGE': 'forge',
+            'BUSH': 'bush',
         }
 
         if cell_type in exact_pickup_map:
             item_name = exact_pickup_map[cell_type]
-            self.inventory.add_item(item_name, 1)
+
+            # HOUSE and CHEST scatter their components as dropped items instead of
+            # going into inventory as a single item (looks better than silent removal)
+            if cell_type == 'HOUSE':
+                self.drop_item('wood', target_x, target_y)
+                self.drop_item('wood', target_x, target_y)
+            elif cell_type == 'CHEST':
+                # Scatter contents if present; empty chests leave nothing (no plank drop)
+                chest_key = f"{screen_key}:{target_x},{target_y}"
+                contents = getattr(self, 'chest_contents', {}).pop(chest_key, None)
+                if contents:
+                    for citem, ccount in contents.items():
+                        for _ in range(ccount):
+                            self.drop_item(citem, target_x, target_y)
+                # Remove background entry if present
+                if hasattr(self, 'chest_backgrounds'):
+                    self.chest_backgrounds.pop(chest_key, None)
+            else:
+                self.inventory.add_item(item_name, 1)
+
             self.sound.on_pickup()
 
             # Replace cell: inside structures → restore structure floor, else biome base

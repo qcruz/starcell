@@ -55,6 +55,21 @@ class NpcAiActionsMixin:
         Returns True if action was performed."""
         if screen_key not in self.screens:
             return False
+
+        # Farmers collect buried items from harvested adjacent cells
+        if actor != 'player' and getattr(actor, 'type', None) == 'FARMER':
+            buried = getattr(self, 'buried_items', {}).get(screen_key, {})
+            if buried:
+                for _dy in range(-1, 2):
+                    for _dx in range(-1, 2):
+                        if _dx == 0 and _dy == 0:
+                            continue
+                        bpos = (actor.x + _dx, actor.y + _dy)
+                        if bpos in buried:
+                            for item, amt in list(buried[bpos].items()):
+                                actor.inventory[item] = actor.inventory.get(item, 0) + amt
+                            del buried[bpos]
+
         screen = self.screens[screen_key]
         is_player = (actor == 'player')
         ax = self.player['x'] if is_player else actor.x
@@ -574,11 +589,9 @@ class NpcAiActionsMixin:
             if entity.xp >= entity.xp_to_level:
                 entity.level_up()
             if random.random() < FARMER_HARVEST_SUCCESS:
-                harvest_info = CELL_TYPES[cell].get('harvest')
-                if harvest_info:
-                    item, amount = harvest_info['item'], harvest_info['amount']
-                    entity.inventory[item] = entity.inventory.get(item, 0) + amount
-                screen['grid'][cy][cx] = 'SOIL'
+                # Harvest: always 2 carrots, decay cell to CARROT1 (regrows naturally)
+                entity.inventory['carrot'] = entity.inventory.get('carrot', 0) + 2
+                screen['grid'][cy][cx] = 'CARROT1'
                 entity.level_up_from_activity('harvest', self)
             return True   # acted; stop scanning
         return False
@@ -778,36 +791,57 @@ class NpcAiActionsMixin:
         # Remove from dropped items
         del self.dropped_items[screen_key][drop_key]
 
-    def process_entity_drop(self, entity, screen_key):
-        """Process item drops when entity dies"""
-        if 'drops' not in entity.props:
-            return
+    # Items with any of these flags are considered "unique" and survive NPC death intact
+    _UNIQUE_ITEM_FLAGS = ('is_tool', 'is_spell', 'is_follower', 'magic_damage', 'armor')
 
-        # Get drop position
+    def _is_unique_item(self, item_name):
+        """Return True if item should not be destroyed on NPC death."""
+        data = ITEMS.get(item_name, {})
+        return any(data.get(f) for f in self._UNIQUE_ITEM_FLAGS)
+
+    def process_entity_drop(self, entity, screen_key):
+        """Process item drops when entity dies.
+
+        Two drop sources:
+        1. Props drops table — unchanged (loot table rolls).
+        2. Entity inventory — unique items always drop; common items have a 40%
+           destruction chance per item (the rest drop normally at the death cell).
+        """
         drop_x, drop_y = entity.x, entity.y
+        drop_key = (drop_x, drop_y)
 
         # Spawn runestones (rare)
         if random.random() < 0.10:
-          self.spawn_runestones_for_screen(drop_x, drop_y)
+            self.spawn_runestones_for_screen(drop_x, drop_y)
 
-        # Process each potential drop
-        for drop in entity.props['drops']:
-            if random.random() < drop['chance']:
-                item_name = drop['item']
-                amount = drop['amount']
+        def _add_drop(item_name, amount):
+            if amount <= 0:
+                return
+            if screen_key not in self.dropped_items:
+                self.dropped_items[screen_key] = {}
+            if drop_key not in self.dropped_items[screen_key]:
+                self.dropped_items[screen_key][drop_key] = {}
+            self.dropped_items[screen_key][drop_key][item_name] = (
+                self.dropped_items[screen_key][drop_key].get(item_name, 0) + amount
+            )
 
-                # Add to dropped items on the screen
-                if screen_key not in self.dropped_items:
-                    self.dropped_items[screen_key] = {}
+        # ── Props drops table ─────────────────────────────────────────────────
+        if 'drops' in entity.props:
+            for drop in entity.props['drops']:
+                if random.random() < drop['chance']:
+                    _add_drop(drop['item'], drop['amount'])
 
-                drop_key = f"{drop_x},{drop_y}"
-                if drop_key not in self.dropped_items[screen_key]:
-                    self.dropped_items[screen_key][drop_key] = {}
-
-                if item_name in self.dropped_items[screen_key][drop_key]:
-                    self.dropped_items[screen_key][drop_key][item_name] += amount
-                else:
-                    self.dropped_items[screen_key][drop_key][item_name] = amount
+        # ── Inventory drops ───────────────────────────────────────────────────
+        # Unique items (tools, spells, named gear) always survive.
+        # Common resource items: 40% destruction chance per item, rest drop.
+        for item_name, amount in list(getattr(entity, 'inventory', {}).items()):
+            if amount <= 0:
+                continue
+            if self._is_unique_item(item_name):
+                _add_drop(item_name, amount)
+            else:
+                surviving = sum(1 for _ in range(amount) if random.random() > 0.40)
+                _add_drop(item_name, surviving)
 
     def npc_place_camp(self, entity):
         """NPC places a campsite if none exists in the zone"""
@@ -844,6 +878,8 @@ class NpcAiActionsMixin:
                     # Otherwise, chance to upgrade camp to house
                     elif random.random() < 0.02:  # 2% chance
                         screen['grid'][y][x] = 'HOUSE'
+                        entity.inventory.pop('wood', None)
+                        entity.inventory.pop('planks', None)
 
                         # Chance to level up from building
                         entity.level_up_from_activity('build', self)
@@ -861,6 +897,7 @@ class NpcAiActionsMixin:
                 cell = screen['grid'][place_y][place_x]
                 if cell in ['GRASS', 'DIRT', 'SAND']:
                     screen['grid'][place_y][place_x] = 'CAMP'
+                    entity.inventory.pop('wood', None)
                     return
 
     def miner_place_cave(self, entity):
@@ -905,6 +942,8 @@ class NpcAiActionsMixin:
                         # Can place cave on non-solid ground
                         if cell in ['GRASS', 'DIRT', 'SAND', 'STONE']:
                             screen['grid'][place_y][place_x] = 'CAVE'
+                            entity.inventory.pop('stone', None)
+                            entity.inventory.pop('iron_ore', None)
 
                             # Chance to level up from discovery
                             entity.level_up_from_activity('mine', self)
@@ -1094,3 +1133,49 @@ class NpcAiActionsMixin:
 
         # No trader nearby
         print("No trader nearby!")
+
+    # ------------------------------------------------------------------
+    # NPC chest placement (fallback when no nearby chest exists)
+    # ------------------------------------------------------------------
+
+    def try_place_npc_chest(self, entity, screen_key):
+        """Place a chest adjacent to an overburdened NPC and transfer some inventory.
+        Only places if no chest exists within 8 cells — enforced here regardless of caller."""
+        if screen_key not in self.screens:
+            return False
+        screen = self.screens[screen_key]
+        # Refuse if any chest already exists within 8 cells
+        grid = screen['grid']
+        for gy in range(max(0, entity.y - 8), min(GRID_HEIGHT, entity.y + 9)):
+            for gx in range(max(0, entity.x - 8), min(GRID_WIDTH, entity.x + 9)):
+                if grid[gy][gx] == 'CHEST':
+                    return False
+        valid_floors = ('GRASS', 'DIRT', 'SAND', 'FLOOR_WOOD', 'CAVE_FLOOR')
+        for dy in range(-1, 2):
+            for dx in range(-1, 2):
+                if dx == 0 and dy == 0:
+                    continue
+                cx, cy = entity.x + dx, entity.y + dy
+                if not (0 <= cx < GRID_WIDTH and 0 <= cy < GRID_HEIGHT):
+                    continue
+                cell = screen['grid'][cy][cx]
+                if cell not in valid_floors:
+                    continue
+                screen['grid'][cy][cx] = 'CHEST'
+                ck = f"{screen_key}:{cx},{cy}"
+                if not hasattr(self, 'chest_backgrounds'):
+                    self.chest_backgrounds = {}
+                self.chest_backgrounds[ck] = cell
+                # Transfer up to 5 excess items into the new chest
+                chest_loot = {}
+                items = list(entity.inventory.keys())
+                random.shuffle(items)
+                for item in items[:5]:
+                    amt = entity.inventory.pop(item, 0)
+                    if amt > 0:
+                        chest_loot[item] = amt
+                if not hasattr(self, 'chest_contents'):
+                    self.chest_contents = {}
+                self.chest_contents[ck] = chest_loot
+                return True
+        return False

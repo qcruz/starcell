@@ -4,9 +4,10 @@ from constants import (
     GRID_WIDTH, GRID_HEIGHT,
     CELL_TYPES, BIOMES,
     # Cellular automata rates
+    BASE_DECAY_RATE,
     DIRT_TO_GRASS_RATE, GRASS_TO_DIRT_RATE, DIRT_TO_SAND_RATE,
     TREE_GROWTH_RATE, TREE_DECAY_RATE, TREE_CROWD_DECAY_RATE,
-    SAND_RECLAIM_RATE,
+    SAND_RECLAIM_RATE, CACTUS_DROUGHT_RATE, TREE_DROUGHT_RATE,
     FLOWER_SPREAD_RATE, FLOWER_DECAY_RATE,
     DEEP_WATER_FORM_RATE, DEEP_WATER_EVAPORATE_RATE,
     WATER_TO_DIRT_RATE, FLOODING_RATE,
@@ -112,6 +113,18 @@ class CellsMixin:
         _growth = max(0.1, 1.0 - drought_severity * 0.9) * _tp  # decays to 10% of base at max drought
         _decay  = (1.0 + drought_severity * 0.5) * _tp           # rises to 1.5x base at max drought
 
+        # ── Zone-wide water count for volume-based decay rule ─────────────────
+        # Count WATER (not DEEP_WATER) cells across the full zone grid once per cycle.
+        # Used to compute per-cell water decay rate: (count - 4) * BASE_DECAY_RATE.
+        # < 4 cells → rate = 0 (small pools are stable); larger bodies drain over time.
+        zone_water_count = sum(row.count('WATER') for row in screen['grid'])
+
+        # Biome base cell for water evaporation target (LAKE biome keeps water)
+        _water_decay_target = {
+            'FOREST': 'GRASS', 'PLAINS': 'GRASS', 'DESERT': 'SAND',
+            'MOUNTAINS': 'DIRT', 'TUNDRA': 'DIRT', 'SWAMP': 'DIRT',
+        }.get(biome)  # None for LAKE or unknown → rule skipped
+
         for y in range(GRID_HEIGHT):
             for x in range(GRID_WIDTH):
                 # Per-cell coverage skip: probability decreases down the priority queue
@@ -166,6 +179,11 @@ class CellsMixin:
                     if random.random() < min(1.0, FLOODING_RATE * _tp):
                         new_grid[y][x] = 'WATER'
 
+                # Sand → Water (rain flooding — 2x dirt rate; sand absorbs water faster)
+                elif cell == 'SAND' and total_water >= 3 and self.is_raining:
+                    if random.random() < min(1.0, FLOODING_RATE * 2.0 * _tp):
+                        new_grid[y][x] = 'WATER'
+
                 # Dirt → Grass (water >= 2)
                 elif cell == 'DIRT' and total_water >= 2:
                     if random.random() < min(1.0, DIRT_TO_GRASS_RATE * _growth):
@@ -201,9 +219,15 @@ class CellsMixin:
                     if random.random() < min(1.0, TREE_GROWTH_RATE * _growth):
                         new_grid[y][x] = 'TREE1'
 
-                # Sand reclamation (water converts sand back to dirt)
+                # Sand → Dirt (any water neighbor — universal rule, supercedes biome-specific rules)
                 elif cell == 'SAND' and total_water >= 1:
                     if random.random() < min(1.0, SAND_RECLAIM_RATE * _growth):
+                        new_grid[y][x] = 'DIRT'
+
+                # Sand → Dirt (grass neighbor — vegetation slowly reclaims desert edges)
+                # Half the water-reclaim rate so deserts don't erode too quickly
+                elif cell == 'SAND' and grass_count >= 1:
+                    if random.random() < min(1.0, SAND_RECLAIM_RATE * 0.05 * _growth):
                         new_grid[y][x] = 'DIRT'
 
                 # Deep water formation: all 4 cardinal neighbors must be water/deepwater
@@ -217,10 +241,23 @@ class CellsMixin:
                         new_grid[y][x] = 'DEEP_WATER'
                     elif total_water <= 1 and random.random() < min(1.0, WATER_TO_DIRT_RATE * _decay):
                         new_grid[y][x] = 'DIRT'
+                    elif _water_decay_target and zone_water_count > 4:
+                        # Volume-based decay: large water bodies drain toward biome base cell.
+                        # Rate = (zone_water_count - 4) * BASE_DECAY_RATE, scaled by drought.
+                        # Pools of ≤ 4 cells are fully stable (rate = 0).
+                        _wdr = (zone_water_count - 4) * BASE_DECAY_RATE
+                        if random.random() < min(1.0, _wdr * _decay):
+                            new_grid[y][x] = _water_decay_target
 
-                # Deep water evaporation
-                elif cell == 'DEEP_WATER' and (water_count + deep_water_count) < 2:
-                    if random.random() < min(1.0, DEEP_WATER_EVAPORATE_RATE * _decay):
+                # Deep water evaporation — mirrors formation: requires all 4 cardinal
+                # neighbors to be water/deep_water to stay deep; decays quickly otherwise
+                elif cell == 'DEEP_WATER':
+                    cardinal_water_dw = sum(
+                        1 for cdx, cdy in ((0, -1), (0, 1), (-1, 0), (1, 0))
+                        if 0 <= x + cdx < GRID_WIDTH and 0 <= y + cdy < GRID_HEIGHT
+                        and screen['grid'][y + cdy][x + cdx] in ('WATER', 'DEEP_WATER')
+                    )
+                    if cardinal_water_dw < 4 and random.random() < min(1.0, DEEP_WATER_EVAPORATE_RATE * _decay):
                         new_grid[y][x] = 'WATER'
 
                 # Flower spread
@@ -237,6 +274,11 @@ class CellsMixin:
                 elif cell == 'GRASS' and total_water >= 1 and self.is_raining:
                     if random.random() < min(1.0, GRASS_WATER_ABSORB_RATE * _tp):
                         new_grid[y][x] = 'WATER'
+
+                # Tree → Grass (drought — mirrors Cactus drought decay; fires when no water and drought is moderate+)
+                elif cell.startswith('TREE') and total_water == 0 and drought_severity > 0.5:
+                    if random.random() < min(1.0, TREE_DROUGHT_RATE * _decay):
+                        new_grid[y][x] = 'GRASS'
 
                 # Tree → Cobblestone (tree stranded inside a cobblestone road — 5+ of 8 neighbors cobblestone)
                 # High threshold prevents cascade: edge trees are untouched, only truly embedded ones convert
@@ -259,6 +301,11 @@ class CellsMixin:
                 elif cell.startswith('TREE') and tree_count >= 1:
                     if random.random() < min(1.0, TREE_CROWD_DECAY_RATE * _decay):
                         new_grid[y][x] = 'GRASS'
+
+                # Cactus → Sand (drought — mirrors tree drought decay in lush biomes)
+                elif cell == 'CACTUS' and total_water == 0 and drought_severity > 0.5:
+                    if random.random() < min(1.0, CACTUS_DROUGHT_RATE * _decay):
+                        new_grid[y][x] = 'SAND'
 
                 # General neighbor-copy: base terrain may adopt a random NSEW neighbor's type
                 if new_grid[y][x] == cell and cell in ('GRASS', 'DIRT', 'SAND', 'WATER'):
@@ -327,24 +374,43 @@ class CellsMixin:
         screen = self.screens[key]
         biome = screen.get('biome', 'FOREST')
 
-        rain_multiplier = 1.0
+        # Desert: rare puddles (10% chance per tick to attempt one sand→water conversion).
+        # Gives ~1-2 puddles over a full rain cycle. No grass — rain doesn't green desert.
         if biome == 'DESERT':
-            rain_multiplier = 0.1
-        elif biome == 'MOUNTAINS':
-            rain_multiplier = 0.3
-        elif biome == 'PLAINS':
-            rain_multiplier = 1.2
+            if random.random() < 0.1:
+                x = random.randint(1, GRID_WIDTH - 2)
+                y = random.randint(1, GRID_HEIGHT - 2)
+                cell = screen['grid'][y][x]
+                if cell == 'SAND' and not self.is_cell_enchanted(x, y, key):
+                    if random.random() < 0.6:
+                        screen['grid'][y][x] = 'WATER'
+            # Even in desert, rain quenches thirst (just rarer puddles)
+            for eid in self.screen_entities.get(key, []):
+                if eid in self.entities:
+                    e = self.entities[eid]
+                    if e.health > 0 and not getattr(e, 'in_subscreen', False):
+                        e.thirst = e.max_thirst
+            return
 
-        water_spawns = int(RAIN_WATER_SPAWNS * rain_multiplier)
+        water_mult = 1.0
+        grass_mult = 1.0
+        if biome == 'MOUNTAINS':
+            water_mult = 0.6
+            grass_mult = 0.3
+        elif biome == 'PLAINS':
+            water_mult = 1.2
+            grass_mult = 1.2
+
+        water_spawns = max(1, int(RAIN_WATER_SPAWNS * water_mult))
         for _ in range(water_spawns):
             x = random.randint(1, GRID_WIDTH - 2)
             y = random.randint(1, GRID_HEIGHT - 2)
             cell = screen['grid'][y][x]
-            if cell in ['DIRT', 'SAND'] and not self.is_cell_enchanted(x, y, key):
+            if cell == 'DIRT' and not self.is_cell_enchanted(x, y, key):
                 if random.random() < 0.3:
                     screen['grid'][y][x] = 'WATER'
 
-        grass_spawns = int(RAIN_GRASS_SPAWNS * rain_multiplier)
+        grass_spawns = max(1, int(RAIN_GRASS_SPAWNS * grass_mult))
         for _ in range(grass_spawns):
             x = random.randint(1, GRID_WIDTH - 2)
             y = random.randint(1, GRID_HEIGHT - 2)
@@ -352,6 +418,13 @@ class CellsMixin:
             if cell == 'DIRT' and not self.is_cell_enchanted(x, y, key):
                 if random.random() < 0.4:
                     screen['grid'][y][x] = 'GRASS'
+
+        # Rain fills thirst for all living outdoor entities in this zone
+        for eid in self.screen_entities.get(key, []):
+            if eid in self.entities:
+                e = self.entities[eid]
+                if e.health > 0 and not getattr(e, 'in_subscreen', False):
+                    e.thirst = e.max_thirst
 
     # -------------------------------------------------------------------------
     # Weather
@@ -389,10 +462,7 @@ class CellsMixin:
         old_is_night = self.is_night
         self.is_night = self.day_night_timer >= DAY_LENGTH
 
-        if self.is_night and not old_is_night:
-            print("Night falls...")
-        elif not self.is_night and old_is_night:
-            print("Dawn breaks...")
+        if not self.is_night and old_is_night:
             if hasattr(self, 'sound'):
                 self.sound.play_dawn_music()
 

@@ -5,12 +5,15 @@ from constants import (
     CELL_TYPES, ENTITY_TYPES,
     MAX_CATCHUP_PER_FRAME, MAX_CYCLES_TO_SIMULATE,
     UPDATE_FREQUENCY, MAX_ZONES_PER_UPDATE,
-    NEW_ZONE_INSTANTIATE_CHANCE,
+    NEW_ZONE_INSTANTIATE_CHANCE, ZONE_SOFT_CAP,
     SKELETON_DAYLIGHT_DAMAGE,
     CAMP_HEALING_MULTIPLIER, HOUSE_HEALING_MULTIPLIER,
     NPC_CAMP_PLACE_RATE, ENHANCED_SETTLEMENT_RATE,
     KEEPER_ENTITY_TYPE, KEEPER_ASSIGNMENT_RATE,
+    KEEPER_TYPE_BY_ENTITY, KEEPER_RANGE,
     DESERT_ROCK_FORMATION_RATE, DESERT_ORE_FORMATION_RATE,
+    RAIN_FREQUENCY_MIN, RAIN_FREQUENCY_MAX,
+    RAIN_DURATION_MIN, RAIN_DURATION_MAX,
 )
 from entity import Entity
 
@@ -18,6 +21,60 @@ from entity import Entity
 class ZonesMixin:
     """Handles zone update loop, priority queue, catch-up simulation,
     biome shifts, and entity lifecycle across zones."""
+
+    # -------------------------------------------------------------------------
+    # Zone purge helper
+    # -------------------------------------------------------------------------
+
+    def _purge_zone(self, zone_key):
+        """Thoroughly remove a zone and all associated data from every game structure.
+
+        Covers: screens, instantiated_zones, screen_last_update, zone_rain,
+        screen_entities (+ entity deletion), dropped_items, buried_items,
+        chest_contents, opened_chests, door_map, enchanted_cells, zone_keepers,
+        enchanted_entities (entity-keyed, so checked by zone membership).
+        """
+        zone_prefix = zone_key + ':'
+
+        # --- Entities in this zone ---
+        for eid in list(self.screen_entities.get(zone_key, [])):
+            self.followers = [f for f in self.followers if f != eid]
+            if hasattr(self, 'follower_items'):
+                self.follower_items.pop(eid, None)
+            self.entities.pop(eid, None)
+        self.screen_entities.pop(zone_key, None)
+
+        # --- Keeper slots ---
+        self.zone_keepers.pop(zone_key, None)
+
+        # --- Items ---
+        self.dropped_items.pop(zone_key, None)
+        if hasattr(self, 'buried_items'):
+            self.buried_items.pop(zone_key, None)
+
+        # --- Chest contents (keyed "zone_key:x,y") ---
+        for ck in [k for k in self.chest_contents if k.startswith(zone_prefix)]:
+            del self.chest_contents[ck]
+        for ok in [k for k in self.opened_chests if k.startswith(zone_prefix)]:
+            self.opened_chests.discard(ok)
+
+        # --- Door map (tuple keys: (zone_key, x, y) → (dest_zone, dx, dy)) ---
+        for dk in [k for k in self.door_map
+                   if k[0] == zone_key or self.door_map[k][0] == zone_key]:
+            self.door_map.pop(dk, None)
+
+        # --- Enchanted cells (keyed {zone_key: {(x,y): level}}) ---
+        if hasattr(self, 'enchanted_cells'):
+            self.enchanted_cells.pop(zone_key, None)
+
+        # --- Zone world data ---
+        self.screens.pop(zone_key, None)
+        self.instantiated_zones.discard(zone_key)
+        self.screen_last_update.pop(zone_key, None)
+        if hasattr(self, 'zone_rain'):
+            self.zone_rain.pop(zone_key, None)
+
+        self.zones_deleted = getattr(self, 'zones_deleted', 0) + 1
 
     # -------------------------------------------------------------------------
     # Main update loop
@@ -29,21 +86,100 @@ class ZonesMixin:
         if not getattr(self, 'time_pass_active', False) and self.tick % UPDATE_FREQUENCY != 0:
             return
 
-        self.update_weather()
         self.update_day_night_cycle()
         self.move_items_to_nearest_chest()
 
-        # Small chance to instantiate a new random zone
-        if random.random() < NEW_ZONE_INSTANTIATE_CHANCE:
+        # Chance to instantiate a new random overworld zone, scaled down with distance from player.
+        # Soft cap: above ZONE_SOFT_CAP overworld zones the chance drops sharply.
+        _overworld_count = sum(1 for zk in self.screens if self.is_overworld_zone(zk))
+        _inst_chance = NEW_ZONE_INSTANTIATE_CHANCE
+        if _overworld_count >= ZONE_SOFT_CAP:
+            _excess = _overworld_count - ZONE_SOFT_CAP
+            _inst_chance *= max(0.02, 1.0 / (1.0 + _excess * 0.15))
+        if random.random() < _inst_chance:
+            _pox = self.player['screen_x'] if self.is_overworld_zone(f"{self.player['screen_x']},{self.player['screen_y']}") else 0
+            _poy = self.player['screen_y'] if self.is_overworld_zone(f"{self.player['screen_x']},{self.player['screen_y']}") else 0
             range_x = random.randint(-20, 20)
             range_y = random.randint(-20, 20)
             new_zone_key = f"{range_x},{range_y}"
             if new_zone_key not in self.screens:
-                self.generate_screen(range_x, range_y)
-                self.instantiated_zones.add(new_zone_key)
+                dist = abs(range_x - _pox) + abs(range_y - _poy)
+                if random.random() < 1.0 / (1.0 + dist * 0.25):
+                    self.generate_screen(range_x, range_y)
+                    self.instantiated_zones.add(new_zone_key)
 
         if self.tick % 600 == 0:
             self.cleanup_screen_entities()
+            # Recompute faction control for all overworld zones and update domains
+            for zk in list(self.screens.keys()):
+                if self.is_overworld_zone(zk):
+                    self.update_zone_faction_control(zk)
+            # Sync instantiated_zones exactly with self.screens (bidirectional)
+            self.instantiated_zones = set(self.screens.keys())
+            # Validate door_map: remove entries where either zone is missing
+            for door_key in list(getattr(self, 'door_map', {}).keys()):
+                src_zone = door_key[0]
+                dest = self.door_map[door_key]
+                dest_zone = dest[0]
+                if src_zone not in self.screens or dest_zone not in self.screens:
+                    del self.door_map[door_key]
+            # Clean up structure zones whose parent entrance cell has been destroyed
+            for struct_key in list(self.structure_zones.keys()):
+                sz = self.structure_zones[struct_key]
+                parent = sz.get('parent_zone')
+                cell_pos = sz.get('cell')
+                if not parent or not cell_pos:
+                    continue
+                if parent not in self.screens:
+                    self.deinstantiate_structure_zone(struct_key)
+                    continue
+                cx, cy = cell_pos
+                parent_screen = self.screens[parent]
+                parent_cell = parent_screen['grid'][cy][cx]
+                if parent_cell not in ('HOUSE', 'STONE_HOUSE', 'CAVE', 'MINESHAFT'):
+                    self.deinstantiate_structure_zone(struct_key)
+
+            # De-instantiate distant overworld zones that have been idle and empty
+            # Probability of removal increases with distance; nearby zones are protected
+            _px = self.player['screen_x']
+            _py = self.player['screen_y']
+            _idle_threshold = 3600  # ~1 min at 60fps
+            for _zk in list(self.instantiated_zones):
+                if not self.is_overworld_zone(_zk):
+                    continue
+                _zx, _zy = int(_zk.split(',')[0]), int(_zk.split(',')[1])
+                _dist = abs(_zx - _px) + abs(_zy - _py)
+                if _dist <= 4:
+                    continue  # always keep player-adjacent zones
+                if self.tick - self.screen_last_update.get(_zk, 0) < _idle_threshold:
+                    continue  # not idle long enough
+                # Keep zone only if it has ALIVE entities (dead IDs in screen_entities don't count)
+                _has_alive = any(
+                    eid in self.entities and self.entities[eid].health > 0
+                    for eid in self.screen_entities.get(_zk, [])
+                )
+                if _has_alive:
+                    continue
+                # Remove with probability proportional to distance
+                if random.random() < min(0.9, _dist * 0.04):
+                    self._purge_zone(_zk)
+
+        # --- Staleness hard trim: zones not updated in >20k ticks get deleted
+        # regardless of content. Chance = ticks_since_update / 100_000 per cycle. ---
+        _px = self.player['screen_x']
+        _py = self.player['screen_y']
+        for _zk in list(self.instantiated_zones):
+            if not self.is_overworld_zone(_zk):
+                continue
+            _zx, _zy = int(_zk.split(',')[0]), int(_zk.split(',')[1])
+            if abs(_zx - _px) + abs(_zy - _py) <= 4:
+                continue  # always protect player-adjacent zones
+            _stale = self.tick - self.screen_last_update.get(_zk, 0)
+            if _stale < 20000:
+                continue
+            _delete_chance = min(1.0, _stale / 100000)
+            if random.random() < _delete_chance:
+                self._purge_zone(_zk)
 
         self.ensure_nearby_zones_exist()
 
@@ -115,17 +251,11 @@ class ZonesMixin:
             total_entities_updated += int(ent_count * entity_coverage)
             total_cells_updated += int(GRID_WIDTH * GRID_HEIGHT * cell_coverage)
 
-        if self.tick % 1800 == 0:
-            total_entities = len(self.entities)
-            total_zones = len(self.screens)
-            print(f"[UpdateCycle] tick={self.tick} "
-                  f"zones={zones_updated}/{total_zones} "
-                  f"entities={total_entities_updated}/{total_entities} "
-                  f"cells={total_cells_updated} "
-                  f"mandatory={len(mandatory_zones)} "
-                  f"player_zone={player_zone_key}"
-                  f"({len(self.screen_entities.get(player_zone_key, []))}ent) "
-                  f"queue={len(priority_queue)}")
+        # Sync global is_raining to the player zone's per-zone rain state (for UI/sounds)
+        _pzk = f"{self.player['screen_x']},{self.player['screen_y']}"
+        if hasattr(self, 'zone_rain') and _pzk in self.zone_rain:
+            self.is_raining = self.zone_rain[_pzk]['is_raining']
+
 
     # -------------------------------------------------------------------------
     # Per-zone update methods
@@ -141,25 +271,73 @@ class ZonesMixin:
         screen = self.screens[zone_key]
         self.screen_last_update[zone_key] = self.tick
 
+        # Distance-based decay multiplier: structures and items decay faster in distant zones
+        _dist_from_player = abs(zone_x - self.player['screen_x']) + abs(zone_y - self.player['screen_y'])
+        _decay_factor = 1.0 + _dist_from_player * 0.02  # +2% per zone, no cap
+
         # === ZONE-LEVEL UPDATES ===
         self.check_zone_threats(zone_key)
         self.check_raid_event(zone_key)
         self.check_cave_spawn_hostile(zone_key)
         self.check_night_skeleton_spawn(zone_key)
         self.check_termite_spawn(zone_key)
-        self.decay_dropped_items(zone_x, zone_y)
+        self.decay_dropped_items(zone_x, zone_y, _decay_factor)
+        self.decay_items_to_buried(zone_key, _decay_factor)
+        self.decay_buried_items(zone_key, _decay_factor)
         self.consolidate_dropped_items(zone_key)
+        self.consolidate_chests(zone_key)
         self.assign_zone_keepers(zone_key)
+        # Wolf pack check: ~0.5% per update or on the 600-tick sweep
+        if self.tick % 600 == 0 or random.random() < 0.005:
+            self.assign_wolf_pack_keepers(zone_key)
+
+        # === PER-ZONE RAIN ===
+        if not hasattr(self, 'zone_rain'):
+            self.zone_rain = {}
+        if zone_key not in self.zone_rain:
+            self.zone_rain[zone_key] = {
+                'is_raining': False,
+                'weather_timer': random.randint(0, RAIN_FREQUENCY_MAX),
+                'weather_cycle': random.randint(RAIN_FREQUENCY_MIN, RAIN_FREQUENCY_MAX),
+                'rain_timer': 0,
+                'rain_duration': 0,
+            }
+        _zr = self.zone_rain[zone_key]
+        _zr['weather_timer'] += 1
+        if _zr['weather_timer'] >= _zr['weather_cycle']:
+            _zr['weather_timer'] = 0
+            _zr['weather_cycle'] = random.randint(RAIN_FREQUENCY_MIN, RAIN_FREQUENCY_MAX)
+            _zr['is_raining'] = True
+            _zr['rain_duration'] = random.randint(RAIN_DURATION_MIN, RAIN_DURATION_MAX)
+            _zr['rain_timer'] = 0
+        if _zr['is_raining']:
+            _zr['rain_timer'] += 1
+            if _zr['rain_timer'] >= _zr['rain_duration']:
+                _zr['is_raining'] = False
+                _zr['rain_timer'] = 0
+        _zone_is_raining = _zr['is_raining']
 
         # === CELL UPDATES ===
-        if self.is_raining:
-            distance = abs(zone_x - self.player['screen_x']) + abs(zone_y - self.player['screen_y'])
-            if distance <= 2:
+        if _zone_is_raining:
+            time_passing = getattr(self, 'time_pass_active', False)
+            if time_passing or _dist_from_player <= 2:
                 self.apply_rain(zone_x, zone_y)
 
+        # apply_cellular_automata reads self.is_raining; use this zone's rain state
+        _saved_is_raining = self.is_raining
+        self.is_raining = _zone_is_raining
         self.apply_cellular_automata(zone_x, zone_y, cell_coverage)
+        self.is_raining = _saved_is_raining
 
         _tp = getattr(self, 'time_pass_speed', 1.0)
+        _biome = screen.get('biome', 'FOREST')
+        _biome_base_map = {'FOREST': 'GRASS', 'PLAINS': 'GRASS', 'DESERT': 'SAND',
+                           'MOUNTAINS': 'DIRT', 'TUNDRA': 'DIRT', 'SWAMP': 'DIRT'}
+        base_cell = _biome_base_map.get(_biome, 'GRASS')
+
+        # Count caves for elevated decay when zone is over-caved
+        cave_count = sum(1 for row in screen['grid'] for c in row if c == 'CAVE')
+        cave_decay_rate = 0.01 if cave_count > 2 else 0.0
 
         for y in range(1, GRID_HEIGHT - 1):
             for x in range(1, GRID_WIDTH - 1):
@@ -167,12 +345,28 @@ class ZonesMixin:
                     continue
 
                 cell = screen['grid'][y][x]
+
+                # Decay excess caves back to base cell
+                if cell == 'CAVE' and cave_decay_rate > 0 and random.random() < cave_decay_rate:
+                    screen['grid'][y][x] = base_cell
+                    continue
+
+                # Empty chest decay: chests with no contents revert to base cell
+                if cell == 'CHEST':
+                    chest_key = f"{zone_key}:{x},{y}"
+                    contents = self.chest_contents.get(chest_key, {})
+                    if not any(v > 0 for v in contents.values()):
+                        if random.random() < min(1.0, 0.003 * _tp):
+                            screen['grid'][y][x] = base_cell
+                            self.chest_contents.pop(chest_key, None)
+                    continue
+
                 if cell in CELL_TYPES:
                     cell_info = CELL_TYPES[cell]
 
                     if 'grows_to' in cell_info and random.random() < min(1.0, cell_info.get('growth_rate', 0) * _tp):
                         self.set_grid_cell(screen, x, y, cell_info['grows_to'])
-                    elif 'degrades_to' in cell_info and random.random() < min(1.0, cell_info.get('degrade_rate', 0) * _tp):
+                    elif 'degrades_to' in cell_info and random.random() < min(1.0, cell_info.get('degrade_rate', 0) * _tp * _decay_factor):
                         if cell == 'COBBLESTONE':
                             center_x = GRID_WIDTH // 2
                             center_y = GRID_HEIGHT // 2
@@ -216,20 +410,20 @@ class ZonesMixin:
         base_cell = biome_base_map.get(biome, 'GRASS')
 
         biome_native = {
-            'FOREST': {'GRASS', 'DIRT', 'TREE1', 'TREE2', 'FLOWER'},
-            'PLAINS': {'GRASS', 'DIRT', 'FLOWER'},
-            'DESERT': {'SAND', 'DIRT'},
+            'FOREST': {'GRASS', 'DIRT', 'TREE1', 'TREE2', 'FLOWER', 'BUSH'},
+            'PLAINS': {'GRASS', 'DIRT', 'FLOWER', 'BUSH'},
+            'DESERT': {'SAND', 'DIRT', 'BUSH'},
             'MOUNTAINS': {'DIRT', 'STONE', 'GRASS'},
             'TUNDRA': {'DIRT', 'STONE'},
-            'SWAMP': {'DIRT', 'WATER', 'GRASS'},
+            'SWAMP': {'DIRT', 'WATER', 'GRASS', 'BUSH'},
         }
         native_cells = biome_native.get(biome, {'GRASS', 'DIRT'})
 
         protected_cells = {'HOUSE', 'CAVE', 'MINESHAFT', 'CAMP', 'CHEST', 'WALL',
-                           'COBBLESTONE', 'WATER', 'DEEP_WATER', 'WOOD', 'PLANKS',
-                           'FLOOR_WOOD', 'CAVE_FLOOR', 'CAVE_WALL', 'STAIRS_UP',
+                           'COBBLESTONE', 'WATER', 'DEEP_WATER',
+                           'CAVE_FLOOR', 'CAVE_WALL', 'STAIRS_UP',
                            'STAIRS_DOWN', 'HIDDEN_CAVE', 'SOIL', 'CARROT1', 'CARROT2', 'CARROT3',
-                           'CLIFF', 'STONE_HOUSE'}
+                           'CLIFF', 'STONE_HOUSE', 'BUSH'}
 
         foreign_revert = {
             'DESERT': {'GRASS', 'TREE1', 'TREE2', 'FLOWER', 'DIRT'},
@@ -255,6 +449,11 @@ class ZonesMixin:
                     screen['grid'][y][x] = base_cell
                     continue
 
+                # Revert stray interior/placeable cells that shouldn't appear in overworld
+                if cell in ('WOOD', 'PLANKS', 'FLOOR_WOOD') and random.random() < 0.1:
+                    screen['grid'][y][x] = base_cell
+                    continue
+
                 if cell in native_cells and random.random() < 0.005:
                     dx, dy = random.choice([(1, 0), (-1, 0), (0, 1), (0, -1)])
                     nx, ny = x + dx, y + dy
@@ -262,6 +461,18 @@ class ZonesMixin:
                         neighbor = screen['grid'][ny][nx]
                         if neighbor not in protected_cells and neighbor not in native_cells:
                             screen['grid'][ny][nx] = cell
+
+        # Very sparse bush growth; rarer than trees, rarest in desert scrub
+        if biome in ('FOREST', 'PLAINS', 'SWAMP'):
+            for y in range(1, GRID_HEIGHT - 1):
+                for x in range(1, GRID_WIDTH - 1):
+                    if screen['grid'][y][x] == 'GRASS' and random.random() < min(1.0, 0.000005 * _tp):
+                        self.set_grid_cell(screen, x, y, 'BUSH')
+        elif biome == 'DESERT':
+            for y in range(1, GRID_HEIGHT - 1):
+                for x in range(1, GRID_WIDTH - 1):
+                    if screen['grid'][y][x] == 'SAND' and random.random() < min(1.0, 0.0000008 * _tp):
+                        self.set_grid_cell(screen, x, y, 'BUSH')
 
         # === ENTITY UPDATES ===
         if getattr(self, 'autopilot', False) and zone_key in self.screen_entities:
@@ -272,6 +483,9 @@ class ZonesMixin:
                         e.idle_timer = 0
                         e.is_idle = False
             self.inspected_npc = None
+
+        # Extra decay passes for distant zones: 1 extra per 4 zones beyond dist 8, cap 4
+        _extra_decay = max(0, min(4, (_dist_from_player - 8) // 4)) if _dist_from_player > 8 else 0
 
         if zone_key in self.screen_entities:
             entities_to_remove = []
@@ -306,7 +520,6 @@ class ZonesMixin:
                             if entity_id not in self.factions[new_faction]['warriors']:
                                 self.factions[new_faction]['warriors'].append(entity_id)
 
-                            print(f"{entity.name} defected from {old_faction} to {new_faction}!")
 
                 # Age entities every 600 ticks (accelerated during time pass)
                 age_interval = max(1, int(600 / _tp))
@@ -314,6 +527,16 @@ class ZonesMixin:
                     entity.age += 1
 
                 entity.decay_stats()
+                for _ in range(_extra_decay):
+                    entity.decay_stats()
+
+                # NPC item consumption: remove full stack of a random item
+                if random.random() < 0.25 and entity.inventory:
+                    item = random.choice(list(entity.inventory.keys()))
+                    count = entity.inventory.pop(item)
+                    if item in ('meat', 'carrot', 'cooked_meat', 'stew', 'bones'):
+                        if (self.tick - getattr(entity, 'last_attacked_tick', 0)) > 120:
+                            entity.health = min(entity.max_health, entity.health + 5 * min(count, 10))
 
                 # Skeletons burn in daylight
                 if entity.type == 'SKELETON' and not self.is_night:
@@ -340,7 +563,16 @@ class ZonesMixin:
                         if heal_boost > 1.0:
                             break
 
-                entity.regenerate_health(heal_boost)
+                # Regen health only if not recently attacked (120 ticks = ~2s)
+                if (self.tick - getattr(entity, 'last_attacked_tick', 0)) > 120:
+                    entity.regenerate_health(heal_boost)
+
+                # Energy regen: idle = +2/tick, stationary = +1/tick, moving = no regen
+                if hasattr(entity, 'energy') and entity.energy < entity.max_energy:
+                    if entity.ai_state == 'idle':
+                        entity.energy = min(entity.max_energy, entity.energy + 2)
+                    elif not entity.is_moving:
+                        entity.energy = min(entity.max_energy, entity.energy + 1)
 
                 if not entity.is_alive():
                     entities_to_remove.append(entity_id)
@@ -384,26 +616,46 @@ class ZonesMixin:
                                     for item_name, count in contents.items():
                                         entity.inventory[item_name] = entity.inventory.get(item_name, 0) + count
                                     self.chest_contents[chest_key] = {}
-                                    grid[cy][cx] = 'WOOD'
+                                    # Leave the chest cell — decay system will remove it quickly
                                 break
 
-                    # Inventory overflow: place chest if >10 unique item types
-                    if len(entity.inventory) > 10:
-                        ground_cells = {'GRASS', 'DIRT', 'SAND', 'FLOOR_WOOD', 'CAVE_FLOOR', 'COBBLESTONE'}
-                        for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
+                    # Fill a nearby existing chest when any item stack exceeds 100
+                    _inv_overflow = any(c > 20 for c in entity.inventory.values())
+                    if _inv_overflow and random.random() < 0.70:
+                        for dx, dy in [(0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)]:
                             cx, cy = ex + dx, ey + dy
                             if 0 <= cx < GRID_WIDTH and 0 <= cy < GRID_HEIGHT:
-                                cell = grid[cy][cx]
-                                if cell in ground_cells:
-                                    grid[cy][cx] = 'CHEST'
+                                if grid[cy][cx] == 'CHEST':
                                     chest_key = f"{zone_key}:{cx},{cy}"
-                                    items_list = list(entity.inventory.items())
-                                    half = len(items_list) // 2
-                                    chest_items = {n: c for n, c in items_list[:half]}
-                                    self.chest_contents[chest_key] = chest_items
-                                    for item_name in chest_items:
-                                        del entity.inventory[item_name]
+                                    if chest_key not in self.chest_contents:
+                                        self.chest_contents[chest_key] = {}
+                                    for item_name, count in list(entity.inventory.items()):
+                                        self.chest_contents[chest_key][item_name] = (
+                                            self.chest_contents[chest_key].get(item_name, 0) + count
+                                        )
+                                    entity.inventory.clear()
                                     break
+
+                    # Place a new chest only if no chest within 5 cells
+                    _inv_overflow = any(c > 20 for c in entity.inventory.values())
+                    if _inv_overflow and random.random() < 0.60:
+                        _chest_nearby = any(
+                            grid[ny][nx] == 'CHEST'
+                            for nx in range(max(0, ex - 5), min(GRID_WIDTH, ex + 6))
+                            for ny in range(max(0, ey - 5), min(GRID_HEIGHT, ey + 6))
+                        )
+                        if not _chest_nearby:
+                            ground_cells = {'GRASS', 'DIRT', 'SAND', 'FLOOR_WOOD', 'CAVE_FLOOR', 'COBBLESTONE'}
+                            for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
+                                cx, cy = ex + dx, ey + dy
+                                if 0 <= cx < GRID_WIDTH and 0 <= cy < GRID_HEIGHT:
+                                    cell = grid[cy][cx]
+                                    if cell in ground_cells:
+                                        grid[cy][cx] = 'CHEST'
+                                        chest_key = f"{zone_key}:{cx},{cy}"
+                                        self.chest_contents[chest_key] = dict(entity.inventory)
+                                        entity.inventory.clear()
+                                        break
 
         # Entity consolidation: when >2 of same base type, merge pairs into _double
         if zone_key in self.screen_entities and self.tick % 300 == 0:
@@ -457,7 +709,6 @@ class ZonesMixin:
                         self.factions[new_faction] = {'warriors': [], 'zones': set()}
                     if warrior_id not in self.factions[new_faction]['warriors']:
                         self.factions[new_faction]['warriors'].append(warrior_id)
-                print(f"ZONE REVOLUTION in [{zone_key}]! {len(warriors_in_zone)} warriors formed {new_faction} faction!")
 
         # Faction raid: 0.1% chance for raid on high-population zones
         if zone_key in self.screen_entities and random.random() < 0.001:
@@ -499,7 +750,7 @@ class ZonesMixin:
                                 raiders_spawned += 1
 
                     if raiders_spawned > 0:
-                        print(f"FACTION RAID in [{zone_key}]! {raiders_spawned} {raiding_faction} warriors invade!")
+                        pass  # raid initiated
 
         # Population maintenance (every 5 seconds)
         if not hasattr(self, 'zone_last_spawn_check'):
@@ -528,22 +779,20 @@ class ZonesMixin:
             else:
                 spawn_chance = 0.05
 
+            # Reduce spawn rate for distant zones: -3% per zone of distance, floor 0
+            _spawn_dist = abs(zone_x - self.player['screen_x']) + abs(zone_y - self.player['screen_y'])
+            spawn_chance *= max(0.0, 1.0 - _spawn_dist * 0.03)
+
             if random.random() < spawn_chance:
                 biome = screen.get('biome', 'FOREST')
                 spawned = False
                 if 'TRADER' not in types_in_zone:
                     spawned = self.spawn_single_entity_at_entrance(zone_x, zone_y, biome, force_type='TRADER')
-                    if spawned:
-                        print(f"[SPAWN] TRADER spawned in [{zone_key}] (pop: {npc_count})")
                 elif 'GUARD' not in types_in_zone:
                     spawned = self.spawn_single_entity_at_entrance(zone_x, zone_y, biome, force_type='GUARD')
-                    if spawned:
-                        print(f"[SPAWN] GUARD spawned in [{zone_key}] (pop: {npc_count})")
 
                 if not spawned:
                     spawned = self.spawn_single_entity_at_entrance(zone_x, zone_y, biome)
-                    if spawned:
-                        print(f"[SPAWN] Entity spawned in [{zone_key}] (pop: {npc_count})")
 
             # NPC role conversion / settlement
             if zone_key in self.screen_entities:
@@ -575,7 +824,6 @@ class ZonesMixin:
                         if t1.can_merge_with(t2):
                             t1.merge_with(t2)
                             del self.entities[t2_id]
-                            print(f"Two traders merged into {t1.type} at [{zone_key}]")
 
                     if len(guards) > 2:
                         g1_id, g1 = guards[0]
@@ -583,43 +831,63 @@ class ZonesMixin:
                         if g1.can_merge_with(g2):
                             g1.merge_with(g2)
                             del self.entities[g2_id]
-                            print(f"Two guards merged into {g1.type} at [{zone_key}]")
 
                     if traders:
                         trader_id, trader = random.choice(traders)
+                        new_trader_type = None
                         if not has_farmer and random.random() < 0.5:
-                            old_name = trader.name
-                            trader.type = 'FARMER'
-                            trader.props = ENTITY_TYPES['FARMER']
-                            print(f"{old_name} (Trader) settled as a farmer at [{zone_key}]")
+                            new_trader_type = 'FARMER'
                         elif not has_lumberjack and random.random() < 0.5:
-                            old_name = trader.name
-                            trader.type = 'LUMBERJACK'
-                            trader.props = ENTITY_TYPES['LUMBERJACK']
-                            print(f"{old_name} (Trader) settled as a lumberjack at [{zone_key}]")
+                            new_trader_type = 'LUMBERJACK'
                         elif not has_miner:
-                            old_name = trader.name
-                            trader.type = 'MINER'
-                            trader.props = ENTITY_TYPES['MINER']
-                            print(f"{old_name} (Trader) settled as a miner at [{zone_key}]")
+                            new_trader_type = 'MINER'
+                        if new_trader_type:
+                            trader.type = new_trader_type
+                            trader.props = ENTITY_TYPES[new_trader_type]
+                            if hasattr(trader, 'quest_queue'):
+                                del trader.quest_queue
+                            trader.quest_focus = None
+                            trader.quest_target = None
 
                     if guards:
                         guard_id, guard = random.choice(guards)
+                        new_guard_type = None
                         if not has_farmer and random.random() < 0.5:
-                            old_name = guard.name
-                            guard.type = 'FARMER'
-                            guard.props = ENTITY_TYPES['FARMER']
-                            print(f"{old_name} (Guard) settled as a farmer at [{zone_key}]")
+                            new_guard_type = 'FARMER'
                         elif not has_miner and random.random() < 0.5:
-                            old_name = guard.name
-                            guard.type = 'MINER'
-                            guard.props = ENTITY_TYPES['MINER']
-                            print(f"{old_name} (Guard) settled as a miner at [{zone_key}]")
+                            new_guard_type = 'MINER'
+                        if new_guard_type:
+                            guard.type = new_guard_type
+                            guard.props = ENTITY_TYPES[new_guard_type]
+                            if hasattr(guard, 'quest_queue'):
+                                del guard.quest_queue
+                            guard.quest_focus = None
+                            guard.quest_target = None
 
             if self.tick % 600 == 0:
                 self.promote_to_commander(zone_key)
                 self.promote_to_king()
                 self.recruit_to_hostile_faction(zone_key)
+
+        # Prune empty distant zones: no alive entities, no structures, no items → delete.
+        if _dist_from_player > 4:
+            _has_alive = any(
+                eid in self.entities and self.entities[eid].health > 0
+                for eid in self.screen_entities.get(zone_key, [])
+            )
+            if not _has_alive:
+                _struct_cells = {'HOUSE', 'STONE_HOUSE', 'CAVE', 'MINESHAFT',
+                                 'CHEST', 'BARREL', 'CAMP', 'WELL', 'FORGE'}
+                _has_structures = any(
+                    cell in _struct_cells
+                    for row in screen['grid']
+                    for cell in row
+                )
+                if not _has_structures:
+                    _has_drops = any(self.dropped_items.get(zone_key, {}).values())
+                    _has_buried = any(getattr(self, 'buried_items', {}).get(zone_key, {}).values())
+                    if not _has_drops and not _has_buried:
+                        self._purge_zone(zone_key)
 
     def update_structure_zone(self, struct_zone_key, cell_coverage, entity_coverage):
         """Update a structure zone (cave/house interior) like a regular zone."""
@@ -640,6 +908,7 @@ class ZonesMixin:
                         self.set_grid_cell(screen, x, y, cell_info['grows_to'])
                     elif 'degrades_to' in cell_info and random.random() < cell_info.get('degrade_rate', 0):
                         self.set_grid_cell(screen, x, y, cell_info['degrades_to'])
+        self.check_raid_event(struct_zone_key)
 
         entity_list = self.screen_entities.get(struct_zone_key, [])
         if not entity_list:
@@ -653,14 +922,32 @@ class ZonesMixin:
                         e.idle_timer = 0
                         e.is_idle = False
 
+        _tp = getattr(self, 'time_pass_speed', 1.0)
+        _age_interval = max(1, int(600 / _tp))
+
         entities_to_remove = []
         for entity_id in list(entity_list):
             if entity_id not in self.entities:
                 continue
 
             entity = self.entities[entity_id]
+
+            # Age increment (mirrors overworld logic so structure entities age too)
+            if self.tick % _age_interval == 0 and entity.type != 'SKELETON':
+                entity.age += 1
+
             entity.decay_stats()
-            entity.regenerate_health(1.0)
+
+            # Item consumption (same rate as overworld)
+            if random.random() < 0.10 and entity.inventory:
+                _item = random.choice(list(entity.inventory.keys()))
+                _count = entity.inventory.pop(_item)
+                if _item in ('meat', 'carrot', 'cooked_meat', 'stew', 'bones'):
+                    if (self.tick - getattr(entity, 'last_attacked_tick', 0)) > 120:
+                        entity.health = min(entity.max_health, entity.health + 5 * min(_count, 10))
+
+            if (self.tick - getattr(entity, 'last_attacked_tick', 0)) > 120:
+                entity.regenerate_health(1.0)
 
             if not entity.is_alive():
                 entities_to_remove.append(entity_id)
@@ -701,18 +988,42 @@ class ZonesMixin:
                 )
 
                 if random.random() < 0.20:
-                    hostile_count = random.randint(1, 2)
-                    hostile_type = random.choice(['GOBLIN', 'BANDIT', 'WOLF'])
+                    hostile_count = random.randint(2, max(2, human_count))
+                    hostile_type = random.choice(['GOBLIN', 'BANDIT', 'WOLF', 'BLACK_SPIDER', 'SKELETON', 'TERMITE'])
+
+                    # Build entrance positions: zone edges + adjacent to cave/mineshaft cells
+                    _cx = GRID_WIDTH // 2
+                    _cy = GRID_HEIGHT // 2
+                    _raid_positions = []
+                    if screen['exits'].get('top'):
+                        _raid_positions += [(x, 1) for x in range(_cx - 1, _cx + 2)]
+                    if screen['exits'].get('bottom'):
+                        _raid_positions += [(x, GRID_HEIGHT - 2) for x in range(_cx - 1, _cx + 2)]
+                    if screen['exits'].get('left'):
+                        _raid_positions += [(1, y) for y in range(_cy - 1, _cy + 2)]
+                    if screen['exits'].get('right'):
+                        _raid_positions += [(GRID_WIDTH - 2, y) for y in range(_cy - 1, _cy + 2)]
+                    # Also allow spawning adjacent to cave/mineshaft entrances
+                    for _gy in range(GRID_HEIGHT):
+                        for _gx in range(GRID_WIDTH):
+                            if screen['grid'][_gy][_gx] in ('CAVE', 'HIDDEN_CAVE', 'MINESHAFT'):
+                                for _dx, _dy in ((-1,0),(1,0),(0,-1),(0,1)):
+                                    _nx, _ny = _gx + _dx, _gy + _dy
+                                    if 0 < _nx < GRID_WIDTH - 1 and 0 < _ny < GRID_HEIGHT - 1:
+                                        _raid_positions.append((_nx, _ny))
+                    if not _raid_positions:
+                        _raid_positions = [(_cx, _cy)]
 
                     for _ in range(hostile_count):
-                        spawn_x = random.randint(3, GRID_WIDTH - 4)
-                        spawn_y = random.randint(3, GRID_HEIGHT - 4)
-                        if not CELL_TYPES[screen['grid'][spawn_y][spawn_x]].get('solid', False):
-                            entity = Entity(hostile_type, spawn_x, spawn_y, screen_x, screen_y, level=1)
-                            entity_id = self.next_entity_id
-                            self.next_entity_id += 1
-                            self.entities[entity_id] = entity
-                            self.screen_entities[screen_key].append(entity_id)
+                        for _attempt in range(15):
+                            spawn_x, spawn_y = random.choice(_raid_positions)
+                            if not CELL_TYPES[screen['grid'][spawn_y][spawn_x]].get('solid', False):
+                                entity = Entity(hostile_type, spawn_x, spawn_y, screen_x, screen_y, level=1)
+                                entity_id = self.next_entity_id
+                                self.next_entity_id += 1
+                                self.entities[entity_id] = entity
+                                self.screen_entities[screen_key].append(entity_id)
+                                break
 
                     # Kill a low-level NPC (simulate raid casualty)
                     lowest_entity = None
@@ -727,11 +1038,8 @@ class ZonesMixin:
                         self.remove_entity(lowest_entity)
 
                     if not has_cave:
-                        cave_x = random.randint(2, GRID_WIDTH - 3)
-                        cave_y = random.randint(2, GRID_HEIGHT - 3)
-                        screen['grid'][cave_y][cave_x] = 'CAVE'
+                        self.spawn_hidden_cave(screen_key)
 
-                    print(f"Catch-up: Raid event simulated in [{screen_key}] - {hostile_count} {hostile_type}(s) spawned")
 
         # Faction simulation for warriors during catch-up
         if cycles > 10:
@@ -760,7 +1068,6 @@ class ZonesMixin:
                     else:
                         casualty_id, casualty = random.choice(faction_groups[faction2])
                     self.remove_entity(casualty_id)
-                    print(f"Catch-up: Faction war in [{screen_key}] - {casualty.name} ({casualty.faction}) killed")
 
         entities_to_remove = []
         entities_to_transition = []
@@ -799,8 +1106,9 @@ class ZonesMixin:
                             has_water = True
 
             for cycle_num in range(cycles):
-                entity.hunger = max(0, entity.hunger - 0.5)
-                entity.thirst = max(0, entity.thirst - 0.3)
+                if not getattr(entity, 'keeper', False):
+                    entity.hunger = max(0, entity.hunger - 0.5)
+                    entity.thirst = max(0, entity.thirst - 0.3)
 
                 if cycle_num % 2 == 0:
                     behavior_config = entity.props.get('behavior_config')
@@ -852,7 +1160,8 @@ class ZonesMixin:
                         if heal_boost > 1.0:
                             break
 
-                entity.regenerate_health(heal_boost)
+                if (self.tick - getattr(entity, 'last_attacked_tick', 0)) > 120:
+                    entity.regenerate_health(heal_boost)
 
                 if entity.hunger <= 0:
                     entity.health -= 1
@@ -980,6 +1289,7 @@ class ZonesMixin:
 
     def on_zone_transition(self, new_screen_x, new_screen_y):
         """When player enters new zone, catch up nearby zones"""
+        self.gain_xp(1)
         new_key = f"{new_screen_x},{new_screen_y}"
         if new_key in self.screen_last_update:
             cycles = (self.tick - self.screen_last_update[new_key]) // 60
@@ -1013,12 +1323,16 @@ class ZonesMixin:
     # -------------------------------------------------------------------------
 
     def calculate_zone_priority(self, zone_key):
-        """Calculate priority score for a zone. Higher = update sooner."""
+        """Calculate priority score for a zone. Higher = update sooner.
+
+        All positional scores are expressed as fractions of total_zones so
+        the current zone always tops the queue regardless of world size.
+        Staleness is uncapped so every zone eventually gets updated.
+        """
         player_x = self.player['screen_x']
         player_y = self.player['screen_y']
         player_zone = f"{player_x},{player_y}"
-
-        # player screen_x/y already reflects virtual coords in structure zones — no special case needed
+        total_zones = max(1, len(self.screens))
 
         if self.is_overworld_zone(zone_key):
             parts = zone_key.split(',')
@@ -1033,45 +1347,43 @@ class ZonesMixin:
             else:
                 distance = 50
 
+        # Distance score as % of total_zones: current zone = 100%, falls off with distance
         if zone_key == player_zone:
-            distance_score = 100.0
+            distance_score = total_zones * 1.0
         elif distance == 0:
-            distance_score = 90.0
-        elif distance <= 1:
-            distance_score = 50.0
-        elif distance <= 2:
-            distance_score = 25.0
-        elif distance <= 3:
-            distance_score = 10.0
+            distance_score = total_zones * 0.9   # same-coord structure zone
         else:
-            distance_score = max(1.0, 5.0 / distance)
+            distance_score = total_zones * (0.5 / distance)
 
+        # Uncapped staleness — zones that haven't been updated keep climbing
+        # until they get processed, guaranteeing rotation across all zones
         last_update = self.screen_last_update.get(zone_key, 0)
-        staleness_ticks = self.tick - last_update
-        staleness_score = min(30.0, staleness_ticks / 60.0)
+        staleness_score = (self.tick - last_update) / 30.0
 
+        # Connection score as % of total_zones
         connection_score = 0.0
         if zone_key in self.zone_connections:
             for connected_key, conn_type, *_ in self.zone_connections[zone_key]:
                 if connected_key == player_zone:
-                    connection_score = 40.0
+                    connection_score = total_zones * 0.4
                     break
                 if self.is_overworld_zone(connected_key):
                     cp = connected_key.split(',')
                     cd = abs(int(cp[0]) - player_x) + abs(int(cp[1]) - player_y)
                     if cd <= 1:
-                        connection_score = max(connection_score, 20.0)
+                        connection_score = max(connection_score, total_zones * 0.2)
 
+        # Structure and quest scores as % of total_zones
         structure_score = 0.0
         if zone_key in self.structure_zones:
-            structure_score = 15.0
+            structure_score = total_zones * 0.15
         elif zone_key in self.zone_structures:
-            structure_score = 5.0
+            structure_score = total_zones * 0.05
 
         quest_score = 0.0
         for quest_type, quest in self.quests.items():
             if hasattr(quest, 'target_zone') and quest.target_zone == zone_key:
-                quest_score = 20.0
+                quest_score = total_zones * 0.2
                 break
 
         return distance_score + staleness_score + connection_score + structure_score + quest_score
@@ -1195,7 +1507,307 @@ class ZonesMixin:
 
         if new_biome != current_biome:
             screen['biome'] = new_biome
-            print(f"Zone [{screen_x},{screen_y}] biome shifted: {current_biome} → {new_biome}")
+            screen['biome_domain_id'] = None  # Removed from old domain; will be reassigned
+            self.update_biome_domain(key)
+
+    # -------------------------------------------------------------------------
+    # Domain management
+    # -------------------------------------------------------------------------
+
+    def _new_domain_id(self):
+        self._domain_counter += 1
+        return self._domain_counter
+
+    def update_biome_domain(self, zone_key):
+        """Assign or merge biome domain for zone_key after a biome change.
+
+        Called when a zone's biome shifts. Removes the zone from any prior biome
+        domain, checks cardinal neighbors for same-biome zones, and merges or
+        creates domains accordingly. Triggers contiguity split check on any domain
+        the zone just left.
+        """
+        if zone_key not in self.screens:
+            return
+
+        screen = self.screens[zone_key]
+        biome = screen.get('biome')
+
+        # --- Leave old domain ---
+        old_domain_id = screen.get('biome_domain_id')
+        if old_domain_id and old_domain_id in self.domains:
+            old_domain = self.domains[old_domain_id]
+            old_domain['zones'].discard(zone_key)
+            if len(old_domain['zones']) == 0:
+                del self.domains[old_domain_id]
+            elif len(old_domain['zones']) == 1:
+                # Shrank to one zone — re-roll its name
+                remaining_key = next(iter(old_domain['zones']))
+                if remaining_key in self.screens:
+                    new_name = self.generate_zone_name(self.screens[remaining_key].get('biome', 'FOREST'))
+                    old_domain['name'] = new_name
+                    self.screens[remaining_key]['name'] = new_name
+            else:
+                self._check_biome_domain_contiguity(old_domain_id)
+        screen['biome_domain_id'] = None
+
+        # --- Find adjacent same-biome zones connected by a shared exit ---
+        # exit_pairs: (dx, dy, my_exit_key, their_exit_key)
+        exit_pairs = [
+            (-1,  0, 'left',   'right'),
+            ( 1,  0, 'right',  'left'),
+            ( 0, -1, 'top',    'bottom'),
+            ( 0,  1, 'bottom', 'top'),
+        ]
+        sx, sy = map(int, zone_key.split(','))
+        my_exits = screen.get('exits', {})
+        neighbor_domain_ids = set()
+        domainless_neighbors = []  # same-biome neighbors not yet in any domain
+        for dx, dy, my_exit, their_exit in exit_pairs:
+            nkey = f"{sx+dx},{sy+dy}"
+            if nkey not in self.screens:
+                continue
+            # Only merge zones connected by an actual open exit in both directions
+            if not my_exits.get(my_exit):
+                continue
+            nbr = self.screens[nkey]
+            if not nbr.get('exits', {}).get(their_exit):
+                continue
+            if nbr.get('biome') == biome:
+                did = nbr.get('biome_domain_id')
+                if did:
+                    neighbor_domain_ids.add(did)
+                else:
+                    domainless_neighbors.append(nkey)
+
+        if not neighbor_domain_ids and not domainless_neighbors:
+            # Truly isolated — create a single-zone domain so future neighbors can find it
+            new_id = self._new_domain_id()
+            self.domains[new_id] = {
+                'name': screen.get('name', self.generate_zone_name(biome)),
+                'type': 'biome',
+                'biome': biome,
+                'faction': None,
+                'zones': {zone_key},
+            }
+            screen['biome_domain_id'] = new_id
+            return
+
+        # --- Pick or create the surviving domain ---
+        surviving_id = None
+        if neighbor_domain_ids:
+            candidate = max(
+                neighbor_domain_ids,
+                key=lambda d: (len(self.domains[d]['zones']), random.random()) if d in self.domains else (0, 0)
+            )
+            if candidate in self.domains:
+                surviving_id = candidate
+
+        if surviving_id is None:
+            # No valid existing domain — create one named after this zone
+            surviving_id = self._new_domain_id()
+            self.domains[surviving_id] = {
+                'name': screen.get('name', self.generate_zone_name(biome)),
+                'type': 'biome',
+                'biome': biome,
+                'faction': None,
+                'zones': set(),
+            }
+
+        surviving_domain = self.domains[surviving_id]
+
+        # Absorb all other touching domains
+        for other_id in neighbor_domain_ids:
+            if other_id == surviving_id or other_id not in self.domains:
+                continue
+            other_domain = self.domains[other_id]
+            for zk in list(other_domain['zones']):
+                surviving_domain['zones'].add(zk)
+                if zk in self.screens:
+                    self.screens[zk]['biome_domain_id'] = surviving_id
+                    self.screens[zk]['name'] = surviving_domain['name']
+            del self.domains[other_id]
+
+        # Pull in domainless same-biome neighbors
+        for nkey in domainless_neighbors:
+            surviving_domain['zones'].add(nkey)
+            if nkey in self.screens:
+                self.screens[nkey]['biome_domain_id'] = surviving_id
+                self.screens[nkey]['name'] = surviving_domain['name']
+
+        # Add this zone to the surviving domain
+        surviving_domain['zones'].add(zone_key)
+        screen['biome_domain_id'] = surviving_id
+        screen['name'] = surviving_domain['name']
+
+    def _check_biome_domain_contiguity(self, domain_id):
+        """BFS check: if a domain has split into disconnected fragments, split it.
+
+        Assigns directional modifiers (North/South/East/West) to fragments based
+        on their centroid position relative to each other.
+        """
+        if domain_id not in self.domains:
+            return
+        domain = self.domains[domain_id]
+        all_zones = set(domain['zones'])
+        if len(all_zones) <= 1:
+            return
+
+        # BFS to find connected fragments
+        visited = set()
+        fragments = []
+        for start in list(all_zones):
+            if start in visited:
+                continue
+            fragment = set()
+            queue = [start]
+            while queue:
+                zk = queue.pop()
+                if zk in visited:
+                    continue
+                visited.add(zk)
+                if zk not in all_zones:
+                    continue
+                fragment.add(zk)
+                sx, sy = map(int, zk.split(','))
+                zdata = self.screens.get(zk, {})
+                z_exits = zdata.get('exits', {})
+                exit_pairs = [
+                    (-1,  0, 'left',   'right'),
+                    ( 1,  0, 'right',  'left'),
+                    ( 0, -1, 'top',    'bottom'),
+                    ( 0,  1, 'bottom', 'top'),
+                ]
+                for dx, dy, my_exit, their_exit in exit_pairs:
+                    nk = f"{sx+dx},{sy+dy}"
+                    if nk not in all_zones or nk in visited:
+                        continue
+                    if not z_exits.get(my_exit):
+                        continue
+                    nbr_exits = self.screens.get(nk, {}).get('exits', {})
+                    if not nbr_exits.get(their_exit):
+                        continue
+                    queue.append(nk)
+            fragments.append(fragment)
+
+        if len(fragments) <= 1:
+            return  # Still contiguous
+
+        base_name = domain['name']
+        DIRECTION_MODIFIERS = ['North', 'South', 'East', 'West', 'Old', 'New', 'Inner', 'Outer']
+
+        # Sort fragments by centroid (north-to-south then west-to-east)
+        def centroid(frag):
+            coords = [list(map(int, k.split(','))) for k in frag]
+            return (sum(c[1] for c in coords) / len(coords), sum(c[0] for c in coords) / len(coords))
+
+        fragments.sort(key=centroid)
+
+        for i, fragment in enumerate(fragments):
+            if i == 0:
+                # Largest/primary fragment keeps the domain id
+                domain['zones'] = fragment
+                for zk in fragment:
+                    if zk in self.screens:
+                        self.screens[zk]['biome_domain_id'] = domain_id
+            else:
+                # New domain for each additional fragment
+                modifier = DIRECTION_MODIFIERS[i] if i < len(DIRECTION_MODIFIERS) else str(i)
+                new_id = self._new_domain_id()
+                new_name = f"{modifier} {base_name}"
+                self.domains[new_id] = {
+                    'name': new_name,
+                    'type': 'biome',
+                    'biome': domain['biome'],
+                    'faction': None,
+                    'zones': fragment,
+                }
+                for zk in fragment:
+                    if zk in self.screens:
+                        self.screens[zk]['biome_domain_id'] = new_id
+                        self.screens[zk]['name'] = new_name
+
+    def update_faction_domain(self, faction_name):
+        """Rebuild the faction domain for faction_name from scratch.
+
+        Called when a zone changes faction control. Finds all zones controlled
+        by this faction, groups them into contiguous sets, and creates/updates
+        faction domains accordingly. Faction domain name = faction_name + first zone name.
+        """
+        # Collect all zones controlled by this faction
+        controlled = set()
+        for zk, screen in self.screens.items():
+            if screen.get('controlling_faction') == faction_name:
+                controlled.add(zk)
+
+        # Remove old faction domain entries for this faction
+        old_ids = [did for did, d in self.domains.items()
+                   if d['type'] == 'faction' and d['faction'] == faction_name]
+        for old_id in old_ids:
+            for zk in self.domains[old_id]['zones']:
+                if zk in self.screens:
+                    self.screens[zk]['faction_domain_id'] = None
+            del self.domains[old_id]
+
+        if not controlled:
+            return
+
+        # BFS to find contiguous groups
+        visited = set()
+        fragments = []
+        for start in list(controlled):
+            if start in visited:
+                continue
+            fragment = set()
+            queue = [start]
+            while queue:
+                zk = queue.pop()
+                if zk in visited:
+                    continue
+                visited.add(zk)
+                if zk not in controlled:
+                    continue
+                fragment.add(zk)
+                sx, sy = map(int, zk.split(','))
+                for nx, ny in [(sx, sy-1), (sx, sy+1), (sx-1, sy), (sx+1, sy)]:
+                    nk = f"{nx},{ny}"
+                    if nk in controlled and nk not in visited:
+                        queue.append(nk)
+            fragments.append(fragment)
+
+        for fragment in fragments:
+            new_id = self._new_domain_id()
+            # Use the name of the first zone in the fragment as the domain root name
+            sample_key = next(iter(fragment))
+            zone_name = self.screens[sample_key].get('name', sample_key) if sample_key in self.screens else sample_key
+            domain_name = f"{faction_name} {zone_name}"
+            self.domains[new_id] = {
+                'name': domain_name,
+                'type': 'faction',
+                'biome': None,
+                'faction': faction_name,
+                'zones': fragment,
+            }
+            for zk in fragment:
+                if zk in self.screens:
+                    self.screens[zk]['faction_domain_id'] = new_id
+
+    def get_zone_domain_id(self, zone_key, domain_type='biome'):
+        """Return the domain ID for a zone. domain_type: 'biome' or 'faction'."""
+        if zone_key not in self.screens:
+            return None
+        field = 'biome_domain_id' if domain_type == 'biome' else 'faction_domain_id'
+        return self.screens[zone_key].get(field)
+
+    def is_same_domain(self, zone_key_a, zone_key_b):
+        """True if both zones share any domain (biome or faction)."""
+        if zone_key_a == zone_key_b:
+            return True
+        for field in ('biome_domain_id', 'faction_domain_id'):
+            da = self.screens.get(zone_key_a, {}).get(field)
+            db = self.screens.get(zone_key_b, {}).get(field)
+            if da and da == db:
+                return True
+        return False
 
     def is_near_structure(self, x, y, screen_key):
         """Check if cell is near HOUSE/CAMP (within 2 cells)"""
@@ -1351,7 +1963,98 @@ class ZonesMixin:
             if ktype in keepers:
                 continue  # Slot already occupied
 
-            if random.random() < KEEPER_ASSIGNMENT_RATE:
-                entity.keeper = True
-                keepers[ktype] = eid
-                print(f"[Keeper] {entity.type} (id={eid}) assigned as {ktype} keeper in {zone_key}")
+            # In non-structure zones the first entity of each type is immediately
+            # assigned keeper — no probability roll needed.
+            # Structure zones use the slower probabilistic rate.
+            is_structure_zone = zone_key in self.structure_zones
+            if is_structure_zone:
+                if random.random() >= KEEPER_ASSIGNMENT_RATE:
+                    continue
+            entity.keeper = True
+            keepers[ktype] = eid
+            # Assign patrol type and target position
+            entity.keeper_type = KEEPER_TYPE_BY_ENTITY.get(entity.type, 3)
+            if entity.keeper_type < 3:
+                entity.keeper_target_pos = self._find_keeper_target(zone_key)
+
+    def _find_keeper_target(self, zone_key):
+        """Return (grid_x, grid_y) for a keeper's anchor point in zone_key.
+
+        Priority:
+        1. First WELL cell found in the zone grid
+        2. First structure entrance cell (DOOR, STAIRS_DOWN) found
+        3. Zone center as fallback
+        """
+        screen = self.screens.get(zone_key)
+        if screen:
+            grid = screen.get('grid', [])
+            target_cells = {'WELL', 'DOOR', 'STAIRS_DOWN'}
+            for y, row in enumerate(grid):
+                for x, cell in enumerate(row):
+                    if cell in target_cells:
+                        return (x, y)
+        # Fallback: zone center
+        return (GRID_WIDTH // 2, GRID_HEIGHT // 2)
+
+    _WOLF_TYPES = frozenset(('WOLF', 'WOLF_double'))
+
+    def assign_wolf_pack_keepers(self, zone_key):
+        """Form or refresh wolf pack hierarchy in zone_key.
+
+        The strongest wolf (highest level, oldest as tiebreak) becomes the pack
+        leader and roams freely.  All other wolves become keepers tracking the
+        leader so they follow it when it crosses zones.  Called occasionally
+        from the zone update loop (~0.5% per update or every 600 ticks).
+        """
+        wolf_ids = [
+            eid for eid in self.screen_entities.get(zone_key, [])
+            if eid in self.entities
+            and self.entities[eid].health > 0
+            and self.entities[eid].type in self._WOLF_TYPES
+            and eid not in self.followers
+        ]
+
+        if len(wolf_ids) < 2:
+            # Single wolf or empty — clear any stale follower flags
+            for eid in wolf_ids:
+                e = self.entities[eid]
+                if getattr(e, '_wolf_follower', False):
+                    e.keeper = False
+                    e.keeper_type = None
+                    e.keeper_target = None
+                    e.keeper_target_pos = None
+                    e._wolf_follower = False
+            return
+
+        # Pick leader: highest level, then oldest (highest age) as tiebreak
+        def _leader_key(eid):
+            e = self.entities[eid]
+            return (getattr(e, 'level', 1), getattr(e, 'age', 0))
+
+        leader_id = max(wolf_ids, key=_leader_key)
+        leader = self.entities[leader_id]
+
+        # Leader roams freely — not a keeper, can cross zones at high travel rate
+        leader.keeper = False
+        leader.keeper_type = None
+        leader.keeper_target = None
+        leader.keeper_target_pos = None
+        leader._wolf_leader = True
+        leader._wolf_follower = False
+
+        # Followers: keepers that track the leader across zones
+        for eid in wolf_ids:
+            if eid == leader_id:
+                continue
+            follower = self.entities[eid]
+            follower.keeper = True
+            follower._wolf_follower = True
+            follower._wolf_leader = False
+            follower.keeper_target = {
+                'type': 'entity',
+                'ref': leader_id,
+                'pos': (leader.x, leader.y),
+                'screen': (leader.screen_x, leader.screen_y),
+            }
+            follower.keeper_target_pos = (leader.x, leader.y)
+            follower.keeper_type = 2  # Within 5 cells of leader

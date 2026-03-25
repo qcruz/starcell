@@ -77,10 +77,15 @@ HOSTILE_FACTION_SYMBOLS = ['Fang', 'Claw', 'Knife', 'Death', 'Hunger', 'Blade', 
 # ============================================================================
 
 # Weather System
-RAIN_FREQUENCY_MIN = 1800   # Minimum ticks between rain (~30 s at 60 FPS)
-RAIN_FREQUENCY_MAX = 18000  # Maximum ticks between rain (~5 min at 60 FPS)
-RAIN_DURATION_MIN = 10    # Minimum rain duration (5 seconds)
-RAIN_DURATION_MAX = 60    # Maximum rain duration (15 seconds)
+# weather_timer increments once per update_weather() call (every UPDATE_FREQUENCY=30 ticks
+# during normal play; every tick during time-pass). So RAIN_FREQUENCY_* are in
+# update_weather call-counts, not raw ticks.
+# Normal play: MIN=120 → ~1 min between rains; MAX=600 → ~5 min between rains.
+# Time-pass (600 sim ticks, no gate): MIN=120 → rain fires ~4-5 times during sim.
+RAIN_FREQUENCY_MIN = 120    # minimum zone updates between rains (per zone)
+RAIN_FREQUENCY_MAX = 2000   # maximum zone updates between rains — long drought periods possible
+RAIN_DURATION_MIN = 30      # rain lasts ≥30 zone updates
+RAIN_DURATION_MAX = 180     # rain lasts ≤180 zone updates
 RAIN_WATER_SPAWNS = 5      # Water cells created per rain tick per screen
 RAIN_GRASS_SPAWNS = 8      # Dirt→Grass conversions per rain tick
 
@@ -93,18 +98,26 @@ NIGHT_OVERLAY_ALPHA = 40  # Darkness overlay opacity (0-255, subtle at 40)
 QUEST_COOLDOWN = 300      # Ticks before new quest target assigned after completion (5 seconds)
 QUEST_XP_MULTIPLIER = 10  # XP reward = target_level × this value
 
+# ── Global CA base rate ────────────────────────────────────────────────────────
+# Central reference for all growth/decay probabilities per tick.
+# Future rules should be expressed as multiples of this (e.g. 0.5 * BASE_DECAY_RATE).
+# Existing rates will be migrated to use this reference incrementally.
+BASE_DECAY_RATE = 0.001         # ~0.1% per tick baseline; tune this to shift all derived rules
+
 # Cell Growth & Decay Rates (probability per tick) - SLOWED for subtle changes
 GRASS_TO_DIRT_RATE = 0.00001    # Grass decays to dirt without water (was 0.0001)
 DIRT_TO_SAND_RATE = 0.000005    # Dirt becomes sand in severe drought (was 0.00005)
 DIRT_TO_GRASS_RATE = 0.0001     # Dirt becomes grass with water (was 0.0005)
 TREE_GROWTH_RATE = 0.0001       # Grass becomes tree (increased to offset crowding decay)
 TREE_DECAY_RATE = 0.0005        # Trees decay when overcrowded (was 0.001)
-SAND_RECLAIM_RATE = 0.05        # Sand becomes dirt when touching water (high rate)
+TREE_DROUGHT_RATE = 0.0003      # Trees die to grass during drought (drought_severity > 0.5, no water)
+SAND_RECLAIM_RATE = 0.05        # Sand → dirt when touching water (universal CA rule, all biomes)
+CACTUS_DROUGHT_RATE = 0.0003    # Cactus dies to sand during drought (mirrors TREE_DROUGHT_RATE)
 FLOWER_SPREAD_RATE = 0.0001     # Flowers spread to nearby grass (was 0.0005)
 FLOWER_DECAY_RATE = 0.0005      # Flowers die from overcrowding/drought (was 0.002)
 DEEP_WATER_FORM_RATE = 0.05     # Water becomes deep water (apply_cellular_automata)
-DEEP_WATER_EVAPORATE_RATE = 0.03 # Deep water becomes water (apply_cellular_automata)
-WATER_TO_DIRT_RATE = 0.005      # Water slowly evaporates to dirt without neighbors (apply_cellular_automata)
+DEEP_WATER_EVAPORATE_RATE = 0.3  # Deep water → water when any cardinal neighbor isn't water (was 0.03)
+WATER_TO_DIRT_RATE = 0.02       # Water evaporates to dirt when isolated (was 0.005)
 FLOODING_RATE = 0.08            # Water spreads to dirt during rain only (apply_cellular_automata)
 BIOME_SPREAD_RATE = 0.004          # Chance per update a base cell copies a different NSEW neighbor type (4x increase)
 TREE_CROWD_DECAY_RATE = 0.001      # Trees thin when touching any adjacent tree (produces checkerboard spacing)
@@ -114,10 +127,12 @@ GRASS_WATER_ABSORB_RATE = 0.02     # Grass adjacent to water floods during rain 
 DIRT_WATER_EXTRA_GRASS_RATE = 0.0002  # Dirt with even 1 water neighbor gets extra grass chance
 
 # Entity Survival
-HUNGER_DECAY_RATE = 0.02        # Hunger loss per tick (slowed down further)
-THIRST_DECAY_RATE = 0.015       # Thirst loss per tick (slowed down further)
-STARVATION_DAMAGE = 0.1         # HP loss per tick when starving (was 0.3)
-DEHYDRATION_DAMAGE = 0.15       # HP loss per tick when dehydrated (was 0.5)
+HUNGER_DECAY_RATE = 0.02        # Base hunger loss per decay call (humanoids get 6× this)
+THIRST_DECAY_RATE = 0.5         # Base thirst loss per decay call — drains in ~200 calls (~half max rain gap)
+HUMANOID_DRAIN_MULTIPLIER = 6.0 # Humanoid hunger multiplier
+HUMANOID_THIRST_MULTIPLIER = 2.0 # Humanoid thirst multiplier (2× base — drain in ~100 calls)
+STARVATION_DAMAGE = 1.0         # HP loss per decay call when hunger==0
+DEHYDRATION_DAMAGE = 1.5        # HP loss per decay call when thirst==0
 BASE_HEALING_RATE = 1.5         # HP regen per tick when fed/hydrated
 CAMP_HEALING_MULTIPLIER = 2.0   # Healing boost near camps
 HOUSE_HEALING_MULTIPLIER = 3.0  # Healing boost near houses
@@ -189,7 +204,7 @@ EATING_CHANCE_CATCHUP = 0.6         # Chance to eat per cycle during catch-up (c
 DRINKING_CHANCE_CATCHUP = 0.6       # Chance to drink per cycle during catch-up (catch_up_entities)
 WATER_DECAY_ON_DRINK = 0.7          # Chance water becomes dirt when drunk (find_and_move_to_water)
 GRASS_DECAY_ON_EAT = 0.6            # Chance grass becomes dirt when eaten (find_and_move_to_food)
-OLD_AGE_DAMAGE = 0.05               # Health loss per tick when age exceeds max_age
+OLD_AGE_DAMAGE = 2.0                # Health loss per zone-update tick when age exceeds max_age
 
 # Entity Spawning
 SPAWN_CHANCE_MULTIPLIER = 1.0   # Global spawn rate multiplier (1.0 = normal) (spawn_entities_for_screen)
@@ -199,9 +214,8 @@ MOUNTAINS_BIOME_CHANCE = 0.15   # 15% of zones are mountains (generate_screen)
 DESERT_BIOME_CHANCE = 0.05      # 5% of zones are desert (generate_screen)
 
 # Raid Event System
-RAID_CHECK_INTERVAL = 600       # Ticks between raid checks (10 seconds at 60 FPS)
-RAID_CHANCE_BASE = 0.08         # 8% chance for raid when zone has 5+ entities
-RAID_POPULATION_THRESHOLD = 6   # Minimum entities in zone to trigger raid check
+RAID_CHANCE_BASE = 0.02         # 2% base chance per zone update (scales with population)
+RAID_POPULATION_THRESHOLD = 4   # Minimum entities in zone to trigger raid check
 HIDDEN_CAVE_SPAWN_CHANCE = 0.20 # 20% chance to spawn hidden cave during raid
 NATURAL_CAVE_ZONE_CHANCE = 0.08 # 8% chance a zone gets a natural cave on generation
 PLAYER_MINESHAFT_BASE_CHANCE = 0.05 # 5% base chance for player mining to create mineshaft
@@ -214,18 +228,62 @@ DESERT_ORE_FORMATION_RATE  = 0.00002  # Stone very rarely yields ore in deserts
 WARRIOR_PROMOTION_CHANCE = 0.60 # 60% chance highest level entity becomes warrior after raid clear
 KEEPER_ASSIGNMENT_RATE = 0.02  # 2% chance per zone update to assign a vacant keeper slot
 
+# NPC quest queue system
+NPC_QUEST_QUEUE_MAX = 3  # Max quests per NPC including base quest
+# Base quest per NPC type — permanent, never removed from queue.
+# All peaceful humanoids included. Later, quest assignment will be
+# gated by per-NPC favor score — for now all are assignable freely.
+NPC_BASE_QUEST = {
+    'FARMER':     'FARM',
+    'LUMBERJACK': 'LUMBER',
+    'MINER':      'MINE',
+    'TRADER':     'EXPLORE',
+    'GUARD':      'COMBAT_HOSTILE',
+    'WARRIOR':    'COMBAT_HOSTILE',
+    'COMMANDER':  'COMBAT_ALL',
+    'BLACKSMITH': 'GATHER',
+    'WIZARD':     'SEARCH',
+}
+
+# Keeper patrol types and their movement radii (Manhattan distance from keeper_target_pos).
+# Type 1 (guard): stands within 1 cell of target — door guard, escort
+# Type 2 (patrol): roams within 5 cells of target — area patrol
+# Type 3 (zone): anchored to zone but no specific target — full-zone roam (default)
+KEEPER_RANGE = {1: 1, 2: 5, 3: None}
+
+# Maps entity type → keeper patrol type.  Defaults to 3 for anything not listed.
+# Type 1: cell guard — stays within 1 tile of anchor
+# Type 2: patrol    — stays within 5 tiles of anchor
+# Type 3: zone      — stays within home zone (assigned on first zone entry for a faction)
+# Type 4: domain    — stays within home domain (crosses zone boundaries within domain)
+KEEPER_TYPE_BY_ENTITY = {
+    'GUARD':      1,
+    'WARRIOR':    1,
+    'COMMANDER':  1,
+    'BLACKSMITH': 2,
+    'WIZARD':     2,
+    'FARMER':     2,
+    'LUMBERJACK': 2,
+    'MINER':      2,
+    'TRADER':     2,
+}
+
 # Maps entity type → keeper slot name for keeper assignment.
 # KING intentionally omitted — singular, always traveling.
 # All peaceful worker humanoids share one slot so a zone doesn't accumulate one of every type.
 KEEPER_ENTITY_TYPE = {
-    'WOLF':       'wolf',
-    'BAT':        'bat',
-    'GOBLIN':     'goblin',
-    'BANDIT':     'bandit',
-    'SKELETON':   'skeleton',
-    'TERMITE':    'termite',
-    'SHEEP':      'sheep',
-    'DEER':       'deer',
+    'WOLF':         'wolf',
+    'BAT':          'bat',
+    'GOBLIN':       'goblin',
+    'BANDIT':       'bandit',
+    'SKELETON':     'skeleton',
+    'TERMITE':      'termite',
+    'SHEEP':        'sheep',
+    'DEER':         'deer',
+    'RED_BIRD':     'red_bird',
+    'BUTTERFLY':    'butterfly',
+    'CHICKEN':      'chicken',
+    'BLACK_SPIDER': 'black_spider',
     # Peaceful worker types share one 'humanoid' slot per zone
     'FARMER':     'humanoid',
     'GUARD':      'humanoid',
@@ -261,7 +319,8 @@ DISTANCE_2_CELL_COVERAGE = 0.8      # Update 80% of cells at distance 2
 DISTANCE_2_ENTITY_COVERAGE = 0.8    # Update 80% of entities at distance 2
 DISTANCE_3_CELL_COVERAGE = 0.6      # Update 60% of cells at distance 3+
 DISTANCE_3_ENTITY_COVERAGE = 0.6    # Update 60% of entities at distance 3+
-NEW_ZONE_INSTANTIATE_CHANCE = 0.05  # 5% chance to instantiate a new random zone per update cycle
+NEW_ZONE_INSTANTIATE_CHANCE = 0.025  # 2.5% chance to instantiate a new random zone per update cycle
+ZONE_SOFT_CAP = 200                  # Overworld zone count above which new instantiation drops sharply
 
 # ============================================================================
 # END GAME BALANCE CONFIGURATION
@@ -306,6 +365,7 @@ COLORS = {
     'STONE_HOUSE': (110, 110, 120),
     'RUINED_SANDSTONE_COLUMN': (200, 160, 90),
     'CLIFF': (90, 80, 75),
+    'BUSH': (34, 100, 34),
 }
 
 # Cell type properties with drop probabilities
@@ -415,6 +475,13 @@ CELL_TYPES = {
         'label': 'Clf',
         'solid': True,
     },
+    'BUSH': {
+        'color': COLORS['BUSH'],
+        'label': 'Bush',
+        'solid': True,
+        'drops': [{'item': 'wood', 'amount': 1, 'chance': 0.6},
+                  {'cell': 'GRASS', 'chance': 0.4}],
+    },
 }
 
 # Item definitions
@@ -455,6 +522,55 @@ ITEMS = {
                    'description': 'Toggles day and night'},
     'magic_stone': {'color': (138, 43, 226), 'name': 'Magic Stone', 'is_spell': True, 'damage': 12},
     'magic_wand': {'color': (255, 140, 255), 'name': 'Magic Wand', 'is_spell': True, 'damage': 10},
+
+    # Dev summon spells
+    'summon_sheep':        {'color': (230, 230, 230), 'name': 'Summon Sheep',        'is_spell': True, 'spell_type': 'summon',    'npc_type': 'SHEEP'},
+    'summon_wolf':         {'color': (80,  80,  80),  'name': 'Summon Wolf',         'is_spell': True, 'spell_type': 'summon',    'npc_type': 'WOLF'},
+    'summon_deer':         {'color': (139, 90,  43),  'name': 'Summon Deer',         'is_spell': True, 'spell_type': 'summon',    'npc_type': 'DEER'},
+    'summon_farmer':       {'color': (139, 69,  19),  'name': 'Summon Farmer',       'is_spell': True, 'spell_type': 'summon',    'npc_type': 'FARMER'},
+    'summon_guard':        {'color': (100, 100, 150), 'name': 'Summon Guard',        'is_spell': True, 'spell_type': 'summon',    'npc_type': 'GUARD'},
+    'summon_warrior':      {'color': (150, 50,  50),  'name': 'Summon Warrior',      'is_spell': True, 'spell_type': 'summon',    'npc_type': 'WARRIOR'},
+    'summon_commander':    {'color': (180, 50,  50),  'name': 'Summon Commander',    'is_spell': True, 'spell_type': 'summon',    'npc_type': 'COMMANDER'},
+    'summon_king':         {'color': (220, 180, 50),  'name': 'Summon King',         'is_spell': True, 'spell_type': 'summon',    'npc_type': 'KING'},
+    'summon_trader':       {'color': (218, 165, 32),  'name': 'Summon Trader',       'is_spell': True, 'spell_type': 'summon',    'npc_type': 'TRADER'},
+    'summon_blacksmith':   {'color': (105, 105, 105), 'name': 'Summon Blacksmith',   'is_spell': True, 'spell_type': 'summon',    'npc_type': 'BLACKSMITH'},
+    'summon_wizard':       {'color': (138, 43,  226), 'name': 'Summon Wizard',       'is_spell': True, 'spell_type': 'summon',    'npc_type': 'WIZARD'},
+    'summon_lumberjack':   {'color': (139, 90,  43),  'name': 'Summon Lumberjack',   'is_spell': True, 'spell_type': 'summon',    'npc_type': 'LUMBERJACK'},
+    'summon_miner':        {'color': (105, 105, 105), 'name': 'Summon Miner',        'is_spell': True, 'spell_type': 'summon',    'npc_type': 'MINER'},
+    'summon_bandit':       {'color': (150, 50,  50),  'name': 'Summon Bandit',       'is_spell': True, 'spell_type': 'summon',    'npc_type': 'BANDIT'},
+    'summon_goblin':       {'color': (100, 150, 50),  'name': 'Summon Goblin',       'is_spell': True, 'spell_type': 'summon',    'npc_type': 'GOBLIN'},
+    'summon_skeleton':     {'color': (200, 200, 200), 'name': 'Summon Skeleton',     'is_spell': True, 'spell_type': 'summon',    'npc_type': 'SKELETON'},
+    'summon_termite':      {'color': (255, 215, 0),   'name': 'Summon Termite',      'is_spell': True, 'spell_type': 'summon',    'npc_type': 'TERMITE'},
+    'summon_bat':          {'color': (40,  30,  50),  'name': 'Summon Bat',          'is_spell': True, 'spell_type': 'summon',    'npc_type': 'BAT'},
+    'summon_red_bird':     {'color': (200, 60,  40),  'name': 'Summon Red Bird',     'is_spell': True, 'spell_type': 'summon',    'npc_type': 'RED_BIRD'},
+    'summon_butterfly':    {'color': (180, 120, 220), 'name': 'Summon Butterfly',    'is_spell': True, 'spell_type': 'summon',    'npc_type': 'BUTTERFLY'},
+    'summon_chicken':      {'color': (255, 220, 100), 'name': 'Summon Chicken',      'is_spell': True, 'spell_type': 'summon',    'npc_type': 'CHICKEN'},
+    'summon_black_spider': {'color': (20,  20,  20),  'name': 'Summon Spider',       'is_spell': True, 'spell_type': 'summon',    'npc_type': 'BLACK_SPIDER'},
+
+    # Dev transform spells
+    'transform_sheep':        {'color': (230, 230, 230), 'name': 'Transform: Sheep',        'is_spell': True, 'spell_type': 'transform', 'npc_type': 'SHEEP'},
+    'transform_wolf':         {'color': (80,  80,  80),  'name': 'Transform: Wolf',         'is_spell': True, 'spell_type': 'transform', 'npc_type': 'WOLF'},
+    'transform_deer':         {'color': (139, 90,  43),  'name': 'Transform: Deer',         'is_spell': True, 'spell_type': 'transform', 'npc_type': 'DEER'},
+    'transform_farmer':       {'color': (139, 69,  19),  'name': 'Transform: Farmer',       'is_spell': True, 'spell_type': 'transform', 'npc_type': 'FARMER'},
+    'transform_guard':        {'color': (100, 100, 150), 'name': 'Transform: Guard',        'is_spell': True, 'spell_type': 'transform', 'npc_type': 'GUARD'},
+    'transform_warrior':      {'color': (150, 50,  50),  'name': 'Transform: Warrior',      'is_spell': True, 'spell_type': 'transform', 'npc_type': 'WARRIOR'},
+    'transform_commander':    {'color': (180, 50,  50),  'name': 'Transform: Commander',    'is_spell': True, 'spell_type': 'transform', 'npc_type': 'COMMANDER'},
+    'transform_king':         {'color': (220, 180, 50),  'name': 'Transform: King',         'is_spell': True, 'spell_type': 'transform', 'npc_type': 'KING'},
+    'transform_trader':       {'color': (218, 165, 32),  'name': 'Transform: Trader',       'is_spell': True, 'spell_type': 'transform', 'npc_type': 'TRADER'},
+    'transform_blacksmith':   {'color': (105, 105, 105), 'name': 'Transform: Blacksmith',   'is_spell': True, 'spell_type': 'transform', 'npc_type': 'BLACKSMITH'},
+    'transform_wizard':       {'color': (138, 43,  226), 'name': 'Transform: Wizard',       'is_spell': True, 'spell_type': 'transform', 'npc_type': 'WIZARD'},
+    'transform_lumberjack':   {'color': (139, 90,  43),  'name': 'Transform: Lumberjack',   'is_spell': True, 'spell_type': 'transform', 'npc_type': 'LUMBERJACK'},
+    'transform_miner':        {'color': (105, 105, 105), 'name': 'Transform: Miner',        'is_spell': True, 'spell_type': 'transform', 'npc_type': 'MINER'},
+    'transform_bandit':       {'color': (150, 50,  50),  'name': 'Transform: Bandit',       'is_spell': True, 'spell_type': 'transform', 'npc_type': 'BANDIT'},
+    'transform_goblin':       {'color': (100, 150, 50),  'name': 'Transform: Goblin',       'is_spell': True, 'spell_type': 'transform', 'npc_type': 'GOBLIN'},
+    'transform_skeleton':     {'color': (200, 200, 200), 'name': 'Transform: Skeleton',     'is_spell': True, 'spell_type': 'transform', 'npc_type': 'SKELETON'},
+    'transform_termite':      {'color': (255, 215, 0),   'name': 'Transform: Termite',      'is_spell': True, 'spell_type': 'transform', 'npc_type': 'TERMITE'},
+    'transform_bat':          {'color': (40,  30,  50),  'name': 'Transform: Bat',          'is_spell': True, 'spell_type': 'transform', 'npc_type': 'BAT'},
+    'transform_red_bird':     {'color': (200, 60,  40),  'name': 'Transform: Red Bird',     'is_spell': True, 'spell_type': 'transform', 'npc_type': 'RED_BIRD'},
+    'transform_butterfly':    {'color': (180, 120, 220), 'name': 'Transform: Butterfly',    'is_spell': True, 'spell_type': 'transform', 'npc_type': 'BUTTERFLY'},
+    'transform_chicken':      {'color': (255, 220, 100), 'name': 'Transform: Chicken',      'is_spell': True, 'spell_type': 'transform', 'npc_type': 'CHICKEN'},
+    'transform_black_spider': {'color': (20,  20,  20),  'name': 'Transform: Spider',       'is_spell': True, 'spell_type': 'transform', 'npc_type': 'BLACK_SPIDER'},
+
     'enchanted_sword': {'color': (147, 112, 219), 'name': 'Enchanted Sword', 'is_tool': True, 'is_weapon': True, 'damage': 25},
     'enchanted_axe': {'color': (148, 0, 211), 'name': 'Enchanted Axe', 'is_tool': True, 'damage': 20},
     
@@ -602,7 +718,7 @@ ENTITY_TYPES = {
     'SHEEP': {
         'color': (230, 230, 230),
         'symbol': 'S',
-        'max_health': 20,
+        'max_health': 16,
         'max_hunger': 100,
         'max_thirst': 100,
         'strength': 6,
@@ -630,7 +746,7 @@ ENTITY_TYPES = {
         'max_health': 30,
         'max_hunger': 100,
         'max_thirst': 100,
-        'strength': 15,
+        'strength': 17,
         'speed': 1.5,
         'food_sources': ['SHEEP', 'DEER'],
         'water_sources': ['WATER'],
@@ -653,7 +769,7 @@ ENTITY_TYPES = {
     'DEER': {
         'color': (139, 90, 43),
         'symbol': 'D',
-        'max_health': 30,
+        'max_health': 24,
         'max_hunger': 100,
         'max_thirst': 100,
         'strength': 9,
@@ -679,7 +795,7 @@ ENTITY_TYPES = {
     'FARMER': {
         'color': (139, 69, 19),
         'symbol': 'F',
-        'max_health': 80,
+        'max_health': 64,
         'max_hunger': 100,
         'max_thirst': 100,
         'strength': 13,
@@ -710,7 +826,7 @@ ENTITY_TYPES = {
     'GUARD': {
         'color': (100, 100, 150),
         'symbol': 'G',
-        'max_health': 130,
+        'max_health': 104,
         'max_hunger': 100,
         'max_thirst': 100,
         'strength': 31,
@@ -741,7 +857,7 @@ ENTITY_TYPES = {
     'WARRIOR': {
         'color': (150, 50, 50),
         'symbol': 'W',
-        'max_health': 100,
+        'max_health': 80,
         'max_hunger': 100,
         'max_thirst': 100,
         'strength': 26,
@@ -772,7 +888,7 @@ ENTITY_TYPES = {
     'COMMANDER': {
         'color': (180, 50, 50),
         'symbol': 'C',
-        'max_health': 120,
+        'max_health': 96,
         'max_hunger': 100,
         'max_thirst': 100,
         'strength': 31,
@@ -804,7 +920,7 @@ ENTITY_TYPES = {
     'KING': {
         'color': (220, 180, 50),
         'symbol': 'K',
-        'max_health': 150,
+        'max_health': 120,
         'max_hunger': 100,
         'max_thirst': 100,
         'strength': 41,
@@ -836,7 +952,7 @@ ENTITY_TYPES = {
     'TRADER': {
         'color': (218, 165, 32),
         'symbol': 'T',
-        'max_health': 70,
+        'max_health': 56,
         'max_hunger': 100,
         'max_thirst': 100,
         'strength': 11,
@@ -867,7 +983,7 @@ ENTITY_TYPES = {
     'BLACKSMITH': {
         'color': (105, 105, 105),  # Dark gray
         'symbol': 'S',
-        'max_health': 90,
+        'max_health': 72,
         'max_hunger': 100,
         'max_thirst': 100,
         'strength': 25,
@@ -897,7 +1013,7 @@ ENTITY_TYPES = {
     'WIZARD': {
         'color': (138, 43, 226),  # Blue-violet
         'symbol': 'Z',
-        'max_health': 60,
+        'max_health': 48,
         'max_hunger': 100,
         'max_thirst': 100,
         'strength': 13,
@@ -929,7 +1045,7 @@ ENTITY_TYPES = {
     'LUMBERJACK': {
         'color': (139, 90, 43),
         'symbol': 'L',
-        'max_health': 100,
+        'max_health': 80,
         'max_hunger': 100,
         'max_thirst': 100,
         'strength': 19,
@@ -961,7 +1077,7 @@ ENTITY_TYPES = {
     'MINER': {
         'color': (105, 105, 105),
         'symbol': 'M',
-        'max_health': 110,
+        'max_health': 88,
         'max_hunger': 100,
         'max_thirst': 100,
         'strength': 21,
@@ -997,7 +1113,7 @@ ENTITY_TYPES = {
         'max_health': 50,
         'max_hunger': 100,
         'max_thirst': 100,
-        'strength': 20,
+        'strength': 22,
         'speed': 1.3,
         'food_sources': [],
         'water_sources': ['WATER'],
@@ -1024,7 +1140,7 @@ ENTITY_TYPES = {
         'max_health': 35,
         'max_hunger': 100,
         'max_thirst': 100,
-        'strength': 12,
+        'strength': 13,
         'speed': 1.1,
         'food_sources': [],
         'water_sources': ['WATER'],
@@ -1052,7 +1168,7 @@ ENTITY_TYPES = {
         'max_health': 35,
         'max_hunger': 50,
         'max_thirst': 50,
-        'strength': 12,
+        'strength': 13,
         'speed': 1.0,
         'food_sources': [],
         'water_sources': [],
@@ -1079,7 +1195,7 @@ ENTITY_TYPES = {
         'max_health': 25,
         'max_hunger': 100,
         'max_thirst': 100,
-        'strength': 3,
+        'strength': 4,
         'speed': 1.1,
         'food_sources': ['TREE1', 'TREE2'],  # Eats trees
         'water_sources': ['WATER'],
@@ -1113,7 +1229,7 @@ ENTITY_TYPES = {
         'max_health': 10,
         'max_hunger': 80,
         'max_thirst': 80,
-        'strength': 4,       # Very low damage per hit
+        'strength': 5,       # Very low damage per hit
         'speed': 1.6,        # Fast flyers
         'food_sources': [],
         'water_sources': ['WATER'],
@@ -1134,7 +1250,111 @@ ENTITY_TYPES = {
             'attack_chance': 0.30,
             'target_types': ['hostile']  # Attacks other NPCs
         }
-    }
+    },
+    'RED_BIRD': {
+        'color': (200, 60, 40),
+        'symbol': 'r',
+        'sprite_name': 'red bird',
+        'max_health': 6,
+        'max_hunger': 60,
+        'max_thirst': 60,
+        'strength': 2,
+        'speed': 1.8,
+        'food_sources': ['GRASS', 'FLOWER'],
+        'water_sources': ['WATER', 'LAKE'],
+        'hostile': False,
+        'edible': True,
+        'flying': True,
+        'drops': [
+            {'item': 'meat', 'amount': 1, 'chance': 0.5},
+            {'item': 'bones', 'amount': 1, 'chance': 0.2}
+        ],
+        'ai_params': {
+            'aggressiveness': 0.02,
+            'passiveness': 0.60,
+            'idleness': 0.30,
+            'flee_chance': 0.95,
+            'combat_chance': 0.05,
+            'target_types': ['food', 'water']
+        }
+    },
+    'BUTTERFLY': {
+        'color': (180, 120, 220),
+        'symbol': 'u',
+        'sprite_name': 'butterfly',
+        'max_health': 3,
+        'max_hunger': 40,
+        'max_thirst': 40,
+        'strength': 1,
+        'speed': 1.4,
+        'food_sources': ['FLOWER', 'GRASS'],
+        'water_sources': ['WATER'],
+        'hostile': False,
+        'edible': False,
+        'flying': True,
+        'drops': [],
+        'ai_params': {
+            'aggressiveness': 0.01,
+            'passiveness': 0.70,
+            'idleness': 0.25,
+            'flee_chance': 0.99,
+            'combat_chance': 0.01,
+            'target_types': ['food', 'water']
+        }
+    },
+    'CHICKEN': {
+        'color': (240, 220, 160),
+        'symbol': 'c',
+        'sprite_name': 'chicken',
+        'max_health': 12,
+        'max_hunger': 80,
+        'max_thirst': 80,
+        'strength': 3,
+        'speed': 0.9,
+        'food_sources': ['GRASS', 'CARROT1', 'CARROT2', 'CARROT3'],
+        'water_sources': ['WATER', 'WELL'],
+        'hostile': False,
+        'edible': True,
+        'drops': [
+            {'item': 'meat', 'amount': 1, 'chance': 0.7},
+            {'item': 'bones', 'amount': 1, 'chance': 0.2}
+        ],
+        'ai_params': {
+            'aggressiveness': 0.02,
+            'passiveness': 0.65,
+            'idleness': 0.25,
+            'flee_chance': 0.90,
+            'combat_chance': 0.10,
+            'target_types': ['food', 'water']
+        }
+    },
+    'BLACK_SPIDER': {
+        'color': (20, 20, 30),
+        'symbol': 's',
+        'sprite_name': 'blackSpider',
+        'max_health': 30,
+        'max_hunger': 100,
+        'max_thirst': 100,
+        'strength': 17,
+        'speed': 1.5,
+        'food_sources': ['SHEEP', 'DEER', 'CHICKEN'],
+        'water_sources': ['WATER'],
+        'hostile': True,
+        'edible': False,
+        'cave_spawner': True,
+        'drops': [
+            {'item': 'bones', 'amount': 1, 'chance': 0.4}
+        ],
+        'ai_params': {
+            'aggressiveness': 0.80,
+            'passiveness': 0.10,
+            'idleness': 0.05,
+            'flee_chance': 0.20,
+            'combat_chance': 0.80,
+            'attack_chance': 0.60,
+            'target_types': ['food', 'water', 'hostile']
+        }
+    },
 
 }
 
@@ -1269,6 +1489,7 @@ ITEMS.update({
     'pickaxe': {'color': (100, 100, 120), 'name': 'Pickaxe', 'is_tool': True},
     'bucket': {'color': (180, 180, 180), 'name': 'Bucket', 'is_tool': True},
     'tree_sapling': {'color': COLORS['TREE1'], 'name': 'Tree Sapling'},
+    'bush': {'color': (34, 100, 34), 'name': 'Bush'},
     'tree1': {'color': COLORS['TREE1'], 'name': 'Tree 1'},
     'tree2': {'color': COLORS['TREE2'], 'name': 'Tree 2'},
     'carrot': {'color': COLORS['CARROT1'], 'name': 'Carrot'},
@@ -1294,6 +1515,7 @@ CELL_PICKUP = {
     'STONE': {'tool': None, 'item': 'stone'},
     'TREE1': {'tool': None, 'item': 'tree_sapling', 'amount': 1},
     'TREE2': {'tool': None, 'item': 'tree_sapling', 'amount': 1},
+    'BUSH': {'tool': None, 'item': 'bush', 'amount': 1},
     'WALL': {'tool': None, 'item': 'wall'},
     'HOUSE': {'tool': None, 'item': 'house'},
     'CAVE': {'tool': None, 'item': 'cave'},
@@ -1309,38 +1531,6 @@ CELL_PICKUP = {
     'BONES': {'tool': None, 'item': 'bones'}
 }
 
-# ============================================================================
-# ITEM DECAY SYSTEM - General decay rules for dropped items
-# ============================================================================
-
-# Item decay configuration - defines how dropped items decay over time
-ITEM_DECAY_CONFIG = {
-    'bones': {
-        'decay_rate': 0.05,  # 5% chance per update cycle (per bone)
-        'decay_results': {
-            # Cell type → [(result_cell, weight), ...]
-            'DIRT': [('GRASS', 0.7), ('TREE1', 0.3)],
-            'SAND': [('GRASS', 0.7), ('TREE1', 0.3)],
-            'GRASS': [('TREE1', 0.5), (None, 0.5)],  # None = just disappears
-            'default': [(None, 1.0)]  # Already good terrain, just disappear
-        }
-    },
-    'meat': {
-        'decay_rate': 0.10,  # 10% chance to decay (meat spoils faster)
-        'decay_results': {
-            'default': [(None, 1.0)]  # Meat just disappears (eaten by animals)
-        }
-    },
-    'carrot': {
-        'decay_rate': 0.03,  # 3% chance to decay
-        'decay_results': {
-            'DIRT': [('CARROT1', 0.2), (None, 0.8)],  # Small chance to replant
-            'SOIL': [('CARROT1', 0.5), (None, 0.5)],  # Better on soil
-            'default': [(None, 1.0)]
-        }
-    }
-}
-
 # NPC transformation configuration - defines when NPCs change roles
 NPC_TRANSFORMATION_CONFIG = {
     'TRADER': {
@@ -1354,6 +1544,12 @@ NPC_TRANSFORMATION_CONFIG = {
             'need_farmer': {'FARMER': 0.8, 'LUMBERJACK': 0.2},
             'need_lumberjack': {'FARMER': 0.2, 'LUMBERJACK': 0.8}
         }
+    },
+    'WARRIOR': {
+        'transform_rate': 0.00025,  # ~1.5% per minute at 60 FPS — rare promotion
+        'transform_logic': 'promotion',
+        'possible_types': ['COMMANDER'],
+        'level_requirement': 2,
     }
 }
 
@@ -1369,6 +1565,7 @@ ITEM_TO_CELL = {
     'tree_sapling': 'TREE1',
     'tree1': 'TREE1',
     'tree2': 'TREE2',
+    'bush': 'BUSH',
     'carrot': 'CARROT1',
     'carrot1': 'CARROT1',
     'carrot2': 'CARROT2',
@@ -1379,8 +1576,6 @@ ITEM_TO_CELL = {
     'camp': 'CAMP',
     'chest': 'CHEST',
     'wall': 'WALL',
-    'wood': 'WOOD',
-    'planks': 'PLANKS',
     'meat': 'MEAT',
     'fur': 'FUR',
     'bones': 'BONES',

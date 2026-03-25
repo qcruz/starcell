@@ -1,7 +1,251 @@
 # StarCell Bug Report — Auto-Debug Sessions
 
-Each run: autopilot plays a new game, saves, quits. Session cap: 30–45s (reduced 2026-03-09 for faster iteration).
+Each run: autopilot plays a new game, saves, quits. Session cap: 180–300s (extended 2026-03-14 for quest/keeper observation).
 Reviewed from `debug/bugcatcher.log` after each session.
+
+---
+
+## Session 23 — 2026-03-15 (live player review — chest/faction/NPC behavior fixes)
+
+### FIXED — WOOD and PLANKS appearing as overworld grid cells
+
+**Root cause:** `ITEM_TO_CELL` in both `constants.py` and `data/cells.py` contained `'wood': 'WOOD'` and `'planks': 'PLANKS'`, causing `place_selected_item()` to stamp WOOD/PLANKS as permanent terrain cells.
+
+**Fix:** Removed `'wood'` and `'planks'` entries from `ITEM_TO_CELL` in both files. Wood and planks now only exist as inventory items — they drop as item overlays rather than grid cells.
+
+---
+
+### FIXED — WOOD cells appearing when NPC empties a chest (time-pass)
+
+**Root cause:** In `world/zones.py` time-pass entity loop, when an NPC picked up all items from a chest, the code set `grid[cy][cx] = 'WOOD'` instead of leaving the chest cell intact.
+
+**Fix:** Removed the erroneous cell assignment. The chest cell is left in place; the empty-chest decay system handles cleanup.
+
+---
+
+### FIXED — Empty chests not decaying (dead code — wrong `elif` level)
+
+**Root cause:** The `elif cell == 'CHEST':` branch in `update_zone_with_coverage()` was at the outer `if/elif` level rather than inside `if cell in CELL_TYPES:`. Since CHEST is in CELL_TYPES, the outer branch was never reached — the decay code was effectively dead.
+
+**Fix:** Moved `elif cell == 'CHEST':` inside the `if cell in CELL_TYPES:` block so it fires correctly each zone update.
+
+---
+
+### FIXED — Empty chests decaying to GRASS in desert/mountain biomes
+
+**Root cause 1:** Fallback cell hardcoded to `'GRASS'` instead of the zone's biome base cell.
+**Root cause 2:** `base_cell` variable referenced before it was defined (computed later in the biome reversion block), causing `UnboundLocalError`.
+
+**Fix:** Computed `base_cell` from a biome→cell map before the cell loop so it is available to the chest decay branch. Fallback now uses `base_cell` (SAND for desert, DIRT for mountains/tundra/swamp, GRASS otherwise). Structure zone chests fall back to `FLOOR_WOOD`.
+
+---
+
+### FIXED — Too many chests accumulating across zones
+
+**Root cause:** NPCs depositing items into nearby chests, then creating a new chest on inventory overflow, with no mechanism to merge nearby chests or remove empty ones quickly enough.
+
+**Fix (two parts):**
+1. `consolidate_chests(zone_key)` added to `systems/crafting.py`: each zone update, finds all CHEST cells, merges contents of chests within 5 cells of each other into the chest with the most items, leaves secondaries empty (for decay). Called alongside `consolidate_dropped_items()` in `update_zone_with_coverage()`.
+2. Empty chest decay rate increased to 50% per zone update (from 5–10%) in both overworld and structure zone loops.
+
+---
+
+### FIXED — Commander faction not appearing on dev info screen after save/load
+
+**Root cause:** `self.factions` was never serialized. Entities retained `entity.faction` through save/load, but `self.factions` was always empty after any reload — so the dev screen found no registered factions.
+
+**Fix:** Added factions to `systems/save_load.py` save/load: zones stored as lists (JSON-safe), restored as sets on load.
+
+---
+
+### FIXED — Faction name on entity not registered in `self.factions` (hostile factions)
+
+**Root cause:** Multiple code paths set `entity.faction` without guaranteeing the faction name appears in `self.factions` — particularly after save/load or when `create_hostile_faction()` reverse-lookup fails. The dev screen reads `self.factions`, so unregistered factions are invisible even when present on entities.
+
+**Fix:** Added `_lore_sync_faction_registry()` to `lore/engine.py`, called each lore cycle (600 ticks). Scans all live entities with `entity.faction` set; registers any faction name missing from `self.factions` and ensures the entity is in the warriors list.
+
+---
+
+### FIXED — `_lore_ensure_commander_factions` skipping already-factionless Commanders after reload
+
+**Root cause:** Skip condition was `if getattr(entity, 'faction', None): continue` — this skipped any Commander that had `entity.faction` set, even if that faction name was not in `self.factions`. It also only scanned a 9×9 radius around the player, missing Commanders in loaded but distant zones.
+
+**Fix:** Skip condition changed to require both `entity.faction` non-None AND the faction name present in `self.factions`. Now also scans all `self.entities` (not just the 9×9 radius).
+
+---
+
+### FIXED — NPCs standing still while in wandering state
+
+**Root cause:** The wandering state block had a hardcoded `if random.random() < 0.6: self.wander_entity(entity)` — meaning 40% of wandering ticks did nothing. Standing still is meant to be handled exclusively by the `idle` state.
+
+**Fix:** Removed the conditional; `wander_entity()` is always called in the wandering block. Transition to idle is controlled by the `idleness` prop and inventory scaling as intended.
+
+---
+
+### FIXED — Instantiated zones never shrinking (dead zone accumulation)
+
+**Root cause:** `self.instantiated_zones` is an append-only set. Evicted zones (removed from `self.screens` to free memory) were never removed from `instantiated_zones`, causing the count to grow unboundedly and inflating zone-wide loops.
+
+**Fix:** Added a 600-tick cleanup in `world/zones.py`: `self.instantiated_zones &= set(self.screens.keys())` — syncs the set against active screens each cleanup cycle.
+
+---
+
+## Session 22 — 2026-03-14 (observation runs, quest/keeper focus)
+
+### Run 1 — 270s, new game, tick 15130
+
+**Focus:** NPC quest queue system, LoreEngine random assignment, keeper no-target flags.
+
+#### CONFIRMED — LoreEngine random quest assignment working
+LoreEngine assigned MINE quest to MINER(id=249). Quest appeared in watchdog_npc_quests with `base: false` at front of queue, STONE cell as quest_target. Functional.
+
+#### OBSERVATION — Two quest focus systems coexisting
+At tick 516, early entities show `quest_focus='farming'` (lowercase, old entity.py system) and `quest_queue=null`. By tick 2916 most have uppercase focus and initialized queues. npc_ai.py queue init runs on first AI update and overwrites. No functional damage but dual-system is confusing in early-game window.
+
+#### BUG — Some NPCs (FARMER, MINER, LUMBERJACK) get wrong base quest type
+FARMER(id=4,15) show `quest_queue=[{"type":"COMBAT_HOSTILE","base":true}]` across all 5 watchdog cycles. MINER/LUMBERJACK similarly get EXPLORE as base quest. `NPC_BASE_QUEST['FARMER']='FARM'` — this should not be possible. Both FARMERs remain `ai_state='wandering'` with no active combat. Root cause not isolated after code review of npc_ai.py:2271, game_core.py:1522, lore/engine.py:836 — all correctly use `NPC_BASE_QUEST[entity.type]`. **Carried to Run 2 for confirmation.**
+
+#### OBSERVATION — Entity count approaching bloat threshold
+Shutdown entity_count: **588** (threshold: 600). 270s / 15130 ticks. Monitoring.
+
+#### OBSERVATION — 468 keeper_no_target flags at tick 2616
+Normal early-game transient — keepers just assigned, haven't completed first search cycle. Not present in later ticks.
+
+#### OBSERVATION — 60 ghost entities reconciled on respawn
+`reconcile_screen_entities()` caught 60 ghosts at respawn. Root desync site not yet isolated.
+
+---
+
+### Run 2 — ~210s, tick 11837
+
+**Focus:** Confirm wrong base quest bug, autopilot shovel crafting loop, entity count.
+
+#### CONFIRMED — Wrong base quest bug is reproducible across new-game sessions
+New session, new entity IDs: FARMER(id=154) → COMBAT_HOSTILE base=True; MINER(id=16,158,228,250) → EXPLORE base=True; LUMBERJACK(id=150,209,240,257) → EXPLORE base=True. Pattern: FARMER→COMBAT_HOSTILE, MINER/LUMBERJACK→EXPLORE, consistently across sessions. Added to bug report for fix.
+
+#### BUG — Autopilot crafting shovel in tight loop
+Terminal output shows repeated `[AP] press C → click shovel → SPACE → Crafted Shovel!` with no delay between cycles. Proxy accumulating multiple shovels, not switching to other actions. Likely the shovel craft is cheap/fast and the autopilot craft-trigger condition keeps re-firing. Low gameplay impact but wastes ticks.
+
+#### OBSERVATION — Proxy stuck at zone exit again
+"Stuck at exit (0,9) — entering wander cooldown" logged. Exit-crossing stall persists but wander cooldown recovery mechanism is working.
+
+#### OBSERVATION — NPC built forge
+"Zephyr Meadowbrook built a forge!" — MINER NPC self-built a structure. `try_build_well` or similar action. Organic NPC behavior working.
+
+---
+
+### FIXED — Wrong base quest type on FARMER/MINER/LUMBERJACK
+
+**Root cause (confirmed via debug tracking):** Entity type is changed by multiple code paths AFTER `quest_queue` is already initialized with the old type's base quest. The type-change paths were:
+- `world/zones.py` (settlement logic): TRADER→FARMER/LUMBERJACK/MINER, GUARD→FARMER/MINER — no quest reset
+- `systems/factions.py` `promote_to_commander()`: WARRIOR→COMMANDER — no quest reset
+- `npc_ai.py:1115` warrior promotion (already had partial fix from prior session)
+- `npc_ai.py:3171` `check_npc_transformation` settlement transform (already had fix from prior session)
+
+Debug trace confirmed entity 24 was type=GUARD when quest_queue initialized (COMBAT_HOSTILE), later became FARMER via `world/zones.py:586`. `engine/entity.py` `level_up()` GUARD→WARRIOR also found but WARRIOR has same base quest (COMBAT_HOSTILE) — no mismatch.
+
+**Fix:** Added quest reset block (`del quest_queue`, clear `quest_focus`/`quest_target`) immediately after every `entity.type = <new_type>` assignment in:
+- `world/zones.py:574–600` (trader and guard settlement rewrites)
+- `systems/factions.py:456` (warrior→commander promotion)
+
+Removed debug tracking attributes (`_quest_init_type`, `_quest_init_eid`) and `[QuestBug]` print from `npc_ai.py`.
+
+**Verification run (Session 22, Run 3 — 2026-03-14, ~10,991 ticks, NEW GAME):**
+Zero `[QuestBug]` prints. No wrong-quest entries in watchdog samples. Entity count at shutdown: 485 (well below 600 threshold). World healthy: 128 zones, 7 structures, 1 follower. Bug confirmed resolved.
+
+---
+
+### FIXED — Autopilot gaining XP from synthetic key events
+
+**Root cause:** `gain_xp(1)` is called in `game_core.py` inside the KEYDOWN/MOUSEBUTTONDOWN event handler for every action key (SPACE, E, N, P, D, X, L, etc.). Synthetic autopilot events (`_ap_synthetic=True`) correctly skip idle detection but were NOT skipping XP grants.
+
+**Fix:** Added early return in `gain_xp()` in `systems/combat.py`:
+```python
+if getattr(self, 'autopilot', False):
+    return  # Autopilot proxy does not earn XP
+```
+This gates all XP from any source during autopilot mode.
+
+### FIXED — Autopilot damage not visible in HUD/watchdog
+
+**Root cause:** NPCs attack the proxy entity (real Entity object in `self.entities`), reducing `proxy.health`. But `self.player['health']` was never synced from `proxy.health`, so the HUD and watchdog always showed 100 HP regardless of combat damage taken.
+
+**Fix:** Added health sync in `_sync_player_from_proxy()` in `autopilot.py`:
+```python
+self.player['health']     = proxy.health
+self.player['max_health'] = proxy.max_health
+```
+Damage is now visible in the HUD and logged correctly by the watchdog.
+
+---
+
+## Session 21 — 2026-03-14 (live player review + balance work)
+
+### FIXED — Ghost entities invisible after zone cross / player death
+**Root cause:** `screen_entities` remove/append pairs during zone crossing, structure entry/exit, time-pass simulation, or player death can desync from `self.entities`. Ghosts exist in the master dict but are absent from `screen_entities` — invisible, never AI-updated. Save/load recovered them but runtime ghosts persisted until restart.
+**Fix:** `reconcile_screen_entities()` added to CombatMixin. Called at load time, after every respawn, and every 600 ticks during normal play.
+
+### FIXED — Quest HUNT target pointing to cell instead of entity
+**Root cause:** Multiple compounding issues: live-tracking loop was clearing `is_dead` before `check_quest_completion` could fire; kill handler in game_core.py was calling `quest.clear_target()` directly (bypassing XP + sound); old saves had stale cell coords in target fields.
+**Fix:** Kill handler removed (let `check_quest_completion` own detection via `entity.is_dead`); live-tracking guard resets quests with no `target_entity_id`; entity health clamped to `min(saved, max_health)` on load.
+
+### FIXED — Quest arrow pointing wrong location when target inside cave
+**Root cause:** `entity.screen_x/y` are virtual coords (−1000,N) when `in_structure=True`. Live-tracking was copying these directly into `quest.target_zone`.
+**Fix:** `get_surface_pos_for_entity()` added to LoreEngine — traces `parent_screen` chain recursively up to the overworld surface. Quest arrow and HUD now show the cave entrance cell.
+
+### FIXED — NPC stall at zone exits when pursuing cross-zone target
+**Root cause:** `_try_targeting_zone_cross` was calling `try_entity_zone_transition` (1800-tick cooldown), causing 30-second stalls. Should use `try_entity_screen_crossing` (30-tick cooldown, OOB coordinates).
+**Fix:** Rewrote `_try_targeting_zone_cross` to derive OOB coords from `is_at_exit()` direction and call the fast path.
+
+### FIXED — TypeError: keeper_type None comparison
+**Root cause:** `getattr(entity, 'keeper_type', 3)` doesn't catch explicit `None` values stored in save data.
+**Fix:** `ktype = getattr(entity, 'keeper_type', None) or 3`
+
+### FIXED — Chest destruction plank feedback loop
+**Root cause:** Empty chests dropped a `planks` item when harvested. NPCs harvested chests, picked up the plank, had "full" inventory, then placed a new chest — infinite loop.
+**Fix:** Empty chest destruction leaves nothing. Only chests with stored contents scatter items. Goblin chest-placement chance also reduced 0.5% → 0.05%.
+
+### BALANCE — Rain/biome desertification
+**Root cause (rain too rare):** `RAIN_FREQUENCY_*` are `update_weather` call-counts (called every 30 ticks), not raw ticks. Old values (1800–18000) = 15–150 min between rains.
+**Root cause (time-pass, no rain):** Time-pass sim is only 600 ticks total — old minimum (1800) was never reached, so zero rain fired during 200-year simulation.
+**Root cause (rain coverage):** `apply_rain` gated to distance ≤ 2 from player, so most zones never got rain during time-pass.
+**Fixes applied:** Frequency tuned to 120–600 calls (~1–5 min); duration 30–180 calls (~15–90 s); distance limit removed during `time_pass_active`; sand→dirt grass-reclaim rule added at 0.05× base rate; water evaporation 0.005 → 0.02; deep water evaporation condition corrected to mirror formation rule (cardinal_water < 4), rate 0.03 → 0.3.
+
+---
+
+## Session 20 — 2026-03-13 (live player review)
+
+### OBSERVATION — Houses spawning with no lumberjack in zone
+**Severity:** Low / polish
+**Root cause:** HOUSE placement (world/generation.py ~line 158) and LUMBERJACK spawning are completely independent. A HOUSE is placed at 30% chance per zone (random choice of HOUSE or CAVE), with no lumberjack spawn guarantee. House interiors have a 50% chance to spawn any NPC, and only ever pick FARMER or TRADER — never LUMBERJACK. Lumberjacks only appear via the probabilistic zone spawn table.
+**Result:** A HOUSE can exist with an empty interior and no lumberjack anywhere in the zone.
+**Suggested fix:** When placing a HOUSE, guarantee at least one LUMBERJACK in the zone's spawn list, or prefer placing the house only when the zone spawn table has already produced a LUMBERJACK.
+
+### OBSERVATION — Bandits crowding zones
+**Severity:** Medium
+**Root cause:** Multiple independent systems stack bandit counts:
+1. Initial spawn: 20–50% per zone (desert 50%), up to 2 per zone
+2. Continuous spawn: desert 15% weight — highest of any entity
+3. Raid events: spawn 2 bandits at once when 6+ peaceful NPCs present; TRADER+GUARD always spawn so threshold is frequently met; raid cooldown is only 600 ticks (~10s)
+4. Cave spawns: 20% of cave hostile spawns are bandits — continuous low-rate
+5. Zone crossing: bandits in targeting state cross zone boundaries at 100% travel rate with no block
+**Bandit stats are also aggressive:** strength 20, speed 1.3, aggressiveness 0.90, attacks_structures True.
+**Suggested angles:** Reduce desert continuous spawn weight, raise raid threshold or increase raid cooldown, add per-zone bandit hard cap, or reduce aggressiveness so bandits don't chain-trigger pursuit across zones.
+
+---
+
+## Session 19 — 2026-03-10 (live player session)
+
+### FIXED — BLACK_SPIDER step animation not playing
+**Root cause:** Still-frame sprites for BLACK_SPIDER (and BUTTERFLY, CHICKEN, COW) were renamed from `blackSpider_down_still_1.png` → `blackSpider_down_still.png` in the dev folder but never committed to git. The live game dir (`~/StarCell/`) only had the old `_still_1` format. The sprite loader looks for `blackSpider_down_still.png` — it was silently failing, falling back to frame `1` for the still step. Walk frames `_1` and `_2` were present and loading correctly.
+**Fix:** Committed renamed still sprites for spider, butterfly, chicken, cow. All four entity types now have correct still frames in the live game dir.
+**Note:** `is_combat_idle` animation during combat stance was separately proposed and reverted twice — confirmed by user as incorrect behavior. Entities correctly freeze at still when not physically moving.
+
+### BUG — Entity spawn bloat: 2,736 entities observed vs ~294 in session 18
+**Severity:** High
+**Confirmed cause:** `spawn_single_entity_at_entrance` in `systems/spawning.py` has a missing `break` after successful spawn. The `for attempt in range(10)` loop spawns an entity each time it finds a non-solid cell, only exiting on a 5% random roll (`if random.random() < 0.05: return True`). Expected: 1 entity per call. Actual: ~9-10 entities per call.
+`check_zone_spawning` calls this up to 3 times per cycle across a 5×5 zone grid around the player, and runs continuously. This compounds: each call spawns ~9 entities instead of 1.
+**Fix:** Replace `if random.random() < 0.05: return True` with `return True` to exit after the first successful spawn.
 
 ---
 

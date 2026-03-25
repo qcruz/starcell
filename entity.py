@@ -244,6 +244,37 @@ class SpriteManager:
         
         print("  ✓ Generated all structure and special cell sprites")
     
+    def create_dev_spell_sprites(self, entity_types):
+        """Generate summon/transform spell sprites for each NPC type."""
+        # Sprite keys use different naming than ENTITY_TYPES keys for some NPCs
+        _sprite_key_overrides = {
+            'termite':     'yellow termite',
+            'bat':         'black bat',
+            'black_spider': 'blackspider',
+            'red_bird':    'red bird',
+        }
+        font = pygame.font.Font(None, self.cell_size // 2)
+        for npc_type, type_data in entity_types.items():
+            color = type_data.get('color', (150, 150, 150))
+            key = npc_type.lower()
+            sprite_key = _sprite_key_overrides.get(key, key)
+            # Use the NPC's down_still sprite as base; fall back to down_1 frame
+            base_sprite = (self.sprites.get(f'{sprite_key}_down_still') or
+                           self.sprites.get(f'{sprite_key}_down_1'))
+            for prefix, letter in (('summon', 'S'), ('transform', 'T')):
+                if base_sprite is not None:
+                    surf = base_sprite.copy()
+                else:
+                    surf = pygame.Surface((self.cell_size, self.cell_size))
+                    surf.fill(color)
+                # Shadow + letter overlay for readability on any background
+                shadow = font.render(letter, True, (0, 0, 0))
+                lbl = font.render(letter, True, (255, 255, 255))
+                surf.blit(shadow, (3, 3))
+                surf.blit(lbl, (2, 2))
+                pygame.draw.rect(surf, (0, 0, 0), (0, 0, self.cell_size, self.cell_size), 1)
+                self.sprites[f'{prefix}_{key}'] = surf
+
     def get_all_sprite_names(self):
         """Return list of all loaded sprite names"""
         return list(self.sprites.keys())
@@ -331,10 +362,22 @@ class Entity:
         self.counterattack_target = None  # entity_id to counterattack
         self.last_home_return_check = 0  # Tick of last home zone check
         self.was_trading = False  # Track if entity was recently trading
+        self.last_attacked_tick = 0  # Game tick when last took damage (gates health regen + flee exit)
+
+        # Stamina
+        self.max_energy = 100
+        self.energy = self.max_energy
         
         # Structure state
         self.in_structure = False  # True when entity is in a house/cave structure
         self.structure_key = None  # Key of structure entity is in
+
+        # Keeper state
+        # keeper_type: 0=none, 1=cell guard (1-tile radius), 2=patrol (5-tile radius),
+        #              3=zone keeper (home zone only), 4=domain keeper (home domain only)
+        self.keeper = False
+        self.keeper_type = 0
+        self.home_domain = None  # Domain ID for domain keepers (type 4)
         
         # Unified AI Behavior State System
         # Set initial state based on entity type
@@ -614,15 +657,35 @@ class Entity:
         self.world_y = new_world_y
         self.is_moving = True
     
-    def decay_stats(self):
-        """Decay hunger and thirst over time"""
-        self.hunger = max(0, self.hunger - HUNGER_DECAY_RATE)
-        self.thirst = max(0, self.thirst - THIRST_DECAY_RATE)
-        
+    _HUMANOID_DRAIN_TYPES = frozenset([
+        'FARMER', 'GUARD', 'WARRIOR', 'COMMANDER', 'KING',
+        'TRADER', 'BLACKSMITH', 'WIZARD', 'LUMBERJACK', 'MINER',
+    ])
+
+    def decay_stats(self, sheltered=False):
+        """Decay hunger and thirst over time.
+
+        Args:
+            sheltered: If True, skip thirst drain and dehydration damage —
+                       entity is inside a structure with implied water access.
+        """
+        if self.type in self._HUMANOID_DRAIN_TYPES:
+            level_factor = max(0.3, 1.0 / (1.0 + self.level * 0.08))
+            hunger_rate = HUNGER_DECAY_RATE * HUMANOID_DRAIN_MULTIPLIER * level_factor
+            thirst_rate = THIRST_DECAY_RATE * HUMANOID_THIRST_MULTIPLIER * level_factor
+        else:
+            hunger_rate = HUNGER_DECAY_RATE
+            thirst_rate = THIRST_DECAY_RATE
+
+        self.hunger = max(0, self.hunger - hunger_rate)
+
+        if not sheltered:
+            self.thirst = max(0, self.thirst - thirst_rate)
+
         # Take damage if starving or dehydrated
         if self.hunger <= 0:
             self.health -= STARVATION_DAMAGE
-        if self.thirst <= 0:
+        if not sheltered and self.thirst <= 0:
             self.health -= DEHYDRATION_DAMAGE
         
         # Take damage from old age
@@ -664,14 +727,7 @@ class Entity:
         self.health = min(self.max_health, self.health + amount)
     
     def eat(self, food_value=30):
-        """Eat food to restore hunger
-        
-        Args:
-            food_value: Amount of hunger to restore (default 30)
-                       - Grass: 20
-                       - Crops (CARROT1/2/3): 40
-                       - Meat (predators): 50
-        """
+        """Eat food to restore hunger by food_value amount."""
         self.hunger = min(self.max_hunger, self.hunger + food_value)
     
     def update_facing_toward(self, target_x, target_y):
@@ -699,12 +755,8 @@ class Entity:
 
     
     def drink(self, water_value=40):
-        """Drink water to restore thirst
-        
-        Args:
-            water_value: Amount of thirst to restore (default 40)
-        """
-        self.thirst = min(self.max_thirst, self.thirst + water_value)
+        """Drink water to restore thirst — fills bar to max."""
+        self.thirst = self.max_thirst
     
     def level_up_from_activity(self, activity_type, game):
         """Chance to level up from completing activities
@@ -792,12 +844,8 @@ class Entity:
                     print(f"  {name_str} switched focus: {old_focus} → {self.quest_focus}")
     
     def drink(self, water_value=40):
-        """Drink water to restore thirst
-        
-        Args:
-            water_value: Amount of thirst to restore (default 40)
-        """
-        self.thirst = min(self.max_thirst, self.thirst + water_value)
+        """Drink water to restore thirst — fills bar to max."""
+        self.thirst = self.max_thirst
     
     def gain_xp(self, amount):
         self.xp += amount

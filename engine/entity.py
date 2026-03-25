@@ -79,13 +79,22 @@ class Entity:
         self.counterattack_target = None  # entity_id to counterattack
         self.last_home_return_check = 0  # Tick of last home zone check
         self.was_trading = False  # Track if entity was recently trading
+        self.last_attacked_tick = 0  # Game tick when last took damage (gates health regen + flee exit)
+
+        # Stamina
+        self.max_energy = 100
+        self.energy = self.max_energy
 
         # Subscreen state
         self.in_subscreen = False  # True when entity is in a house/cave subscreen
         self.subscreen_key = None  # Key of subscreen entity is in
 
-        # Keeper state — keepers are permanently anchored to their current zone/subscreen
+        # Keeper state
+        # keeper_type: 0=none, 1=cell guard (1-tile radius), 2=patrol (5-tile radius),
+        #              3=zone keeper (home zone only), 4=domain keeper (home domain only)
         self.keeper = False
+        self.keeper_type = 0
+        self.home_domain = None  # Domain ID for domain keepers (type 4)
 
         # Unified AI Behavior State System
         # Set initial state based on entity type
@@ -365,10 +374,24 @@ class Entity:
         self.world_y = new_world_y
         self.is_moving = True
 
+    _HUMANOID_TYPES = {
+        'FARMER', 'GUARD', 'WARRIOR', 'COMMANDER', 'KING',
+        'TRADER', 'BLACKSMITH', 'WIZARD', 'LUMBERJACK', 'MINER',
+    }
+
     def decay_stats(self):
         """Decay hunger and thirst over time"""
-        self.hunger = max(0, self.hunger - HUNGER_DECAY_RATE)
-        self.thirst = max(0, self.thirst - THIRST_DECAY_RATE)
+        if self.type in self._HUMANOID_TYPES:
+            # Humanoids decay faster; higher level = more resilient (floors at 0.3×)
+            level_factor = max(0.3, 1.0 / (1.0 + self.level * 0.08))
+            hunger_rate = HUNGER_DECAY_RATE * 4.0 * level_factor
+            thirst_rate = THIRST_DECAY_RATE * 4.0 * level_factor
+        else:
+            hunger_rate = HUNGER_DECAY_RATE
+            thirst_rate = THIRST_DECAY_RATE
+
+        self.hunger = max(0, self.hunger - hunger_rate)
+        self.thirst = max(0, self.thirst - thirst_rate)
 
         # Take damage if starving or dehydrated
         if self.hunger <= 0:
@@ -491,9 +514,11 @@ class Entity:
             self.health = self.max_health  # Full heal on level up
             self.strength = self.props['strength'] * self.level
 
-            # Reduce age by 10% (minimum 20)
+            # Reduce age by 10% and extend max_age by 20% (leveling extends lifespan)
             age_reduction = max(1, int(self.age * 0.1))
             self.age = max(20, self.age - age_reduction)
+            if hasattr(self, 'max_age'):
+                self.max_age = int(self.max_age * 1.2)
 
             # Log level up with name if available
             name_str = self.name if self.name else self.type

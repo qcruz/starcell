@@ -35,6 +35,7 @@ COLORS = {
     'IRON_ORE': (139, 90, 43),
     'WELL': (100, 80, 60),
     'CLIFF': (90, 80, 75),
+    'BUSH': (34, 100, 34),
     'CACTUS': (50, 120, 50),
     'BARREL': (120, 80, 40),
     'STONE_HOUSE': (110, 110, 120),
@@ -153,6 +154,13 @@ CELL_TYPES = {
         'label': 'Clf',
         'solid': True,
     },
+    'BUSH': {
+        'color': (34, 100, 34),
+        'label': 'Bush',
+        'solid': True,
+        'drops': [{'item': 'wood', 'amount': 1, 'chance': 0.6},
+                  {'cell': 'GRASS', 'chance': 0.4}],
+    },
 }
 
 # Cell pickup requirements
@@ -165,6 +173,7 @@ CELL_PICKUP = {
     'STONE': {'tool': None, 'item': 'stone'},
     'TREE1': {'tool': None, 'item': 'tree_sapling', 'amount': 1},
     'TREE2': {'tool': None, 'item': 'tree_sapling', 'amount': 1},
+    'BUSH': {'tool': None, 'item': 'bush', 'amount': 1},
     'WALL': {'tool': None, 'item': 'wall'},
     'HOUSE': {'tool': None, 'item': 'house'},
     'CAVE': {'tool': None, 'item': 'cave'},
@@ -180,38 +189,6 @@ CELL_PICKUP = {
     'BONES': {'tool': None, 'item': 'bones'}
 }
 
-# ============================================================================
-# ITEM DECAY SYSTEM - General decay rules for dropped items
-# ============================================================================
-
-# Item decay configuration - defines how dropped items decay over time
-ITEM_DECAY_CONFIG = {
-    'bones': {
-        'decay_rate': 0.05,  # 5% chance per update cycle (per bone)
-        'decay_results': {
-            # Cell type → [(result_cell, weight), ...]
-            'DIRT': [('GRASS', 0.7), ('TREE1', 0.3)],
-            'SAND': [('GRASS', 0.7), ('TREE1', 0.3)],
-            'GRASS': [('TREE1', 0.5), (None, 0.5)],  # None = just disappears
-            'default': [(None, 1.0)]  # Already good terrain, just disappear
-        }
-    },
-    'meat': {
-        'decay_rate': 0.10,  # 10% chance to decay (meat spoils faster)
-        'decay_results': {
-            'default': [(None, 1.0)]  # Meat just disappears (eaten by animals)
-        }
-    },
-    'carrot': {
-        'decay_rate': 0.03,  # 3% chance to decay
-        'decay_results': {
-            'DIRT': [('CARROT1', 0.2), (None, 0.8)],  # Small chance to replant
-            'SOIL': [('CARROT1', 0.5), (None, 0.5)],  # Better on soil
-            'default': [(None, 1.0)]
-        }
-    }
-}
-
 # Cell placement - what item places what cell
 ITEM_TO_CELL = {
     'grass': 'GRASS',
@@ -224,6 +201,7 @@ ITEM_TO_CELL = {
     'tree_sapling': 'TREE1',
     'tree1': 'TREE1',
     'tree2': 'TREE2',
+    'bush': 'BUSH',
     'carrot': 'CARROT1',
     'carrot1': 'CARROT1',
     'carrot2': 'CARROT2',
@@ -234,8 +212,6 @@ ITEM_TO_CELL = {
     'camp': 'CAMP',
     'chest': 'CHEST',
     'wall': 'WALL',
-    'wood': 'WOOD',
-    'planks': 'PLANKS',
     'meat': 'MEAT',
     'fur': 'FUR',
     'bones': 'BONES',

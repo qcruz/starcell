@@ -48,13 +48,13 @@ def check_git():
 
 
 def choose_branch():
-    """Show a macOS dialog asking which branch to run. Returns 'main' or 'dev'."""
+    """Show a macOS dialog asking which branch to run. Returns branch name."""
     script = (
         'tell application "System Events"\n'
         '  activate\n'
         '  set choice to button returned of (display dialog '
         '"Which version would you like to run?" '
-        'buttons {"Stable (main)", "Dev (latest)"} '
+        'buttons {"Stable (main)", "Dev (latest)", "Q Branch"} '
         'default button "Stable (main)" '
         'with title "StarCell Launcher")\n'
         'end tell\n'
@@ -64,6 +64,8 @@ def choose_branch():
         ["osascript", "-e", script],
         capture_output=True, text=True,
     )
+    if "Q Branch" in result.stdout:
+        return "dev-q-updates"
     if "Dev" in result.stdout:
         return "dev"
     return "main"
