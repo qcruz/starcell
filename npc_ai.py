@@ -21,6 +21,69 @@ class NpcAiMixin:
         return entity_zone == player_zone
 
     # ══════════════════════════════════════════════════════════════════════
+    # WALK CELL EFFECTS — entities passively reshape the world as they move
+    # ══════════════════════════════════════════════════════════════════════
+
+    def _apply_walk_cell_effects(self, entity, screen_key):
+        """Passive terrain mutation triggered each AI tick for overworld entities.
+
+        Each entity type modifies the cell it currently stands on at low probability,
+        creating emergent biome pressure without any extra pathfinding or targeting.
+        """
+        grid = self.screens[screen_key]['grid']
+        cx, cy = entity.x, entity.y
+        if not (0 <= cx < GRID_WIDTH and 0 <= cy < GRID_HEIGHT):
+            return
+        cell = grid[cy][cx]
+        center_x = GRID_WIDTH // 2
+        center_y = GRID_HEIGHT // 2
+
+        # ── SKELETON — bleaches grass to bare dirt ────────────────────────
+        if entity.type == 'SKELETON':
+            if cell == 'GRASS' and random.random() < 0.25:
+                grid[cy][cx] = 'DIRT'
+
+        # ── TERMITE — drops sand, aerates dirt into grass ─────────────────
+        elif entity.type == 'TERMITE':
+            if cell in ('GRASS', 'DIRT') and random.random() < 0.15:
+                grid[cy][cx] = 'SAND'     # organic matter consumed → sandy residue
+            elif cell == 'DIRT' and random.random() < 0.08:
+                grid[cy][cx] = 'GRASS'    # disturbed dirt catches seeds → grass
+
+        # ── FLYING ANIMALS — fertilise dirt into grass ────────────────────
+        elif entity.type == 'BUTTERFLY':
+            if cell == 'DIRT' and random.random() < 0.03:
+                grid[cy][cx] = 'GRASS'
+        elif entity.type == 'RED_BIRD':
+            if cell == 'DIRT' and random.random() < 0.05:
+                grid[cy][cx] = 'GRASS'
+        elif entity.type == 'BAT':
+            if cell == 'DIRT' and random.random() < 0.08:
+                grid[cy][cx] = 'GRASS'
+
+        # ── FARMER — slowly reclaims and tills land; auto-plants on SOIL ──
+        elif entity.type == 'FARMER':
+            if cell == 'SAND' and random.random() < 0.05:
+                grid[cy][cx] = 'DIRT'
+            elif cell == 'DIRT' and random.random() < 0.03:
+                grid[cy][cx] = 'SOIL'
+            elif cell == 'SOIL' and random.random() < 0.04:
+                # Auto-plant: place CARROT1 and consume one carrot from inventory
+                if entity.inventory.get('carrot', 0) > 0:
+                    grid[cy][cx] = 'CARROT1'
+                    entity.inventory['carrot'] = entity.inventory['carrot'] - 1
+
+        # ── OTHER HUMANOIDS — lay cobblestone through center cross ─────────
+        elif entity.type in ('WARRIOR', 'COMMANDER', 'KING', 'BLACKSMITH',
+                             'WIZARD', 'LUMBERJACK', 'MINER'):
+            on_center = abs(cx - center_x) <= 1 or abs(cy - center_y) <= 1
+            if on_center:
+                if cell in ('GRASS', 'SOIL') and random.random() < 0.08:
+                    grid[cy][cx] = 'DIRT'
+                elif cell == 'DIRT' and random.random() < 0.05:
+                    grid[cy][cx] = 'COBBLESTONE'
+
+    # ══════════════════════════════════════════════════════════════════════
     # ACTION PRIMITIVES — Reusable building blocks for NPC and player actions
     # ══════════════════════════════════════════════════════════════════════
 
@@ -522,6 +585,29 @@ class NpcAiMixin:
         if hasattr(entity, 'action_animation_timer') and entity.action_animation_timer > 0:
             entity.action_animation_timer -= 1
         
+        # Walk cell effects — overworld only (structures have fixed interiors)
+        if not entity.in_structure and screen_key in self.screens:
+            self._apply_walk_cell_effects(entity, screen_key)
+
+        # Automatic item pickup — runs for all entities (overworld and in-structure).
+        # Must sit before the in-structure return so cave/house NPCs can collect loot.
+        if screen_key in self.dropped_items:
+            pos_key_str = f"{entity.x},{entity.y}"
+            pos_key_tuple = (entity.x, entity.y)
+            for pos_key in (pos_key_str, pos_key_tuple):
+                if pos_key in self.dropped_items[screen_key]:
+                    items_at_pos = self.dropped_items[screen_key][pos_key]
+                    for item_name, count in list(items_at_pos.items()):
+                        entity.inventory[item_name] = entity.inventory.get(item_name, 0) + count
+                        player_adjacent = (
+                            entity.screen_x == self.player['screen_x'] and
+                            entity.screen_y == self.player['screen_y'] and
+                            abs(entity.x - self.player['x']) + abs(entity.y - self.player['y']) <= 1
+                        )
+                        if item_name == 'gold' and player_adjacent:
+                            self.process_npc_trade(entity, entity_id, count)
+                    del self.dropped_items[screen_key][pos_key]
+
         # Structure behavior - NPCs enter/exit houses and caves
         if entity.in_structure:
             self.handle_in_structure_npc(entity, entity_id)
@@ -724,63 +810,6 @@ class NpcAiMixin:
             entity.target_priority = priority
             entity.target = target
         
-        # Automatic item pickup for all entities
-        
-        # Check for dropped items at current position (both key formats)
-        if screen_key in self.dropped_items:
-                # Try string key format
-                pos_key_str = f"{entity.x},{entity.y}"
-                # Try tuple key format
-                pos_key_tuple = (entity.x, entity.y)
-                
-                items_picked_up = False
-                
-                # Check string format
-                if pos_key_str in self.dropped_items[screen_key]:
-                    items_at_pos = self.dropped_items[screen_key][pos_key_str]
-                    
-                    # Pick up all items at position
-                    for item_name, count in list(items_at_pos.items()):
-                        entity.inventory[item_name] = entity.inventory.get(item_name, 0) + count
-                        items_picked_up = True
-                        
-                        # Check if player is adjacent for trading
-                        player_adjacent = (
-                            entity.screen_x == self.player['screen_x'] and 
-                            entity.screen_y == self.player['screen_y'] and
-                            abs(entity.x - self.player['x']) + abs(entity.y - self.player['y']) <= 1
-                        )
-                        
-                        # TRADING: If gold picked up and player nearby, trigger trade
-                        if item_name == 'gold' and player_adjacent:
-                            self.process_npc_trade(entity, entity_id, count)
-                        
-                    # Clear dropped items at this position
-                    del self.dropped_items[screen_key][pos_key_str]
-                
-                # Check tuple format
-                if pos_key_tuple in self.dropped_items[screen_key]:
-                    items_at_pos = self.dropped_items[screen_key][pos_key_tuple]
-                    
-                    # Pick up all items at position
-                    for item_name, count in list(items_at_pos.items()):
-                        entity.inventory[item_name] = entity.inventory.get(item_name, 0) + count
-                        items_picked_up = True
-                        
-                        # Check if player is adjacent for trading
-                        player_adjacent = (
-                            entity.screen_x == self.player['screen_x'] and 
-                            entity.screen_y == self.player['screen_y'] and
-                            abs(entity.x - self.player['x']) + abs(entity.y - self.player['y']) <= 1
-                        )
-                        
-                        # TRADING: If gold picked up and player nearby, trigger trade
-                        if item_name == 'gold' and player_adjacent:
-                            self.process_npc_trade(entity, entity_id, count)
-                        
-                    # Clear dropped items at this position
-                    del self.dropped_items[screen_key][pos_key_tuple]
-
         # Flying entities occasionally drop one inventory item over ground cells
         if entity.props.get('flying', False):
             self._try_flying_item_drop(entity, screen_key)
