@@ -84,6 +84,53 @@ class NpcAiMixin:
                     elif cell == 'DIRT':
                         grid[cy][cx] = 'COBBLESTONE'
 
+    def _try_adjacent_consume(self, entity, screen_key):
+        """Auto-eat/drink when hungry/thirsty and adjacent to a food or water cell.
+
+        Carrot cells decay one step when consumed (CARROT3→CARROT2→CARROT1→SOIL).
+        WATER cells have a small chance to evaporate on drink.
+        Only fires for overworld entities that are actually in need.
+        """
+        if screen_key not in self.screens:
+            return
+        grid = self.screens[screen_key]['grid']
+        hunger_low = entity.hunger < entity.max_hunger * 0.55
+        thirst_low = entity.thirst < entity.max_thirst * 0.55
+        if not hunger_low and not thirst_low:
+            return
+
+        food_sources = entity.props.get('food_sources', [])
+        water_sources = entity.props.get('water_sources', ['WATER'])
+        CARROT_DECAY = {'CARROT3': 'CARROT2', 'CARROT2': 'CARROT1', 'CARROT1': 'SOIL'}
+
+        for dy in (-1, 0, 1):
+            for dx in (-1, 0, 1):
+                if dx == 0 and dy == 0:
+                    continue
+                nx, ny = entity.x + dx, entity.y + dy
+                if not (0 <= nx < GRID_WIDTH and 0 <= ny < GRID_HEIGHT):
+                    continue
+                cell = grid[ny][nx]
+
+                if hunger_low and cell in food_sources:
+                    gain = random.randint(3, 8)
+                    entity.hunger = min(entity.max_hunger, entity.hunger + gain)
+                    # Decay carrot one level; grassy food not consumed
+                    if cell in CARROT_DECAY and random.random() < 0.5:
+                        grid[ny][nx] = CARROT_DECAY[cell]
+                    hunger_low = False  # satisfied for this tick
+
+                elif thirst_low and cell in water_sources:
+                    gain = random.randint(4, 10)
+                    entity.thirst = min(entity.max_thirst, entity.thirst + gain)
+                    # Small chance water cell evaporates
+                    if cell == 'WATER' and random.random() < 0.15:
+                        grid[ny][nx] = 'DIRT'
+                    thirst_low = False
+
+                if not hunger_low and not thirst_low:
+                    return
+
     # ══════════════════════════════════════════════════════════════════════
     # ACTION PRIMITIVES — Reusable building blocks for NPC and player actions
     # ══════════════════════════════════════════════════════════════════════
@@ -589,6 +636,10 @@ class NpcAiMixin:
         # Walk cell effects — fire on actual steps only
         if not entity.in_structure and screen_key in self.screens and entity.moved_this_update:
             self._apply_walk_cell_effects(entity, screen_key)
+
+        # Passive adjacent eat/drink — overworld only, fires each step when hungry/thirsty
+        if not entity.in_structure and screen_key in self.screens and entity.moved_this_update:
+            self._try_adjacent_consume(entity, screen_key)
 
         # Automatic item pickup — runs for all entities (overworld and in-structure).
         # Must sit before the in-structure return so cave/house NPCs can collect loot.
@@ -1498,32 +1549,39 @@ class NpcAiMixin:
         # =====================================================================
         if (getattr(entity, 'keeper', False) and
                 entity.ai_state not in ('combat', 'flee')):
-            ktype = getattr(entity, 'keeper_type', 3)
-            ktarget = getattr(entity, 'keeper_target_pos', None)
-            krange = KEEPER_RANGE.get(ktype)
-            kt_ref = getattr(entity, 'keeper_target', None)
-            if ktype < 3 and ktarget and krange is not None:
-                # Cross-zone: target is in a different zone — head toward exit
-                if kt_ref and kt_ref.get('type') == 'entity':
-                    target_screen = kt_ref.get('screen')
-                    my_screen = (entity.screen_x, entity.screen_y)
-                    if target_screen and target_screen != my_screen:
-                        ex, ey = self._get_exit_toward_zone(
-                            my_screen[0], my_screen[1],
-                            target_screen[0], target_screen[1])
+            # Survival emergency: skip keeper forcing so the score queue can
+            # prioritise food/water instead.  20% threshold means truly starving.
+            _critical_survival = (
+                entity.hunger < entity.max_hunger * 0.20 or
+                entity.thirst < entity.max_thirst * 0.20
+            )
+            if not _critical_survival:
+                ktype = getattr(entity, 'keeper_type', 3)
+                ktarget = getattr(entity, 'keeper_target_pos', None)
+                krange = KEEPER_RANGE.get(ktype)
+                kt_ref = getattr(entity, 'keeper_target', None)
+                if ktype < 3 and ktarget and krange is not None:
+                    # Cross-zone: target is in a different zone — head toward exit
+                    if kt_ref and kt_ref.get('type') == 'entity':
+                        target_screen = kt_ref.get('screen')
+                        my_screen = (entity.screen_x, entity.screen_y)
+                        if target_screen and target_screen != my_screen:
+                            ex, ey = self._get_exit_toward_zone(
+                                my_screen[0], my_screen[1],
+                                target_screen[0], target_screen[1])
+                            entity.ai_state = 'targeting'
+                            entity.target_type = 'keeper_target'
+                            entity.current_target = (ex, ey)
+                            entity.ai_state_timer = 1
+                            return
+                    # Same zone: check distance
+                    dist = abs(entity.x - ktarget[0]) + abs(entity.y - ktarget[1])
+                    if dist > krange:
                         entity.ai_state = 'targeting'
                         entity.target_type = 'keeper_target'
-                        entity.current_target = (ex, ey)
+                        entity.current_target = (ktarget[0], ktarget[1])
                         entity.ai_state_timer = 1
                         return
-                # Same zone: check distance
-                dist = abs(entity.x - ktarget[0]) + abs(entity.y - ktarget[1])
-                if dist > krange:
-                    entity.ai_state = 'targeting'
-                    entity.target_type = 'keeper_target'
-                    entity.current_target = (ktarget[0], ktarget[1])
-                    entity.ai_state_timer = 1
-                    return
 
         # =====================================================================
         # TIMER-BASED STATE TRANSITIONS (only when timer expired)
