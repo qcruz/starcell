@@ -470,7 +470,16 @@ class NpcAiMixin:
                         elif len(entity.current_target) >= 2 and isinstance(entity.current_target[0], (int, float)):
                             self.move_toward_position(entity, entity.current_target[0], entity.current_target[1], screen_key)
                             self._try_targeting_zone_cross(entity, entity_id)
-            
+                else:
+                    # No current_target set — dispatch directly by target_type so resource-
+                    # seeking NPCs actually move instead of sitting frozen in targeting state.
+                    if entity.target_type == 'food':
+                        self.find_and_move_to_food(entity)
+                    elif entity.target_type == 'water':
+                        self.find_and_move_to_water(entity)
+                    elif entity.target_type == 'hostile':
+                        self.find_and_attack_enemy(entity_id, entity)
+
             elif entity.ai_state == 'wandering':
                 # Keeper type 1/2: return to anchor target if out of range
                 ktype = getattr(entity, 'keeper_type', None) or 3
