@@ -470,15 +470,7 @@ class NpcAiMixin:
                         elif len(entity.current_target) >= 2 and isinstance(entity.current_target[0], (int, float)):
                             self.move_toward_position(entity, entity.current_target[0], entity.current_target[1], screen_key)
                             self._try_targeting_zone_cross(entity, entity_id)
-                else:
-                    # No current_target set — dispatch directly by target_type so resource-
-                    # seeking NPCs actually move instead of sitting frozen in targeting state.
-                    if entity.target_type == 'food':
-                        self.find_and_move_to_food(entity)
-                    elif entity.target_type == 'water':
-                        self.find_and_move_to_water(entity)
-                    elif entity.target_type == 'hostile':
-                        self.find_and_attack_enemy(entity_id, entity)
+
 
             elif entity.ai_state == 'wandering':
                 # Keeper type 1/2: return to anchor target if out of range
@@ -1604,6 +1596,16 @@ class NpcAiMixin:
         _survival_urgency = (_h_missing + _t_missing) / 2.0
         _eff_aggr = min(1.0, aggressiveness + _survival_urgency)
 
+        def _resolve_current_target(ttype):
+            """Translate a target-type string into a concrete current_target value."""
+            if ttype == 'quest_target':
+                return self._quest_target_as_current(entity)
+            if ttype == 'food':
+                return self.find_closest_target_by_type(entity, 'food', screen_key)
+            if ttype == 'water':
+                return self.find_closest_target_by_type(entity, 'water', screen_key)
+            return None
+
         if entity.ai_state == 'idle':
             entity.current_target = None  # always clear target while idle
             roll = random.random()
@@ -1612,7 +1614,7 @@ class NpcAiMixin:
                 if target_type:
                     entity.ai_state = 'targeting'
                     entity.target_type = target_type
-                    entity.current_target = self._quest_target_as_current(entity) if target_type == 'quest_target' else None
+                    entity.current_target = _resolve_current_target(target_type)
                     entity.ai_state_timer = 2
                 else:
                     # Nothing to target — wander instead
@@ -1633,7 +1635,7 @@ class NpcAiMixin:
                 if target_type:
                     entity.ai_state = 'targeting'
                     entity.target_type = target_type
-                    entity.current_target = self._quest_target_as_current(entity) if target_type == 'quest_target' else None
+                    entity.current_target = _resolve_current_target(target_type)
                     entity.ai_state_timer = 2
                 else:
                     # Nothing to target — keep wandering longer
