@@ -52,13 +52,13 @@ class NpcAiMixin:
 
         # ── FLYING ANIMALS — fertilise dirt into grass ────────────────────
         elif entity.type == 'BUTTERFLY':
-            if cell == 'DIRT' and random.random() < 0.03:
+            if cell == 'DIRT' and random.random() < 0.12:
                 grid[cy][cx] = 'GRASS'
         elif entity.type == 'RED_BIRD':
-            if cell == 'DIRT' and random.random() < 0.05:
+            if cell == 'DIRT' and random.random() < 0.06:
                 grid[cy][cx] = 'GRASS'
         elif entity.type == 'BAT':
-            if cell == 'DIRT' and random.random() < 0.08:
+            if cell == 'DIRT' and random.random() < 0.02:
                 grid[cy][cx] = 'GRASS'
 
         # ── FARMER — slowly reclaims and tills land; auto-plants on SOIL ──
