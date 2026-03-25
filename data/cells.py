@@ -34,12 +34,27 @@ COLORS = {
     'FLOWER': (255, 100, 200),
     'IRON_ORE': (139, 90, 43),
     'WELL': (100, 80, 60),
+    'GRAVESTONE': (130, 125, 135),
+    'BED_BLUE': (70, 130, 180),
+    'DESERT_WELL': (180, 140, 80),
     'CLIFF': (90, 80, 75),
     'BUSH': (34, 100, 34),
     'CACTUS': (50, 120, 50),
     'BARREL': (120, 80, 40),
     'STONE_HOUSE': (110, 110, 120),
     'RUINED_SANDSTONE_COLUMN': (200, 160, 90),
+    # New cells
+    'BROKEN_GRAVESTONE': (105, 100, 108),
+    'LOCKED_CHEST':      (100, 50, 10),
+    'OPEN_CHEST':        (160, 100, 40),
+    'BOOKSHELF':         (130, 90, 50),
+    'WOOD_CHAIR':        (150, 100, 55),
+    'WOOD_TABLE':        (145, 95, 50),
+    'WATER_TROUGH':      (80, 110, 130),
+    'SMALL_POTTED_PLANT':(60, 120, 60),
+    'BED_WHITE':         (230, 225, 215),
+    'BLUE_MUSHROOM':     (60, 90, 180),
+    'APPLE_CRATE':       (180, 80, 30),
 }
 
 # Colors for entities
@@ -99,6 +114,9 @@ CELL_TYPES = {
     'CAMP': {'color': (200, 100, 50), 'label': 'Camp', 'solid': False, 'grows_to': 'HOUSE', 'growth_rate': 0.001},
     'SOIL': {'color': COLORS['SOIL'], 'label': 'Soil', 'solid': False},
     'FLOWER': {'color': COLORS['FLOWER'], 'label': 'Flwr', 'solid': False, 'degrades_to': 'GRASS', 'degrade_rate': 0.0001},  # Very slow decay
+    'FLOWER_PATTERN1': {'color': (255, 200, 50), 'label': 'Fp1', 'solid': True, 'degrades_to': 'GRASS', 'degrade_rate': 0.00015},
+    'FLOWER_PATTERN2': {'color': (180, 100, 220), 'label': 'Fp2', 'solid': True, 'degrades_to': 'GRASS', 'degrade_rate': 0.00015},
+    'FLOWER_PATTERN3': {'color': (255, 100, 100), 'label': 'Fp3', 'solid': True, 'degrades_to': 'GRASS', 'degrade_rate': 0.00015},
     # Placeable item cells
     'WOOD': {'color': COLORS['WOOD'], 'label': 'Wood', 'solid': False},
     'PLANKS': {'color': COLORS['PLANKS'], 'label': 'Plnk', 'solid': False},
@@ -124,12 +142,85 @@ CELL_TYPES = {
         'solid': True,
         'interactable': True,
     },
+    'GRAVESTONE': {
+        'color': (130, 125, 135),
+        'label': 'GS',
+        'solid': True,
+        'degrades_to': 'BROKEN_GRAVESTONE',
+        'degrade_rate': 0.000005,  # Very slow — centuries of weathering
+    },
+    'BROKEN_GRAVESTONE': {
+        'color': COLORS['BROKEN_GRAVESTONE'],
+        'label': 'BGS',
+        'solid': True,
+    },
+    'LOCKED_CHEST': {
+        'color': COLORS['LOCKED_CHEST'],
+        'label': 'LCh',
+        'solid': True,
+        'interactable': True,
+    },
+    'OPEN_CHEST': {
+        'color': COLORS['OPEN_CHEST'],
+        'label': 'Chst',
+        'solid': False,
+        'interactable': True,
+    },
+    'BOOKSHELF': {
+        'color': COLORS['BOOKSHELF'],
+        'label': 'Bkshlf',
+        'solid': True,
+    },
+    'WOOD_CHAIR': {
+        'color': COLORS['WOOD_CHAIR'],
+        'label': 'Chr',
+        'solid': True,
+    },
+    'WOOD_TABLE': {
+        'color': COLORS['WOOD_TABLE'],
+        'label': 'Tbl',
+        'solid': True,
+    },
+    'WATER_TROUGH': {
+        'color': COLORS['WATER_TROUGH'],
+        'label': 'WTrg',
+        'solid': True,
+        'interactable': True,
+    },
+    'SMALL_POTTED_PLANT': {
+        'color': COLORS['SMALL_POTTED_PLANT'],
+        'label': 'Plt',
+        'solid': True,
+    },
+    'BED_WHITE': {
+        'color': COLORS['BED_WHITE'],
+        'label': 'BedW',
+        'solid': True,
+    },
+    'BLUE_MUSHROOM': {
+        'color': COLORS['BLUE_MUSHROOM'],
+        'label': 'BMsh',
+        'solid': True,
+        'drops': [{'item': 'blue_mushroom', 'amount': 1, 'chance': 1.0}],
+    },
+    'BED_BLUE': {
+        'color': (70, 130, 180),
+        'label': 'Bed',
+        'solid': True,
+    },
+    'DESERT_WELL': {
+        'color': (180, 140, 80),
+        'label': 'DWel',
+        'solid': True,
+        'interactable': True,
+    },
     'CACTUS': {
         'color': (50, 120, 50),
         'label': 'Cct',
         'solid': True,
         'degrades_to': 'SAND',
         'degrade_rate': 0.00002,
+        'drops': [{'cell': 'SAND', 'chance': 0.8}],
     },
     'BARREL': {
         'color': (120, 80, 40),
@@ -143,6 +234,12 @@ CELL_TYPES = {
         'solid': True,
         'enterable': True,
         'interior_type': 'HOUSE_INTERIOR',
+    },
+    'EMPTY_CRATE': {
+        'color': (100, 65, 25),
+        'label': 'ECrt',
+        'solid': True,
+        'interactable': True,
     },
     'RUINED_SANDSTONE_COLUMN': {
         'color': (200, 160, 90),
@@ -159,7 +256,15 @@ CELL_TYPES = {
         'label': 'Bush',
         'solid': True,
         'drops': [{'item': 'wood', 'amount': 1, 'chance': 0.6},
-                  {'cell': 'GRASS', 'chance': 0.4}],
+                  {'cell': 'GRASS', 'chance': 0.8}],
+    },
+    'APPLE_CRATE': {
+        'color': (180, 80, 30),
+        'label': 'AplCrt',
+        'solid': True,
+        'interactable': True,
+        'infinite_food': True,
+        'food_value': 30,
     },
 }
 
@@ -186,7 +291,11 @@ CELL_PICKUP = {
     'PLANKS': {'tool': None, 'item': 'planks'},
     'MEAT': {'tool': None, 'item': 'meat'},
     'FUR': {'tool': None, 'item': 'fur'},
-    'BONES': {'tool': None, 'item': 'bones'}
+    'BONES': {'tool': None, 'item': 'bones'},
+    'FLOWER_PATTERN1': {'tool': None, 'item': 'flower'},
+    'FLOWER_PATTERN2': {'tool': None, 'item': 'flower'},
+    'FLOWER_PATTERN3': {'tool': None, 'item': 'flower'},
+    'APPLE_CRATE':     {'tool': None, 'item': 'apple_crate'},
 }
 
 # Cell placement - what item places what cell
@@ -215,7 +324,13 @@ ITEM_TO_CELL = {
     'meat': 'MEAT',
     'fur': 'FUR',
     'bones': 'BONES',
-    'flower': 'FLOWER',
+    'flower': 'FLOWER_PATTERN1',
+    'flower_pattern1': 'FLOWER_PATTERN1',
+    'flower_pattern2': 'FLOWER_PATTERN2',
+    'flower_pattern3': 'FLOWER_PATTERN3',
+    'gravestone': 'GRAVESTONE',
+    'bed_blue': 'BED_BLUE',
+    'desert_well': 'DESERT_WELL',
     'iron_ore': 'IRON_ORE',
     'well': 'WELL',
     'cactus': 'CACTUS',

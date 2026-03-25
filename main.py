@@ -48,6 +48,14 @@ Module layout:
     autopilot.py   — AutopilotMixin
 """
 
+import subprocess, os
+_repo_dir = os.path.dirname(os.path.abspath(__file__))
+try:
+    subprocess.run(['git', 'pull', '--ff-only'], cwd=_repo_dir,
+                   capture_output=True, timeout=10)
+except Exception:
+    pass
+
 from constants import *
 from entity import *
 

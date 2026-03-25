@@ -9,16 +9,21 @@
 
 Small additions using existing systems and minimal changes to code.
 
-- [ ] Action inventory, equipment inventory, and favor system — one session
-- [ ] Add actions inventory tab (R key) — shove and other contextual action items. Start with Attack, Block, Sneak, Dig, and Talk placeholders. Actions not dropped on death, will be starting options for game actions before player has tools.
-- [ ] Make actions default on spawn - 'attack', 'block' - allow player to collect resources without tools (low success chance)(actions and spells not dropped on death)
-- [ ] Add NPC trait Favor: -100 to 100, default zero for peacful NPCs, default -50 for hostiles. Will increase or decrease for certain actions (we will discuss when implementing)
-- [ ] Add faction standing display when inspecting NPC — show NPC favor score and faction label
-- [ ] Add per-NPC favor system — -100 to 100 favorability score; reduces follower energy cost
-- [ ] Add gift giving — player offers item to NPC to increase favor;
-- [ ] Add energy cost for active followers — each follower reduces max energy by 30% of their max energy; recalculates on add/remove
+- [ ] Status effects as a first-class system — add `entity.status_effects = {effect: ticks_remaining}` dict and `tick_status_effects()` pass; wire poisoned/burning/cold/bleeding as entries; replaces per-site hacks and unlocks The Hunger poison water, fire cells, and bleed-on-hit as one-liners
+- [ ] Player reputation ripple effects — hostile NPCs in a zone flee when player reputation exceeds threshold; traders offer 10–20% discount at high rep; zone Keeper greets player by name once rep threshold crossed; no new UI, condition checks on existing paths only
+- [ ] Zone memory / history scars — after any zone with >10 entity deaths, leave persistent marks: scorched tile variants, non-decaying bone piles, zone name suffix ("the Blighted"); pipe LoreEngine zone-death counts into visible cell state
+- [ ] Item durability — `durability` field on equipped items, decremented on each hit; at 0 breaks to `broken_<item>` junk; creates constant economic pressure that makes blacksmith and crafting feel necessary; repair recipes already handled by crafting system
+- [ ] Day/night NPC faction shift — at night guards patrol instead of idle, farmers shelter, bandits become aggressive even in neutral zones; one `self.is_night` condition check added to faction behavior dispatch
+- [ ] Wandering merchant caravan — TRADER NPC spawns at world edge once every N days, travels a path through several zones, despawns at far edge; carries rare items not in normal loot tables; wires existing travel behavior, trader inventory, and zone transition system
+- [ ] Boss concept: The Silence — a zone that has gone completely quiet (no spawns, no ambient, no growth); one ancient high-HP entity inside that ignores the player for ~60 ticks, then pursues zone-to-zone until killed; zero new systems, purely tuned pursuit AI and a suppressed spawn rate flag
+- [ ] Boss concept: The Sleeper — deep cave level that looks normal until any item is picked up; massive STONE_GIANT variant wakes and STAIRS_UP becomes blocked by cave-in (CAVE_WALL placed over stair cells); every 30 ticks adds more CAVE_WALL cells, shrinking playable space; player must kill it before the cave collapses; uses existing cave gen + timed cell placement tied to entity alive status
+- [ ] Monolith extraction pass — extract in-structure behavior block from npc_ai.py into ai/movement.py; target ~200-line reduction from monolith before status effects and boss zone work begins
+- [ ] Review and formalize `dynamic_to_item_conversion` — audit all code paths that convert dynamic follower/entity state to inventory items; ensure consistent naming, cleanup on death, and no stale entries survive between sessions
+- [ ] NPC targeting priority function — replace ad-hoc target selection with a scored priority system; each candidate gets a score based on type (hostile, special, resource, quest target, water, food); NPC picks highest-scoring target; scores tunable per entity type via ai_params
+- [ ] NPC trader targeting and trade system — when NPC inventory is full, NPC seeks nearby chest (existing dump logic) or nearby TRADER; if TRADER is adjacent, NPC trades surplus inventory items for gold; if NPC gold exceeds threshold, buys a random item from the TRADER's inventory
+
+- [ ] NPC infection system: vampirism and lycanthropy — hostile bats can infect humanoid NPCs with vampirism (transforms to BAT at night, reverts at dawn); hostile wolves can infect with lycanthropy (transforms to WOLF at night, reverts at dawn); silver weapons prevent/cure infection
 - [ ] Add item level display in inventory UI — show level badge on leveled items in all tabs
-- [ ] Add equipment panel UI — Weapon, Off-hand, Armor, Ring ×2, Amulet slots; passive stat bonuses
 
 - [ ] Village and dungeon biome — required sprites: fence, stairs up/down
 - [ ] Create village biome — VILLAGE zone type; rare spawn; clustered housing with fence cells enclosing plots, market stall, well; higher NPC density (FARMER, GUARD, BLACKSMITH, TRADER, COMMANDER, KING); guard keepers protect zone perimeter. Required sprites: fence.
@@ -31,19 +36,13 @@ Small additions using existing systems and minimal changes to code.
 - [ ] Skeleton doubles (and all doubles) need to process the same as their single counterparts (skeelton doubles should take constant damage during the day while outside)
 - [ ] Double entities should have a chance to split back in to singles every update tick if NPC population is low enough. Split inventory, levels, quest, etc randomly for now.
 - [ ] Hard cap on total number of same entity in zone - if more than 15 of the same entity type in zone, single or double, singles get 'absorbed' into doubles automatically - double entity gets level increase.
-- [ ] We need to make sure chest content are still picked up by the player on interaction (spacebar)
-- [ ] Add a few random items to barrels as well, picked up when interacted (same hadnling as chests, but lower quality loot table)
+- [ ] Add a few random items to barrels as well, picked up when interacted (same handling as chests, but lower quality loot table)
 - [ ] When player drops items on a chest cell, they should move to the chest inventory
-- [ ] When butterflys fly over base cells - high chance to grow the cell to next level - sand>dirt>grass>plant (will be adding bush and flowers, ect)(doesn't grow trees)
-- [ ] Complete NPC combat creature sound mapping — verify WOLF, GOBLIN, BAT, SKELETON, BANDIT route through _ENTITY_SOUND
-- [ ] Add wolf/goblin ambient presence sounds — WOLF growl every ~300 ticks within 6 cells; GOBLIN every ~200 ticks
+- [ ] When butterflies fly over base cells - high chance to grow the cell to next level - sand>dirt>grass>plant (will be adding bush and flowers, etc)(doesn't grow trees)
 - [ ] Add ambient rain sound during rain events — play rain_sound loop when is_raining; stop when false
-- [ ] Add do_shove() — push entity in facing direction one cell; blocked by solid cells
-- [ ] Add handle_npc_follow_interaction() — Shift+F on inspected NPC; 50% recruit chance - maybe an action instead? We will discuss.
 - [ ] Add buried treasure — shovel digs soft cells; chance to uncover cached items; Detect spell reveals locations, dig action works as well (low success chance - takes multiple tries)
 - [ ] Boost night-time hostile spawn rate slightly — BAT, GOBLIN, SKELETON have higher spawn weight at night
 - [ ] Add spell energy cost — spells draw from energy pool; drain health if insufficient
-- [ ] Rain affects crop growth — active rain reduces crop decay rate; speeds grass/tree spread
 - [ ] Add poisoned status effect — HP drain per tick; cured by antidote or milk
 - [ ] Add burning status effect — HP drain per tick; spreads to adjacent flammable cells
 - [ ] Add cold status effect — immobile for duration;
@@ -63,7 +62,6 @@ Small additions using existing systems and minimal changes to code.
 Post the item in chat before starting. Wait for a clear "go ahead." These introduce new entity types, structure types, UI systems, or world generation systems that require design decisions.
 
 ### New Entity Types
-
 
 ### New Structure Types
 - [ ] chance for stone house to become fort or belltower - fort spawns traveling soldiers (agressive) of the local faction, belltower spawns guards (relaxed, protect zone)

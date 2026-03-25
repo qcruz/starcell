@@ -5,6 +5,544 @@ Reviewed from `debug/bugcatcher.log` after each session.
 
 ---
 
+## Session 54 — PENDING (cave/structure bug focus)
+
+**Fixes applied before this run:**
+- Offscreen-only spawning: cave hostile, night skeleton, termite, and population maintenance now all skipped for the player's current zone. Only raids still fire in current zone.
+- Death drops: all items now land at exact death cell (no ±2 scatter).
+- Resource priority: linear urgency (NPCs pursue water/food at 30% missing, not 60%).
+- Chest decay: 0.5%/update chance to dump contents as dropped items.
+- WARRIOR added to all biome initial spawn tables (0.35–0.40).
+- Hostile spawns reduced ~25%; raid base halved (0.05→0.025).
+- Watchdog enhanced: structures now log `ai_state_timer`, `frozen_flag` (>600 ticks), `world_x/y`, `in_subscreen`, `in_combat`, `facing`, `anim_frame` per entity. Entity sample adds `in_subscreen`, `subscreen_key`, `ai_state_timer`. New integrity check: `entity_frozen_in_structure` fires when timer >600.
+
+**Watchdog focus this session: structure/cave behavior**
+- `watchdog_structure_sample`: look for entities with `frozen_flag: true` — these are freezing bugs
+- `integrity_anomaly / entity_frozen_in_structure`: direct freeze reports
+- `integrity_anomaly / entity_in_subscreen_but_in_screen_entities`: teleport/ghost candidates
+- `watchdog_entity_sample`: look for entities with `in_subscreen: true` while their zone is an overworld key
+- Target: spend session inside a cave. Document any freeze, teleport, or ghost entity seen.
+
+**Run stats:** TBD
+
+---
+
+## Session 53 — 2026-03-20 (proxy death → respawn)
+
+**Fixes applied before this run:**
+- Proxy death now triggers full death/respawn sequence (3–10 years time pass)
+- `update_autopilot()` re-enables `autopilot=True` when locked but flag cleared
+
+**Run stats:** Tick 16049 (~267s). Clean shutdown. Quest: FARM entire session.
+
+- **FARM**: ✅ **×2 completions** — `Quest [FARM] completed (autopilot)!` twice
+- **Quest advance broken**: `active_quest` stayed 'FARM' for the entire session (tick 1500–14700). After FARM completed, the quest never advanced to LUMBER. FARM appears to complete and then immediately re-cycle or the advance logic is not firing.
+- **Proxy survival**: LUMBERJACK id=262 survived all 16049 ticks. HP restored to 160 (proxy leveled up). No proxy death triggered.
+- **Proxy in combat/flee**: Samples show combat/flee at ticks 4800–14700. Quest nudge is suppressed during combat/flee — proxy spends most of the session fighting, not farming.
+- **Session 52 crash**: Not reproduced in Session 53. Session 52 likely a one-off (window close or transient error).
+
+### CONFIRMED BUG — Quest cycle not advancing after completion
+
+FARM completed twice in this session but `active_quest` never changed from FARM. The `_autopilot_advance_quest()` call should move to LUMBER after FARM completes. Either:
+(a) FARM is completing but `_autopilot_advance_quest()` isn't being reached (status check condition failing), or
+(b) FARM completes → advances → GATHER/FARM re-selected because loreEngine assigns FARM again on the new cycle
+
+### OBSERVATION — Proxy combat dominates quest time
+
+Proxy in flee/combat for all 5 watchdog samples (ticks 4800–14700). Quest nudge is skipped during these states, so the proxy effectively stops pursuing the quest goal while fighting. This is by design but worth noting — high combat pressure zones prevent quest progress.
+
+### CONFIRMED FIX — Proxy death respawn not needed this session
+
+No proxy death occurred, so the new respawn path wasn't exercised. Proxy HP was restored correctly by the 300-tick restore check. Respawn path will be observed in a future session.
+
+---
+
+## Session 52 — 2026-03-20 (proxy death respawn — crash session)
+
+**Run stats:** Tick ~3816. Crashed without shutdown event (no traceback captured). Session 53 confirmed this was a one-off.
+
+- Proxy (COMMANDER id=293) alive throughout, in targeting state
+- FARM quest active, proxy using wander priority at tick 2316
+- No proxy death triggered
+- Crash cause unknown (not reproduced)
+
+---
+
+## Session 51 — 2026-03-20 (quest timeout removed + proxy re-spawn fix)
+
+**Fixes applied before this run:**
+- Removed `QUEST_MAX_TICKS` / quest timeout entirely — quests run until natural completion
+- Proxy re-spawn fix applied after session (see confirmed bug below)
+
+**Run stats:** Tick ~15231 (~4.2 min). Quest sequence: FARM → HUNT (proxy died mid-HUNT, autopilot froze)
+
+- **FARM**: ✅ Completed naturally between tick 4728–8028 — first FARM completion observed
+- **HUNT**: Proxy (id=312) died between tick 4728 and 8028; `_autopilot_disengage()` set `autopilot=False` but left `autopilot_locked=True`; player stuck at (21,7) for ~7000 ticks taking passive damage
+- **LUMBER/MINE/etc.**: Never reached — session spent in frozen state
+
+### CONFIRMED FIX — FARM completed naturally
+
+With timeout removed, FARM completed between ticks 4728 and 8028 (~55 seconds). Previous sessions it was timing out at the 60s cap. Quest is achievable; it just needs time.
+
+### CONFIRMED BUG — Proxy death freezes player (autopilot_locked desync)
+
+**Root cause:** When proxy entity is externally removed (killed), `_autopilot_disengage()` sets `self.autopilot=False`. On the next tick, `game_core.py` sees `autopilot_locked=True` → calls `update_autopilot()` → but `update_autopilot()` early-returns on `if not self.autopilot`. Proxy is never respawned. Player is locked indefinitely.
+
+**Fix applied:** `update_autopilot()` now re-enables `self.autopilot=True` when `autopilot_locked=True` before the early-return check, allowing the spawn path to re-engage immediately.
+
+### OBSERVATION — Enemy facing while autopilot stuck
+
+User observed enemies attacking the player were not facing the player while the proxy was dead and autopilot was frozen. Likely a visual artifact of `world_x/world_y` diverging from grid `x/y` at proxy death time (smooth interpolation left mid-flight). The re-spawn fix resolves the root cause (no more frozen state). Will confirm facing in next session.
+
+---
+
+## Session 50 — 2026-03-20 (snap fix + zone exit fix)
+
+**Fixes applied before this run:**
+- `_autopilot_opportunistic_harvest`: skip harvest if proxy `world_x/y` lag > 0.3 cells (prevents facing change mid-interpolation causing visual snap)
+- `_autopilot_try_harvest_cell`: hard `dist == 1` adjacency guard before any action
+- `try_entity_zone_transition`: removed center ±1 corridor constraint — any edge position can now cross if exit is open
+- `try_entity_screen_crossing`: removed corridor position checks — only exit-open flag gates crossing
+
+**Run stats:** Tick 14757 (~4 min). Quest sequence: FARM → LUMBER → MINE → HUNT → SLAY (session end)
+
+- **FARM**: Timeout — no completion
+- **LUMBER**: ✅ **2 completions** — `Quest [LUMBER] completed (autopilot)!` ×2 — consistent with Session 49
+- **MINE**: Timeout — proxy (WARRIOR id=748) entered combat state at ticks 8157 and 11457; never able to mine
+- **HUNT**: Timeout — proxy (GUARD id=868) logged "Stuck at exit (12,17) — entering wander cooldown" but **DID cross to zone 0,-1** by tick 14757 ✅
+- **SLAY**: Session ended before observation
+
+### CONFIRMED FIX — Zone crossing working
+
+Proxy (GUARD id=868) crossed from zone 0,0 to zone 0,-1 during HUNT quest. Previous sessions never left the starting zone. Zone exit fix confirmed.
+
+### OBSERVATION — Stuck-at-exit message still appears
+
+"Stuck at exit (12,17) — entering wander cooldown" logged during HUNT. Proxy DID eventually cross (zone 0,-1 confirmed), so the corridor fix resolved the blocking issue. The stuck message is from autopilot's own exit-stuck detection (`_autopilot_nudge_zone_explore`) which triggered before the crossing completed — likely the anti-bounce cooldown (30 ticks) delayed it. Not a blocker.
+
+### CONFIRMED BUG — MINE timing out (combat interference)
+
+MINE proxy (WARRIOR id=748) was in combat state at both watchdog samples (ticks 8157, 11457). The proxy's aggression as a WARRIOR type pulls it into fights before it can mine. The quest target cell never gets mined because the proxy keeps fighting instead of executing the MINE behavior. Needs either: (a) spawn a MINER for MINE quests, or (b) suppress combat for quest proxies when in quest-action range.
+
+### CONFIRMED BUG — FARM still timing out
+
+FARM has not completed across any session. Likely the quest target is being modified by a different entity (cell changes to something other than what's expected) before the proxy arrives, or the `try_till_soil`/`try_harvest_crop` priority path still has an issue. Needs a dedicated run focused on FARM with closer logging.
+
+---
+
+## Session 49 — 2026-03-20 (quest target priority fix)
+
+**Fixes applied before this run:**
+- `try_chop_tree` and `try_mine_rock` now prioritize `quest_nav_target` cell when it is adjacent — root cause of zero quest completions across sessions 43-48
+- Added same priority to `try_harvest_crop` and `try_till_soil` for FARM quests
+
+**Root cause identified:** Both harvest functions scanned 4 cardinal directions and returned after the FIRST matching adjacent cell. In dense forests/stone fields, a different adjacent cell always won the scan before the specific quest target cell. `check_quest_completion` requires the EXACT `(tx, ty)` cell to change, so quests always timed out.
+
+**Run stats:** Session killed early (user intervention), but captured:
+- Quest sequence: FARM (FARMER id=276) → LUMBER (WARRIOR id=463) → MINE (LUMBERJACK id=608)
+- **FARM timed out** — FARM quest probably targeted SOIL/DIRT/TREE, not CARROT3. FARMER proxy's `try_harvest_crop` only looks for CARROT3; `try_till_soil` fix not yet committed.
+- **LUMBER COMPLETED** ✅ — `Quest [LUMBER] completed (autopilot)! +1 XP` — first quest completion ever logged
+- MINE not observed (session killed during MINE quest)
+
+### CONFIRMED BUG — FARM still timing out
+
+The FARM quest can target CARROT1/2/3, SOIL, DIRT, TREE1/2. When target is DIRT, the proxy needs `try_till_soil` to change it to SOIL. Same priority problem existed there. Priority fix added to `try_harvest_crop` and `try_till_soil` in this session. Not yet verified — needs another run.
+
+### CONFIRMED FIX — LUMBER completing
+
+Priority fix to `try_chop_tree` is confirmed working. WARRIOR proxy for LUMBER reached and chopped the quest target cell successfully.
+
+---
+
+## Session 48 — 2026-03-20 (quest_nav_target — navigation confirmed, completion still 0)
+
+**Fixes applied before this run:**
+- `quest_nav_target` field on entities: highest-priority navigation, checked before keeper block in `npc_ai.py`
+- `_try_complete_assigned_quest`: skips keeper reset when `quest_nav_target` is set
+- `assign_zone_keepers` (world/zones.py): skips autopilot proxies to prevent keeper_type=2 override
+- CACTUS drops added: `{'cell': 'SAND', 'chance': 0.8}` — was empty, proxy stalled forever on CACTUS cells
+
+**Run stats:** 5 quests advanced (GATHER→FARM→LUMBER→MINE→HUNT), no stagnation, no crashes.
+
+### OBSERVATION — keeper_type=1 confirmed holding via watchdog
+
+MINER proxy (id=585) npc_quest snapshot: `keeper_type=1`. The quest_nav_target block is overriding all other keeper resets and holding type=1 between nudge cycles. Navigation is working as intended.
+
+### OBSERVATION — HUNT proxy entered real combat
+
+COMMANDER proxy for HUNT: `ai_state=combat`, `quest_target='WOLF(id=526) HP:14/30'`. Proxy is engaging the quest target in combat. Combat engagement path working.
+
+### OBSERVATION — All quests still timing out, 0 completions
+
+All 5 quests advanced via `QUEST_MAX_TICKS=3600` timeout, not completion. Stdout: `[Autopilot] Quest timeout: HUNT — advancing`. Zero `quest_complete` events in bugcatcher.log across any category.
+
+### UNRESOLVED — quest_complete not firing despite navigation working
+
+Root cause not yet identified. Three candidates:
+1. Proxy reaches dist≤1 but `try_chop_tree`/`try_mine_rock` chops a DIFFERENT adjacent cell instead of the quest target
+2. `check_quest_completion` distance check fails (player position not synced)
+3. `_original_cell` mismatch (cell changed by world update before proxy arrives)
+
+---
+
+## Session 47 — 2026-03-20 (quest_nav_target first run — killed early)
+
+**Fixes applied before this run:** Same as Session 48 batch (quest_nav_target approach, CACTUS drops, assign_zone_keepers proxy skip).
+
+**Run stats:** Session killed immediately after LUMBERJACK proxy spawned — insufficient data.
+
+### OBSERVATION — loreEngine diagnostic never appeared (correct behavior)
+
+Added diagnostic print to `_autopilot_nudge_quest_target` to fire when loreEngine found no target. Never appeared. Root cause: `update_quests()` calls `loreEngine(quest)` for any inactive quest every tick. After `clear_target()` in `_autopilot_advance_quest`, the quest is reassigned within 1 game tick — already active before the first nudge fires (120 ticks later). Diagnostic removed. This is correct behavior.
+
+---
+
+## Session 46 — 2026-03-20 (random proxy types + keeper fix)
+
+**Fixes applied before this run:**
+- `try_chop_tree` now handles CACTUS/BUSH (was TREE1/TREE2 only) — MINER no longer stuck on BUSH
+- Proxy excluded from `assign_zone_keepers` to prevent keeper_type=2 override on tick 1
+- `proxy.keeper=True` set alongside keeper_type=1 in nudge (was False — keeper block was skipped)
+- Proxy spawns at nearest walkable cell (avoids water/wall spawn)
+- `_autopilot_explore_for_target` fallback added: when loreEngine finds no target, push proxy toward adjacent unloaded zones
+- Random proxy type per quest: `AUTOPILOT_PROXY_TYPES` pool replaces `QUEST_NPC_TYPE` mapping
+
+**Run stats:** tick 10878, no crashes.
+
+### OBSERVATION — No proxy stagnation
+
+Previous sessions had proxy stuck at same position for 3000+ ticks. This session: zero stagnation events. Proxy moved across zone (positions changed each snapshot). The walkable-spawn + keeper fixes are working.
+
+### OBSERVATION — Quest sequence advancing correctly
+
+- Tick 1422: FARM (proxy id=260), pos=[17,5] zone=0,0
+- Tick 4722: LUMBER (proxy id=445), pos=[4,9] zone=0,0
+- Tick 8022: MINE (proxy id=606), pos=[2,10] zone=0,0
+
+GATHER→FARM→LUMBER→MINE all advanced within one session. Proxy ids differ each quest = fresh spawns working.
+
+### OBSERVATION — Quests still advancing via timeout (~3300 ticks), not completion
+
+Gap between quest advances is ~3300 ticks (close to QUEST_MAX_TICKS=3600). Quests are timing out rather than completing. Root cause not yet confirmed — could be:
+1. NPC's own keeper_type reset overriding the nudge's keeper_type=1 (confirmed below)
+2. Quest completion check not triggering (distance, cell change not detected)
+3. loreEngine finding targets too far from proxy
+
+### OBSERVATION — NPC's own behavior resets keeper_type between nudges
+
+LUMBER proxy was COMMANDER (id=445). At tick 6222: `keeper_type=3`, `quest_focus='COMBAT_ALL'`. The nudge sets `keeper_type=1` every 120 ticks, but COMMANDER's `_try_complete_assigned_quest` (called on each combat contact) resets `keeper_type = _base_keeper_type = 3`. So the proxy orbits in zone-keeper mode between nudges instead of walking to the quest cell. This is the **primary blocker for cell quest completion** — needs a different approach (see next section).
+
+### OBSERVATION — Random proxy types working as designed
+
+Different NPC types assigned per quest. COMMANDER doing LUMBER is intentional — reveals that NPC types with combat-focused base quests (COMMANDER, WARRIOR, GUARD) won't navigate to resource cells effectively. This data is useful for identifying which NPC types need quest-steering improvements.
+
+### CONFIRMED BUG — NPC's own keeper management overrides nudge-set keeper_type
+
+**Impact:** Cell quests (LUMBER, MINE, FARM) never complete because the proxy's NPC AI resets keeper_type after every state transition. The nudge sets keeper_type=1 for 120 ticks, but any NPC completing a "base quest" sub-step resets it to 3 (the `_base_keeper_type` fallback). Needs investigation — either anchor the keeper_type more persistently or use a different mechanism to steer the proxy to quest cells.
+
+---
+
+## Sessions 43–45 — 2026-03-20 (keeper_target navigation + combat aggression fixes)
+
+Fixes applied across these runs — results fed into Session 46:
+
+### FIXED — Proxy position jumping from nudge state overrides
+
+The nudge was forcing `proxy.ai_state = 'targeting'` and `proxy.current_target` every 120 ticks, externally overriding the NPC's own state machine. This caused visible jerking. Fix: nudge now uses `proxy.keeper_target` / `proxy.keeper_target_pos` / `proxy.keeper_type = 1` for cell quests — the NPC AI navigates naturally without state interruption. For combat quests: `proxy.quest_target = target_entity_id`, NPC AI handles combat.
+
+### FIXED — WARRIOR proxy never attacked (aggressiveness=0.0)
+
+All proxy types had `aggressiveness=0.0`, `combat_chance=0.0` — the proxy never initiated combat, so `_proxy_damaged_target` was never set, and combat quests could never complete. Fix: combat quests get `aggressiveness=0.6`, `combat_chance=0.5`, `flee_chance=0.05`. Non-combat quests keep low aggression (0.1) with high flee (0.85).
+
+### FIXED — Obstacle-clear and harvest were stopping the proxy mid-navigation
+
+`proxy.ai_state = 'wandering'` and `proxy.current_target = None` were set in both `_autopilot_try_harvest_cell` and `_autopilot_try_clear_obstacle`, cancelling the keeper_target navigation. Removed. Proxy now just faces the cell and executes the action without interrupting its navigation state.
+
+### FIXED — loreEngine picking first tree/stone in grid scan (row 0 first)
+
+LUMBER/MINE quest targets were assigned as the first cell found scanning from (0,0), often at the opposite side of the zone. Fix: loreEngine now finds the nearest tree/stone to the player position (Manhattan distance) for local-zone assignments.
+
+---
+
+## Session 42 — 2026-03-20 (run 26 — harvest stop + combat gate)
+
+Two fixes applied before this run:
+
+### FIXED — Proxy movement snap during mining/chopping
+
+`_autopilot_try_harvest_cell` was calling `try_chop_tree`/`try_mine_rock` while proxy was still in targeting state — caused visible snap as proxy moved into the cell. Fix: explicitly stop proxy (clear current_target, set ai_state='wandering', call `update_facing_toward`) before executing the harvest action. Same fix applied to `_autopilot_try_clear_obstacle`.
+
+### FIXED — Obstacle-clear only handled TREE/STONE, missing CACTUS/BUSH
+
+Expanded `_CHOPPABLE` to include CACTUS, BUSH. Added `_MINABLE`, `_PLANTABLE`, `_TILLABLE`, `_CROPPABLE` constants. Obstacle-clear and harvest now reference shared frozensets.
+
+### FIXED — Combat quests completing on NPC dehydration deaths
+
+`check_quest_completion` was crediting completion whenever the entity died in the same zone, including from dehydration. Proxy combat was irrelevant.
+
+Fix: two-part:
+1. `update_autopilot` now tracks `proxy.combat_target == quest.target_entity_id` each tick. When true, updates `quest.progress` and sets `quest._proxy_damaged_target = True`.
+2. `check_quest_completion` (lore/engine.py) now requires `quest._proxy_damaged_target == True` before crediting completion when entity is dead. If entity died without proxy damage, clears target and reassigns.
+
+`_proxy_damaged_target` is reset to False on `_autopilot_advance_quest()`.
+
+---
+
+## Sessions 38–41 — 2026-03-20 (runs 25–28 — cell quest targeting chain)
+
+Session 41: 11368 ticks. FARM/LUMBER/MINE all timed out again. Zero harvest_cell calls. MINE completed once in session 39 (likely by chance — obstacle-clear mining a rock adjacent to the quest target). Several bugs found and fixed in sequence:
+
+### FIXED — Proxy spawn location (user reported proxy spawning in lake)
+
+Proxy spawns at `self.player['x'], self.player['y']`. Player position is not checked for walkability before spawn. Proxy can land on water/impassable tiles and be stuck immediately. Needs spawn location validation — pick nearest walkable cell to player. Not yet fixed — adding to next_up.
+
+### FIXED — 65% natural-behavior skip was cancelling cell-quest steering
+
+The nudge returned early 65% of the time AND explicitly cleared `ai_state = 'wandering'` for any in-progress targeting. For FARM/LUMBER/MINE/GATHER, the natural NPC AI chops random cells, not the specific quest target. Completion requires the SPECIFIC target cell to change. Fix: skip the 65% early-return when the proxy is in the same zone as the target cell (`in_same_zone` flag).
+
+### FIXED — Wrong current_target format (2-tuple vs ('cell', tx, ty))
+
+Nudge was setting `proxy.current_target = (tx, ty)` (2-tuple). The NPC AI targeting code checks `len >= 3 and current_target[0] in ['cell', 'entity']`. A 2-tuple hits a fallback path that walks ONTO the cell (not adjacent), getting stuck on blocking tiles (trees, stone). Fix: use `('cell', tx, ty)` so NPC AI stops at dist==1 (adjacent).
+
+### FIXED — _autopilot_try_harvest_cell missing SOIL/DIRT handlers
+
+For FARM quests targeting SOIL/DIRT cells, `_autopilot_try_harvest_cell` printed "already changed?" and did nothing. Fix: added `SOIL → try_plant_seed()`, `DIRT/GRASS/SAND → try_till_soil()`.
+
+### BUG — harvest_cell still never fires despite fixes
+
+After all three fixes, no `[AP] harvest_cell:` prints appear across sessions 40–41. The proxy navigates (obstacle-clear triggers when adjacent to target), but the nudge's `dist <= 1` branch never fires `_autopilot_try_harvest_cell`. Root cause under investigation:
+- Proxy may reach dist==1, NPC AI idles, obstacle-clear chops the target cell — but `check_quest_completion` doesn't detect because player was not within dist≤2 at that tick
+- OR: the nudge fires at dist > 1 (proxy hasn't arrived yet), sets targeting, but by next nudge the proxy has moved away again
+
+Next step: add dist print to the nudge's same-zone branch to observe proxy distance to target at each nudge cycle.
+
+### OBSERVATION — loreEngine called by update_quests within 1 tick of clear_target
+
+`update_quests()` calls `loreEngine(quest)` for any inactive quest every tick (line 665-666 in lore/engine.py). So after `clear_target()` in `_autopilot_advance_quest`, the quest is reassigned to a nearby target within 1 game tick — BEFORE the first nudge fires (120 ticks later). The diagnostic loreEngine print in the nudge never appeared because quest was already 'active' again. This is correct behavior; diagnostic print removed.
+
+---
+
+## Session 37 — 2026-03-20 (run 26 — diagnosing loreEngine target assignment)
+
+Session killed immediately after LUMBERJACK spawned — insufficient data. Confirmed: loreEngine print never appeared because `update_quests()` re-activates the quest within 1 tick of clear_target, so quest is already 'active' when the nudge runs.
+
+---
+
+## Session 36 — 2026-03-20 (run 25 — stale target clear fix)
+
+Session ran ~190s. FARM timed out, LUMBER timed out, MINE started (MINER spawned). Zero quest completions.
+
+### BUG — clear_target on quest advance may leave quest permanently inactive
+
+After `_autopilot_advance_quest()` clears the new quest's target, the quest status becomes 'inactive'. The nudge calls `loreEngine(quest)` to re-assign. If loreEngine can't find a nearby tree/stone (or the proxy is in a barren zone), it returns False and the quest stays 'inactive' forever — nudge exits early every cycle, no steering, no harvest, timeout fires.
+
+Session confirmed: zero `[AP] harvest_cell:` prints across all three quest types. The nudge is not reaching the target_cell steering block.
+
+Next step: diagnostic print after loreEngine call to confirm whether it assigns or fails.
+
+---
+
+## Session 35 — 2026-03-20 (run 25 — verify proxy respawn fix)
+
+FARM timed out, LUMBER timed out, MINE started. Zero harvest_cell calls. Proxy types spawned correctly (FARMER → LUMBERJACK → MINER) confirming session 34 fix holds. But quest targets from game-start are stale by the time those quests become active — proxy is in a different zone than the original target.
+
+---
+
+## Session 34 — 2026-03-19 (run 24 — proxy respawn fix for quest type transitions)
+
+10228 ticks. Session ran ~190s.
+
+### FIXED — LUMBERJACK/MINER proxy never spawning after FARM→LUMBER or LUMBER→MINE advance
+
+Root cause: `_autopilot_advance_quest()` calls `_autopilot_disengage()` when the new quest requires a different NPC type. `_autopilot_disengage()` sets `self.autopilot = False` (designed for player takeover), which prevents `update_autopilot()` from ever calling `_autopilot_engage()` again. The LUMBERJACK proxy was never created; LUMBER quest ran its full 3600-tick timeout with no activity.
+
+Fix: In `_autopilot_advance_quest()`, immediately after `_autopilot_disengage()`, set `self.autopilot = True` to keep the autopilot running through the proxy swap.
+
+### CONFIRMED — Quest progression working across multiple types
+
+Results this session:
+- FARM completed ×2, then timed out (quest re-assigned after completions but stalled)
+- LUMBER completed ×1 (proxy spawned, navigated to target tree, chopped)
+- MINE started (MINER proxy spawned at tick ~10000+, session ended before completion)
+
+Previous sessions: LUMBER/MINE/GATHER always timed out (0 completions). Now working.
+
+### OBSERVATION — FARM "already changed?" repeated calls after completions
+
+`[AP] harvest_cell: target (11,3) is now 'SOIL' — already changed?` fires repeatedly on same (11,3) target after FARM completes. This is the FARM quest target_cell still pointing to a now-tilled cell. Harmless but noisy — suggest clearing or refreshing FARM target on quest status change to 'cooldown'.
+
+### OBSERVATION — LUMBER timed out on 2nd cycle
+
+After first LUMBER completion, quest re-assigned. The new LUMBER target was not reached before the 3600-tick timeout. Likely the second target was in a different zone and cross-zone travel didn't complete in time. Worth watching in future sessions.
+
+---
+
+## Session 33 — 2026-03-19 (run 23 — diagnostic run, LUMBER failure mode)
+
+Session run to observe diagnostic prints in `_autopilot_try_harvest_cell`. No harvest_cell prints appeared for LUMBER quest — LUMBERJACK proxy was never spawned after FARM→LUMBER advance (see Session 34 root cause above).
+
+---
+
+## Session 29 — 2026-03-19 (run 19 — quest completion steering)
+
+13907 ticks. 467 entities. 75 zones. Player zone 0,0. 0 stagnations. Player took combat damage (health 82).
+
+### CONFIRMED — Quest completions now happening in autopilot sessions
+
+3 quests completed this session: COMBAT_HOSTILE, HUNT, SLAY. Previous sessions had 0 completions. Change: proxy now actively steers toward specific target cell within the quest's zone rather than wandering randomly. XP at tick 11385: 2 (2 combat completions credited before SLAY at end).
+
+### CONFIRMED — Tools persisting and accumulating across full session
+
+axe:1, hoe:1, shovel:1, pickaxe:1, bucket:1 all present from tick 1485 through shutdown. Tool slots progressively filled: 7 at tick 3237, 8 at 6537, 9 at 9885 (all slots filled). Weapon slot equipped (enchanted_sword crafted again).
+
+### CONFIRMED — Persistent flee respawn working
+
+"Persistent flee — switching EXPLORE → SLAY, respawning as WARRIOR" fired. Proxy re-engaged as WARRIOR and completed SLAY quest shortly after.
+
+### OBSERVATION — Zero stagnations
+
+No stagnation events logged. Flee detection + flee-stuck escape fully preventing lock-in states.
+
+### OBSERVATION — XP progression: 0→2 over session
+
+Level stayed at 1 (XP reward=1 per quest, 3 completed = 3 XP, but level threshold not reached). Quest completion is now driving forward. Next focus: getting more non-combat quest completions (GATHER/LUMBER/MINE) and accumulating wood/stone for crafting.
+
+---
+
+## Session 28 — 2026-03-19 (run 18 — tool-seeding fix verification)
+
+10320 ticks. 394 entities. 76 zones. Player zone 0,0. Player health 81.3 (took damage in combat).
+
+### CONFIRMED FIXED — Tools now persist across full session
+
+Inventory at tick 1437: axe:1, hoe:1, shovel:1, pickaxe:1, bucket:1, enchanted_sword:1. Same tools present at tick 8037 (none lost). Tool-seeding fix confirmed: proxy no longer consumes player tools through the sync.
+
+### CONFIRMED — Enchanted sword crafted and equipped to weapon slot
+
+`equip enchanted_sword → weapon` fired. Inventory state at tick 3237 shows `equip=['weapon']`. enchanted_sword assigned to tool slot 5. Gear equip and tool slot assignment both working end-to-end.
+
+### CONFIRMED — Tool slots progressively filling
+
+By tick 9837: 7 slots filled (axe, hoe, shovel, pickaxe, bucket, enchanted_sword, hoe). Multiple assignment sequences executed correctly.
+
+### OBSERVATION — One stagnation event (proxy position stuck)
+
+Single proxy stagnation logged. Proxy still spending time in flee state (tick 8037: flee). Persistent flee detection (1800 ticks) is the escape hatch — not yet visible in this session since flee ticks were spread across movement.
+
+### OBSERVATION — Quest cycle active but resource accumulation slow
+
+Quest switches: FARM→GATHER→LUMBER→COMBAT_HOSTILE→SEARCH→RESCUE→FARM. Carrot appeared at tick 4737, seeds at tick 8037. No stone/wood/iron yet — proxy is FARMER type for most of the session, prioritizing farming over mining/chopping.
+
+---
+
+## Session 27 — 2026-03-19 (run 17 — persistent flee + tool seeding fix)
+
+16680 ticks. 471 entities. 83 zones. Player zone 0,0. No proxy stagnation.
+
+### CONFIRMED BUG — Proxy seeding tools caused player to lose them via sync
+
+**Symptom:** Initial inventory at tick 1437: axe:1, hoe:1, shovel:1, tree_sapling:3, seeds:1. By tick 4737: only seeds:1, carrot:1. All tools and saplings disappeared within ~3300 ticks.
+
+**Root cause:** `_autopilot_engage()` seeded ALL player items (including tools) into `proxy.inventory`. When the NPC AI proxy used a hoe (till action) or shovel (dig action), it removed the item from `proxy.inventory`. The `_sync_inventory_to_player` then applied delta=-1 → player lost the tool.
+
+**Fix (applied):** Proxy seeding now skips items where `is_tool`, `is_spell`, or `is_action` is True. Only resource/consumable items are seeded into the proxy. Tools remain in the player's inventory exclusively.
+
+### CONFIRMED FIXED — Persistent flee detection working
+
+"Persistent flee — switching GATHER → SLAY, respawning as WARRIOR" triggered near end of session (tick ~16400). Proxy disengaged and would have re-engaged as WARRIOR. Session timer expired before re-engage completed — expected behavior.
+
+### OBSERVATION — Tool slots clearing over session
+
+At tick 3237: slots had shovel in slot 2. By tick 6537: all slots empty. Shovel disappeared (confirmed caused by tool-seeding bug above). With the seeding fix applied, tools should persist through sessions.
+
+### OBSERVATION — Resource accumulation still minimal
+
+seeds:1, carrot:1 unchanged from tick 4737 to shutdown. Proxy was mostly fleeing. Persistent flee fix triggers re-engage as WARRIOR — next sessions should show WARRIOR proxy accumulating combat drops (meat, bones) rather than staying in flee.
+
+---
+
+## Session 26 — 2026-03-19 (run 16 — flee-state fix verification)
+
+11888 ticks. 474 entities. 95 zones. Player crossed to zone 1,0. Player health 110.8 (healed above base).
+
+### CONFIRMED FIXED — Proxy flee-state stagnation
+
+Zero stagnation events logged. Proxy moved between grid positions across the session (zone 0,0 → 1,0). Flee-state stuck detection now fires correctly.
+
+### OBSERVATION — Proxy spends ~80% of session in flee state
+
+Player samples at ticks 4911, 8211, 11511 all show proxy_state=flee. Proxy is FARMER type (spawned for GATHER quest), which has low combat rating and flees from hostiles. As entity count grows (~474) and the player zone accumulates bandits/goblins/skeletons/wolves, the FARMER proxy gets into persistent flee loops. Proxy does still move and cross zones; resource accumulation is minimal (seeds:2→3, meat:1 appeared). Not a crash; documented for future proxy-role-assignment improvement.
+
+### OBSERVATION — `selected_tools` transient mismatch during multi-step sequences
+
+At tick 10011, `selected_tools='carrot'` with `tool_slots[2]=None`. This is a mid-sequence transient state captured by the watchdog between an unequip and the matching equip queued action. Not player-visible (player is not controlling during autopilot). No gameplay impact — number keys read `tool_slots` directly.
+
+### OBSERVATION — One MINER keeper_no_target integrity hit (id=345, tick 6111)
+
+Humanoid filter working correctly — this is a legitimate anomaly (MINER with keeper=True briefly without a target). Single occurrence, likely during zone transition. No action needed.
+
+### OBSERVATION — Tool slot assignment sequences executing
+
+Console confirmed: T+I+number+click sequences firing correctly. Carrot and seeds assigned to slots. `close_menus post-action` firing after each sequence.
+
+---
+
+## Session 25 — 2026-03-19 (run 15 — toolbar/reference architecture stress test)
+
+11935 ticks. 486 entities at shutdown. 86 zones explored. Player stayed zone 0,0.
+
+### CONFIRMED BUG — Proxy stagnation in `flee` state
+
+**Symptom:** Proxy stuck at grid [1,1] for ~3300 ticks (tick ~8200 to 11517). Proxy ai_state was `flee` the entire time. `last_input_tick` was 1617, meaning no new inputs were generated for nearly the full session duration.
+
+**Root cause:** Stuck detection in `update_autopilot()` (autopilot.py:147) only checks `targeting` and `wandering` states. When hostile NPCs cornered the proxy at [1,1] and forced it into `flee`, neither obstacle clearing nor stuck counter increments fired. The proxy remained frozen with menus open.
+
+**Fix (applied):** Extended stuck detection to include `flee` state. After 300+ ticks stuck in flee, force proxy ai_state back to `wandering` so it can resume normal movement.
+
+### OBSERVATION — Tool slot assignment working
+
+Tool slots progressively filled: slot 1 (shovel) at tick 3417, slots 0+1 (seeds+shovel) at tick 6717, slots 0+1+2 at tick 10017. Assignment sequence (T→I→number→click) confirmed functional.
+
+### OBSERVATION — Actions dict correct
+
+All four actions present throughout: attack, block, inspect, shove. `selected_actions` cycled between block and inspect across samples — action selection working.
+
+### OBSERVATION — New watchdog categories firing
+
+`watchdog_inventory_state` and `watchdog_favor` both sampled correctly (3 entries each). Favor values correct: peaceful NPCs at 0, hostiles (WOLF, SKELETON, BANDIT, GOBLIN, TERMITE) at -50.
+
+### OBSERVATION — Equipment slots never filled
+
+All equipment slots null across all three inventory state samples. No equippable items (weapons, armor) appeared in inventory during this session — autopilot harvested only seeds/shovel/carrot. Not a bug; need combat/crafting paths to yield equippable gear before this can be tested.
+
+### OBSERVATION — `selected_items` pointing to missing item
+
+Player sample at tick 11517 shows `selected_items: 'axe'` but axe not present in `items_top5` or `items_count=3`. Stale selection reference when item leaves inventory. Low priority cosmetic issue — doesn't affect gameplay.
+
+### OBSERVATION — No resource accumulation
+
+items_count stayed at 3 (seeds:1, shovel:1, carrot:1) from early session through end. No wood/stone/iron harvested. Related to proxy being stuck in flee/cornered for most of the session — opportunistic harvesting never fired.
+
+---
+
+## Session 24 — 2026-03-19 (run 14 — prior session, pre-watchdog-category additions)
+
+Session ran before `watchdog_inventory_state` and `watchdog_favor` categories were wired in. No category data available for those samplers.
+
+### CONFIRMED (fixed before this run) — keeper_no_target integrity flood
+
+242 false-positive integrity entries from non-humanoid types (animals, hostiles). Fixed by filtering `keeper_no_target` check to `_KEEPER_HUMANOIDS` set.
+
+### CONFIRMED (fixed before this run) — Proxy sync reversing crafted items
+
+Proxy sync compared `proxy_flat` vs `player_flat`; items crafted by player (not in proxy) generated negative delta → removed from player inventory. Fixed by using `proxy._sync_baseline` (proxy's own previous state) as the comparison baseline.
+
+### CONFIRMED (fixed before this run) — Tool slot double-counting in crafting
+
+`get_craftable_recipes` and `get_all_craftable_items` counted tool_slots separately when tools already live in `items` dict. Removed tool_slots counting from both methods.
+
+---
+
 ## Session 23 — 2026-03-15 (live player review — chest/faction/NPC behavior fixes)
 
 ### FIXED — WOOD and PLANKS appearing as overworld grid cells

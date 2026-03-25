@@ -404,7 +404,7 @@ class CraftingMixin:
         _UNIQUE_FLAGS = ('is_tool', 'is_spell', 'is_follower', 'magic_damage', 'armor')
         for pos, items in list(self.dropped_items[screen_key].items()):
             for item_name in list(items.keys()):
-                if random.random() > 0.0003 * decay_factor:  # 0.03% per item per update, scaled by distance
+                if random.random() > 0.003 * decay_factor:  # 0.3% per item per update, scaled by distance
                     continue
                 amt = items.pop(item_name, 0)
                 if not items:
@@ -585,6 +585,26 @@ class CraftingMixin:
             'RUINED_SANDSTONE_COLUMN': 'ruined_sandstone_column',
             'FORGE': 'forge',
             'BUSH': 'bush',
+            'EMPTY_CRATE': 'chest',
+            'FLOWER_PATTERN1': 'flower',
+            'FLOWER_PATTERN2': 'flower',
+            'FLOWER_PATTERN3': 'flower',
+            # Furniture / interior cells
+            'BOOKSHELF':          'bookshelf',
+            'WOOD_CHAIR':         'wood_chair',
+            'WOOD_TABLE':         'wood_table',
+            'BED_WHITE':          'bed_white',
+            'BED_BLUE':           'bed_blue',
+            'WATER_TROUGH':       'water_trough',
+            'SMALL_POTTED_PLANT': 'small_potted_plant',
+            'BLUE_MUSHROOM':      'blue_mushroom',
+            # Outdoor special cells
+            'BROKEN_GRAVESTONE':  'broken_gravestone',
+            'GRAVESTONE':         'gravestone',
+            'LOCKED_CHEST':       'locked_chest',
+            'OPEN_CHEST':         'chest',
+            'DESERT_WELL':        'desert_well',
+            'APPLE_CRATE':        'apple_crate',
         }
 
         if cell_type in exact_pickup_map:
@@ -611,17 +631,23 @@ class CraftingMixin:
 
             self.sound.on_pickup()
 
-            # Replace cell: inside structures → restore structure floor, else biome base
+            # Replace cell: inside structures → restore structure floor, else biome base.
+            # Water cells leave cave floor behind (high chance for deep water, low for regular).
             base = self.get_biome_base_cell()
             if structure_floor:
                 self.current_screen['grid'][target_y][target_x] = structure_floor
             elif cell_type in ['CARROT1', 'CARROT2', 'CARROT3']:
                 self.current_screen['grid'][target_y][target_x] = 'SOIL'
+            elif cell_type == 'DEEP_WATER' and random.random() < 0.80:
+                self.current_screen['grid'][target_y][target_x] = 'CAVE_FLOOR'
+            elif cell_type == 'WATER' and random.random() < 0.25:
+                self.current_screen['grid'][target_y][target_x] = 'CAVE_FLOOR'
             else:
                 self.current_screen['grid'][target_y][target_x] = base
 
-    def place_selected_item(self):
+    def place_selected_item(self, item_name=None):
         """Place selected item as a cell in the world, or as an overlay if no cell mapping.
+        Pass item_name to force a specific item (e.g. from hotbar slot).
         Inside structures, non-structural items are always placed as overlays
         to preserve the structure floor."""
         target = self.get_target_cell()
@@ -640,39 +666,56 @@ class CraftingMixin:
         # Structural items that replace grid cells even inside structures
         structural_items = {'wall', 'house', 'cave', 'mineshaft', 'chest'}
 
-        # Find which category has an item selected
-        for category in ['items', 'tools', 'magic', 'followers']:
-            selected = self.inventory.get_selected_item(category)
-            if selected:
-                if not self.inventory.has_item(selected):
-                    continue
+        # Determine which item to place
+        if item_name is not None:
+            # Explicit item (hotbar hotkey): verify it actually exists in inventory
+            selected = item_name if self.inventory.has_item(item_name) else None
+            if not selected:
+                return
+        else:
+            # P key fallback: prefer active tool slot, then other categories
+            selected = None
+            # Check active tool slot first
+            idx = self.inventory.selected_tool_slot_idx
+            if idx is not None and idx < len(self.inventory.tool_slots):
+                slot_item = self.inventory.tool_slots[idx]
+                if slot_item and self.inventory.has_item(slot_item):
+                    selected = slot_item
+            if not selected:
+                for category in ['items', 'magic', 'followers']:
+                    cat_sel = self.inventory.get_selected_item(category)
+                    if cat_sel and self.inventory.has_item(cat_sel):
+                        selected = cat_sel
+                        break
+            if not selected:
+                return
 
-                # Inside structures: non-structural items always go as overlays
-                if in_structure and selected not in structural_items and selected in ITEM_TO_CELL:
-                    self.inventory.remove_item(selected, 1)
-                    if in_structure and self.player.get('structure_key'):
-                        sk = self.player['structure_key']
-                    else:
-                        sk = screen_key
-                    if sk not in self.dropped_items:
-                        self.dropped_items[sk] = {}
-                    cell_key = (target_x, target_y)
-                    if cell_key not in self.dropped_items[sk]:
-                        self.dropped_items[sk][cell_key] = {}
-                    self.dropped_items[sk][cell_key][selected] = \
-                        self.dropped_items[sk][cell_key].get(selected, 0) + 1
-                    return
-                elif selected in ITEM_TO_CELL:
-                    # Overworld: place as a grid cell (replaces the cell)
-                    cell_type = ITEM_TO_CELL[selected]
-                    self.current_screen['grid'][target_y][target_x] = cell_type
-                    self.inventory.remove_item(selected, 1)
-                    return
-                else:
-                    # No cell mapping — place as overlay
-                    self.inventory.remove_item(selected, 1)
-                    self.drop_item(selected, target_x, target_y)
-                    return
+        # Inside structures: non-structural items always go as overlays
+        if in_structure and selected not in structural_items and selected in ITEM_TO_CELL:
+            self.inventory.remove_item(selected, 1)
+            if in_structure and self.player.get('structure_key'):
+                sk = self.player['structure_key']
+            else:
+                sk = screen_key
+            if sk not in self.dropped_items:
+                self.dropped_items[sk] = {}
+            cell_key = (target_x, target_y)
+            if cell_key not in self.dropped_items[sk]:
+                self.dropped_items[sk][cell_key] = {}
+            self.dropped_items[sk][cell_key][selected] = \
+                self.dropped_items[sk][cell_key].get(selected, 0) + 1
+            return
+        elif selected in ITEM_TO_CELL:
+            # Overworld: place as a grid cell (replaces the cell)
+            cell_type = ITEM_TO_CELL[selected]
+            self.current_screen['grid'][target_y][target_x] = cell_type
+            self.inventory.remove_item(selected, 1)
+            return
+        else:
+            # No cell mapping — place as overlay
+            self.inventory.remove_item(selected, 1)
+            self.drop_item(selected, target_x, target_y)
+            return
 
     def drop_selected_item(self):
         """Drop currently selected item"""

@@ -478,41 +478,33 @@ class NpcAiMovementMixin:
         new_position = None
         exit_cells = []  # Track exit cells to add to memory
 
-        # Top entrance - must be within 1 cell of center exit
-        if (exits['top'] and entity.y <= 1 and
-            abs(entity.x - center_x) <= 1):  # Must be at center ±1 cell
+        # Top entrance — any x position along top edge
+        if exits['top'] and entity.y <= 1:
             transition_target = (entity.screen_x, entity.screen_y - 1)
             new_position = (entity.x, GRID_HEIGHT - 3)
-            # Mark cells near top exit
-            exit_cells = [(center_x + dx, 0) for dx in range(-2, 3)]
-            exit_cells.extend([(center_x + dx, 1) for dx in range(-2, 3)])
+            exit_cells = [(entity.x + dx, 0) for dx in range(-2, 3)]
+            exit_cells.extend([(entity.x + dx, 1) for dx in range(-2, 3)])
 
-        # Bottom entrance - must be within 1 cell of center exit
-        elif (exits['bottom'] and entity.y >= GRID_HEIGHT - 2 and
-              abs(entity.x - center_x) <= 1):
+        # Bottom entrance — any x position along bottom edge
+        elif exits['bottom'] and entity.y >= GRID_HEIGHT - 2:
             transition_target = (entity.screen_x, entity.screen_y + 1)
             new_position = (entity.x, 2)
-            # Mark cells near bottom exit
-            exit_cells = [(center_x + dx, GRID_HEIGHT - 1) for dx in range(-2, 3)]
-            exit_cells.extend([(center_x + dx, GRID_HEIGHT - 2) for dx in range(-2, 3)])
+            exit_cells = [(entity.x + dx, GRID_HEIGHT - 1) for dx in range(-2, 3)]
+            exit_cells.extend([(entity.x + dx, GRID_HEIGHT - 2) for dx in range(-2, 3)])
 
-        # Left entrance - must be within 1 cell of center exit
-        elif (exits['left'] and entity.x <= 1 and
-              abs(entity.y - center_y) <= 1):
+        # Left entrance — any y position along left edge
+        elif exits['left'] and entity.x <= 1:
             transition_target = (entity.screen_x - 1, entity.screen_y)
             new_position = (GRID_WIDTH - 3, entity.y)
-            # Mark cells near left exit
-            exit_cells = [(0, center_y + dy) for dy in range(-2, 3)]
-            exit_cells.extend([(1, center_y + dy) for dy in range(-2, 3)])
+            exit_cells = [(0, entity.y + dy) for dy in range(-2, 3)]
+            exit_cells.extend([(1, entity.y + dy) for dy in range(-2, 3)])
 
-        # Right entrance - must be within 1 cell of center exit
-        elif (exits['right'] and entity.x >= GRID_WIDTH - 2 and
-              abs(entity.y - center_y) <= 1):
+        # Right entrance — any y position along right edge
+        elif exits['right'] and entity.x >= GRID_WIDTH - 2:
             transition_target = (entity.screen_x + 1, entity.screen_y)
             new_position = (2, entity.y)
-            # Mark cells near right exit
-            exit_cells = [(GRID_WIDTH - 1, center_y + dy) for dy in range(-2, 3)]
-            exit_cells.extend([(GRID_WIDTH - 2, center_y + dy) for dy in range(-2, 3)])
+            exit_cells = [(GRID_WIDTH - 1, entity.y + dy) for dy in range(-2, 3)]
+            exit_cells.extend([(GRID_WIDTH - 2, entity.y + dy) for dy in range(-2, 3)])
 
         if transition_target and new_position:
             new_screen_x, new_screen_y = transition_target
@@ -642,25 +634,25 @@ class NpcAiMovementMixin:
         # Verify entity is in the exit corridor for the direction they're stepping.
         # Corridor geometry mirrors is_at_exit(): 2-tile span at each edge center.
         if new_y < 0:
-            if not screen['exits']['top'] or not (center_x - 1 <= entity.x <= center_x):
+            if not screen['exits']['top']:
                 return
             new_screen_y -= 1
             new_y = GRID_HEIGHT - 2
             facing_after = 'up'
         elif new_y >= GRID_HEIGHT:
-            if not screen['exits']['bottom'] or not (center_x - 1 <= entity.x <= center_x):
+            if not screen['exits']['bottom']:
                 return
             new_screen_y += 1
             new_y = 1
             facing_after = 'down'
         elif new_x < 0:
-            if not screen['exits']['left'] or not (center_y - 1 <= entity.y <= center_y):
+            if not screen['exits']['left']:
                 return
             new_screen_x -= 1
             new_x = GRID_WIDTH - 2
             facing_after = 'left'
         elif new_x >= GRID_WIDTH:
-            if not screen['exits']['right'] or not (center_y - 1 <= entity.y <= center_y):
+            if not screen['exits']['right']:
                 return
             new_screen_x += 1
             new_x = 1
@@ -890,6 +882,10 @@ class NpcAiMovementMixin:
                     if final_cell in ['CARROT1', 'CARROT2', 'CARROT3']:
                         if random.random() < 0.02:  # 2% chance
                             screen['grid'][new_y][new_x] = 'DIRT'
+
+                    # Grass trampling - small chance any NPC wears grass to dirt
+                    elif final_cell == 'GRASS' and random.random() < 0.005:  # 0.5% per step
+                        screen['grid'][new_y][new_x] = 'DIRT'
                 else:
                     # Target became solid - don't move
                     entity.stuck_counter += 1
@@ -1036,11 +1032,13 @@ class NpcAiMovementMixin:
                 if len(entity.memory_lane) < entity.max_memory_length:
                     entity.memory_lane.append(mem_cell)
 
-        # Position in structure (near entrance)
-        entity.x = GRID_WIDTH // 2
-        entity.y = GRID_HEIGHT - 2
-        entity.world_x = float(entity.x)
-        entity.world_y = float(entity.y)
+        # Position in structure at STAIRS_UP / entrance
+        structure_data = self.structures.get(structure_key, {})
+        ent_x, ent_y = structure_data.get('entrance', (GRID_WIDTH // 2, GRID_HEIGHT - 2))
+        entity.x = ent_x
+        entity.y = ent_y
+        entity.world_x = float(ent_x)
+        entity.world_y = float(ent_y)
 
 
     def npc_exit_structure(self, entity):
@@ -1075,6 +1073,37 @@ class NpcAiMovementMixin:
 
         if not parent_screen:
             return
+
+        # Multi-level cave ascent: depth > 1 goes to level above, not straight to overworld
+        depth = sub_data.get('depth', 1)
+        if depth > 1 and sub_data.get('type') == 'CAVE':
+            upper_key = None
+            for key, s in self.structures.items():
+                if (s.get('parent_screen') == parent_screen and
+                        s.get('parent_cell') == parent_cell and
+                        s.get('type') == 'CAVE' and
+                        s.get('depth') == depth - 1):
+                    upper_key = key
+                    break
+            if upper_key:
+                upper_entrance = self.structures[upper_key].get('entrance', (GRID_WIDTH // 2, GRID_HEIGHT // 2))
+                if structure_key in self.screen_entities and entity_id in self.screen_entities[structure_key]:
+                    self.screen_entities[structure_key].remove(entity_id)
+                if upper_key not in self.screen_entities:
+                    self.screen_entities[upper_key] = []
+                if entity_id not in self.screen_entities[upper_key]:
+                    self.screen_entities[upper_key].append(entity_id)
+                vx, vy = map(int, upper_key.split(','))
+                entity.screen_x = vx
+                entity.screen_y = vy
+                entity.structure_key = upper_key
+                entity.in_structure = True
+                entity.x, entity.y = upper_entrance
+                entity.world_x = float(upper_entrance[0])
+                entity.world_y = float(upper_entrance[1])
+                entity.last_structure_change_tick = self.tick
+                return
+            # Upper level not generated yet — fall through to overworld exit
 
         parent_key = f"{parent_screen[0]},{parent_screen[1]}"
 
@@ -1165,53 +1194,52 @@ class NpcAiMovementMixin:
                     self.npc_exit_structure(entity)
 
     def move_npc_toward_structure_exit(self, entity):
-        """Move NPC toward the structure exit point (bottom center)"""
+        """Move NPC one step toward the structure exit (STAIRS_UP / entrance position)."""
         if not entity.in_structure or not entity.structure_key:
             return
 
         structure_key = entity.structure_key
-        structure = self.structures.get(structure_key)
-        if not structure:
-            # Also check self.screens for structure zones
-            structure = self.screens.get(structure_key)
+        structure = self.structures.get(structure_key) or self.screens.get(structure_key)
         if not structure:
             return
 
-        # Exit is at bottom center
-        exit_x = GRID_WIDTH // 2
-        exit_y = GRID_HEIGHT - 2
+        # Use the stored exit position — matches STAIRS_UP placement after cave redesign
+        exit_x, exit_y = structure.get('exit', (GRID_WIDTH // 2, GRID_HEIGHT // 2))
 
-        # If already at exit position, try actual exit
-        if abs(entity.x - exit_x) <= 1 and entity.y >= exit_y - 1:
+        # If already at exit position, trigger actual exit
+        if abs(entity.x - exit_x) <= 1 and abs(entity.y - exit_y) <= 1:
             self.try_npc_exit_structure(entity)
             return
 
-        # Move toward exit — one step at a time
-        dx = exit_x - entity.x
         dy = exit_y - entity.y
+        dx = exit_x - entity.x
 
-        # Prioritize vertical movement (get to bottom first)
-        if dy > 0:
-            new_y = entity.y + 1
+        # Prioritize the axis with the larger gap; try both if blocked
+        # Do NOT update world_x/y — smooth movement handles visual interpolation
+        if abs(dy) >= abs(dx) and dy != 0:
+            new_y = entity.y + (1 if dy > 0 else -1)
             if 0 <= new_y < GRID_HEIGHT:
                 cell = structure['grid'][new_y][entity.x]
                 if not CELL_TYPES.get(cell, {}).get('solid', False):
                     entity.y = new_y
-                    entity.world_y = float(new_y)
-                    entity.facing = 'down'
+                    entity.facing = 'down' if dy > 0 else 'up'
                     return
-
-        # Then horizontal
         if dx != 0:
-            step_x = 1 if dx > 0 else -1
-            new_x = entity.x + step_x
+            new_x = entity.x + (1 if dx > 0 else -1)
             if 0 <= new_x < GRID_WIDTH:
                 cell = structure['grid'][entity.y][new_x]
                 if not CELL_TYPES.get(cell, {}).get('solid', False):
                     entity.x = new_x
-                    entity.world_x = float(new_x)
-                    entity.facing = 'right' if step_x > 0 else 'left'
+                    entity.facing = 'right' if dx > 0 else 'left'
                     return
+        # Fallback: try remaining y direction if x was tried first
+        if abs(dy) < abs(dx) and dy != 0:
+            new_y = entity.y + (1 if dy > 0 else -1)
+            if 0 <= new_y < GRID_HEIGHT:
+                cell = structure['grid'][new_y][entity.x]
+                if not CELL_TYPES.get(cell, {}).get('solid', False):
+                    entity.y = new_y
+                    entity.facing = 'down' if dy > 0 else 'up'
 
     def has_target_in_structure(self, entity, screen_key, check_x, check_y):
         """Check if entity's current_target is inside the structure at (check_x, check_y)."""
@@ -1313,20 +1341,25 @@ class NpcAiMovementMixin:
             self.npc_exit_structure(entity)
             return
 
-        # Move toward exit one step at a time (vertical priority — get to exit row first)
-        if entity.y < exit_y:
-            new_y = entity.y + 1
-            cell = structure['grid'][new_y][entity.x]
-            if not CELL_TYPES.get(cell, {}).get('solid', False):
-                entity.y = new_y
-                entity.facing = 'down'
-                return
-        if entity.x < exit_x:
-            entity.x += 1
-            entity.facing = 'right'
-        elif entity.x > exit_x:
-            entity.x -= 1
-            entity.facing = 'left'
+        # Move toward exit one step at a time — handle both up and down
+        dy = exit_y - entity.y
+        if dy != 0:
+            new_y = entity.y + (1 if dy > 0 else -1)
+            if 0 <= new_y < GRID_HEIGHT:
+                cell = structure['grid'][new_y][entity.x]
+                if not CELL_TYPES.get(cell, {}).get('solid', False):
+                    entity.y = new_y
+                    entity.facing = 'down' if dy > 0 else 'up'
+                    return
+        # x-axis fallback — must check for solid cells like y-axis does
+        if entity.x != exit_x:
+            step_x = 1 if entity.x < exit_x else -1
+            new_x = entity.x + step_x
+            if 0 <= new_x < GRID_WIDTH:
+                cell = structure['grid'][entity.y][new_x]
+                if not CELL_TYPES.get(cell, {}).get('solid', False):
+                    entity.facing = 'right' if step_x > 0 else 'left'
+                    entity.x = new_x
 
     def try_travel_behavior(self, entity, screen_key):
         """Move entity toward zone exit (used by traders and other traveling NPCs)"""
@@ -2038,6 +2071,11 @@ class NpcAiMovementMixin:
         elif target_type == 'quest_target':
             # Direct passthrough — entity.quest_target is already the resolved target
             return getattr(entity, 'quest_target', None)
+        elif target_type == 'clearing_action':
+            return self._find_clearing_target(entity, screen_key)
+        elif target_type == 'trade':
+            # Stub — NPC trader trade system not yet built; always returns None
+            return None
         return None
 
     # ── Quest-focus target finders ────────────────────────────────────────────
@@ -2078,18 +2116,22 @@ class NpcAiMovementMixin:
         return closest
 
     def _find_closest_stone(self, entity, screen_key):
-        """Closest mineable stone (mining quest)."""
+        """Closest miner target: stone, iron ore, cave, or mineshaft."""
         if screen_key not in self.screens:
             return None
         screen = self.screens[screen_key]
         closest, closest_dist = None, float('inf')
+        # Priority: ore > stone > cave > mineshaft (lower dist wins within same priority)
+        _priority = {'IRON_ORE': 0, 'STONE': 1, 'CAVE': 2, 'MINESHAFT': 3, 'CAVE_WALL': 4}
         for y in range(GRID_HEIGHT):
             for x in range(GRID_WIDTH):
-                if screen['grid'][y][x] in ('STONE', 'CAVE_WALL'):
-                    dist = abs(x - entity.x) + abs(y - entity.y)
-                    if dist < closest_dist:
-                        closest_dist = dist
-                        closest = ('cell', x, y, screen['grid'][y][x])
+                cell = screen['grid'][y][x]
+                if cell not in _priority:
+                    continue
+                dist = abs(x - entity.x) + abs(y - entity.y) + _priority[cell] * 0.5
+                if dist < closest_dist:
+                    closest_dist = dist
+                    closest = ('cell', x, y, cell)
         return closest
 
     def _find_closest_any_entity(self, entity, screen_key):

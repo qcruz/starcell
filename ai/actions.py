@@ -393,7 +393,7 @@ class NpcAiActionsMixin:
                 check_x = entity.x + dx
                 check_y = entity.y + dy
                 if 0 <= check_x < GRID_WIDTH and 0 <= check_y < GRID_HEIGHT:
-                    if screen['grid'][check_y][check_x] in ['TREE1', 'TREE2']:
+                    if screen['grid'][check_y][check_x] in ['TREE1', 'TREE2', 'CACTUS', 'BUSH']:
                         nearby_trees += 1
 
         # Calculate chop rate with density bonus
@@ -406,13 +406,24 @@ class NpcAiActionsMixin:
 
         chop_rate = min(chop_rate, 0.8)  # Cap at 80% (increased to allow level scaling)
 
+        # If quest_nav_target points at an adjacent choppable cell, check it first
+        _chop_dirs = [(0, -1), (0, 1), (-1, 0), (1, 0)]
+        _qnav = getattr(entity, 'quest_nav_target', None)
+        if _qnav:
+            _, _, _qx, _qy = _qnav
+            _qdx, _qdy = _qx - entity.x, _qy - entity.y
+            if abs(_qdx) + abs(_qdy) == 1 and (_qdx, _qdy) in _chop_dirs:
+                if (0 <= _qx < GRID_WIDTH and 0 <= _qy < GRID_HEIGHT
+                        and screen['grid'][_qy][_qx] in ['TREE1', 'TREE2', 'CACTUS', 'BUSH']):
+                    _chop_dirs = [(_qdx, _qdy)] + [d for d in _chop_dirs if d != (_qdx, _qdy)]
+
         # Try to chop adjacent tree (cardinal directions only)
-        for dx, dy in [(0, -1), (0, 1), (-1, 0), (1, 0)]:
+        for dx, dy in _chop_dirs:
             check_x = entity.x + dx
             check_y = entity.y + dy
             if 0 <= check_x < GRID_WIDTH and 0 <= check_y < GRID_HEIGHT:
                 cell = screen['grid'][check_y][check_x]
-                if cell in ['TREE1', 'TREE2']:
+                if cell in ['TREE1', 'TREE2', 'CACTUS', 'BUSH']:
                     entity.update_facing_toward(check_x, check_y)
                     entity.trigger_action_animation()
                     self.show_attack_animation(check_x, check_y, entity=entity)
@@ -457,8 +468,19 @@ class NpcAiActionsMixin:
         mine_rate = LUMBERJACK_BASE_CHOP_RATE + (nearby_rocks * LUMBERJACK_DENSITY_BONUS)
         mine_rate = min(mine_rate, 0.85)  # Cap at 85%
 
+        # If quest_nav_target points at an adjacent mineable cell, check it first
+        _mine_dirs = [(0, -1), (0, 1), (-1, 0), (1, 0)]
+        _qnav = getattr(entity, 'quest_nav_target', None)
+        if _qnav:
+            _, _, _qx, _qy = _qnav
+            _qdx, _qdy = _qx - entity.x, _qy - entity.y
+            if abs(_qdx) + abs(_qdy) == 1 and (_qdx, _qdy) in _mine_dirs:
+                if (0 <= _qx < GRID_WIDTH and 0 <= _qy < GRID_HEIGHT
+                        and screen['grid'][_qy][_qx] in ('STONE', 'IRON_ORE')):
+                    _mine_dirs = [(_qdx, _qdy)] + [d for d in _mine_dirs if d != (_qdx, _qdy)]
+
         # Try to mine adjacent rock (cardinal directions only — mirrors try_chop_tree)
-        for dx, dy in [(0, -1), (0, 1), (-1, 0), (1, 0)]:
+        for dx, dy in _mine_dirs:
             check_x = entity.x + dx
             check_y = entity.y + dy
             if 0 <= check_x < GRID_WIDTH and 0 <= check_y < GRID_HEIGHT:
@@ -510,12 +532,32 @@ class NpcAiActionsMixin:
                                     entity.inventory['stone'] = entity.inventory.get('stone', 0) + 2
                                 screen['grid'][check_y][check_x] = 'DIRT'
                                 entity.level_up_from_activity('mine', self)
+                        # Clear stale target so state machine immediately seeks next rock
+                        entity.current_target = None
                     return
 
-        # No rocks adjacent — move toward nearest corner to mine
-        target_corner = self.get_nearest_corner_target(entity.x, entity.y)
-        if target_corner:
-            self.move_entity_towards(entity, target_corner[0], target_corner[1])
+        # No rocks adjacent — seek nearest STONE/IRON_ORE/CAVE/MINESHAFT in zone.
+        # Also update entity.current_target so the state machine's targeting state
+        # navigates here without conflicting with this call.
+        nearest_target = None
+        nearest_dist = 9999
+        _priority = {'IRON_ORE': 0, 'STONE': 1, 'CAVE': 2, 'MINESHAFT': 3}
+        for sy in range(GRID_HEIGHT):
+            for sx in range(GRID_WIDTH):
+                c = screen['grid'][sy][sx]
+                if c in _priority:
+                    d = abs(entity.x - sx) + abs(entity.y - sy) + _priority[c] * 0.5
+                    if d < nearest_dist:
+                        nearest_dist = d
+                        nearest_target = (sx, sy, c)
+        if nearest_target:
+            entity.current_target = ('cell', nearest_target[0], nearest_target[1], nearest_target[2])
+            self.move_entity_towards(entity, nearest_target[0], nearest_target[1])
+        else:
+            entity.current_target = None
+            target_corner = self.get_nearest_corner_target(entity.x, entity.y)
+            if target_corner:
+                self.move_entity_towards(entity, target_corner[0], target_corner[1])
 
     def try_build_well(self, entity, screen_key):
         """Miner builds a well if zone has 2+ houses and no existing well."""
@@ -575,7 +617,16 @@ class NpcAiActionsMixin:
         if screen_key not in self.screens:
             return False
         screen = self.screens[screen_key]
-        for dx, dy in [(0, -1), (0, 1), (-1, 0), (1, 0)]:
+        _harvest_dirs = [(0, -1), (0, 1), (-1, 0), (1, 0)]
+        _qnav = getattr(entity, 'quest_nav_target', None)
+        if _qnav:
+            _, _, _qx, _qy = _qnav
+            _qdx, _qdy = _qx - entity.x, _qy - entity.y
+            if abs(_qdx) + abs(_qdy) == 1 and (_qdx, _qdy) in _harvest_dirs:
+                if (0 <= _qx < GRID_WIDTH and 0 <= _qy < GRID_HEIGHT
+                        and screen['grid'][_qy][_qx] == 'CARROT3'):
+                    _harvest_dirs = [(_qdx, _qdy)] + [d for d in _harvest_dirs if d != (_qdx, _qdy)]
+        for dx, dy in _harvest_dirs:
             cx, cy = entity.x + dx, entity.y + dy
             if not (0 <= cx < GRID_WIDTH and 0 <= cy < GRID_HEIGHT):
                 continue
@@ -601,11 +652,21 @@ class NpcAiActionsMixin:
         if screen_key not in self.screens:
             return False
         screen = self.screens[screen_key]
-        for dx, dy in [(0, -1), (0, 1), (-1, 0), (1, 0)]:
+        _till_dirs = [(0, -1), (0, 1), (-1, 0), (1, 0)]
+        _qnav = getattr(entity, 'quest_nav_target', None)
+        if _qnav:
+            _, _, _qx, _qy = _qnav
+            _qdx, _qdy = _qx - entity.x, _qy - entity.y
+            if abs(_qdx) + abs(_qdy) == 1 and (_qdx, _qdy) in _till_dirs:
+                if (0 <= _qx < GRID_WIDTH and 0 <= _qy < GRID_HEIGHT
+                        and screen['grid'][_qy][_qx] in ('GRASS', 'DIRT')):
+                    _till_dirs = [(_qdx, _qdy)] + [d for d in _till_dirs if d != (_qdx, _qdy)]
+        for dx, dy in _till_dirs:
             cx, cy = entity.x + dx, entity.y + dy
             if not (0 <= cx < GRID_WIDTH and 0 <= cy < GRID_HEIGHT):
                 continue
-            if screen['grid'][cy][cx] not in ('GRASS', 'DIRT'):
+            cell = screen['grid'][cy][cx]
+            if cell not in ('GRASS', 'DIRT', 'SAND'):
                 continue
             entity.update_facing_toward(cx, cy)
             entity.trigger_action_animation()
@@ -613,7 +674,9 @@ class NpcAiActionsMixin:
             entity.xp += 1
             if entity.xp >= entity.xp_to_level:
                 entity.level_up()
-            if random.random() < FARMER_TILL_SUCCESS:
+            # Sand is much harder to till than grass/dirt
+            success_rate = FARMER_TILL_SUCCESS * 0.15 if cell == 'SAND' else FARMER_TILL_SUCCESS
+            if random.random() < success_rate:
                 screen['grid'][cy][cx] = 'SOIL'
             return True   # acted; stop scanning
         return False
@@ -632,8 +695,8 @@ class NpcAiActionsMixin:
                 check_y = entity.y + dy
                 if 0 <= check_x < GRID_WIDTH and 0 <= check_y < GRID_HEIGHT:
                     cell = screen['grid'][check_y][check_x]
-                    if cell in ['TREE1', 'TREE2']:
-                        # Clear tree - apply drop effects but don't collect wood
+                    if cell in ['TREE1', 'TREE2', 'CACTUS', 'BUSH']:
+                        # Clear tree/cactus/bush - apply drop effects but don't collect wood
                         drops = CELL_TYPES[cell].get('drops', [])
                         for drop in drops:
                             if random.random() < drop['chance']:
@@ -900,23 +963,59 @@ class NpcAiActionsMixin:
                     entity.inventory.pop('wood', None)
                     return
 
-    def miner_place_cave(self, entity):
-        """Miner creates a cave at zone corners"""
+    def miner_mine_cave(self, entity):
+        """Miner navigates to nearest CAVE cell and converts it to MINESHAFT"""
+        screen_key = entity.screen_key
+        if screen_key not in self.screens:
+            return False
+
+        screen = self.screens[screen_key]
+        grid = screen['grid']
+
+        # Find nearest CAVE cell
+        nearest_cave = None
+        nearest_dist = 9999
+        for cy in range(GRID_HEIGHT):
+            for cx in range(GRID_WIDTH):
+                if grid[cy][cx] == 'CAVE':
+                    dist = abs(entity.x - cx) + abs(entity.y - cy)
+                    if dist < nearest_dist:
+                        nearest_dist = dist
+                        nearest_cave = (cx, cy)
+
+        if nearest_cave is None:
+            return False
+
+        cave_x, cave_y = nearest_cave
+
+        # Adjacent — convert to MINESHAFT
+        if nearest_dist <= 1:
+            grid[cave_y][cave_x] = 'MINESHAFT'
+            entity.level_up_from_activity('mine', self)
+            name_str = entity.name if entity.name else entity.type
+            print(f"{name_str} mined cave at ({cave_x},{cave_y}) into MINESHAFT in [{screen_key}]")
+            return True
+
+        # Navigate toward cave
+        entity.nav_target = nearest_cave
+        return True
+
+    def miner_place_mineshaft(self, entity):
+        """Miner excavates a new mineshaft at a zone corner"""
         screen_key = entity.screen_key
         if screen_key not in self.screens:
             return
 
         screen = self.screens[screen_key]
 
-        # Count existing caves in zone
-        cave_count = 0
-        for row in screen['grid']:
-            for cell in row:
-                if cell in ['CAVE', 'HIDDEN_CAVE']:
-                    cave_count += 1
+        # Count existing mineshafts in zone
+        shaft_count = sum(
+            1 for row in screen['grid'] for cell in row
+            if cell == 'MINESHAFT'
+        )
 
-        # Don't create more than 2 caves per zone
-        if cave_count >= 2:
+        # Don't create more than 2 mineshafts per zone
+        if shaft_count >= 2:
             return
 
         # Try to place cave at a corner location
@@ -941,15 +1040,15 @@ class NpcAiActionsMixin:
                         cell = screen['grid'][place_y][place_x]
                         # Can place cave on non-solid ground
                         if cell in ['GRASS', 'DIRT', 'SAND', 'STONE']:
-                            screen['grid'][place_y][place_x] = 'CAVE'
+                            screen['grid'][place_y][place_x] = 'MINESHAFT'
                             entity.inventory.pop('stone', None)
                             entity.inventory.pop('iron_ore', None)
 
-                            # Chance to level up from discovery
+                            # Chance to level up from mining
                             entity.level_up_from_activity('mine', self)
 
                             name_str = entity.name if entity.name else entity.type
-                            print(f"{name_str} discovered a cave at corner ({place_x}, {place_y}) in [{screen_key}]!")
+                            print(f"{name_str} excavated a mineshaft at corner ({place_x}, {place_y}) in [{screen_key}]!")
                             return
 
     def try_npc_trade(self, entity, screen_key):

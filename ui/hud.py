@@ -168,6 +168,13 @@ class HudMixin:
                             else:
                                 pygame.draw.rect(self.screen, COLORS['DEEP_WATER'],
                                                  (x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE))
+                        elif cell == 'CAVE_FLOOR':
+                            cave_spr = self.sprite_manager.sprites.get('CAVE_FLOOR')
+                            if cave_spr:
+                                self.screen.blit(cave_spr, (x * CELL_SIZE, y * CELL_SIZE))
+                            else:
+                                pygame.draw.rect(self.screen, COLORS['CAVE_FLOOR'],
+                                                 (x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE))
                         elif has_sprite:
                             # For non-base-terrain / non-solid cells, draw the actual
                             # base terrain underneath so transparent pixels don't show black.
@@ -186,8 +193,7 @@ class HudMixin:
                             # Draw border for non-sprite cells
                             pygame.draw.rect(self.screen, COLORS['BLACK'],
                                            (x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE), 1)
-
-                            # Draw label ONLY when no sprite
+                            # Draw abbreviated label on placeholder cells
                             label = CELL_TYPES[cell]['label']
                             text = self.tiny_font.render(label, True, COLORS['WHITE'])
                             text_rect = text.get_rect(center=(
@@ -402,33 +408,51 @@ class HudMixin:
                         ))
                         self.screen.blit(symbol_text, symbol_rect)
 
-                    # Draw health bar (always visible) at smooth position
-                    bar_width = CELL_SIZE - 4
-                    bar_height = 4
-                    bar_x = int(pixel_x + 2)
-                    bar_y = int(pixel_y - 6)
+                    # Draw stat bars stacked above the entity cell
+                    # Order top→bottom: health, energy, food, water
+                    bar_width  = CELL_SIZE - 4
+                    bar_height = 3
+                    bar_step   = bar_height + 1   # 4px per bar row
+                    bar_x      = int(pixel_x + 2)
+                    bar_y      = int(pixel_y - 18)  # top of stack (4 bars × 4px = 16px + 2 gap)
 
-                    # Background
+                    # Health (green)
                     pygame.draw.rect(self.screen, COLORS['BLACK'],
-                                   (bar_x, bar_y, bar_width, bar_height))
-                    # Health
+                                     (bar_x, bar_y, bar_width, bar_height))
                     health_width = int((entity.health / entity.max_health) * bar_width)
-                    pygame.draw.rect(self.screen, (0, 255, 0),
-                                   (bar_x, bar_y, health_width, bar_height))
+                    pygame.draw.rect(self.screen, (0, 220, 0),
+                                     (bar_x, bar_y, health_width, bar_height))
 
-                    # Energy bar (below health bar)
+                    # Energy (blue)
                     if hasattr(entity, 'energy') and hasattr(entity, 'max_energy') and entity.max_energy > 0:
-                        ebar_y = bar_y + bar_height + 1
+                        ebar_y = bar_y + bar_step
                         pygame.draw.rect(self.screen, COLORS['BLACK'],
-                                       (bar_x, ebar_y, bar_width, bar_height))
+                                         (bar_x, ebar_y, bar_width, bar_height))
                         energy_width = int((entity.energy / entity.max_energy) * bar_width)
                         pygame.draw.rect(self.screen, (80, 160, 255),
-                                       (bar_x, ebar_y, energy_width, bar_height))
+                                         (bar_x, ebar_y, energy_width, bar_height))
 
-                    # Draw level if > 1
-                    if entity.level > 1:
-                        level_text = self.tiny_font.render(f"L{entity.level}", True, COLORS['YELLOW'])
-                        self.screen.blit(level_text, (int(pixel_x + 2), int(pixel_y + CELL_SIZE - 12)))
+                    # Food / hunger (orange)
+                    if hasattr(entity, 'hunger') and hasattr(entity, 'max_hunger') and entity.max_hunger > 0:
+                        fbar_y = bar_y + bar_step * 2
+                        pygame.draw.rect(self.screen, COLORS['BLACK'],
+                                         (bar_x, fbar_y, bar_width, bar_height))
+                        food_width = int((entity.hunger / entity.max_hunger) * bar_width)
+                        pygame.draw.rect(self.screen, (255, 160, 30),
+                                         (bar_x, fbar_y, food_width, bar_height))
+
+                    # Water / thirst (cyan)
+                    if hasattr(entity, 'thirst') and hasattr(entity, 'max_thirst') and entity.max_thirst > 0:
+                        wbar_y = bar_y + bar_step * 3
+                        pygame.draw.rect(self.screen, COLORS['BLACK'],
+                                         (bar_x, wbar_y, bar_width, bar_height))
+                        water_width = int((entity.thirst / entity.max_thirst) * bar_width)
+                        pygame.draw.rect(self.screen, (0, 210, 230),
+                                         (bar_x, wbar_y, water_width, bar_height))
+
+                    # Draw level (blue, 2 decimal places)
+                    level_text = self.tiny_font.render(f"L{entity.level:.2f}", True, (100, 180, 255))
+                    self.screen.blit(level_text, (int(pixel_x + 2), int(pixel_y + CELL_SIZE - 12)))
 
                     # Enchantment marker — golden rect in top-right corner
                     if self.is_entity_enchanted(entity_id):
@@ -443,37 +467,46 @@ class HudMixin:
                     if self.debug_entity_ai:
                         debug_y_offset = CELL_SIZE - 12 if entity.level > 1 else CELL_SIZE - 2
 
-                        # AI State
+                        # AI State (3-char abbreviation, colour-coded)
                         if hasattr(entity, 'ai_state'):
                             state_color = COLORS['WHITE']
                             if entity.ai_state == 'combat':
-                                state_color = (255, 0, 0)  # RED
+                                state_color = (255, 60, 60)    # red
                             elif entity.ai_state == 'targeting':
-                                state_color = (255, 165, 0)  # ORANGE
+                                state_color = (255, 165, 0)    # orange
                             elif entity.ai_state == 'wandering':
-                                state_color = COLORS['GRAY']
+                                state_color = (160, 160, 160)  # gray
                             elif entity.ai_state == 'idle':
-                                state_color = (192, 192, 192)  # LIGHT_GRAY
-                            elif entity.ai_state == 'fleeing':
-                                state_color = (255, 100, 255)  # PINK
+                                state_color = (200, 200, 200)  # light gray
+                            elif entity.ai_state in ('flee', 'fleeing'):
+                                state_color = (255, 100, 255)  # pink
 
-                            state_text = self.tiny_font.render(f"{entity.ai_state[:3].upper()}", True, state_color)
-                            self.screen.blit(state_text, (int(pixel_x + 2), int(pixel_y + debug_y_offset + 10)))
+                            state_text = self.tiny_font.render(
+                                f"{entity.ai_state[:3].upper()}", True, state_color)
+                            self.screen.blit(state_text,
+                                             (int(pixel_x + 2), int(pixel_y + debug_y_offset + 10)))
 
-                        # Target info
-                        target_info = ""
-                        if hasattr(entity, 'current_target') and entity.current_target:
-                            if isinstance(entity.current_target, int) and entity.current_target in self.entities:
-                                target_entity = self.entities[entity.current_target]
-                                target_info = f"→{target_entity.type[:3]}"
-                            elif entity.current_target == 'player':
-                                target_info = "→PLR"
-                        elif hasattr(entity, 'target_type') and entity.target_type:
-                            target_info = f"?{entity.target_type[:3]}"
+                        # Target type — always show if set (full string up to 8 chars)
+                        ttype = getattr(entity, 'target_type', None)
+                        if ttype:
+                            ttype_text = self.tiny_font.render(
+                                ttype[:8], True, (80, 220, 255))
+                            self.screen.blit(ttype_text,
+                                             (int(pixel_x + 2), int(pixel_y + debug_y_offset + 20)))
 
-                        if target_info:
-                            target_text = self.tiny_font.render(target_info, True, COLORS['CYAN'])
-                            self.screen.blit(target_text, (int(pixel_x + 24), int(pixel_y + debug_y_offset + 10)))
+                        # Current target entity label (→TYPE or →PLR)
+                        ct = getattr(entity, 'current_target', None)
+                        if ct:
+                            if isinstance(ct, int) and ct in self.entities:
+                                ct_label = f"\u2192{self.entities[ct].type[:4]}"
+                            elif ct == 'player':
+                                ct_label = "\u2192PLR"
+                            else:
+                                ct_label = ""
+                            if ct_label:
+                                ct_text = self.tiny_font.render(ct_label, True, (180, 255, 180))
+                                self.screen.blit(ct_text,
+                                                 (int(pixel_x + 2), int(pixel_y + debug_y_offset + 30)))
 
                     # Draw faction name if entity has one (debug display)
                     if hasattr(entity, 'faction') and entity.faction:
@@ -601,11 +634,14 @@ class HudMixin:
             # Check transform state — use NPC sprite/color instead of player sprite
             _transform = self.player.get('transform')
             if _transform:
+                from data.entities import ENTITY_TYPES as _ET
+                # Use the entity's sprite_name (e.g. 'black bat') not raw type ('BAT')
+                _sprite_base = _ET.get(_transform, {}).get('sprite_name', _transform).lower()
                 # Try walking sprite for the NPC type first, fall back to still, then color block
                 if self.use_sprites and hasattr(self, 'sprite_manager'):
-                    for _sname in (f"{_transform.lower()}_{facing}_{anim_frame}",
-                                   f"{_transform.lower()}_{facing}_still",
-                                   f"{_transform.lower()}_down_still"):
+                    for _sname in (f"{_sprite_base}_{facing}_{anim_frame}",
+                                   f"{_sprite_base}_{facing}_still",
+                                   f"{_sprite_base}_down_still"):
                         _sp = self.sprite_manager.sprites.get(_sname)
                         if _sp:
                             player_sprite = _sp
@@ -613,8 +649,7 @@ class HudMixin:
                 if player_sprite:
                     self.screen.blit(player_sprite, (px, py))
                 else:
-                    from data.entities import ENTITY_TYPES
-                    _c = ENTITY_TYPES.get(_transform, {}).get('color', (200, 200, 200))
+                    _c = _ET.get(_transform, {}).get('color', (200, 200, 200))
                     pygame.draw.rect(self.screen, _c, (px, py, CELL_SIZE, CELL_SIZE))
                     _lbl = self.tiny_font.render(_transform[:3], True, (255, 255, 255))
                     self.screen.blit(_lbl, (px + 2, py + CELL_SIZE // 2 - 4))
@@ -812,7 +847,7 @@ class HudMixin:
                 elif CELL_TYPES.get(cell, {}).get('enterable'):
                     hint_text = "SPACE: Enter"
 
-            controls = f"{hint_text} | B: Block | C: Craft | X: Combine | L: Cast | E: Pickup"
+            controls = f"{hint_text} | Shift: Block | C: Craft | X: Combine | L: Cast | U: Actions | E: Pickup"
             text = self.tiny_font.render(controls, True, COLORS['WHITE'])
             self.screen.blit(text, (10, ui_y + 58))
 
@@ -820,8 +855,8 @@ class HudMixin:
             key_ref_x = SCREEN_WIDTH - 340
             key_lines = [
                 "WASD/Arrows: Move  SPACE: Interact  ESC: Pause",
-                "I/T/M/F: Items/Tools/Magic/Follow  Q: Quests  N: Trade",
-                "E: Pickup  P: Place  D: Drop  B: Block  V: FF  C/X: Craft",
+                "I/T/M/U/F: Items/Tools/Magic/Actions/Follow  Q: Quests  N: Trade",
+                "E: Pickup  P: Place  D: Drop  Shift: Block  V: FF  C/X: Craft",
             ]
             for i, line in enumerate(key_lines):
                 ref_text = self.tiny_font.render(line, True, (160, 160, 170))
@@ -850,6 +885,29 @@ class HudMixin:
                 night_text = self.small_font.render("🌙 NIGHT", True, (180, 180, 200))
                 self.screen.blit(night_text, (SCREEN_WIDTH - 100, 30))
 
+            # Draw faction banners on top-left / top-right wall cells
+            if not self.player.get('in_structure'):
+                _sk = f"{self.player['screen_x']},{self.player['screen_y']}"
+                _cf = self.get_zone_controlling_faction(_sk)
+                if _cf:
+                    _hostile = self.factions.get(_cf, {}).get('hostile', False)
+                    _banner_key = 'red_banner' if _hostile else 'blue_banner'
+                    _banner_spr = self.sprite_manager.sprites.get(_banner_key)
+                    _abbrev = ''.join(w[0].upper() for w in _cf.split() if w)[:3]
+                    _banner_font = pygame.font.Font(None, max(12, CELL_SIZE // 2))
+                    _abbrev_surf = _banner_font.render(_abbrev, True, (255, 255, 255))
+                    _abbrev_rect = _abbrev_surf.get_rect()
+                    for _bx in (0, GRID_WIDTH - 1):
+                        _px = _bx * CELL_SIZE
+                        if _banner_spr:
+                            self.screen.blit(_banner_spr, (_px, 0))
+                        else:
+                            _bc = (180, 40, 40) if _hostile else (40, 80, 180)
+                            pygame.draw.rect(self.screen, _bc, (_px, 0, CELL_SIZE, CELL_SIZE))
+                        # Centre initials on the banner cell
+                        _abbrev_rect.center = (_px + CELL_SIZE // 2, CELL_SIZE // 2)
+                        self.screen.blit(_abbrev_surf, _abbrev_rect)
+
             # Draw inventory panels
             self.draw_inventory_panels()
 
@@ -876,8 +934,9 @@ class HudMixin:
                 else:
                     self.draw_trader_ui()
 
-            # Draw NPC inspection if targeting peaceful NPC
+            # Draw NPC inspection panel (Shift or inspect tool active)
             self.draw_inspected_npc()
 
-            # Draw item list when targeting a cell with dropped items or a chest
-            self.draw_targeted_items()
+            # Draw cell/item inspect panel (Shift or inspect tool, no NPC at target)
+            self.draw_inspect_target()
+

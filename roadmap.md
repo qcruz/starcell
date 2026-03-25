@@ -198,6 +198,46 @@ The LoreEngine generates a Prophecy fragment found in a dungeon chest: *"the swo
 - [ ] Forest Ancient — enormous Treant boss; guardian of a Sacred Grove artifact; summons smaller Treants; killing it curses the zone
 - [ ] Goblin Warchief — elite goblin leader who fortifies a zone; commands coordinated warband attacks; drops a War Banner artifact
 
+### Boss Battle Concepts
+
+> Boss battles in StarCell are not traditional encounters — they are **zone-scale events** where the environment itself becomes the threat. Each concept below is a distinct biome-state or world condition that the player stumbles into rather than fights directly. The "boss" is the zone.
+
+---
+
+#### The Hunger *(Biome Boss — Poison Swamp)*
+
+**Concept:** The player has walked into the mouth of a giant, ancient Venus flytrap — but the flytrap *is* the biome. A poison swamp zone that seals its exits when entered and slowly digests everything inside it.
+
+**Zone Layout:**
+- **Outer ring (2 rows)** — Venus flytrap enemies: static, non-moving sprites that only play an attack animation when any NPC or the player walks adjacent. These form the "teeth." No pathfinding, no wandering — pure hazard tiles with an attack range of 1.
+- **Mid layer** — interspersed flower patterns and pools of POISON_WATER (shallow puddle variant). Butterflies spawn here in high numbers. Any non-player NPC that enters this zone dies quickly from poison ticks and leaves a bone pile.
+- **Center** — dense POISON_WATER pools; the "stomach." Maximum poison damage rate. Rare loot cached here as a reward for reaching the center.
+
+**Zone Locking mechanic:**
+- On entry, BUSH or ROCK cells grow over all 4 exit corridors (cellular automata rule: entry cells regrow at high rate).
+- Player must chop/mine through to escape — buying time but taking damage. Existing chop/mine mechanics, no new systems.
+- Regrowth rate can be tuned by biome difficulty level.
+
+**Damage:**
+- POISON_WATER deals continuous poison damage per tick to any entity standing in it (status effect: `poisoned`).
+- Venus flytrap attack fires on the same tick interval as NPC attacks but from a fixed position.
+- Spiders inside the zone ignore poison damage (flag: `poison_immune`).
+
+**Drops & Economy:**
+- All NPCs and animals that die in the zone drop +1–2 bonus meat on top of normal loot (the zone "feeds").
+- Bone piles accumulate visually — a record of everything the zone has consumed.
+- Center loot: rare potion, artifact fragment, or Hunger-specific item (TBD).
+
+**Implementation path (all existing systems):**
+1. New biome: `POISON_SWAMP` — proc-gen rule, rare (~1% chance), replaces a standard swamp/water zone.
+2. New cell: `POISON_WATER` — shallow, walkable, deals poison ticks; variant of WATER with `poison_damage: 2` in CELL_TYPES.
+3. New entity: `VENUS_FLYTRAP` — hostile, `stationary: true`, attack-only AI, no movement behavior, `poison_immune: true`.
+4. Zone entry trigger: on player entering a POISON_SWAMP zone, plant BUSH cells at all 4 exit corridors.
+5. High BUSH regrowth rate specific to POISON_SWAMP biome.
+6. Bonus meat drop: in `update_structure_zone` / entity death handler, check zone biome and add +1–2 meat to loot roll.
+
+---
+
 ### Peaceful & Animals
 - [ ] Birds — fly over the overworld; pick up small items and drop them randomly while flying; certain bird species pollinate adjacent cells, spreading crops and flowers to neighboring cells, eat certain NPCs like bats and bugs.
 - [ ] Sheep — produces wool (behavior pass needed)

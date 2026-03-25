@@ -63,12 +63,14 @@ class MenusMixin:
             # Return clickable rect (box + label)
             return pygame.Rect(cb_x, cy, 20 + lbl.get_width(), 16)
 
-        music_rect  = draw_checkbox("Ambient Music", getattr(self, 'ambient_music_enabled', True), y)
-        debug_rect  = draw_checkbox("Debug Prints",  getattr(self, 'debug_prints_enabled',  True), y + 22)
+        music_rect    = draw_checkbox("Ambient Music",  getattr(self, 'ambient_music_enabled', True), y)
+        debug_rect    = draw_checkbox("Debug Prints",   getattr(self, 'debug_prints_enabled',  True), y + 22)
+        autosave_rect = draw_checkbox("Autosave (30s)", getattr(self, 'autosave_enabled',      True), y + 44)
 
         # Store rects for click detection in handle_input
-        self._menu_cb_music_rect = music_rect
-        self._menu_cb_debug_rect = debug_rect
+        self._menu_cb_music_rect    = music_rect
+        self._menu_cb_debug_rect    = debug_rect
+        self._menu_cb_autosave_rect = autosave_rect
 
     # -------------------------------------------------------------------------
     # Pause screen
@@ -313,6 +315,16 @@ class MenusMixin:
 
     def draw_inspected_npc(self):
         """Draw inspection info to the right of targeted NPC"""
+        keys = pygame.key.get_pressed()
+        shift_held = keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]
+        _ts_idx = self.inventory.selected_tool_slot_idx
+        inspect_tool_active = (
+            _ts_idx is not None and
+            _ts_idx < len(self.inventory.tool_slots) and
+            self.inventory.tool_slots[_ts_idx] == 'inspect'
+        )
+        if not (shift_held or inspect_tool_active):
+            return
         if not self.inspected_npc or self.inspected_npc not in self.entities:
             return
 
@@ -411,6 +423,12 @@ class MenusMixin:
             prefix = "Quest*" if assigned else "Quest"
             info_lines.append(f"{prefix}: {q_label}")
 
+        # Favor score
+        if hasattr(entity, 'favor'):
+            favor_val = entity.favor
+            favor_label = "Hostile" if favor_val <= -75 else ("Wary" if favor_val < 0 else ("Neutral" if favor_val == 0 else ("Friendly" if favor_val < 60 else "Allied")))
+            info_lines.append(f"Favor:{favor_val:+d} ({favor_label})")
+
         # Faction (if entity has faction)
         if hasattr(entity, 'faction') and entity.faction:
             info_lines.append(f"{entity.faction}")
@@ -422,28 +440,122 @@ class MenusMixin:
             if hasattr(entity, 'alignment'):
                 info_lines.append(f"({entity.alignment})")
 
-        # Quest hint
+        # Quest hint (info, not prompt)
         nq = next((n for n in getattr(self, 'npc_quests', [])
                    if n.npc_id == self.inspected_npc), None)
         if nq:
             if nq.quest.status == 'completed':
-                info_lines.append("Quest done! (Shift+Q)")
+                info_lines.append("Quest: done!")
             else:
                 q_name = QUEST_TYPES.get(nq.quest.quest_type, {}).get('name', nq.quest.quest_type)
                 info_lines.append(f"Quest: {q_name}")
-        else:
-            if len(getattr(self, 'npc_quests', [])) < 3:
-                info_lines.append("Shift+Q: Get quest")
-        if self.active_quest or getattr(self, 'active_npc_quest_npc_id', None):
-            info_lines.append("Shift+A: Assign quest")
-        # Show trade hint if NPC has items
-        if entity.inventory:
-            info_lines.append("Shift+T: Trade")
 
-        # Draw each line (no background box)
+        # Draw info lines
         for i, line in enumerate(info_lines):
             text = self.tiny_font.render(line, True, (255, 255, 255))
             self.screen.blit(text, (info_x, info_y + i * line_height))
+
+        # Contextual prompts — shown as a horizontal bar below the info block
+        prompts = []
+        if nq and nq.quest.status == 'completed':
+            prompts.append("Shift+Q:Turn in")
+        elif len(getattr(self, 'npc_quests', [])) < 3:
+            prompts.append("Shift+Q:Quest")
+        if self.active_quest or getattr(self, 'active_npc_quest_npc_id', None):
+            prompts.append("Shift+A:Assign")
+        if entity.inventory:
+            prompts.append("Shift+T:Trade")
+        if self.inventory.items:
+            prompts.append("Shift+G:Gift")
+        prompts.append("Shift+F:Follow")
+
+        if prompts:
+            prompt_y = info_y + len(info_lines) * line_height + 4
+            px = info_x
+            for prompt in prompts:
+                surf = self.tiny_font.render(prompt, True, (200, 200, 100))
+                self.screen.blit(surf, (px, prompt_y))
+                px += surf.get_width() + 8
+
+    # -------------------------------------------------------------------------
+    # Cell / item inspect (triggered when Shift held or inspect tool active,
+    # no NPC at target)
+    # -------------------------------------------------------------------------
+
+    def draw_inspect_target(self):
+        """Show cell name, items, and contextual prompts when inspecting a non-NPC cell."""
+        # Only draw when player is actively holding Shift or has inspect tool selected
+        keys = pygame.key.get_pressed()
+        shift_held = keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]
+        _ts_idx = self.inventory.selected_tool_slot_idx
+        inspect_tool_active = (
+            _ts_idx is not None and
+            _ts_idx < len(self.inventory.tool_slots) and
+            self.inventory.tool_slots[_ts_idx] == 'inspect'
+        )
+        if not (shift_held or inspect_tool_active):
+            return
+        target = getattr(self, 'inspect_cell_target', None)
+        if not target:
+            return
+        check_x, check_y = target
+        screen_key = f"{self.player['screen_x']},{self.player['screen_y']}"
+        grid = (self.current_screen or {}).get('grid')
+        if not grid:
+            return
+
+        cell = grid[check_y][check_x]
+        info_lines = [cell.replace('_', ' ').title()]
+        prompts = []
+
+        # Items on the cell
+        items_here = {}
+        if screen_key in self.dropped_items:
+            items_here = self.dropped_items[screen_key].get((check_x, check_y), {})
+        if items_here:
+            for item_name, count in items_here.items():
+                name = ITEMS.get(item_name, {}).get('name', item_name)
+                info_lines.append(f"  {name}{f' x{count}' if count > 1 else ''}")
+            prompts.append("E:Pickup")
+
+        # Gravestone inscriptions
+        if cell == 'GRAVESTONE':
+            gs_names = getattr(self, 'gravestone_names', {}).get(screen_key, {}).get((check_x, check_y), [])
+            for n in gs_names:
+                info_lines.append(f"  {n}")
+
+        # Chest contents
+        if cell == 'CHEST':
+            chest_key = f"{screen_key}:{check_x},{check_y}"
+            contents = (self.chest_contents or {}).get(chest_key, {})
+            if contents:
+                for item_name, count in contents.items():
+                    name = ITEMS.get(item_name, {}).get('name', item_name)
+                    info_lines.append(f"  {name}{f' x{count}' if count > 1 else ''}")
+            prompts.append("E:Open chest")
+
+        # Enchantable cells
+        enchantable = {'STONE', 'TREE', 'IRON_ORE', 'CAVE_WALL', 'WALL'}
+        if cell in enchantable:
+            prompts.append("L:Enchant")
+
+        # Position panel near the target cell, but clamp to screen
+        from constants import CELL_SIZE, SCREEN_WIDTH, SCREEN_HEIGHT
+        px = min(check_x * CELL_SIZE + CELL_SIZE + 4, SCREEN_WIDTH - 120)
+        py = max(check_y * CELL_SIZE, 4)
+        line_height = 16
+
+        for i, line in enumerate(info_lines):
+            surf = self.tiny_font.render(line, True, (220, 220, 220))
+            self.screen.blit(surf, (px, py + i * line_height))
+
+        if prompts:
+            prompt_y = py + len(info_lines) * line_height + 4
+            ppx = px
+            for p in prompts:
+                surf = self.tiny_font.render(p, True, (200, 200, 100))
+                self.screen.blit(surf, (ppx, prompt_y))
+                ppx += surf.get_width() + 8
 
     # -------------------------------------------------------------------------
     # Dropped item / chest tooltip

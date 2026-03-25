@@ -53,20 +53,48 @@ NIGHT_OVERLAY_ALPHA = 40  # Darkness overlay opacity (0-255, subtle at 40)
 QUEST_COOLDOWN = 300      # Ticks before new quest target assigned after completion (5 seconds)
 QUEST_XP_MULTIPLIER = 10  # XP reward = target_level × this value
 
-# Cell Growth & Decay Rates (probability per tick) - SLOWED for subtle changes
-GRASS_TO_DIRT_RATE = 0.00001    # Grass decays to dirt without water (was 0.0001)
-DIRT_TO_SAND_RATE = 0.000005    # Dirt becomes sand in severe drought (was 0.00005)
-DIRT_TO_GRASS_RATE = 0.0001     # Dirt becomes grass with water (was 0.0005)
-TREE_GROWTH_RATE = 0.00005      # Grass becomes tree (was 0.0001)
-TREE_DECAY_RATE = 0.0005        # Trees decay when overcrowded (was 0.001)
-SAND_RECLAIM_RATE = 0.0005      # Sand becomes dirt with water (was 0.001)
-FLOWER_SPREAD_RATE = 0.0001     # Flowers spread to nearby grass (was 0.0005)
-FLOWER_DECAY_RATE = 0.0005      # Flowers die from overcrowding/drought (was 0.002)
-DEEP_WATER_FORM_RATE = 0.05     # Water becomes deep water (apply_cellular_automata)
-DEEP_WATER_EVAPORATE_RATE = 0.03 # Deep water becomes water (apply_cellular_automata)
-WATER_TO_DIRT_RATE = 0.005      # Water slowly evaporates to dirt without neighbors (apply_cellular_automata)
-BIOME_SPREAD_RATE = 0.001       # Chance per update a base cell copies a different NSEW neighbor type
-FLOODING_RATE = 0.015           # Water spreads to dirt (apply_cellular_automata)
+# ── CA rate hierarchy (mirrors constants.py — constants.py is authoritative) ──
+CA_BASE_RATE = 0.001
+BASE_DECAY_RATE = CA_BASE_RATE  # legacy alias
+
+# Tier 1 class rates
+CA_GROWTH_RATE     = 0.1 * CA_BASE_RATE
+CA_DECAY_RATE      = 0.1 * CA_BASE_RATE
+CA_SPREAD_RATE     = 2   * CA_BASE_RATE
+CA_WATER_EVAP_RATE = 8   * CA_BASE_RATE
+
+# Tier 1 — Growth
+DIRT_TO_GRASS_RATE       = 1.0 * CA_GROWTH_RATE
+DIRT_TO_GRASS_WATER_RATE = 2.0 * CA_GROWTH_RATE
+GRASS_TO_TREE_RATE       = 1.0 * CA_GROWTH_RATE
+GRASS_TO_FLOWER_RATE     = 1.0 * CA_GROWTH_RATE
+SAND_TO_DIRT_STONE_RATE  = 2.0 * CA_GROWTH_RATE
+
+# Tier 1 — Decay
+GRASS_TO_DIRT_RATE          = 0.1  * CA_DECAY_RATE
+DIRT_TO_SAND_DROUGHT_RATE   = 0.05 * CA_DECAY_RATE
+TREE_TO_GRASS_RATE          = 5.0  * CA_DECAY_RATE
+TREE_TO_GRASS_CROWD_RATE    = 10   * CA_DECAY_RATE
+TREE_TO_GRASS_DROUGHT_RATE  = 3.0  * CA_DECAY_RATE
+CACTUS_TO_SAND_DROUGHT_RATE = 3.0  * CA_DECAY_RATE
+FLOWER_TO_GRASS_RATE        = 5.0  * CA_DECAY_RATE
+
+# Tier 1 — Water dynamics
+WATER_TO_BASE_ISOLATED_RATE = 2    * CA_BASE_RATE
+DEEP_WATER_TO_WATER_RATE    = 0.5  * CA_WATER_EVAP_RATE
+WATER_TO_DEEP_WATER_RATE    = 2.5  * CA_WATER_EVAP_RATE
+SAND_TO_DIRT_WATER_RATE     = 10   * CA_WATER_EVAP_RATE
+DIRT_TO_WATER_RAIN_RATE     = 0.75 * CA_WATER_EVAP_RATE
+GRASS_TO_WATER_RAIN_RATE    = 1.0  * CA_WATER_EVAP_RATE
+DIRT_TO_FLOWER_WATER_RATE   = 0.4  * CA_WATER_EVAP_RATE
+
+# Tier 1 — Spread
+BIOME_BORDER_SPREAD_RATE = 2.0 * CA_SPREAD_RATE
+TERRAIN_DIFFUSION_RATE   = 1.0 * CA_GROWTH_RATE
+
+# Tier 2 — Cross-biome: desert edge
+GRASS_TO_DIRT_SAND_RATE  = 1.5 * CA_SPREAD_RATE
+DIRT_TO_SAND_SPREAD_RATE = 2.0 * CA_SPREAD_RATE
 
 # Entity Survival
 HUNGER_DECAY_RATE = 0.02        # Base hunger loss per decay call (humanoids get 6× this)
@@ -122,7 +150,7 @@ WIZARD_SPELL_RANGE = 6          # Maximum spell casting range
 # Action Success Rates
 FARMER_HARVEST_SUCCESS = 0.4    # 40% harvest success
 FARMER_TILL_SUCCESS = 0.25      # 25% till success
-FARMER_PLANT_SUCCESS = 0.3      # 30% plant success
+FARMER_PLANT_SUCCESS = 0.45     # 45% plant success (increased)
 LUMBERJACK_CHOP_SUCCESS = 0.85   # 85% chop success (increased for much faster work)
 LUMBERJACK_BUILD_SUCCESS = 0.35 # 35% build success
 MINER_MINE_SUCCESS = 0.2        # 20% mine success
@@ -136,7 +164,7 @@ ENHANCED_SETTLEMENT_RATE = 0.25 # Settlement rate when zone needs specific role 
 
 # Trader Path Building (Cellular Automata)
 TRADER_PATH_BUILD_RATE = 0.6    # Chance to convert cell to dirt while walking (increased for traders/guards/miners)
-TRADER_COBBLE_RATE = 0.25       # Chance to upgrade dirt to cobblestone (increased for faster road building)
+TRADER_COBBLE_RATE = 0.35       # Chance to upgrade dirt to cobblestone
 TRADER_TRAVEL_MODE = True       # Traders prioritize traveling between zone exits
 
 # Entity Movement & Exploration
@@ -157,9 +185,9 @@ DESERT_BIOME_CHANCE = 0.05      # 5% of zones are desert (generate_screen)
 
 # Raid Event System
 RAID_CHECK_INTERVAL = 600       # Ticks between raid checks (10 seconds at 60 FPS)
-RAID_CHANCE_BASE = 0.08         # 8% chance for raid when zone has 5+ entities
+RAID_CHANCE_BASE = 0.025        # 2.5% base raid chance (halved; structures lower it further)
 RAID_POPULATION_THRESHOLD = 4   # Minimum entities in zone to trigger raid check
-HIDDEN_CAVE_SPAWN_CHANCE = 0.20 # 20% chance to spawn hidden cave during raid
+HIDDEN_CAVE_SPAWN_CHANCE = 0.50 # 50% chance to spawn hidden cave during raid (caves primary source)
 NATURAL_CAVE_ZONE_CHANCE = 0.08 # 8% chance a zone gets a natural cave on generation
 PLAYER_MINESHAFT_BASE_CHANCE = 0.05 # 5% base chance for player mining to create mineshaft
 MINESHAFT_DEPTH_DIVISOR = 2.0  # Each depth level halves the mineshaft creation chance
@@ -170,7 +198,7 @@ WARRIOR_PROMOTION_CHANCE = 0.60 # 60% chance highest level entity becomes warrio
 # Miner & Structure Systems
 MINER_CAVE_CREATE_CHANCE = 0.10 # 10% chance to create cave when mining at zone corners
 CAMP_UPGRADE_CHANCE = 0.001     # 0.1% chance per update for camp to upgrade to house
-CAVE_HOSTILE_SPAWN_CHANCE = 0.005 # 0.5% chance per cave per update to spawn hostile
+CAVE_HOSTILE_SPAWN_CHANCE = 0.010 # 1.0% chance per cave per update to spawn hostile
 TERMITE_SPAWN_CHANCE = 0.001      # 0.1% chance per zone per update to spawn termite (near trees) - reduced spawn rate
 NIGHT_SKELETON_SPAWN_CHANCE = 0.01 # 1% chance per zone at night to spawn skeleton (higher near dropped items)
 SKELETON_DAYLIGHT_DAMAGE = 1       # HP damage per update to skeletons during daytime

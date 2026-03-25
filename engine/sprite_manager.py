@@ -245,10 +245,66 @@ class SpriteManager:
         print("  ✓ Generated all structure and special cell sprites")
 
         # Load individual PNG sprites for new cell/item types
+        _wa = 'weapons and armour'  # subdirectory shorthand
         _individual_sprites = {
-            'IRON_ORE':   'ironore.png',
-            'WELL':       'well.png',
-            'iron_sword': 'sword.png',
+            # Cells (uppercase = cell key, lowercase = item key alias)
+            'IRON_ORE':        'ironore.png',
+            'WELL':            'well.png',
+            'DESERT_WELL':     'desert_well.png',
+            'BED_BLUE':        'bed_blue.png',
+            'GRAVESTONE':      'gravestone.png',
+            'FLOWER_PATTERN1': 'flowerpattern1.png',
+            'FLOWER_PATTERN2': 'flowerpattern2.png',
+            'FLOWER_PATTERN3': 'flowerpattern3.png',
+            # New furniture / structural cells
+            'BOOKSHELF':          'bookshelf.png',
+            'WOOD_CHAIR':         'wood_chair.png',
+            'WOOD_TABLE':         'wood_table.png',
+            'BED_WHITE':          'bed_white.png',
+            'WATER_TROUGH':       'water_trough.png',
+            'SMALL_POTTED_PLANT': 'small_potted_plant.png',
+            'BLUE_MUSHROOM':      'blue_mushroom.png',
+            'BROKEN_GRAVESTONE':  'broken_gravestone.png',
+            'EMPTY_CRATE':        'emptycrate.png',
+            'OPEN_CHEST':         'open_chest.png',
+            'APPLE_CRATE':        'applecrate.png',
+            # Item sprites for inventory display
+            'iron_ore':           'ironore.png',
+            'well':               'well.png',
+            'desert_well':        'desert_well.png',
+            'bed_blue':           'bed_blue.png',
+            'bed_white':          'bed_white.png',
+            'flower_pattern1':    'flowerpattern1.png',
+            'flower_pattern2':    'flowerpattern2.png',
+            'flower_pattern3':    'flowerpattern3.png',
+            'gravestone':         'gravestone.png',
+            'broken_gravestone':  'broken_gravestone.png',
+            'bookshelf':          'bookshelf.png',
+            'wood_chair':         'wood_chair.png',
+            'wood_table':         'wood_table.png',
+            'water_trough':       'water_trough.png',
+            'small_potted_plant': 'small_potted_plant.png',
+            'blue_mushroom':      'blue_mushroom.png',
+            'open_chest':         'open_chest.png',
+            'apple_crate':        'applecrate.png',
+            # Weapons — keyed by item name so inventory/drop lookup finds them directly
+            'iron_sword':       f'{_wa}/sword_red_handle.png',
+            'bone_sword':       f'{_wa}/sword_red_handle.png',
+            'enchanted_sword':  f'{_wa}/sword_gold.png',
+            'club':             f'{_wa}/club_red.png',
+            'bow':              f'{_wa}/bow.png',
+            'bow_metal':        f'{_wa}/bow_metal.png',
+            'staff_red':        f'{_wa}/staff_red.png',
+            'spear':            f'{_wa}/spear_black.png',
+            'warhammer':        f'{_wa}/warhammer_red_bronze.png',
+            # Shields
+            'shield':           f'{_wa}/shield_metal.png',
+            'shield_bronze':    f'{_wa}/shield_red_bronze.png',
+            # Armour
+            'armour_chest':     f'{_wa}/armour_chest_metal.png',
+            'armour_helm':      f'{_wa}/armour_helm_metal.png',
+            'armour_legs':      f'{_wa}/armour_legs_metal.png',
+            'armour_shoes':     f'{_wa}/armour_shoes_metal.png',
         }
         sprite_dir = os.path.join(os.path.dirname(__file__), '..', 'sprites')
         for sprite_key, filename in _individual_sprites.items():

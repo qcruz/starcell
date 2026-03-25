@@ -44,16 +44,53 @@ class CombatMixin:
                     best_damage = dmg
         return best_damage
 
+    def calculate_equipped_weapon_damage(self):
+        """Return damage from player's equipped weapon slot (0 if empty)."""
+        weapon = getattr(self.inventory, 'equipment_slots', {}).get('weapon')
+        if weapon and weapon in ITEMS:
+            return ITEMS[weapon].get('damage', 0)
+        return 0
+
+    def calculate_equipped_armor_reduction(self):
+        """Return damage reduction (0–1 fraction) from player's equipped armor."""
+        armor = getattr(self.inventory, 'equipment_slots', {}).get('armor')
+        if armor and armor in ITEMS:
+            armor_val = ITEMS[armor].get('armor', 0)
+            # Each armor point = 2% reduction, capped at 60%
+            return min(0.60, armor_val * 0.02)
+        return 0.0
+
     # -------------------------------------------------------------------------
     # Player attack
     # -------------------------------------------------------------------------
 
     def player_attack(self):
-        """Player attacks with equipped weapon (SPACE when weapon selected)"""
-        # Check if weapon selected in tools
-        weapon = self.inventory.selected_tool
-        if not weapon or 'damage' not in ITEMS.get(weapon, {}):
-            return False  # No weapon equipped
+        """Player attacks whenever a valid target is in range (Space bar).
+        Damage = base_damage + equipment-slot weapon + hotbar weapon (if any).
+        No hotbar weapon is required to attack."""
+        # Get target cell first — bail early if nothing there
+        target = self.get_target_cell()
+        if not target:
+            return False
+
+        check_x, check_y = target
+        screen_key = f"{self.player['screen_x']},{self.player['screen_y']}"
+        entities_list = self.screen_entities.get(screen_key, [])
+
+        # Check for a valid target entity
+        target_entity = None
+        for entity_id in entities_list:
+            if entity_id in self.entities:
+                entity = self.entities[entity_id]
+                if entity.x == check_x and entity.y == check_y:
+                    if not self.player.get('friendly_fire', False):
+                        if not entity.props.get('hostile', False):
+                            return False  # peaceful entity, FF off — don't attack
+                    target_entity = (entity_id, entity)
+                    break
+
+        if not target_entity:
+            return False  # No entity at target
 
         # Attack cooldown (1 second)
         if self.tick - self.player.get('last_attack_tick', 0) < 60:
@@ -62,71 +99,57 @@ class CombatMixin:
         self.player['last_attack_tick'] = self.tick
         self.sound.on_attack()
 
-        # Get target cell
-        target = self.get_target_cell()
-        if not target:
-            return False
+        entity_id, entity = target_entity
 
-        check_x, check_y = target
-        screen_key = f"{self.player['screen_x']},{self.player['screen_y']}"
+        # Damage: base + equipment-slot weapon + hotbar weapon bonus
+        equip_dmg = self.calculate_equipped_weapon_damage()
+        hotbar_weapon = self.inventory.selected_tool
+        hotbar_dmg = ITEMS.get(hotbar_weapon, {}).get('damage', 0) if hotbar_weapon else 0
+        weapon_damage = max(equip_dmg, hotbar_dmg)
 
-        # Unified zone system: player screen coords reflect current zone (incl. structure virtual coords)
-        entities_list = self.screen_entities.get(screen_key, [])
+        total_damage = self.player['base_damage'] + weapon_damage
 
-        # Check for entity at target
-        for entity_id in entities_list:
-            if entity_id in self.entities:
-                entity = self.entities[entity_id]
-                if entity.x == check_x and entity.y == check_y:
-                    # Friendly-fire guard: peaceful entities are protected when FF is OFF
-                    if not self.player.get('friendly_fire', False):
-                        if not entity.props.get('hostile', False):
-                            print(f"[FF blocked] {entity.type} is peaceful — press V to enable friendly fire")
-                            return False
-                    # Calculate damage
-                    weapon_damage = ITEMS[weapon].get('damage', 0)
-                    total_damage = self.player['base_damage'] + weapon_damage
+        # Add magic damage from runestones
+        runestone_types = ['lightning_rune', 'fire_rune', 'ice_rune', 'poison_rune', 'shadow_rune']
+        magic_damage = 0
+        magic_type = None
+        for rune_type in runestone_types:
+            if rune_type in self.inventory.items:
+                rune_count = self.inventory.items[rune_type]
+                magic_damage += rune_count * ITEMS[rune_type].get('damage', 3)
+                if not magic_type:
+                    magic_type = ITEMS[rune_type].get('magic_damage')
 
-                    # Add magic damage from runestones
-                    runestone_types = ['lightning_rune', 'fire_rune', 'ice_rune', 'poison_rune', 'shadow_rune']
-                    magic_damage = 0
-                    magic_type = None
-                    for rune_type in runestone_types:
-                        if rune_type in self.inventory.items:
-                            rune_count = self.inventory.items[rune_type]
-                            magic_damage += rune_count * ITEMS[rune_type].get('damage', 3)
-                            if not magic_type:  # Use first rune type for animation color
-                                magic_type = ITEMS[rune_type].get('magic_damage')
+        total_damage += magic_damage
 
-                    total_damage += magic_damage
+        # Apply blocking reduction
+        if entity.combat_state == 'blocking':
+            total_damage *= (1 - entity.block_reduction)
 
-                    # Apply blocking reduction
-                    if entity.combat_state == 'blocking':
-                        total_damage *= (1 - entity.block_reduction)
+        entity.take_damage(total_damage, 'player')
+        entity.last_attacked_tick = self.tick
 
-                    entity.take_damage(total_damage, 'player')
-                    entity.last_attacked_tick = self.tick
+        if hasattr(entity, 'favor'):
+            entity.favor = max(-100, entity.favor - 5)
 
-                    # Temp energy cost for attacking
-                    self.player['energy'] = max(0, self.player.get('energy', 0) - 2)
+        self.player['energy'] = max(0, self.player.get('energy', 0) - 2)
+        self.show_attack_animation(check_x, check_y, target_entity=entity, magic_type=magic_type)
 
-                    # Show attack animation (with magic color if applicable)
-                    self.show_attack_animation(check_x, check_y, target_entity=entity, magic_type=magic_type)
+        if entity.health <= 0 and hasattr(entity, 'favor'):
+            entity.favor = max(-100, entity.favor - 20)
 
-                    if magic_damage > 0:
-                        print(f"Hit {entity.type} for {int(total_damage)} damage ({int(magic_damage)} magic)! HP: {int(entity.health)}/{entity.max_health}")
-                    else:
-                        print(f"Hit {entity.type} for {int(total_damage)} damage! HP: {int(entity.health)}/{entity.max_health}")
-                    return True
-
-        return False
+        if magic_damage > 0:
+            print(f"Hit {entity.type} for {int(total_damage)} ({int(magic_damage)} magic)! HP: {int(entity.health)}/{entity.max_health}")
+        else:
+            print(f"Hit {entity.type} for {int(total_damage)}! HP: {int(entity.health)}/{entity.max_health}")
+        return True
 
     # -------------------------------------------------------------------------
     # Player damage & XP
     # -------------------------------------------------------------------------
 
     def player_take_damage(self, damage):
-        """Player takes damage with blocking reduction"""
+        """Player takes damage with blocking and armor reduction"""
         # Don't take damage if already dead
         if self.state == 'death':
             return
@@ -134,6 +157,11 @@ class CombatMixin:
         if self.player['blocking']:
             damage *= 0.1  # 90% reduction when blocking
             self.player['energy'] = max(0, self.player.get('energy', 0) - 5)
+
+        # Apply equipped armor reduction
+        armor_reduction = self.calculate_equipped_armor_reduction()
+        if armor_reduction > 0:
+            damage *= (1.0 - armor_reduction)
 
         self.player['health'] -= damage
         print(f"Player took {int(damage)} damage! Health: {int(self.player['health'])}/{self.player['max_health']}")
@@ -178,31 +206,6 @@ class CombatMixin:
         self.death_years = years_passed
         self.death_start_tick = self.tick
         self.death_ticks_simulated = 0
-
-        # Drop all items at death location
-        death_screen_key = f"{self.player['screen_x']},{self.player['screen_y']}"
-        death_pos = (self.player['x'], self.player['y'])
-
-        if death_screen_key not in self.dropped_items:
-            self.dropped_items[death_screen_key] = {}
-        if death_pos not in self.dropped_items[death_screen_key]:
-            self.dropped_items[death_screen_key][death_pos] = {}
-
-        # Drop all inventory items (except magic - spells are permanent)
-        for category in ['items']:
-            inv = getattr(self.inventory, category)
-            for item_name, count in list(inv.items()):
-                self.dropped_items[death_screen_key][death_pos][item_name] = \
-                    self.dropped_items[death_screen_key][death_pos].get(item_name, 0) + count
-            inv.clear()
-        # Drop tool slot items
-        for slot_item in self.inventory.tool_slots:
-            if slot_item is not None:
-                self.dropped_items[death_screen_key][death_pos][slot_item] = \
-                    self.dropped_items[death_screen_key][death_pos].get(slot_item, 0) + 1
-        self.inventory.tool_slots = [None] * len(self.inventory.tool_slots)
-        self.inventory.selected_tool_slot_idx = None
-        self.inventory.selected['tools'] = None
 
         # Release all followers — remove from party so they survive time passage
         for fid in list(self.followers):
