@@ -24,37 +24,6 @@ class NpcAiMixin:
     # ACTION PRIMITIVES — Reusable building blocks for NPC and player actions
     # ══════════════════════════════════════════════════════════════════════
 
-    def _npc_seek_shelter(self, entity, screen_key):
-        """Night shelter-seeking: move toward nearest house and enter at high probability."""
-        if screen_key not in self.screens:
-            return
-        grid = self.screens[screen_key]['grid']
-
-        # Scan for closest enterable house cell
-        best_dist = 999
-        best_x = best_y = best_cell = None
-        for sy in range(GRID_HEIGHT):
-            for sx in range(GRID_WIDTH):
-                c = grid[sy][sx]
-                if CELL_TYPES.get(c, {}).get('enterable', False) and c not in ('CAVE', 'MINESHAFT'):
-                    d = abs(entity.x - sx) + abs(entity.y - sy)
-                    if d < best_dist:
-                        best_dist = d
-                        best_x, best_y, best_cell = sx, sy, c
-
-        if best_x is None:
-            # No house in zone — use normal low-chance entry as fallback
-            self.try_npc_enter_structure(entity, screen_key)
-            return
-
-        if best_dist <= 1:
-            # Adjacent — 80% chance to enter immediately
-            if random.random() < 0.80:
-                self.npc_enter_structure(entity, screen_key, best_x, best_y, best_cell)
-        else:
-            # Move toward house
-            self.move_toward_position(entity, best_x, best_y, screen_key)
-
     def update_entity_ai(self, entity_id, entity):
         """Update entity AI - targeting, pathfinding, actions"""
         # Guard against double-updates in the same tick (can happen with priority queue)
@@ -555,88 +524,7 @@ class NpcAiMixin:
         
         # Structure behavior - NPCs enter/exit houses and caves
         if entity.in_structure:
-            # Daytime: non-nocturnal NPCs should actively try to exit structures
-            # Nighttime: nocturnal entities should actively try to exit
-            wants_to_exit = False
-
-            if not self.is_night and not entity.props.get('nocturnal', False):
-                # Daytime + not nocturnal = want to be outside working
-                wants_to_exit = True
-            elif self.is_night and entity.props.get('nocturnal', False):
-                # Nighttime + nocturnal = want to be outside hunting
-                wants_to_exit = True
-
-            # Overcrowding: keepers never leave; everyone else may be pushed out
-            # when the structure is too full. Chance = local_pop * 10% per update.
-            if not getattr(entity, 'keeper', False):
-                zone_key = f"{entity.screen_x},{entity.screen_y}"
-                local_pop = len([
-                    eid for eid in self.screen_entities.get(zone_key, [])
-                    if eid in self.entities and self.entities[eid].is_alive()
-                ])
-                if local_pop > 3 and random.random() < local_pop * 0.10:
-                    wants_to_exit = True
-
-            # Hostile entities: emerge from caves at night, shelter during day
-            if entity.props.get('hostile', False):
-                zone_biome = self.screens.get(f"{entity.screen_x},{entity.screen_y}", {}).get('biome', '')
-                if zone_biome == 'CAVE':
-                    wants_to_exit = self.is_night   # night → ascend/exit; day → stay
-                else:
-                    wants_to_exit = False           # non-cave structures: stay regardless
-
-            # Combat-capable NPCs (guards/warriors) detect nearby hostiles outside and rush to defend
-            if not wants_to_exit and entity.type in ('GUARD', 'WARRIOR') \
-                    and entity.structure_key in self.structures:
-                sub = self.structures[entity.structure_key]
-                parent_screen = sub.get('parent_screen')
-                parent_cell = sub.get('parent_cell', (GRID_WIDTH // 2, GRID_HEIGHT // 2))
-                entrance_x, entrance_y = parent_cell
-                overworld_key = (f"{parent_screen[0]},{parent_screen[1]}"
-                                 if parent_screen else f"{entity.screen_x},{entity.screen_y}")
-                for oid in self.screen_entities.get(overworld_key, []):
-                    if oid in self.entities:
-                        other = self.entities[oid]
-                        # Skip player followers — they are friendly regardless of hostile prop
-                        if oid in getattr(self, 'followers', []):
-                            continue
-                        if other.props.get('hostile', False):
-                            if abs(other.x - entrance_x) + abs(other.y - entrance_y) <= 8:
-                                wants_to_exit = True
-                                break
-            
-            _restless_moved = False
-            if wants_to_exit:
-                # Actively move toward exit and leave.
-                # Track position before the call — only use move_npc_toward_structure_exit
-                # as a fallback when try_npc_exit_structure is blocked (both move entity.x/y;
-                # calling both when unblocked causes 2-cell jumps per update → visual flicker).
-                _pre_x, _pre_y = entity.x, entity.y
-                self.try_npc_exit_structure(entity)
-                if entity.in_structure and entity.x == _pre_x and entity.y == _pre_y:
-                    # Blocked — try alternative pathfinding
-                    self.move_npc_toward_structure_exit(entity)
-            else:
-                # Low chance to exit anyway (restless NPCs)
-                if random.random() < 0.05:
-                    _rx, _ry = entity.x, entity.y
-                    self.try_npc_exit_structure(entity)
-                    _restless_moved = (entity.x != _rx or entity.y != _ry)
-
-            # If still in structure after exit attempt, do structure behavior
-            if entity.in_structure:
-                # Miners mine in caves, peaceful NPCs rest in houses
-                zone_biome = self.screens.get(f"{entity.screen_x},{entity.screen_y}", {}).get('biome', '')
-                if entity.type == 'MINER' and zone_biome == 'CAVE':
-                    behavior_config = entity.props.get('behavior_config')
-                    if behavior_config:
-                        self.execute_entity_behavior(entity, behavior_config)
-                else:
-                    # Rest/wander — skip if restless exit already moved this entity this tick
-                    if not _restless_moved and random.random() < 0.1:
-                        self.wander_entity(entity)
-
-            # Always return here — never fall through to overworld AI with stale screen_key
+            self.handle_in_structure_npc(entity, entity_id)
             return
         else:
             # In overworld
@@ -764,12 +652,6 @@ class NpcAiMixin:
                 if self.npc_seek_shelter(entity):
                     return  # Sheltered, don't wander or do work behaviors
 
-        # Daytime: peaceful NPCs in structures leave (keepers excluded — anchored to their zone)
-        if not self.is_night and entity.in_structure and not is_follower and not is_proxy and not is_keeper:
-            if random.random() < 0.02:  # 2% per update to leave
-                self.npc_exit_structure(entity)
-                return
-        
         # PEACEFUL NPC THREAT DETECTION - DISABLED
         # Now handled by the reactive hostile proximity check in update_entity_ai_state
         # which runs for ALL entity types, not just farmers/lumberjacks
@@ -3445,87 +3327,6 @@ class NpcAiMixin:
         transformation = self.check_npc_transformation(entity_id, entity)
         if transformation:
             return  # NPC transformed, skip normal behavior this tick
-    
-    def npc_seek_shelter(self, entity):
-        """NPCs seek shelter (house/camp) at night and enter idle state when there"""
-        # Already inside a structure — don't scan overworld grid or re-enter
-        if entity.in_structure:
-            return False
-        screen_key = f"{entity.screen_x},{entity.screen_y}"
-        if screen_key not in self.screens:
-            return False
-        
-        screen = self.screens[screen_key]
-        
-        # Initialize idle state if not present
-        if not hasattr(entity, 'is_idle'):
-            entity.is_idle = False
-        
-        # Check for threats - break idle state
-        if entity.is_idle:
-            # Check for hostiles nearby
-            has_threat = False
-            if screen_key in self.screen_entities:
-                for eid in self.screen_entities[screen_key]:
-                    if eid in self.entities:
-                        other = self.entities[eid]
-                        if other.props.get('hostile'):
-                            dist = abs(entity.x - other.x) + abs(entity.y - other.y)
-                            if dist <= 5:  # Threat within 5 cells
-                                has_threat = True
-                                break
-            
-            # Break idle if threatened or low resources (nighttime check disabled)
-            if has_threat or entity.hunger < 30 or entity.thirst < 30:
-                entity.is_idle = False
-                return False
-            
-            # Stay idle - don't move
-            return True
-        
-        # Find nearest shelter (HOUSE preferred, then CAMP)
-        nearest_house = None
-        nearest_camp = None
-        min_house_dist = float('inf')
-        min_camp_dist = float('inf')
-        
-        for y in range(GRID_HEIGHT):
-            for x in range(GRID_WIDTH):
-                cell = screen['grid'][y][x]
-                dist = abs(entity.x - x) + abs(entity.y - y)
-                
-                if cell == 'HOUSE' and dist < min_house_dist:
-                    min_house_dist = dist
-                    nearest_house = (x, y)
-                elif cell == 'CAMP' and dist < min_camp_dist:
-                    min_camp_dist = dist
-                    nearest_camp = (x, y)
-        
-        # Move toward nearest shelter (prefer house)
-        if nearest_house and min_house_dist <= 15:
-            if min_house_dist <= 1:
-                # Adjacent to house — enter it
-                hx, hy = nearest_house
-                self.npc_enter_structure(entity, screen_key, hx, hy, 'HOUSE')
-                entity.is_idle = True
-                return True
-            else:
-                entity.is_idle = False
-                self.move_entity_towards(entity, nearest_house[0], nearest_house[1])
-                return True
-        
-        elif nearest_camp and min_camp_dist <= 15:
-            if min_camp_dist <= 2:
-                entity.is_idle = True
-                return True
-            else:
-                entity.is_idle = False
-                self.move_entity_towards(entity, nearest_camp[0], nearest_camp[1])
-                return True
-        
-        # No shelter nearby - not idle
-        entity.is_idle = False
-        return False  # No shelter found or too far
     
     def check_npc_transformation(self, entity_id, entity):
         """General function to check if NPC should transform to new type
