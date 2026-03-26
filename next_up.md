@@ -9,6 +9,9 @@
 
 Small additions using existing systems and minimal changes to code.
 
+- [ ] Cell type masterlist — create `data/cell_order.md` listing every cell type in the game in ascending order of rarity/resource-cost/ecological complexity: raw terrain (CAVE_WALL, WALL, CLIFF, SAND, DIRT, STONE, COBBLESTONE, WATER, DEEP_WATER) → vegetation (GRASS, SOIL, CARROT1-3, FLOWER, FLOWER_PATTERN1-3, BUSH, CACTUS, TREE1-3) → water features (WELL, DESERT_WELL, WATER_TROUGH) → structures/furniture (CAMP, FLOOR_WOOD, CAVE_FLOOR, PLANKS, WOOD_TABLE, WOOD_CHAIR, BOOKSHELF, BED_BLUE, BED_WHITE, SMALL_POTTED_PLANT, BLUE_MUSHROOM, BARREL, EMPTY_CRATE, APPLE_CRATE, CHEST, OPEN_CHEST, LOCKED_CHEST, FORGE, WATER_TROUGH, WALL) → buildings (HOUSE, STONE_HOUSE) → underground (CAVE, MINESHAFT, STAIRS_DOWN, STAIRS_UP) → special/rare (GRAVESTONE, BROKEN_GRAVESTONE, RUINED_SANDSTONE_COLUMN, IRON_ORE, SOIL, BED variants). Include for each entry: label, decay target, grow target, harvest item (if any), notes on rarity/role. This list feeds loot tables, crafting tiers, quest rewards, shop inventories, and the enchanted-cell grow/decay system.
+- [ ] Resource and NPC behavior balancing pass — review hunger/thirst drain rates, food spawn density, carrot growth rates, passive adjacent consume thresholds; observe NPCs finding food in practice and tune so entities are rarely at critical hunger in a normal zone with carrots/grass present; also review water access near wells and WATER cells
+
 - [ ] Status effects as a first-class system — add `entity.status_effects = {effect: ticks_remaining}` dict and `tick_status_effects()` pass; wire poisoned/burning/cold/bleeding as entries; replaces per-site hacks and unlocks The Hunger poison water, fire cells, and bleed-on-hit as one-liners
 - [ ] Player reputation ripple effects — hostile NPCs in a zone flee when player reputation exceeds threshold; traders offer 10–20% discount at high rep; zone Keeper greets player by name once rep threshold crossed; no new UI, condition checks on existing paths only
 - [ ] Zone memory / history scars — after any zone with >10 entity deaths, leave persistent marks: scorched tile variants, non-decaying bone piles, zone name suffix ("the Blighted"); pipe LoreEngine zone-death counts into visible cell state
@@ -76,6 +79,7 @@ Post the item in chat before starting. Wait for a clear "go ahead." These introd
 - [ ] Add barn/pen structure — houses livestock; prevents animal wandering
 
 ### New UI Systems
+- [ ] Enchanted cell interaction popup — when player interacts with an enchanted cell, show a small 2-option popup: left = Decay (shows target decay cell type as a sprite preview), right = Grow (shows target grow cell type as a sprite preview); clicking either transforms the cell to the target type, costs player magic equivalent to a spell cast, and leaves the cell enchanted so it can be interacted with again; cell order for decay/grow targets comes from the cell type masterlist (Tier 1 prerequisite); this lets players freeze and sculpt the terrain at a magic cost without breaking the enchantment
 - [ ] Add world map view — zoomed-out explored zone overlay with names and faction colors
 - [ ] Add achievement system — milestone tracking; HUD notification on unlock
 
