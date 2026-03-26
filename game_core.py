@@ -494,6 +494,11 @@ class GameCoreMixin:
             # UI sprites (faction banners — not items, so not found by the ITEMS loop)
             'blue_banner':           'blue_banner.png',
             'red_banner':            'red_banner.png',
+            # Attack swipe animations — directional
+            'swipe_down':            'down_swipe.png',
+            'swipe_up':              'up_swipe.png',
+            'swipe_left':            'left_swipe.png',
+            'swipe_right':           'right_swipe.png',
         }
 
         # Weapon / armour sprites — subdir has a space so they can't be found by the
