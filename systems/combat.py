@@ -397,14 +397,17 @@ class CombatMixin:
             target_entity: Target entity (for accurate world position)
             magic_type: Type of magic damage for color
         """
-        # Use target_entity's world position if available for accurate placement
-        if target_entity and hasattr(target_entity, 'world_x'):
-            display_x = target_entity.world_x
-            display_y = target_entity.world_y
+        # Position swipe at the attacker's cell edge, not the target's position
+        if entity and hasattr(entity, 'world_x'):
+            display_x = entity.world_x
+            display_y = entity.world_y
+        elif entity:
+            display_x = float(entity.x)
+            display_y = float(entity.y)
         else:
-            # Fallback to grid coordinates
-            display_x = float(x)
-            display_y = float(y)
+            # Player attacking — use player's position
+            display_x = float(self.player.get('x', x))
+            display_y = float(self.player.get('y', y))
 
         # Track which zone this animation belongs to (unified zone system)
         if entity:

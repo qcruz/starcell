@@ -85,50 +85,55 @@ class NpcAiMixin:
                         grid[cy][cx] = 'COBBLESTONE'
 
     def _try_adjacent_consume(self, entity, screen_key):
-        """Auto-eat/drink when hungry/thirsty and adjacent to a food or water cell.
+        """Auto-eat/drink when near a food or water cell.
 
+        Probability of eating = % of hunger bar missing, so a nearly-full entity
+        rarely snacks while a starving one almost always grabs food it walks over.
+        Checks own cell first, then the 8 adjacent cells.
         Carrot cells decay one step when consumed (CARROT3→CARROT2→CARROT1→SOIL).
         WATER cells have a small chance to evaporate on drink.
-        Only fires for overworld entities that are actually in need.
         """
         if screen_key not in self.screens:
             return
         grid = self.screens[screen_key]['grid']
-        hunger_low = entity.hunger < entity.max_hunger * 0.55
-        thirst_low = entity.thirst < entity.max_thirst * 0.55
-        if not hunger_low and not thirst_low:
+
+        hunger_pct_missing = max(0.0, 1.0 - entity.hunger / max(1, entity.max_hunger))
+        thirst_pct_missing = max(0.0, 1.0 - entity.thirst / max(1, entity.max_thirst))
+
+        # Probabilistic gate: chance = % missing, so full entities never eat
+        want_food  = hunger_pct_missing > 0 and random.random() < hunger_pct_missing
+        want_water = thirst_pct_missing > 0 and random.random() < thirst_pct_missing
+        if not want_food and not want_water:
             return
 
         food_sources = entity.props.get('food_sources', [])
         water_sources = entity.props.get('water_sources', ['WATER'])
         CARROT_DECAY = {'CARROT3': 'CARROT2', 'CARROT2': 'CARROT1', 'CARROT1': 'SOIL'}
+        _passive_grazer = (not entity.props.get('hostile', False) and
+                           'GRASS' in food_sources)
 
-        for dy in (-1, 0, 1):
-            for dx in (-1, 0, 1):
-                if dx == 0 and dy == 0:
-                    continue
+        # Own cell first (entity walking directly over food), then adjacent
+        for dy in (0, -1, 1):
+            for dx in (0, -1, 1):
                 nx, ny = entity.x + dx, entity.y + dy
                 if not (0 <= nx < GRID_WIDTH and 0 <= ny < GRID_HEIGHT):
                     continue
                 cell = grid[ny][nx]
 
-                if hunger_low and cell in food_sources:
-                    gain = random.randint(3, 8)
-                    entity.hunger = min(entity.max_hunger, entity.hunger + gain)
-                    # Decay carrot one level; grassy food not consumed
-                    if cell in CARROT_DECAY and random.random() < 0.5:
-                        grid[ny][nx] = CARROT_DECAY[cell]
-                    hunger_low = False  # satisfied for this tick
+                if want_food and cell in food_sources:
+                    entity.hunger = min(entity.max_hunger, entity.hunger + random.randint(15, 25))
+                    if not _passive_grazer:
+                        if cell in CARROT_DECAY and random.random() < 0.5:
+                            grid[ny][nx] = CARROT_DECAY[cell]
+                    want_food = False
 
-                elif thirst_low and cell in water_sources:
-                    gain = random.randint(4, 10)
-                    entity.thirst = min(entity.max_thirst, entity.thirst + gain)
-                    # Small chance water cell evaporates
+                elif want_water and cell in water_sources:
+                    entity.thirst = min(entity.max_thirst, entity.thirst + random.randint(15, 25))
                     if cell == 'WATER' and random.random() < 0.15:
                         grid[ny][nx] = 'DIRT'
-                    thirst_low = False
+                    want_water = False
 
-                if not hunger_low and not thirst_low:
+                if not want_food and not want_water:
                     return
 
     # ══════════════════════════════════════════════════════════════════════
