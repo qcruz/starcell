@@ -152,6 +152,18 @@ class DevScreenMixin:
             key=lambda x: -x[1]
         ))
 
+        # Death cause counts (session)
+        _dc = getattr(self, 'death_counts', {})
+        death_counts = {
+            'starvation':  _dc.get('starvation',  0),
+            'dehydration': _dc.get('dehydration', 0),
+            'combat':      _dc.get('combat',      0),
+            'old_age':     _dc.get('old_age',     0),
+            'other':       _dc.get('other',       0),
+        }
+        total_deaths   = sum(death_counts.values())
+        entities_spawned_total = getattr(self, 'entities_spawned_total', 0)
+
         return {
             'total_domains':     len(getattr(self, 'domains', {})),
             'biome_counts':      dict(sorted(biome_counts.items())),
@@ -180,6 +192,9 @@ class DevScreenMixin:
             'domain_data':       domain_data,
             'top_npc_items':              top_npc_items,
             'quests_completed_by_type':   quests_completed_by_type,
+            'death_counts':              death_counts,
+            'total_deaths':              total_deaths,
+            'entities_spawned_total':    entities_spawned_total,
         }
 
     # ── Renderer ───────────────────────────────────────────────────────────────
@@ -324,6 +339,24 @@ class DevScreenMixin:
                 cy = _t(f"  {qt:<22} {count}", cx, cy)
         else:
             cy = _t("  (none yet)", cx, cy)
+
+        cy += 8
+        dc = stats['death_counts']
+        total_d = stats['total_deaths']
+        spawned = stats['entities_spawned_total']
+        alive   = stats['alive_count']
+        # alive + total_deaths should equal spawned (integrity check)
+        check_ok = (alive + total_d) <= spawned
+        check_col = GRN if check_ok else RED
+        cy = _h("DEATHS (session)", cx, cy)
+        cy = _t(f"  starvation  {dc['starvation']:>5}", cx, cy)
+        cy = _t(f"  dehydration {dc['dehydration']:>5}", cx, cy)
+        cy = _t(f"  combat      {dc['combat']:>5}", cx, cy)
+        cy = _t(f"  old age     {dc['old_age']:>5}", cx, cy)
+        cy = _t(f"  other       {dc['other']:>5}", cx, cy)
+        cy = _t(f"  total dead  {total_d:>5}", cx, cy)
+        cy = _t(f"  spawned     {spawned:>5}", cx, cy)
+        cy = _t(f"  alive now   {alive:>5}  (dead+alive≤spawn)", cx, cy, check_col)
 
         cy += 8
         cy = _h("BLOAT WATCH", cx, cy)

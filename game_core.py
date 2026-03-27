@@ -750,15 +750,20 @@ class GameCoreMixin:
         entity = self.entities[entity_id]
         screen_key = f"{entity.screen_x},{entity.screen_y}"
         
-        # Log death reason if not from combat
+        # Track and log death cause
         if entity.health <= 0:
+            _dc = getattr(self, 'death_counts', {})
             if hasattr(entity, 'age') and hasattr(entity, 'max_age') and entity.age > entity.max_age:
-                name_str = entity.name if entity.name else entity.type
-                print(f"{name_str} died of old age at {entity.age} years (max: {entity.max_age})")
+                _dc['old_age'] = _dc.get('old_age', 0) + 1
             elif entity.hunger <= 0:
-                print(f"{entity.type} died from starvation at ({entity.x}, {entity.y})")
+                _dc['starvation'] = _dc.get('starvation', 0) + 1
             elif entity.thirst <= 0:
-                print(f"{entity.type} died from dehydration at ({entity.x}, {entity.y})")
+                _dc['dehydration'] = _dc.get('dehydration', 0) + 1
+            elif getattr(entity, 'killed_by', None) is not None:
+                _dc['combat'] = _dc.get('combat', 0) + 1
+            else:
+                _dc['other'] = _dc.get('other', 0) + 1
+            self.death_counts = _dc
         
         # Free keeper slot if this entity was a keeper
         if getattr(entity, 'keeper', False):

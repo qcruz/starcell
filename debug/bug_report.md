@@ -5,23 +5,38 @@ Reviewed from `debug/bugcatcher.log` after each session.
 
 ---
 
-## Session 54 — PENDING (cave/structure bug focus)
+## Session 54 — PENDING (AI priority cycling + death balance)
+
+**Current dev phase goal:** Tune entity behavior so all three death types occur in
+roughly balanced proportions (starvation ≈ combat ≈ old age), level distribution
+shows a slowly growing tail of L2+ NPCs, and quest completions accumulate steadily.
+Current + dead should always equal all-time spawned total (integrity check).
 
 **Fixes applied before this run:**
-- Offscreen-only spawning: cave hostile, night skeleton, termite, and population maintenance now all skipped for the player's current zone. Only raids still fire in current zone.
-- Death drops: all items now land at exact death cell (no ±2 scatter).
-- Resource priority: linear urgency (NPCs pursue water/food at 30% missing, not 60%).
-- Chest decay: 0.5%/update chance to dump contents as dropped items.
-- WARRIOR added to all biome initial spawn tables (0.35–0.40).
-- Hostile spawns reduced ~25%; raid base halved (0.05→0.025).
-- Watchdog enhanced: structures now log `ai_state_timer`, `frozen_flag` (>600 ticks), `world_x/y`, `in_subscreen`, `in_combat`, `facing`, `anim_frame` per entity. Entity sample adds `in_subscreen`, `subscreen_key`, `ai_state_timer`. New integrity check: `entity_frozen_in_structure` fires when timer >600.
+- `_try_adjacent_consume`: probabilistic gate (% missing = chance), checks own cell
+  first so NPCs walking over food fill bar; fills to max_hunger/max_thirst.
+- Targeting state food/water handler: fills to max_hunger/max_thirst (not fixed 40).
+- `find_and_move_to_water`: fills to max_thirst on drink.
+- Keeper score: excluded from candidates when within range (was score=1, could win
+  when entity had nothing else to do).
+- Passive grazers skip cell decay when eating.
+- Swipe animation positioned at attacker cell (was at target cell).
+- Death cause tracking: `death_counts` dict in `game_core.remove_entity`.
+- `entities_spawned_total` counter incremented at all 4 spawn sites in spawning.py.
+- Watchdog: new `ai_state_cycling` category — logs all entities with full priority
+  stack state + histogram of ai_state × target_type combinations.
+- Dev screen: new DEATHS section (starvation/dehydration/combat/old_age/other),
+  spawned total, alive count, and alive+dead≤spawned integrity check.
 
-**Watchdog focus this session: structure/cave behavior**
-- `watchdog_structure_sample`: look for entities with `frozen_flag: true` — these are freezing bugs
-- `integrity_anomaly / entity_frozen_in_structure`: direct freeze reports
-- `integrity_anomaly / entity_in_subscreen_but_in_screen_entities`: teleport/ghost candidates
-- `watchdog_entity_sample`: look for entities with `in_subscreen: true` while their zone is an overworld key
-- Target: spend session inside a cave. Document any freeze, teleport, or ghost entity seen.
+**Watchdog focus this run:**
+- `watchdog_ai_state_cycling` → `state_histogram`: check for excess idle/wandering
+  with low hunger (should be food or water), or keeper_target dominating when
+  entities should be on quests or role tasks
+- `watchdog_ai_state_cycling` → individual entries: look for entities with
+  `hunger_pct < 0.4` and `target_type` not 'food'; or `keeper_in_range: true` and
+  `target_type = keeper_target`
+- `watchdog_food_behavior`: confirm hungry entities are reaching food cells
+- Dev screen DEATHS section: note starvation vs combat vs old age split each run
 
 **Run stats:** TBD
 

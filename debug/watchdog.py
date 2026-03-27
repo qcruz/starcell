@@ -33,7 +33,7 @@ from debug.fixes import fix_entity_subscreen_flag
 
 
 class Watchdog:
-    CATEGORIES = ['entities', 'cells', 'zones', 'player', 'structures', 'followers', 'npc_actions', 'keepers', 'npc_quests', 'inventory_state', 'favor', 'food_behavior']
+    CATEGORIES = ['entities', 'cells', 'zones', 'player', 'structures', 'followers', 'npc_actions', 'keepers', 'npc_quests', 'inventory_state', 'favor', 'food_behavior', 'ai_state_cycling']
     SAMPLE_INTERVAL   = 300    # ticks between cycles (~5 s at 60 fps)
     MAX_ENTRIES_PER_SAMPLE = 200  # max JSON entries per category per cycle
     BACKUP1_INTERVAL  = 3600   # ~60 s at 60 fps
@@ -61,18 +61,19 @@ class Watchdog:
         self._category_index += 1
 
         _SAMPLERS = {
-            'entities':        self._sample_entities,
-            'cells':           self._sample_cells,
-            'zones':           self._sample_zones,
-            'player':          self._sample_player,
-            'structures':      self._sample_structures,
-            'followers':       self._sample_followers,
-            'npc_actions':     self._sample_npc_actions,
-            'keepers':         self._sample_keepers,
-            'npc_quests':      self._sample_npc_quests,
-            'inventory_state': self._sample_inventory_state,
-            'favor':           self._sample_favor,
-            'food_behavior':   self._sample_food_behavior,
+            'entities':         self._sample_entities,
+            'cells':            self._sample_cells,
+            'zones':            self._sample_zones,
+            'player':           self._sample_player,
+            'structures':       self._sample_structures,
+            'followers':        self._sample_followers,
+            'npc_actions':      self._sample_npc_actions,
+            'keepers':          self._sample_keepers,
+            'npc_quests':       self._sample_npc_quests,
+            'inventory_state':  self._sample_inventory_state,
+            'favor':            self._sample_favor,
+            'food_behavior':    self._sample_food_behavior,
+            'ai_state_cycling': self._sample_ai_state_cycling,
         }
         _SAMPLERS[category](tick, game)
 
@@ -629,6 +630,65 @@ class Watchdog:
             'category': 'watchdog_food_behavior',
             'hungry_npc_count': len(entries),
             'npcs': self._trim(tick, 'food_behavior', entries),
+        })
+
+    def _sample_ai_state_cycling(self, tick: int, game) -> None:
+        """Snapshot the full AI priority state for every loaded entity.
+
+        Designed to catch target-type cycling bugs: quest → keeper → special →
+        role → resource.  Logs each entity's current position in the priority
+        stack so bad state (e.g. repeatedly flipping food↔idle, or keeper winning
+        when in range, or quest never firing) shows up across consecutive cycles.
+
+        Also tallies a summary histogram of ai_state × target_type combinations
+        so the session review can spot population-level imbalances at a glance.
+        """
+        entries = []
+        state_hist = {}   # {(ai_state, target_type): count}
+        for eid, entity in game.entities.items():
+            if entity.health <= 0:
+                continue
+            ai_state    = getattr(entity, 'ai_state', None)
+            target_type = getattr(entity, 'target_type', None)
+            key = (ai_state or 'none', target_type or 'none')
+            state_hist[key] = state_hist.get(key, 0) + 1
+
+            h_pct = round(entity.hunger / max(1, entity.max_hunger), 2)
+            t_pct = round(entity.thirst / max(1, entity.max_thirst), 2)
+            entries.append({
+                'id':            eid,
+                'type':          entity.type,
+                'zone':          f"{entity.screen_x},{entity.screen_y}",
+                'level':         round(entity.level, 1),
+                'ai_state':      ai_state,
+                'target_type':   target_type,
+                'current_target':str(getattr(entity, 'current_target', None)),
+                'target_priority': getattr(entity, 'target_priority', None),
+                'hunger_pct':    h_pct,
+                'thirst_pct':    t_pct,
+                'in_combat':     getattr(entity, 'in_combat', False),
+                'quest_focus':   getattr(entity, 'quest_focus', None),
+                'keeper':        getattr(entity, 'keeper', False),
+                'keeper_type':   getattr(entity, 'keeper_type', None),
+                'keeper_in_range': (
+                    getattr(entity, 'keeper', False) and
+                    getattr(entity, 'keeper_target_pos', None) is not None and
+                    (abs(entity.x - entity.keeper_target_pos[0]) +
+                     abs(entity.y - entity.keeper_target_pos[1])) <=
+                    (getattr(entity, 'keeper_type', 3) and 4)
+                ),
+            })
+
+        # Serialise histogram with string keys for JSON
+        hist_serialised = {f"{s}|{t}": c for (s, t), c in
+                           sorted(state_hist.items(), key=lambda x: -x[1])}
+
+        self.bug_catcher.log({
+            'tick':              tick,
+            'category':          'watchdog_ai_state_cycling',
+            'total_alive':       len(entries),
+            'state_histogram':   hist_serialised,
+            'npcs':              self._trim(tick, 'ai_state_cycling', entries),
         })
 
     def _sample_spiders(self, tick: int, game) -> None:
