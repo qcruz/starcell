@@ -5,6 +5,50 @@ Reviewed from `debug/bugcatcher.log` after each session.
 
 ---
 
+## Session 62 — 2026-03-26 (continued observation)
+
+**Fixes applied before this run:** None — continuation run to observe XP accumulation trend.
+
+**Run stats:** Tick 66233→78393 (CONTINUE). ~213s. Clean shutdown.
+
+**Population (tick 74933):**
+- alive=1259, spawned_this_session=~80
+- death_counts: {combat:37, dehydration:23, starvation:1, other:1} — balanced causes
+
+**Level distribution (tick 77633):**
+- L1=1266, L2=8, L3=4, L4=2 (total 1280)
+- Level gradient forming: L2>L3>L4 ✓
+- **L4 entities now exist** — progression confirmed across multiple levels
+
+**Notable XP accumulation (entity samples):**
+- LUMBERJACK id=416: 99 XP (almost L2!)
+- LUMBERJACK id=1171: 85 XP
+- WOLF id=1528: 81 XP
+- TERMITE_double id=1922: 359 XP (L4!)
+- BLACKSMITH id=2168: 100 XP (exactly L2)
+- FARMER id=1424: 37 XP, WOLF_double id=1977: 31 XP
+
+Wide variety of entity types (FARMER, LUMBERJACK, MINER, WARRIOR, GOBLIN, WOLF, BLACKSMITH) all accumulating XP through eat/drink/combat actions. XP system is working across all roles.
+
+**Resource health:** both_bars_80pct=771/1280 (60%), health_80pct=765/1280 (60%).
+
+**State histogram (tick 77633):**
+```
+combat+flee: 411/1280 = 32%   wandering|water: 63
+```
+- Combat+flee holding steady at 32% (was 47% in session 58)
+- `wandering|water: 63` — slight uptick from 52 (session 61). Zone-exit fix reduces new accumulation but older save-file entities persist in stale state.
+
+**Integrity:**
+- `keeper_no_target`: WOLF ids 678, 679 (persistent across sessions), WOLF_double 139 (new)
+- `entity_not_in_subscreen_but_in_subscreen_entities: 280` — GROWING (178→280). Confirmed escalating bug: entity exits subscreen but remains in `subscreen_entities` dict. Same class as bat animation desync. Needs fix.
+
+**CONFIRMED BUG (escalating):** `entity_not_in_subscreen_but_in_subscreen_entities` — 280 events, growing each session. Entity's `in_subscreen` flag cleared but entity ID stays in `subscreen_entities` dict. Root cause likely in `npc_exit_structure` or `handle_in_structure_npc` exit path not cleaning up `subscreen_entities`. Requires audit of all subscreen exit paths.
+
+**OBSERVATION:** XP progression working as designed. Level gradient {L1:1266, L2:8, L3:4, L4:2} shows decreasing distribution across levels. Multiple entity types showing 50–99 XP — next sessions should see more L2 crossings.
+
+---
+
 ## Session 61 — 2026-03-26 (NPC action XP + item XP/durability system)
 
 **Fixes applied before this run:**
