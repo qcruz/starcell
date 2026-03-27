@@ -189,6 +189,8 @@ class NpcAiActionsMixin:
                 screen['grid'][cy][cx] = result_cell
                 if not is_player and activity:
                     actor.level_up_from_activity(activity, self)
+                if not is_player:
+                    actor.tasks_completed = getattr(actor, 'tasks_completed', 0) + 1
             return True
         return False
 
@@ -252,6 +254,8 @@ class NpcAiActionsMixin:
                                 break
                 if not is_player and activity:
                     actor.level_up_from_activity(activity, self)
+                if not is_player:
+                    actor.tasks_completed = getattr(actor, 'tasks_completed', 0) + 1
             return True
         return False
 
