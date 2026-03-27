@@ -144,6 +144,10 @@ class NpcAiActionsMixin:
                 if not is_player and activity:
                     actor.level_up_from_activity(activity, self)
 
+                # Count successful harvest as a task completion
+                if not is_player:
+                    actor.tasks_completed = getattr(actor, 'tasks_completed', 0) + 1
+
             return True
         return False
 
