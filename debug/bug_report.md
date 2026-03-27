@@ -5,6 +5,43 @@ Reviewed from `debug/bugcatcher.log` after each session.
 
 ---
 
+## Session 57 — 2026-03-26 (level-up restore + continue-save mode)
+
+**Fixes applied before this run:**
+- `level_up_from_activity`: full health/hunger/thirst restore on integer level crossing
+- Zone-exit urgency threshold: 0.6 → 0.4 (entities seek exits earlier when dehydrated)
+- `flee` state: clears `target_type` to prevent stale resource type in histogram
+- Watchdog `ai_state_cycling`: now logs `level_histogram`, `both_bars_80pct`, `health_80pct_count`
+- Auto-debug: always continues from `savegame.json` when it exists (was 50/50)
+- Auto-debug shutdown: also saves to `savegame.json` so next session continues from same world
+
+**Run stats:** Tick 12630→15630 (CONTINUE from Session 56). ~50s extension. Clean shutdown.
+
+**Population (tick 13530):** alive=512, spawned=45 (session-delta), deaths={combat:4, dehydration:2}
+
+**Level-up events:** 8 level-ups logged — all TERMITEs (1→2 and one 2→3). No humanoid NPC level-ups observed. TERMITEs level faster because they complete mining actions more frequently.
+
+**AI state cycling not sampled** — session too short to hit the cycling category.
+
+### CRITICAL BUG FOUND — BLACKSMITH entity hunger=9955/max=100
+
+Entity eid=165 (BLACKSMITH) had `hunger=9955.279` with `max_hunger=100` in the save file. This caused:
+- `regenerate_health()` to compute `h_frac=99.55` → `regen ≈ 7500/tick` → entity invincible
+- HUD bar to render food width at 99× the bar_width, creating a visually massive bar
+
+**Root causes identified:**
+1. `save_load.py` loaded `entity.hunger = entity_data['hunger']` with no cap — bad value from older save persisted
+2. `regenerate_health()` did not clamp `h_frac` to [0, 1] — glitched hunger caused superhuman regen
+3. `decay_stats()` decremented without capping at `max_hunger` — glitched value took thousands of ticks to decay naturally
+
+**Fixes applied immediately after session:**
+- `save_load.py`: `entity.hunger = min(entity.max_hunger, max(0, entity_data['hunger']))` on load
+- `engine/entity.py`: `decay_stats` clamps both values to `[0, max]`; `regenerate_health` clamps fractions to `[0, 1]`
+- Watchdog: new integrity check `hunger_exceeds_max` / `thirst_exceeds_max` (also flags `is_hard_cap` at 9999)
+- Both save files sanitized in-place (entity 165 hunger/thirst reset to max)
+
+---
+
 ## Session 56 — 2026-03-26 (spawned counter + stale target_type)
 
 **Fixes applied before this run:**

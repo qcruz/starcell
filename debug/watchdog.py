@@ -844,6 +844,32 @@ class Watchdog:
                     'ai_state': getattr(fe, 'ai_state', None),
                 })
 
+        # Check 5: resource values exceeding max (glitch detector)
+        _RESOURCE_HARD_CAP = 9999
+        for eid, entity in game.entities.items():
+            if entity.health <= 0:
+                continue
+            mh = getattr(entity, 'max_hunger', None)
+            mt = getattr(entity, 'max_thirst', None)
+            h  = getattr(entity, 'hunger', 0)
+            t  = getattr(entity, 'thirst', 0)
+            if mh and h > mh + 1:
+                self.bug_catcher.log({
+                    'tick': tick, 'category': 'integrity_anomaly',
+                    'check': 'hunger_exceeds_max',
+                    'entity_id': eid, 'entity_type': entity.type,
+                    'hunger': h, 'max_hunger': mh,
+                    'is_hard_cap': h >= _RESOURCE_HARD_CAP,
+                })
+            if mt and t > mt + 1:
+                self.bug_catcher.log({
+                    'tick': tick, 'category': 'integrity_anomaly',
+                    'check': 'thirst_exceeds_max',
+                    'entity_id': eid, 'entity_type': entity.type,
+                    'thirst': t, 'max_thirst': mt,
+                    'is_hard_cap': t >= _RESOURCE_HARD_CAP,
+                })
+
     # ------------------------------------------------------------------
     # Rolling backup saves
     # ------------------------------------------------------------------

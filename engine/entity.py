@@ -395,8 +395,8 @@ class Entity:
             hunger_rate = HUNGER_DECAY_RATE
             thirst_rate = THIRST_DECAY_RATE
 
-        self.hunger = max(0, self.hunger - hunger_rate)
-        self.thirst = max(0, self.thirst - thirst_rate)
+        self.hunger = max(0, min(self.max_hunger, self.hunger - hunger_rate))
+        self.thirst = max(0, min(self.max_thirst, self.thirst - thirst_rate))
 
         # Take damage if starving or dehydrated
         if self.hunger <= 0:
@@ -417,8 +417,8 @@ class Entity:
         """
         if self.health >= self.max_health:
             return
-        h_frac = self.hunger / max(1, self.max_hunger)
-        t_frac = self.thirst / max(1, self.max_thirst)
+        h_frac = min(1.0, self.hunger / max(1, self.max_hunger))
+        t_frac = min(1.0, self.thirst / max(1, self.max_thirst))
         combined = (h_frac + t_frac) / 2.0  # 0.0–1.0
         regen = BASE_HEALING_RATE * boost * combined * combined
         if regen > 0:
