@@ -3106,7 +3106,8 @@ class GameCoreMixin:
         self.bug_catcher.flush()
         try:
             self.save_game(path='debug/auto_debug_save.json')
-            print("[AutoDebug] Save written to debug/auto_debug_save.json")
+            self.save_game(path='savegame.json')
+            print("[AutoDebug] Save written to debug/auto_debug_save.json and savegame.json")
         except Exception as exc:
             print(f"[AutoDebug] Save failed: {exc}")
         try:

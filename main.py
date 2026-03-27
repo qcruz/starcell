@@ -120,9 +120,9 @@ if __name__ == '__main__':
         _cap = min(_MIN_SECS * (2 ** _run), _MAX_CAP)
         _dur = random.randint(_MIN_SECS, _cap)
 
-        # New game or continue (50/50 if save exists)
+        # Always continue from savegame.json if it exists (balance observation phase)
         _save_exists = os.path.exists('savegame.json')
-        if _save_exists and random.random() < 0.5:
+        if _save_exists:
             game.load_game()
             game.toggle_autopilot()
             _mode = 'CONTINUE'

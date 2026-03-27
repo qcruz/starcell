@@ -1427,7 +1427,7 @@ class NpcAiMixin:
                         _level = entity.hunger if _ttype == 'food' else entity.thirst
                         _maxv  = entity.max_hunger if _ttype == 'food' else entity.max_thirst
                         _urgency = max(0.0, 1.0 - _level / max(1, _maxv))
-                        if _urgency >= 0.6:
+                        if _urgency >= 0.4:
                             self.seek_zone_exit(entity, entity_id)
                             return
                     entity.ai_state = 'wandering'
@@ -1670,6 +1670,7 @@ class NpcAiMixin:
         
         elif entity.ai_state == 'flee':
             # Exit is handled inside the flee state block (proximity + recently_attacked check)
+            entity.target_type = None  # clear stale resource target_type while fleeing
             entity.ai_state_timer = 2
     
     def evaluate_entity_priorities(self, entity, entity_id):

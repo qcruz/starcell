@@ -689,11 +689,28 @@ class Watchdog:
         hist_serialised = {f"{s}|{t}": c for (s, t), c in
                            sorted(state_hist.items(), key=lambda x: -x[1])}
 
+        # Health / resource / level summary stats
+        hp_pcts   = [round(e['hunger_pct'], 2) for e in entries]  # reuse entries field names
+        alive     = len(entries)
+        hp_full   = sum(1 for e in entries
+                        if e['hunger_pct'] >= 0.8 and e['thirst_pct'] >= 0.8)
+        level_hist = {}
+        for e in entries:
+            lv = int(e['level'])
+            level_hist[lv] = level_hist.get(lv, 0) + 1
+        health_80_plus = sum(
+            1 for eid, entity in game.entities.items()
+            if entity.health > 0 and entity.health / max(1, entity.max_health) >= 0.8
+        )
+
         self.bug_catcher.log({
             'tick':              tick,
             'category':          'watchdog_ai_state_cycling',
-            'total_alive':       len(entries),
+            'total_alive':       alive,
             'state_histogram':   hist_serialised,
+            'level_histogram':   {str(k): v for k, v in sorted(level_hist.items())},
+            'both_bars_80pct':   hp_full,
+            'health_80pct_count': health_80_plus,
             'npcs':              self._trim(tick, 'ai_state_cycling', entries),
         })
 

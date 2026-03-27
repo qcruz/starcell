@@ -512,6 +512,11 @@ class Entity:
         name_str = self.name if self.name else self.type
         print(f"{name_str} leveled up! {old_level_int} -> {new_level_int} (Lv {self.level:.2f})")
 
+        # Full restore on level-up — makes leveling a survival event
+        self.health = self.max_health
+        self.hunger = self.max_hunger
+        self.thirst = self.max_thirst
+
         # Reduce age by 10% and extend max_age by 20% (leveling extends lifespan)
         age_reduction = max(1, int(self.age * 0.1))
         self.age = max(20, self.age - age_reduction)
