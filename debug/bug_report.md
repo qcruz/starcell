@@ -5,7 +5,50 @@ Reviewed from `debug/bugcatcher.log` after each session.
 
 ---
 
-## Session 54 — PENDING (AI priority cycling + death balance)
+## Session 55 — 2026-03-26 (zone-exit fallback + death tracking)
+
+**Fixes applied before this run:**
+- `keeper_no_target` integrity check: now skips keeper_type=3 (zone wanderers naturally have no target)
+- Targeting state: food/water miss with urgency≥60% now calls `seek_zone_exit` instead of wandering in place
+- Watchdog `_sample_player`: now logs `death_counts`, `entities_spawned_total`, `entities_alive`
+
+**Run stats:** Tick 10446 (~174s). Clean shutdown.
+
+**Population over time:**
+- tick 1596: alive=162, spawned=93, deaths={dehydration:56, combat:31}
+- tick 5496: alive=331, spawned=126, deaths={dehydration:61, combat:34}
+- tick 9396: alive=389, spawned=157, deaths={dehydration:89, combat:53}
+
+**ai_state_cycling histogram (tick 8196, 373 alive):**
+```
+wandering|water: 58     targeting|hostile: 29   targeting|water: 27
+targeting|keeper_target:21  wandering|clearing_action:21  idle|hostile:20
+targeting|food: 17      idle|keeper_target:13   idle|water:13
+```
+
+**food_behavior (tick 7896):** Only 1 hungry NPC (BLACKSMITH hunger=60/100 targeting keeper). Food fixes working well.
+
+**Integrity events:** 0 (keeper_no_target false positive eliminated)
+
+### CONFIRMED — Death tracking working; dehydration dominant
+
+Death counts are logged correctly. Dehydration is the dominant cause (89 vs 53 combat by tick 9396), starvation=0. This is expected — food fixes from previous session resolved starvation, but water scarcity remains (FARMERs in zones with no water source). Zone-exit fallback should help but may need more time to observe impact.
+
+### BUG — `entities_spawned_total` severely undercounts
+
+At tick 1596: alive=162, deaths=87 → total ever alive ≥249, but `entities_spawned_total`=93. The counter is missing most spawn events. Likely cause: initial `new_game()` entity creation and/or some spawn paths in `spawning.py` that don't hit the 4 incremented sites. Needs full grep of entity creation calls.
+
+### OBSERVATION — `wandering|water: 58` large cluster
+
+58 entities stuck in `wandering` with stale `target_type='water'` — these are entities that couldn't find water in their zone. Zone-exit fix fires at urgency≥60% but many may be below that threshold, or seek_zone_exit may put them into the exit/wander path which shows as `wandering`. The stale `target_type` after transitioning to wandering is also a cosmetic issue — `target_type` should be cleared on wandering transition.
+
+### OBSERVATION — `targeting|keeper_target: 21` persists
+
+Still 21 entities in `targeting|keeper_target`. These may be legitimate (outside range returning to anchor), but the count is higher than expected. Will monitor next session.
+
+---
+
+## Session 54 — PENDING → SUPERSEDED (AI priority cycling + death balance)
 
 **Current dev phase goal:** Tune entity behavior so all three death types occur in
 roughly balanced proportions (starvation ≈ combat ≈ old age), level distribution
@@ -38,7 +81,7 @@ Current + dead should always equal all-time spawned total (integrity check).
 - `watchdog_food_behavior`: confirm hungry entities are reaching food cells
 - Dev screen DEATHS section: note starvation vs combat vs old age split each run
 
-**Run stats:** TBD
+**Run stats:** Tick 15461 (~257s). Clean shutdown. Population 268→367→451 over session. 0 deaths logged (death_counts not yet in watchdog at this point). Level distribution flat: L1=191, L2=6-7.
 
 ---
 
