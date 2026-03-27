@@ -5,6 +5,51 @@ Reviewed from `debug/bugcatcher.log` after each session.
 
 ---
 
+## Session 59 — 2026-03-26 (flee window + enemy radius tightened)
+
+**Fixes applied before this run:**
+- Flee exit: `recently_attacked` window 60→30 ticks; `enemy_nearby` radius 8→5 cells
+
+**Run stats:** Tick 29811→42720 (CONTINUE). ~213s. Clean shutdown.
+
+**Population:**
+- tick 34611: alive=852, deaths={combat:47, dehydration:13}
+- tick 38511: alive=916, deaths={combat:59, dehydration:42}
+- tick 42411: alive=925, deaths={combat:99, dehydration:65, starvation:1}
+
+**Level distribution:**
+- tick 37311: L1=891, L2=12, L3=4 (total 907)
+- tick 41211: L1=907, L2=12, L3=6 (total 925)
+
+L2 count tripled from session 58 (5→12). L3 growing slowly (2→6). Still only TERMITEs leveling from activity (8 level-ups, all TERMITE 1→2/2→3).
+
+**Resource health:** both_bars_80pct=588/925 (64%), health_80pct=595/925 (64%).
+
+**State histogram (tick 41211):**
+```
+targeting|hostile: 161   wandering|none: 146   flee|none: 136
+combat|hostile: 106      wandering|water: 55   targeting|water: 44
+```
+
+Combat+flee states: 403/925 = 44% (down from 48% in session 58). Trend improving slowly.
+
+**Death balance:** combat:99, dehydration:65, starvation:1 — first starvation death. Old age deaths dropped to 0 (short run window).
+
+### OBSERVATION — Humanoid NPCs still not leveling via activity
+
+Level gains are exclusively from TERMITEs because they complete mining actions frequently. Humanoid NPCs have three barriers:
+1. **Combat/flee locks them out of role tasks** (still 44% of population in combat states)
+2. **Role resources may be depleted** — FARMERs need CARROT3, LUMBERJACKs need TREEs; long-running world may have depleted farmland in active zones
+3. **Zone travel XP** should be firing but may not be frequent enough to accumulate 100 XP
+
+### OBSERVATION — `wandering|water` growing (46→55)
+
+Despite target_type clear in wandering handler, water-seeking entities accumulate because new entities keep spawning into water-scarce zones and the zone-exit fallback (`seek_zone_exit`) doesn't clear target_type. Entities cycle: targeting(water)→exit→new zone→targeting(water)→exit... without clearing target_type between cycles.
+
+**Fix planned:** Clear `target_type` in the zone-exit success path when the resource target type is food/water (the entity found no resource in old zone, entering new zone with a fresh start).
+
+---
+
 ## Session 58 — 2026-03-26 (hunger overflow fix, continued world)
 
 **Fixes applied before this run:**
