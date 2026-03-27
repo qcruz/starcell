@@ -5,6 +5,45 @@ Reviewed from `debug/bugcatcher.log` after each session.
 
 ---
 
+## Session 61 — 2026-03-26 (NPC action XP + item XP/durability system)
+
+**Fixes applied before this run:**
+- `gain_xp(1)` added to all NPC non-walking actions: eat, drink, item pickup, chest loot/deposit, auto meat-consume in combat
+- Item XP/durability system: `item_xp`, `item_durability`, `gain_item_xp()` on Entity; weapons degrade -0.01 durability per attack and award item XP; armor awards item XP when wearer is hit; wizard spells award item XP per cast
+- AttributeError fix: `getattr`/`hasattr` guards for legacy entities in save that lack new attrs
+
+**Crash during first run attempt:** `AttributeError: 'Entity' object has no attribute 'item_durability'` — entities from pre-existing save loaded correctly via save_load.py but some entities created mid-session lacked the new attr from old in-memory state. Fixed with guards before second run.
+
+**Run stats:** Tick 54628→66233 (CONTINUE). ~213s. Clean shutdown.
+
+**Population (tick 64500):**
+- alive=1183, spawned_this_session=110
+- death_counts: {combat:54, dehydration:36, other:1}
+
+**Level distribution (tick 63300):**
+- L1=1153, L2=7, L3=6 (total 1166)
+- Entity samples show XP IS accumulating: BANDIT id=960 level=1.03 (3 XP), FARMER id=159 level=1.11 (11 XP)
+- Rate still slow: ~5–15 XP per session for active entities; need ~100 XP for L2 → 5–10 sessions per entity to level
+
+**Resource health:** both_bars_80pct=669/1166 (57%), health_80pct=681/1166 (58%).
+
+**State histogram (tick 63300):**
+```
+wandering|none: 176   combat+flee: 387/1166 = 33%   wandering|water: 52
+```
+- Combat+flee: **33%** — major improvement from 47% in session 59, 44% in session 58. Flee window tightening (30t, 5 cells) is confirmed working.
+- `wandering|water: 52` — gradually decreasing (58→56→55→52). Zone-exit fix slowly clearing old stale states.
+
+**Integrity:**
+- `keeper_no_target` (type 2): WOLF ids 678, 679 persistent across sessions — these are likely wolves whose assigned keeper_target died or left zone
+- `entity_not_in_subscreen_but_in_subscreen_entities: 178` — same LUMBERJACK 555 recurring
+
+**OBSERVATION:** XP accumulation confirmed working for humanoid NPCs. Progression is slow (~1 level per 5–10 sessions), which matches the "slowly leveling over time" goal. The level distribution is not yet showing a clear gradient because: (a) most entities start at L1/0 XP each session from new spawns, (b) entities die before reaching L2, (c) the 100-XP threshold is significant relative to current action frequency.
+
+**OBSERVATION:** item_xp/item_durability system running without errors. No level-up events logged for items yet (expected — weapons need 100 combat attacks).
+
+---
+
 ## Session 60 — 2026-03-26 (zone-exit resource target_type clear)
 
 **Fixes applied before this run:**
