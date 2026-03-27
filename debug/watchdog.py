@@ -263,6 +263,9 @@ class Watchdog:
             'trader_display': bool(getattr(game, 'trader_display', None)),
             'inspected_npc': getattr(game, 'inspected_npc', None),
             'ap_input_queue_len': len(getattr(game, '_ap_input_queue', [])),
+            'death_counts': dict(getattr(game, 'death_counts', {})),
+            'entities_spawned_total': getattr(game, 'entities_spawned_total', 0),
+            'entities_alive': len(game.entities),
         })
         # Stagnation check: flag if proxy grid hasn't changed since last player sample
         if proxy_pos and getattr(game, 'autopilot', False):
@@ -471,12 +474,15 @@ class Watchdog:
             })
 
             # Integrity: flag keepers with no target reference
-            if not kt:
+            # Type 3 = zone wanderer; naturally has no target — skip false positive
+            _ktype = getattr(entity, 'keeper_type', None)
+            if not kt and _ktype in (1, 2):
                 self.bug_catcher.log({
                     'tick': tick, 'category': 'watchdog_integrity',
                     'check': 'keeper_no_target',
                     'id': eid, 'type': entity.type,
-                    'note': 'keeper=True but keeper_target is None — still searching or bug',
+                    'keeper_type': _ktype,
+                    'note': 'keeper=True (type 1/2) but keeper_target is None — still searching or bug',
                 })
 
     def _sample_npc_quests(self, tick: int, game) -> None:

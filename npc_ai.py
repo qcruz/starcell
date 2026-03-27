@@ -1421,6 +1421,15 @@ class NpcAiMixin:
                 else:
                     if debug and entity.type == 'WARRIOR':
                         print(f"  -> [{entity.type}] NO target found for type={entity.target_type}, switching to wandering")
+                    # Critical survival: if food/water can't be found here, exit zone
+                    _ttype = entity.target_type
+                    if _ttype in ('food', 'water'):
+                        _level = entity.hunger if _ttype == 'food' else entity.thirst
+                        _maxv  = entity.max_hunger if _ttype == 'food' else entity.max_thirst
+                        _urgency = max(0.0, 1.0 - _level / max(1, _maxv))
+                        if _urgency >= 0.6:
+                            self.seek_zone_exit(entity, entity_id)
+                            return
                     entity.ai_state = 'wandering'
                     entity.current_target = None
                     entity.target_type = None
