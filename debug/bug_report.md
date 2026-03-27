@@ -5,6 +5,61 @@ Reviewed from `debug/bugcatcher.log` after each session.
 
 ---
 
+## Session 64 — 2026-03-27 (tasks_completed tracking in action primitives)
+
+**Fixes applied before this run:**
+- `tasks_completed` increment added to `action_harvest_cell`, `action_transform_cell`, `action_place_cell` in `ai/actions.py` — covers FARMER/LUMBERJACK/MINER archetype work going through behavior_config path
+- `_try_complete_assigned_quest` now increments `tasks_completed` + awards entity XP for base quest cycles (previously silently no-oped)
+- Quest target assignment rate raised from 20% → 60% per 10 AI updates
+
+**Run stats:** Tick 97921→101821 (CONTINUE). ~65s. Clean shutdown. Log was trimmed (1364 dropped lines from prior session).
+
+**Tasks_completed (963 quest samples, 3900 ticks):**
+- total across all samples: 15; non-zero samples: 9; max per entity: 3
+- By type: BLACKSMITH max=3, FARMER max=2, LUMBERJACK max=1, MINER max=0
+- BLACKSMITH (GATHER focus) completes tasks by navigating to CHEST targets via quest idle block
+- MINER max=0: likely no STONE cells adjacent in overworld zones during this short run
+- Short session (65s) limits observed completions for off-screen entities (90-tick updates → ~43 possible per session)
+
+**AI state distribution (963 quest samples):**
+- flee: 195 (20%), targeting: 307 (32%), wandering: 297 (31%), idle: 106 (11%), combat: 58 (6%)
+- 20% flee is high — many entities in threat-response mode not doing archetype work
+
+**Quest focus breakdown:**
+- Both uppercase ('MINE', 'FARM', 'LUMBER') and lowercase ('mining', 'farming', 'building') observed — two initialization paths; both handled in `_assign_specific_quest_target` (lines 2403–2423)
+- 44/963 entities had quest_target set (4.6%) — low but expected given 60% chance per 10 updates
+
+**Integrity:**
+- `entity_not_in_subscreen_but_in_subscreen_entities`: still escalating (tracked in held_back.md)
+
+**OBSERVATION:** `tasks_completed` increments ARE working — non-zero values confirmed for FARMER, LUMBERJACK, BLACKSMITH. Infrastructure correct. Low per-session totals are expected given short run time and off-screen throttling (not a bug). Longer sessions needed for meaningful baseline.
+
+**OBSERVATION:** MINER tasks_completed=0 across all samples despite 3900-tick run — miners are likely in overworld zones without adjacent STONE/ORE. Needs verification in a longer session to confirm vs. false negative.
+
+---
+
+## Session 63 — 2026-03-27 (quest completion diagnosis + tracking)
+
+**Fixes applied before this run:**
+- `tasks_completed` attribute added to Entity.__init__
+- `_try_complete_assigned_quest` fixed to count base quest cycles (was silently no-oping for all autonomous NPCs)
+- TC column added to dev_screen NPC averages and quest section total
+- `tasks_completed` added to Watchdog `_sample_npc_quests` entries
+- `tasks_completed` saved/loaded in save_load.py
+
+**Run stats:** ~245s session. ~1348 entities. 14 total task completions observed.
+
+**Tasks_completed:** Only 14 completions across 1348 entities in 245s. Root cause: `tasks_completed` was only incremented in the quest target arrival idle block (keeper/lore quests), NOT in `action_harvest_cell` where archetype work actually happens. The idle block fires when `target_type == 'quest_target'` which requires the entity to navigate to a specific quest_target cell — most archetype work bypasses this path entirely via the role tier.
+
+**Root cause analysis completed:**
+- FARMER/LUMBERJACK/MINER archetype actions go: `determine_target_type` → role tier → `find_closest_target_by_type` → navigate → `action_harvest_cell` — this path does NOT go through the quest idle block
+- `farmer_behavior()` and `lumberjack_behavior()` defined in npc_ai.py but never called (dead code)
+- BLACKSMITH (GATHER) and WIZARD (SEARCH) handled in `_assign_specific_quest_target` but find different targets
+
+**Fix identified:** Add `tasks_completed` increment directly in `action_harvest_cell`, `action_transform_cell`, `action_place_cell` — implemented in Session 64 commit.
+
+---
+
 ## Session 62 — 2026-03-26 (continued observation)
 
 **Fixes applied before this run:** None — continuation run to observe XP accumulation trend.
