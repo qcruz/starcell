@@ -121,14 +121,14 @@ class NpcAiMixin:
                 cell = grid[ny][nx]
 
                 if want_food and cell in food_sources:
-                    entity.hunger = min(entity.max_hunger, entity.hunger + random.randint(15, 25))
+                    entity.hunger = entity.max_hunger
                     if not _passive_grazer:
                         if cell in CARROT_DECAY and random.random() < 0.5:
                             grid[ny][nx] = CARROT_DECAY[cell]
                     want_food = False
 
                 elif want_water and cell in water_sources:
-                    entity.thirst = min(entity.max_thirst, entity.thirst + random.randint(15, 25))
+                    entity.thirst = entity.max_thirst
                     if cell == 'WATER' and random.random() < 0.15:
                         grid[ny][nx] = 'DIRT'
                     want_water = False
