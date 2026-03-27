@@ -245,6 +245,7 @@ class SpawningMixin:
                             entity_id = self.next_entity_id
                             self.next_entity_id += 1
                             self.entities[entity_id] = skeleton
+                            self.entities_spawned_total = getattr(self, 'entities_spawned_total', 0) + 1
 
                             if screen_key not in self.screen_entities:
                                 self.screen_entities[screen_key] = []
@@ -743,6 +744,7 @@ class SpawningMixin:
             entity_id = self.next_entity_id
             self.next_entity_id += 1
             self.entities[entity_id] = skeleton
+            self.entities_spawned_total = getattr(self, 'entities_spawned_total', 0) + 1
 
             if screen_key not in self.screen_entities:
                 self.screen_entities[screen_key] = []
@@ -837,6 +839,7 @@ class SpawningMixin:
             entity_id = self.next_entity_id
             self.next_entity_id += 1
             self.entities[entity_id] = termite
+            self.entities_spawned_total = getattr(self, 'entities_spawned_total', 0) + 1
 
             if screen_key not in self.screen_entities:
                 self.screen_entities[screen_key] = []
@@ -1040,6 +1043,7 @@ class SpawningMixin:
                 if entity_type in _HUMANOID_NPC_TYPES:
                     self._give_random_starting_inventory(entity)
                 self.entities[entity_id] = entity
+                self.entities_spawned_total = getattr(self, 'entities_spawned_total', 0) + 1
 
                 if screen_key not in self.screen_entities:
                     self.screen_entities[screen_key] = []

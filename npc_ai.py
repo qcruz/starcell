@@ -1649,6 +1649,7 @@ class NpcAiMixin:
 
         elif entity.ai_state == 'wandering':
             entity.current_target = None  # always clear target while wandering
+            entity.target_type = None     # clear stale target_type from prior targeting
             roll = random.random()
             if roll < _eff_aggr:
                 # Try to find something to target

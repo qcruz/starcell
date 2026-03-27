@@ -1499,6 +1499,7 @@ class NpcAiMovementMixin:
         new_id = self.next_entity_id
         self.next_entity_id += 1
         self.entities[new_id] = new_entity
+        self.entities_spawned_total = getattr(self, 'entities_spawned_total', 0) + 1
 
         if screen_key not in self.screen_entities:
             self.screen_entities[screen_key] = []

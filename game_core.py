@@ -2899,6 +2899,7 @@ class GameCoreMixin:
                 entity_id = self.next_entity_id
                 self.next_entity_id += 1
                 self.entities[entity_id] = entity
+                self.entities_spawned_total = getattr(self, 'entities_spawned_total', 0) + 1
 
                 if structure_key not in self.screen_entities:
                     self.screen_entities[structure_key] = []
