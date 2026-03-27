@@ -5,6 +5,46 @@ Reviewed from `debug/bugcatcher.log` after each session.
 
 ---
 
+## Session 60 — 2026-03-26 (zone-exit resource target_type clear)
+
+**Fixes applied before this run:**
+- Clear `target_type`/`current_target`/`ai_state` to wandering on successful zone transition when `target_type` is food/water (`ai/movement.py:559`)
+
+**Run stats:** Tick 42720→54628 (CONTINUE). ~213s. Clean shutdown.
+
+**Population (latest snapshot, tick 51420):**
+- alive=1035, spawned_this_session=211
+- death_counts: {combat:58, dehydration:34} — no starvation deaths
+
+**Level distribution (tick 54120):**
+- L1=1053, L2=9, L3=6, L5=1 (total 1069)
+- Still only ~1.5% of population above L1. No humanoid leveling from activity observed.
+
+**Resource health:** both_bars_80pct=678/1069 (63%), health_80pct=664/1069 (62%). Consistent with prior sessions.
+
+**State histogram (tick 54120, total 1069):**
+```
+targeting|hostile: 197   wandering|none: 173   flee|none: 156
+combat|hostile: 146      targeting|water: 58   wandering|water: 56
+idle|hostile: 44         flee|hostile: 33      targeting|keeper_target: 32
+idle|water: 28           targeting|food: 24    wandering|clearing_action: 21
+flee|water: 14           ...
+```
+- Combat+flee: (156+33+146+14+3+3+1)=356+146 = ~47% of population (slightly up from 44% session 59)
+- `wandering|water: 56` unchanged from session 59 (55). Zone-exit fix didn't visibly reduce the cluster yet — likely because entities loaded from save already had stale state; fix prevents new accumulation going forward.
+
+**Integrity:**
+- `keeper_no_target` (type 2): WOLF ids 211, 573, 678, 679, 969, WOLF_double 1259, LUMBERJACK 625 — persistent type-2 keepers with no target across both integrity snapshots
+- `entity_not_in_subscreen_but_in_subscreen_entities: 175` (NEW) — LUMBERJACK 555 in zone -1060,0 has `in_subscreen=False` but is still listed in `subscreen_entities` for that zone. Same flag/data-structure desync as bat animation bug.
+
+**OBSERVATION:** `wandering|water: 56` unchanged. Zone-exit fix prevents new accumulation but pre-existing entities from save carry stale `target_type`. Will clear naturally as entities die and respawn.
+
+**OBSERVATION:** Level distribution stagnant. 1.5% above L1 despite 54k+ ticks of world time. Root cause: XP is only awarded at a few specific call sites (combat hits, rare harvest rolls), not for the full range of NPC actions. Need to award XP for all non-walking actions.
+
+**CONFIRMED BUG:** `entity_not_in_subscreen_but_in_subscreen_entities` — 175 events all pointing to LUMBERJACK 555. Entity exited subscreen but `subscreen_entities` dict was not cleaned up. Cousin of the bat animation rendering bug. Needs subscreen exit path audit.
+
+---
+
 ## Session 59 — 2026-03-26 (flee window + enemy radius tightened)
 
 **Fixes applied before this run:**
