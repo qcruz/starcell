@@ -558,6 +558,12 @@ class NpcAiMovementMixin:
                         self.screen_entities[new_screen_key] = []
                     self.screen_entities[new_screen_key].append(entity_id)
 
+                    # Clear stale resource target_type so entity re-evaluates in new zone
+                    if getattr(entity, 'target_type', None) in ('food', 'water'):
+                        entity.target_type = None
+                        entity.current_target = None
+                        entity.ai_state = 'wandering'
+
     def try_entity_screen_crossing(self, entity, new_x, new_y):
         """Seamlessly transition entity to adjacent zone when they walk through an exit corridor.
 
