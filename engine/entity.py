@@ -234,6 +234,9 @@ class Entity:
         # Experience — cumulative total; level = 1 + xp/100
         self.xp = max(0, (level - 1) * 100)  # back-compute XP from initial level
 
+        # Task completion counter — incremented each time entity reaches a quest target
+        self.tasks_completed = 0
+
         # Age (in years) - start at random age
         if entity_type == 'SKELETON':
             self.age = 0  # Skeletons don't age

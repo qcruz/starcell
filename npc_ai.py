@@ -2344,14 +2344,20 @@ class NpcAiMixin:
         entity.keeper_type = 1
 
     def _try_complete_assigned_quest(self, entity):
-        """Remove the front non-base quest from entity.quest_queue and award player 1 XP.
+        """Complete the front quest from entity.quest_queue.
 
-        No-op if the queue is empty, has only the base quest, or the entity type
-        doesn't use the queue system.
+        For non-base quests: removes from queue and awards player 1 XP.
+        For base quests (only item in queue): counts as a task cycle completion —
+        increments entity.tasks_completed and awards entity XP, but does not
+        remove the base quest (it repeats indefinitely).
         """
         queue = getattr(entity, 'quest_queue', None)
+
+        # Base quest cycle — count the completion but keep the quest
         if not queue or queue[0].get('base', True):
-            return  # Only base quest remaining — nothing to complete
+            entity.tasks_completed = getattr(entity, 'tasks_completed', 0) + 1
+            entity.gain_xp(1)
+            return
 
         completed = queue.pop(0)
         q_name = QUEST_TYPES.get(completed['type'], {}).get('name', completed['type'])
@@ -2691,10 +2697,10 @@ class NpcAiMixin:
                     entity._quest_update_counter = 0
                     self._try_complete_assigned_quest(entity)
 
-        # GENERAL MODE — every ~10 updates, 20% chance to assign a specific target
+        # GENERAL MODE — every ~10 updates, 60% chance to assign a specific target
         if entity.quest_target is None and entity._quest_update_counter >= 10:
             entity._quest_update_counter = 0
-            if random.random() < 0.20:
+            if random.random() < 0.60:
                 self._assign_specific_quest_target(entity, screen_key)
                 if entity.quest_target is not None:
                     return QUEST_BASE

@@ -525,6 +525,7 @@ class Watchdog:
                 'quest_focus': getattr(entity, 'quest_focus', None),
                 'quest_queue': [{'type': e.get('type'), 'base': e.get('base')} for e in queue] if queue else None,
                 'quest_target': target_desc,
+                'tasks_completed': getattr(entity, 'tasks_completed', 0),
                 'ai_state': getattr(entity, 'ai_state', None),
                 'keeper': getattr(entity, 'keeper', False),
                 'keeper_type': getattr(entity, 'keeper_type', None),

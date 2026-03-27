@@ -61,6 +61,7 @@ class SaveLoadMixin:
                 'item_names': getattr(entity, 'item_names', {}),
                 'item_xp': getattr(entity, 'item_xp', {}),
                 'item_durability': getattr(entity, 'item_durability', {}),
+                'tasks_completed': getattr(entity, 'tasks_completed', 0),
                 'keeper': getattr(entity, 'keeper', False),
                 'keeper_type': getattr(entity, 'keeper_type', None),
                 'keeper_target': _serialize_keeper_target(getattr(entity, 'keeper_target', None)),
@@ -387,6 +388,7 @@ class SaveLoadMixin:
                 entity.item_names = entity_data.get('item_names', {})
                 entity.item_xp = entity_data.get('item_xp', {})
                 entity.item_durability = entity_data.get('item_durability', {})
+                entity.tasks_completed = entity_data.get('tasks_completed', 0)
                 entity.keeper = entity_data.get('keeper', False)
                 entity.keeper_type = entity_data.get('keeper_type', None)
                 entity.keeper_target = _deserialize_keeper_target(entity_data.get('keeper_target'))

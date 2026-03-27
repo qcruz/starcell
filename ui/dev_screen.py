@@ -20,7 +20,7 @@ class DevScreenMixin:
         from collections import defaultdict
         _ts = defaultdict(lambda: {'n': 0, 'hp': 0.0, 'max_hp': 0.0,
                                    'hunger': 0.0, 'thirst': 0.0,
-                                   'level': 0.0, 'xp': 0})
+                                   'level': 0.0, 'xp': 0, 'tasks': 0})
         level_counts = {}
         alive_count  = 0
         total_npc_items = 0
@@ -37,6 +37,7 @@ class DevScreenMixin:
             s['thirst'] += getattr(entity, 'thirst', 0)
             s['level']  += getattr(entity, 'level', 1.0)
             s['xp']     += getattr(entity, 'xp', 0)
+            s['tasks']  += getattr(entity, 'tasks_completed', 0)
             lv = int(getattr(entity, 'level', 1))
             level_counts[lv] = level_counts.get(lv, 0) + 1
             inv = getattr(entity, 'inventory', {})
@@ -54,6 +55,7 @@ class DevScreenMixin:
                 'thirst': round(s['thirst'] / n),
                 'level':  round(s['level']  / n, 2),
                 'xp':     round(s['xp']     / n),
+                'tasks':  round(s['tasks']  / n, 1),
             }
         npc_type_averages = dict(sorted(npc_type_averages.items(), key=lambda x: -x[1]['n']))
 
@@ -327,12 +329,12 @@ class DevScreenMixin:
         cx, cy = 245, TOP
 
         cy = _h(f"NPC AVERAGES  alive {stats['alive_count']} / se {stats['se_alive_count']}", cx, cy)
-        hdr = f"  {'TYPE':<12} {'N':>4}  {'HP':>4} {'mHP':>4}  {'FD':>3} {'H2O':>3}  {'LV':>4}"
+        hdr = f"  {'TYPE':<12} {'N':>4}  {'HP':>4} {'mHP':>4}  {'FD':>3} {'H2O':>3}  {'LV':>4}  {'TC':>5}"
         cy = _t(hdr, cx, cy, HDR)
         for btype, av in stats['npc_type_averages'].items():
             name = btype[:12]
             row = (f"  {name:<12} {av['n']:>4}  {av['hp']:>4} {av['max_hp']:>4}"
-                   f"  {av['hunger']:>3} {av['thirst']:>3}  {av['level']:>4.1f}")
+                   f"  {av['hunger']:>3} {av['thirst']:>3}  {av['level']:>4.1f}  {av['tasks']:>5.1f}")
             # Colour row: red if avg HP < 30% of avg max_hp
             hp_pct = av['hp'] / max(1, av['max_hp'])
             row_col = RED if hp_pct < 0.3 else (YEL if hp_pct < 0.6 else DAT)
@@ -422,6 +424,8 @@ class DevScreenMixin:
         cy = _t(f"  followers             {len(self.followers):>6}", cx, cy)
         cy = _t(f"  zone_keepers zones    {len(self.zone_keepers):>6}", cx, cy)
         cy = _t(f"  active quests (NPC)   {sum(stats['npc_quest_counts'].values()):>6}", cx, cy)
+        total_tasks = sum(getattr(e, 'tasks_completed', 0) for e in self.entities.values() if e.health > 0)
+        cy = _t(f"  NPC tasks completed   {total_tasks:>6}", cx, cy)
 
         # ══════════════════════════════════════════════════════════════════════
         # Column 4 — Zone priority queue                               x=706
