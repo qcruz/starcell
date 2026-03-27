@@ -16,8 +16,11 @@ class DevScreenMixin:
             b = screen.get('biome', 'UNKNOWN')
             biome_counts[b] = biome_counts.get(b, 0) + 1
 
-        # Entities
-        type_counts  = {}
+        # Entities — type averages (doubles merged into base type)
+        from collections import defaultdict
+        _ts = defaultdict(lambda: {'n': 0, 'hp': 0.0, 'max_hp': 0.0,
+                                   'hunger': 0.0, 'thirst': 0.0,
+                                   'level': 0.0, 'xp': 0})
         level_counts = {}
         alive_count  = 0
         total_npc_items = 0
@@ -25,12 +28,34 @@ class DevScreenMixin:
             if entity.health <= 0:
                 continue
             alive_count += 1
-            type_counts[entity.type] = type_counts.get(entity.type, 0) + 1
+            base = entity.type.replace('_double', '')
+            s = _ts[base]
+            s['n']      += 1
+            s['hp']     += entity.health
+            s['max_hp'] += entity.max_health
+            s['hunger'] += getattr(entity, 'hunger', 0)
+            s['thirst'] += getattr(entity, 'thirst', 0)
+            s['level']  += getattr(entity, 'level', 1.0)
+            s['xp']     += getattr(entity, 'xp', 0)
             lv = int(getattr(entity, 'level', 1))
             level_counts[lv] = level_counts.get(lv, 0) + 1
             inv = getattr(entity, 'inventory', {})
             if isinstance(inv, dict):
                 total_npc_items += sum(inv.values())
+
+        npc_type_averages = {}
+        for btype, s in _ts.items():
+            n = s['n']
+            npc_type_averages[btype] = {
+                'n':      n,
+                'hp':     round(s['hp']     / n),
+                'max_hp': round(s['max_hp'] / n),
+                'hunger': round(s['hunger'] / n),
+                'thirst': round(s['thirst'] / n),
+                'level':  round(s['level']  / n, 2),
+                'xp':     round(s['xp']     / n),
+            }
+        npc_type_averages = dict(sorted(npc_type_averages.items(), key=lambda x: -x[1]['n']))
 
         # Structures — scan every cell grid
         tracked = ('HOUSE', 'STONE_HOUSE', 'CAVE', 'MINESHAFT',
@@ -167,7 +192,7 @@ class DevScreenMixin:
         return {
             'total_domains':     len(getattr(self, 'domains', {})),
             'biome_counts':      dict(sorted(biome_counts.items())),
-            'type_counts':       dict(sorted(type_counts.items(), key=lambda x: -x[1])),
+            'npc_type_averages': npc_type_averages,
             'level_counts':      dict(sorted(level_counts.items())),
             'alive_count':       alive_count,
             'se_alive_count':    se_alive_count,
@@ -301,9 +326,17 @@ class DevScreenMixin:
         # ══════════════════════════════════════════════════════════════════════
         cx, cy = 245, TOP
 
-        cy = _h(f"ENTITIES [GLOBAL]  alive {stats['alive_count']} / se {stats['se_alive_count']}", cx, cy)
-        for etype, count in stats['type_counts'].items():
-            cy = _t(f"  {etype:<18} {count}", cx, cy)
+        cy = _h(f"NPC AVERAGES  alive {stats['alive_count']} / se {stats['se_alive_count']}", cx, cy)
+        hdr = f"  {'TYPE':<12} {'N':>4}  {'HP':>4} {'mHP':>4}  {'FD':>3} {'H2O':>3}  {'LV':>4}"
+        cy = _t(hdr, cx, cy, HDR)
+        for btype, av in stats['npc_type_averages'].items():
+            name = btype[:12]
+            row = (f"  {name:<12} {av['n']:>4}  {av['hp']:>4} {av['max_hp']:>4}"
+                   f"  {av['hunger']:>3} {av['thirst']:>3}  {av['level']:>4.1f}")
+            # Colour row: red if avg HP < 30% of avg max_hp
+            hp_pct = av['hp'] / max(1, av['max_hp'])
+            row_col = RED if hp_pct < 0.3 else (YEL if hp_pct < 0.6 else DAT)
+            cy = _t(row, cx, cy, row_col)
 
         cy += 8
         cy = _h("BY LEVEL", cx, cy)
