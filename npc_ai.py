@@ -375,14 +375,14 @@ class NpcAiMixin:
                             self._try_targeting_zone_cross(entity, entity_id)
 
                 # Stay in flee while any enemy is nearby or recently attacked
-                recently_attacked = (self.tick - getattr(entity, 'last_attacked_tick', 0)) < 60
+                recently_attacked = (self.tick - getattr(entity, 'last_attacked_tick', 0)) < 30
                 enemy_nearby = False
                 if not recently_attacked:
                     for _oid in self.screen_entities.get(screen_key, []):
                         if _oid not in self.entities:
                             continue
                         _o = self.entities[_oid]
-                        if abs(_o.x - entity.x) + abs(_o.y - entity.y) > 8:
+                        if abs(_o.x - entity.x) + abs(_o.y - entity.y) > 5:
                             continue
                         _hostile = _o.props.get('hostile', False)
                         _peaceful = not entity.props.get('hostile', False)

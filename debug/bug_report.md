@@ -5,6 +5,47 @@ Reviewed from `debug/bugcatcher.log` after each session.
 
 ---
 
+## Session 58 — 2026-03-26 (hunger overflow fix, continued world)
+
+**Fixes applied before this run:**
+- `save_load.py`: hunger/thirst clamped to [0, max] on load (fixes BLACKSMITH overflow)
+- `entity.py`: `decay_stats()` clamps to [0, max]; `regenerate_health()` clamps fractions to [0, 1]
+- Watchdog: `hunger_exceeds_max` / `thirst_exceeds_max` integrity checks added
+- Save files sanitized
+
+**Run stats:** Tick 19032→29811 (CONTINUE). ~180s. Clean shutdown.
+
+**Population over time:**
+- tick 20532: alive=624, deaths={combat:25, dehydration:9, old_age:1, other:1}
+- tick 24432: alive=714, deaths={combat:53, dehydration:35, old_age:1}
+- tick 28332: alive=783, deaths={combat:79, dehydration:55, old_age:1}
+
+**Resource health:** `both_bars_80pct`=528/760 (69%), `health_80pct`=533/760 (70%). Food/water fixes are holding well — most entities stay fed and hydrated.
+
+**Death balance:** Combat (79) now exceeds dehydration (55). Old age deaths appearing (1). Improving balance.
+
+**Level distribution (tick 27132):** L1=750, L2=5, L3=2, L5=3 — still 98%+ at L1. 8 level-ups this session, ALL TERMITEs.
+
+**State histogram:** `flee|none: 146`, `targeting|hostile: 131`, `combat|hostile: 91` → **368/760 entities (48%) in combat or flee at any given tick.** Peaceful NPCs can't complete role actions when half their ticks go to combat states.
+
+**Integrity:** 5x `entity_not_in_subscreen_but_in_subscreen_entities` — pre-existing issue, not new.
+
+### OBSERVATION — Combat pressure is blocking level gain for humanoid NPCs
+
+TERMITEs are the only entities leveling because they complete mining actions quickly and aren't pulled into combat (they're not targeted by most hostiles). Humanoid NPCs (FARMER, LUMBERJACK, MINER) spend nearly half their time in flee/combat states, meaning they rarely complete enough role actions (harvest, chop, mine) to accumulate 100 XP for L2.
+
+**Primary bottleneck:** Too many hostile entities per zone → peaceful NPCs constantly engage. Need to reduce hostile spawn density or shrink hostile aggro range so friendly NPCs can work without being pulled in.
+
+### OBSERVATION — `wandering|water: 48-49` persists after fix
+
+The `target_type` clear in wandering state reduced this (was 58 at session 56), but 48-49 remain. Entities must be entering `wandering` via a path that bypasses the `elif entity.ai_state == 'wandering':` handler (e.g., directly from targeting state with no tick before the handler runs). Cosmetic — doesn't affect gameplay but obscures histogram signal.
+
+### CONFIRMED — Hunger overflow fully fixed
+
+No `hunger_exceeds_max` integrity events logged. Entity 165 (BLACKSMITH) functioning normally.
+
+---
+
 ## Session 57 — 2026-03-26 (level-up restore + continue-save mode)
 
 **Fixes applied before this run:**
