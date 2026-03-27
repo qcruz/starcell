@@ -460,6 +460,7 @@ class Entity:
                        - Meat (predators): 50
         """
         self.hunger = min(self.max_hunger, self.hunger + food_value)
+        self.gain_xp(1)
 
     def update_facing_toward(self, target_x, target_y):
         """Update facing direction based on target position"""
@@ -492,6 +493,7 @@ class Entity:
             water_value: Amount of thirst to restore (default 40)
         """
         self.thirst = min(self.max_thirst, self.thirst + water_value)
+        self.gain_xp(1)
 
     def level_up_from_activity(self, activity_type, game):
         """Chance to level up from completing activities

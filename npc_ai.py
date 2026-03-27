@@ -672,6 +672,7 @@ class NpcAiMixin:
                         if item_name == 'gold' and player_adjacent:
                             self.process_npc_trade(entity, entity_id, count)
                     del self.dropped_items[screen_key][pos_key]
+                    entity.gain_xp(1)  # XP for picking up items
 
         # Structure behavior - NPCs enter/exit houses and caves
         if entity.in_structure:
@@ -2188,6 +2189,7 @@ class NpcAiMixin:
                                 # Consume meat to restore hunger only (health regens naturally when full)
                                 entity.inventory['meat'] -= 1
                                 entity.hunger = min(entity.max_hunger, entity.hunger + 50)
+                                entity.gain_xp(1)  # XP for eating
 
                         # Check if enemy died and handle king promotion
                         if not closest_enemy.is_alive():
@@ -2893,6 +2895,8 @@ class NpcAiMixin:
                     contents = self.chest_contents.pop(ck, {})
                     for item, amt in contents.items():
                         entity.inventory[item] = entity.inventory.get(item, 0) + amt
+                    if contents:
+                        entity.gain_xp(1)  # XP for looting chest
                     bg = getattr(self, 'chest_backgrounds', {}).pop(ck, None) or 'GRASS'
                     screen['grid'][cy][cx] = bg
                 else:
@@ -2911,6 +2915,7 @@ class NpcAiMixin:
                             inv[item] -= amt
                             if inv[item] <= 0:
                                 del inv[item]
+                        entity.gain_xp(1)  # XP for depositing into chest
                         # Clear delivery quest if carried one
                         if getattr(entity, 'quest_focus', None) == 'DELIVER_ITEMS':
                             entity.quest_focus = None
@@ -3035,6 +3040,7 @@ class NpcAiMixin:
                                 
                                 # Clear the drop
                                 del self.dropped_items[screen_key][pos_key]
+                                entity.gain_xp(1)  # XP for picking up items
                                 did_action = True
                                 
                                 # Move toward this position if not already there
