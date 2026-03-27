@@ -2162,7 +2162,7 @@ class NpcAiMixin:
                                 _best_weapon = _wn
                                 break
                         if _best_weapon:
-                            damage += entity.item_durability.get(_best_weapon, 0.75)
+                            damage += getattr(entity, 'item_durability', {}).get(_best_weapon, 0.75)
 
                         # Add magic damage from runestones
                         magic_damage, magic_type = self.calculate_magic_damage(entity.inventory)
@@ -2190,13 +2190,16 @@ class NpcAiMixin:
                         entity.gain_xp(1)
 
                         # Award item XP to weapon (degrade durability) and armor of defender
-                        if _best_weapon:
+                        if _best_weapon and hasattr(entity, 'gain_item_xp'):
                             entity.gain_item_xp(_best_weapon)
-                            _cur_dur = entity.item_durability.get(_best_weapon, 0.75)
-                            entity.item_durability[_best_weapon] = max(0.0, round(_cur_dur - 0.01, 4))
-                        for _an, _ac in closest_enemy.inventory.items():
-                            if _ac > 0 and ITEMS.get(_an, {}).get('is_armor'):
-                                closest_enemy.gain_item_xp(_an)
+                            _idur = getattr(entity, 'item_durability', {})
+                            _cur_dur = _idur.get(_best_weapon, 0.75)
+                            _idur[_best_weapon] = max(0.0, round(_cur_dur - 0.01, 4))
+                            entity.item_durability = _idur
+                        if hasattr(closest_enemy, 'gain_item_xp'):
+                            for _an, _ac in closest_enemy.inventory.items():
+                                if _ac > 0 and ITEMS.get(_an, {}).get('is_armor'):
+                                    closest_enemy.gain_item_xp(_an)
 
                         # Auto meat consumption for combat entities (Warriors/Guards/Commanders/Kings)
                         if entity.type in ['WARRIOR', 'COMMANDER', 'KING', 'GUARD']:
