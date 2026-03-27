@@ -295,11 +295,20 @@ Game ← HudMixin, InventoryUIMixin, MenusMixin, DevScreenMixin
 | Stat | Notes |
 |---|---|
 | Health | 16 (SHEEP) – 120 (KING) base; scales with level |
-| Hunger/Thirst | 100 base; animals 0.02/0.015 per tick, humanoids 6×/2× |
+| Hunger/Thirst | 100 base; animals 0.02/0.015 per tick, humanoids 6×/2×; clamped to [0, max] in `decay_stats` and `regenerate_health` |
 | Energy | 100 max; drains 2/step; regen in zones.py off-screen loop |
 | Strength | base × level |
 | Speed | 0.7–2.0 multiplier (BAT fastest) |
 | Age | 65–100 year lifespan; old-age damage 2 HP/zone-update above threshold |
+| XP | Gained from every non-walking action (eat, drink, attack, harvest, pickup, deposit); chance = 1/level per roll; 100 XP = L2, 200 XP = L3, etc. |
+| Level | `1.0 + xp / 100.0` (continuous float); integer crossings trigger level-up effects |
+
+**Level-Up Effects** (`level_up_from_activity`)
+- Full health, hunger, and thirst restore
+- Age reduced; max_age extended
+- 20% chance per item in inventory to level up that item
+- 10% chance per unlocked quest type to unlock another
+- 10% chance to switch quest focus
 
 **Starting Inventory by Type**
 - Humanoids: 0–30 wood, 0–20 stone, 0–10 meat + 0–2 random items
@@ -408,8 +417,9 @@ State transitions: `update_entity_ai_state()` rolls probability table (aggressiv
 
 **NPC Combat**
 - Detection radius: 8 cells
-- Damage: `strength // 5` (level-scaled) + weapon bonus + 1.2× hostile multiplier
+- Damage: `strength // 5` (level-scaled) + weapon bonus + weapon durability bonus + 1.2× hostile multiplier
 - Flee when health low; flee_chance scales by threat
+- Flee exit: `recently_attacked < 30 ticks` AND nearest enemy within 5 cells (tightened from 60t/8 cells)
 - Counterattack (non-combat NPCs): 10%
 
 **Favor System**
@@ -431,6 +441,15 @@ State transitions: `update_entity_ai_state()` rolls probability table (aggressiv
 - Cannot be merged into doubles
 - Death handler uses `follower_items.pop(entity_id, None)` for cleanup
 - **Energy cost**: each active follower reduces player `max_energy` by 1; recalculates on add/remove (`systems/enchantment.py`)
+
+**Item XP & Durability** (NPC items only)
+- Each item in an NPC's inventory has `item_xp[item_name]` and `item_durability[item_name]` dicts on the entity
+- Level formula: `item_level = 1 + item_xp // 100` (same as NPC formula)
+- On item level-up: durability resets to `0.5 × new_level`; name announcement printed
+- **Weapons**: gain 1 XP per attack; durability starts at 0.75 and decays −0.01 per attack to 0; durability bonus is added to damage each attack
+- **Armor pieces**: gain 1 XP each time the wearer takes a hit
+- **Wizard spells**: gain 1 XP each time `cast_wizard_spell()` fires
+- Persisted via `save_load.py`; graceful fallback for entities without attributes (legacy save compatibility)
 
 ---
 

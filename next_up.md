@@ -11,7 +11,7 @@
 - [ ] Status effects as a first-class system — add `entity.status_effects = {effect: ticks_remaining}` dict and `tick_status_effects()` pass; wire poisoned/burning/cold/bleeding as entries; replaces per-site hacks and unlocks The Hunger poison water, fire cells, and bleed-on-hit as one-liners
 - [ ] Player reputation ripple effects — hostile NPCs in a zone flee when player reputation exceeds threshold; traders offer 10–20% discount at high rep; zone Keeper greets player by name once rep threshold crossed; no new UI, condition checks on existing paths only
 - [ ] Zone memory / history scars — after any zone with >10 entity deaths, leave persistent marks: scorched tile variants, non-decaying bone piles, zone name suffix ("the Blighted"); pipe LoreEngine zone-death counts into visible cell state
-- [ ] Item durability — `durability` field on equipped items, decremented on each hit; at 0 breaks to `broken_<item>` junk; creates constant economic pressure that makes blacksmith and crafting feel necessary; repair recipes already handled by crafting system
+- [ ] Item durability (extend) — base system implemented (weapon damage bonus 0.75→0, −0.01/attack; armor/spell XP; item_levels via gain_item_xp); next: add `broken_<item>` on durability=0; repair recipes; blacksmith repair interaction; UI badge showing item level and durability bar
 - [ ] Day/night NPC faction shift — at night guards patrol instead of idle, farmers shelter, bandits become aggressive even in neutral zones; one `self.is_night` condition check added to faction behavior dispatch
 - [ ] Wandering merchant caravan — TRADER NPC spawns at world edge once every N days, travels a path through several zones, despawns at far edge; carries rare items not in normal loot tables; wires existing travel behavior, trader inventory, and zone transition system
 - [ ] Boss concept: The Silence — a zone that has gone completely quiet (no spawns, no ambient, no growth); one ancient high-HP entity inside that ignores the player for ~60 ticks, then pursues zone-to-zone until killed; zero new systems, purely tuned pursuit AI and a suppressed spawn rate flag
@@ -45,6 +45,7 @@
 - [ ] Add poisoned status effect — HP drain per tick; cured by antidote or milk
 - [ ] Add burning status effect — HP drain per tick; spreads to adjacent flammable cells
 - [ ] Add cold status effect — immobile for duration
+- [ ] Fix subscreen desync — `entity_not_in_subscreen_but_in_subscreen_entities` growing each session (178→280); entity `in_subscreen` flag is cleared but entity ID remains in `subscreen_entities` dict; audit all `npc_exit_structure` and `handle_in_structure_npc` exit paths to ensure `subscreen_entities[key].remove(entity_id)` is called on every exit
 - [ ] Remove dead debug prints outside autopilot.py and debug/
 - [ ] Add named villains — LoreEngine occasionally designates a high-level hostile NPC with unique stat boost and artifact drop
 - [ ] Wire higher NPC level → reduced hostile raid chance in zone and reduced structure destruction probability
