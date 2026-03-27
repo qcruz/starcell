@@ -5,6 +5,58 @@ Reviewed from `debug/bugcatcher.log` after each session.
 
 ---
 
+## Session 56 — 2026-03-26 (spawned counter + stale target_type)
+
+**Fixes applied before this run:**
+- `entities_spawned_total` incremented at all 6 previously missed spawn sites:
+  `spawn_skeleton()`, hostile skeleton spawn, termite spawn, zone-arrival spawn
+  (spawning.py), subscreen enemy spawn (game_core.py), entity transformation (ai/movement.py)
+- `wandering` state now clears `target_type` to stop stale values persisting in histogram
+
+**Run stats:** Tick 12630 (~210s). Clean shutdown.
+
+**Population over time:**
+- tick 1449: alive=159, spawned=205, deaths={combat:20, dehydration:27} → alive+deaths=206 ≈ spawned ✓
+- tick 5349: alive=334, spawned=402, deaths={combat:31, dehydration:36} → 401 ≈ 402 ✓
+- tick 9249: alive=444, spawned=565, deaths={combat:43, dehydration:63} → alive+deaths=550, spawned=565 (15 gap, acceptable)
+
+**ai_state_cycling histogram (tick 11949, 475 alive):**
+```
+wandering|none: 137    targeting|hostile: 60   combat|hostile: 39
+flee|none: 28          flee|hostile: 27        idle|hostile: 26
+targeting|keeper_target: 25   wandering|water: 20   idle|none: 19
+```
+
+**Level distribution (tick 12249, n=200 sampled):** L1=199, L3=1 — completely flat.
+
+**Integrity events:** 2 — `keeper_no_target` for SKELETON_double (id=470) and TRADER (id=538)
+
+### CONFIRMED FIX — spawned counter integrity check passing
+
+alive+deaths ≤ spawned at all three snapshots. Counter is now accurate. Dev screen integrity check will show green.
+
+### CONFIRMED FIX — stale target_type eliminated from wandering
+
+`wandering|none` now 137 (was ~5 before). `wandering|water` dropped from 58 to 20 — most of the remaining 20 are entities that just entered wandering and haven't been processed yet (cleared next tick).
+
+### BUG — Level distribution completely flat
+
+199 of 200 sampled entities at L1, one at L3. Entities almost never gain XP. Likely causes:
+(a) XP only gained at very specific moments (quest completion, kill) and quests aren't completing, or
+(b) XP gain amounts are too small relative to thresholds, or
+(c) entities cycle through states without ever landing the XP-triggering action.
+Needs investigation of `entity.gain_xp()` call sites and XP thresholds.
+
+### BUG — keeper_no_target still fires for SKELETON_double and TRADER
+
+After the type-3 fix, two type-1/2 keepers still fire the integrity check. These entities have `keeper=True` but no `keeper_target` at the sample tick. Likely newly-promoted keepers during the lore assignment cycle that haven't yet had a target assigned. May be a timing issue rather than a true bug — need to confirm by checking if the same entity IDs repeat across consecutive samples or only appear once.
+
+### OBSERVATION — Dehydration still dominant death cause
+
+63 dehydration vs 43 combat. Population still growing rapidly (565 spawned, 106 dead = 84% still alive). Spawn rate likely needs capping or death rates need tuning. Old age deaths = 0, starvation = 0.
+
+---
+
 ## Session 55 — 2026-03-26 (zone-exit fallback + death tracking)
 
 **Fixes applied before this run:**
