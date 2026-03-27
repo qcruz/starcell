@@ -214,8 +214,10 @@ class Entity:
         self.inventory = self.props.get('inventory', {}).copy() if 'inventory' in self.props else {}
 
         # Item levels and names - track level of each item type
-        self.item_levels = {}  # {item_name: level}
-        self.item_names = {}   # {item_name: custom_name} for legendary items
+        self.item_levels = {}       # {item_name: int level}
+        self.item_names = {}        # {item_name: custom_name} for legendary items
+        self.item_xp = {}           # {item_name: cumulative xp}
+        self.item_durability = {}   # {item_name: durability bonus (0.0–max)}
 
         # Zone travel cooldown
         self.last_zone_change_tick = -999  # Track when last changed zones (start very negative so can travel immediately)
@@ -583,6 +585,20 @@ class Entity:
         if random.random() < 1.0 / max(1.0, self.level):
             self.xp += 1
             self._sync_level()
+
+    def gain_item_xp(self, item_name, amount=1):
+        """Award XP to an item; levels it up when 100 XP per level is reached.
+        Level formula: item_level = 1 + item_xp // 100.
+        On level-up: reset durability to 0.5 * new_level.
+        """
+        self.item_xp[item_name] = self.item_xp.get(item_name, 0) + amount
+        old_level = self.item_levels.get(item_name, 1)
+        new_level = 1 + self.item_xp[item_name] // 100
+        if new_level > old_level:
+            self.item_levels[item_name] = new_level
+            self.item_durability[item_name] = round(0.5 * new_level, 2)
+            name_str = self.name if self.name else self.type
+            print(f"  {name_str}'s {item_name} leveled up to +{new_level}!")
 
     def _sync_level(self):
         """Recompute continuous level and derived stats from cumulative XP."""

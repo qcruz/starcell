@@ -2155,6 +2155,15 @@ class NpcAiMixin:
                         # Add weapon bonus from inventory
                         damage += self.calculate_weapon_bonus(entity.inventory)
 
+                        # Add weapon durability bonus and track best weapon for XP/decay
+                        _best_weapon = None
+                        for _wn, _wc in entity.inventory.items():
+                            if _wc > 0 and ITEMS.get(_wn, {}).get('is_weapon'):
+                                _best_weapon = _wn
+                                break
+                        if _best_weapon:
+                            damage += entity.item_durability.get(_best_weapon, 0.75)
+
                         # Add magic damage from runestones
                         magic_damage, magic_type = self.calculate_magic_damage(entity.inventory)
                         damage += magic_damage
@@ -2179,6 +2188,15 @@ class NpcAiMixin:
 
                         # Grant XP from hit (chance-based, one roll per hit)
                         entity.gain_xp(1)
+
+                        # Award item XP to weapon (degrade durability) and armor of defender
+                        if _best_weapon:
+                            entity.gain_item_xp(_best_weapon)
+                            _cur_dur = entity.item_durability.get(_best_weapon, 0.75)
+                            entity.item_durability[_best_weapon] = max(0.0, round(_cur_dur - 0.01, 4))
+                        for _an, _ac in closest_enemy.inventory.items():
+                            if _ac > 0 and ITEMS.get(_an, {}).get('is_armor'):
+                                closest_enemy.gain_item_xp(_an)
 
                         # Auto meat consumption for combat entities (Warriors/Guards/Commanders/Kings)
                         if entity.type in ['WARRIOR', 'COMMANDER', 'KING', 'GUARD']:
@@ -3671,7 +3689,7 @@ class NpcAiMixin:
         """Cast a wizard spell on target"""
         spell_name = caster.spell
         spell_data = WIZARD_SPELLS[spell_name]
-        
+
         if spell_data['type'] == 'heal':
             target.heal(spell_data['amount'])
         elif spell_data['type'] == 'damage':
@@ -3682,4 +3700,8 @@ class NpcAiMixin:
         elif spell_data['type'] == 'enchant':
             cell_key = (target.screen_x, target.screen_y, target.x, target.y)
             self.enchanted_cells[cell_key] = True  # Just mark as enchanted, no duration
+
+        # Award XP to the spell on use
+        if hasattr(caster, 'gain_item_xp'):
+            caster.gain_item_xp(spell_name)
     
