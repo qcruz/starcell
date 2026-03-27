@@ -1893,7 +1893,10 @@ class NpcAiMovementMixin:
                     entity.eat(entity.max_hunger)
 
                     # Consume the food cell (and not enchanted)
-                    if not self.is_cell_enchanted(food_x, food_y, screen_key):
+                    # Passive grazers (non-hostile animals with GRASS food source) never decay cells
+                    _passive_grazer = (not entity.props.get('hostile', False) and
+                                       'GRASS' in entity.props.get('food_sources', []))
+                    if not self.is_cell_enchanted(food_x, food_y, screen_key) and not _passive_grazer:
                         current_cell = screen['grid'][food_y][food_x]
                         if current_cell.startswith('CARROT'):
                             # 50% chance to decay one level; otherwise cell is unchanged
@@ -1966,7 +1969,7 @@ class NpcAiMovementMixin:
 
             # Drink if adjacent
             if closest_dist <= 1:
-                entity.drink()
+                entity.drink(entity.max_thirst)
                 # Water has chance to decay to dirt when drunk
                 water_x, water_y = closest_water[0], closest_water[1]
                 if not self.is_cell_enchanted(water_x, water_y, screen_key):

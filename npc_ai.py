@@ -550,7 +550,7 @@ class NpcAiMixin:
                                 cell_type = entity.current_target[3]
                                 cell_info = CELL_TYPES.get(cell_type, {})
                                 if cell_info.get('infinite_food'):
-                                    entity.eat(cell_info.get('food_value', 30))
+                                    entity.eat(entity.max_hunger)
                                     entity.current_target = None
                                     entity.ai_state = 'wandering'
                                     entity.ai_state_timer = 2
@@ -563,16 +563,23 @@ class NpcAiMixin:
                                 # Direct food consumption for entities without behavior_config
                                 if isinstance(entity.current_target, tuple) and len(entity.current_target) >= 4:
                                     cell_type = entity.current_target[3]
-                                    food_value = 40 if 'CARROT' in cell_type else 20
-                                    entity.eat(food_value)
-                                    # Consume the food cell
+                                    entity.eat(entity.max_hunger)
                                     cx, cy = entity.current_target[1], entity.current_target[2]
                                     if screen_key in self.screens:
-                                        self.screens[screen_key]['grid'][cy][cx] = 'GRASS'
+                                        _grid = self.screens[screen_key]['grid']
+                                        _cur = _grid[cy][cx]
+                                        # Passive grazers: no cell decay when eating
+                                        _passive = not entity.props.get('hostile', False)
+                                        if not _passive:
+                                            _CDECAY = {'CARROT3': 'CARROT2', 'CARROT2': 'CARROT1', 'CARROT1': 'SOIL'}
+                                            if _cur in _CDECAY and random.random() < 0.5:
+                                                _grid[cy][cx] = _CDECAY[_cur]
+                                            elif _cur == 'GRASS' and random.random() < GRASS_DECAY_ON_EAT:
+                                                _grid[cy][cx] = 'DIRT'
                                     entity.current_target = None
                         elif entity.target_type == 'water':
                             # Drink water; deep water has high chance to leave cave floor
-                            entity.drink(40)
+                            entity.drink(entity.max_thirst)
                             if isinstance(entity.current_target, tuple) and len(entity.current_target) >= 3:
                                 _wx, _wy = entity.current_target[1], entity.current_target[2]
                                 _wscr = self.screens.get(screen_key, {})
@@ -2540,10 +2547,10 @@ class NpcAiMixin:
             kscale = KEEPER_URGENCY_SCALE.get(ktype, 0)
             kpos   = entity.keeper_target_pos
             kdist  = abs(entity.x - kpos[0]) + abs(entity.y - kpos[1])
-            # Within range: near-zero score so food/water/role can take over
+            # Within range: don't add to candidates — entity wanders freely
             # Outside range: base + urgency scaling to pull them back
             if krange is not None and kdist <= krange:
-                candidates['keeper_target'] = 1
+                pass  # in range, no keeper urgency
             else:
                 drift = max(0, kdist - krange) if krange is not None else 0
                 candidates['keeper_target'] = kbase + drift * kscale
