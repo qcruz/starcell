@@ -1889,26 +1889,19 @@ class NpcAiMovementMixin:
                     food_x, food_y = closest_food[0], closest_food[1]
                     food_cell = food_identifier
 
-                    # Different food values for different cell sources
-                    if food_cell.startswith('CARROT'):
-                        food_value = 40  # Crops are nutritious
-                    elif food_cell == 'GRASS':
-                        food_value = 20  # Grass is less filling
-                    else:
-                        food_value = 30  # Default
-
-                    entity.eat(food_value)
+                    # Fill hunger to max — eating a food cell is a full meal
+                    entity.eat(entity.max_hunger)
 
                     # Consume the food cell (and not enchanted)
                     if not self.is_cell_enchanted(food_x, food_y, screen_key):
-                        if screen['grid'][food_y][food_x].startswith('CARROT'):
-                            # Carrots decay to DIRT when eaten
-                            if random.random() < GRASS_DECAY_ON_EAT:  # Use same rate as grass
-                                screen['grid'][food_y][food_x] = 'DIRT'
-                            else:
-                                screen['grid'][food_y][food_x] = 'SOIL'
-                        elif screen['grid'][food_y][food_x] == 'GRASS':
-                            if random.random() < GRASS_DECAY_ON_EAT:  # Now 60% chance
+                        current_cell = screen['grid'][food_y][food_x]
+                        if current_cell.startswith('CARROT'):
+                            # 50% chance to decay one level; otherwise cell is unchanged
+                            if random.random() < 0.5:
+                                _carrot_decay = {'CARROT3': 'CARROT2', 'CARROT2': 'CARROT1', 'CARROT1': 'SOIL'}
+                                screen['grid'][food_y][food_x] = _carrot_decay.get(current_cell, 'SOIL')
+                        elif current_cell == 'GRASS':
+                            if random.random() < GRASS_DECAY_ON_EAT:
                                 screen['grid'][food_y][food_x] = 'DIRT'
 
                 elif food_category == 'entity':

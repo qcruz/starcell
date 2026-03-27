@@ -33,7 +33,7 @@ from debug.fixes import fix_entity_subscreen_flag
 
 
 class Watchdog:
-    CATEGORIES = ['entities', 'cells', 'zones', 'player', 'structures', 'followers', 'npc_actions', 'keepers', 'npc_quests', 'inventory_state', 'favor']
+    CATEGORIES = ['entities', 'cells', 'zones', 'player', 'structures', 'followers', 'npc_actions', 'keepers', 'npc_quests', 'inventory_state', 'favor', 'food_behavior']
     SAMPLE_INTERVAL   = 300    # ticks between cycles (~5 s at 60 fps)
     MAX_ENTRIES_PER_SAMPLE = 200  # max JSON entries per category per cycle
     BACKUP1_INTERVAL  = 3600   # ~60 s at 60 fps
@@ -72,6 +72,7 @@ class Watchdog:
             'npc_quests':      self._sample_npc_quests,
             'inventory_state': self._sample_inventory_state,
             'favor':           self._sample_favor,
+            'food_behavior':   self._sample_food_behavior,
         }
         _SAMPLERS[category](tick, game)
 
@@ -572,6 +573,62 @@ class Watchdog:
             'npc_count': len(entries),
             'npcs': entries,
             'inspected_npc': getattr(game, 'inspected_npc', None),
+        })
+
+    def _sample_food_behavior(self, tick: int, game) -> None:
+        """Track hungry NPCs and their food-targeting state across all loaded zones.
+
+        Flags the farmer idle/targeting toggle bug: a FARMER adjacent to a carrot
+        cell that keeps flipping between 'targeting' (food) and 'idle' without eating.
+        """
+        _CARROT_CELLS = {'CARROT1', 'CARROT2', 'CARROT3'}
+        entries = []
+        for eid, entity in game.entities.items():
+            if entity.health <= 0:
+                continue
+            hunger_pct = entity.hunger / max(1, entity.max_hunger)
+            if hunger_pct > 0.6:
+                continue  # Only watch hungry entities
+            screen_key = f"{entity.screen_x},{entity.screen_y}"
+            screen = game.screens.get(screen_key)
+            if not screen:
+                continue
+            grid = screen.get('grid', [])
+            # Find nearest carrot and its distance
+            nearest_carrot = None
+            nearest_dist = float('inf')
+            for dy in range(-3, 4):
+                for dx in range(-3, 4):
+                    nx, ny = entity.x + dx, entity.y + dy
+                    if 0 <= nx < 24 and 0 <= ny < 18:
+                        try:
+                            if grid[ny][nx] in _CARROT_CELLS:
+                                d = abs(dx) + abs(dy)
+                                if d < nearest_dist:
+                                    nearest_dist = d
+                                    nearest_carrot = (nx, ny, grid[ny][nx])
+                        except IndexError:
+                            pass
+            entries.append({
+                'id': eid,
+                'type': entity.type,
+                'zone': screen_key,
+                'grid': [entity.x, entity.y],
+                'hunger': round(entity.hunger, 1),
+                'max_hunger': entity.max_hunger,
+                'hunger_pct': round(hunger_pct, 2),
+                'ai_state': getattr(entity, 'ai_state', None),
+                'target_type': getattr(entity, 'target_type', None),
+                'current_target': getattr(entity, 'current_target', None),
+                'nearest_carrot': nearest_carrot,
+                'nearest_carrot_dist': nearest_dist if nearest_carrot else None,
+                'adjacent_to_food': nearest_dist <= 1 if nearest_carrot else False,
+            })
+        self.bug_catcher.log({
+            'tick': tick,
+            'category': 'watchdog_food_behavior',
+            'hungry_npc_count': len(entries),
+            'npcs': self._trim(tick, 'food_behavior', entries),
         })
 
     def _sample_spiders(self, tick: int, game) -> None:
