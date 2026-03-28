@@ -217,6 +217,17 @@ class NpcAiMixin:
         # screen_key is always the entity's current zone — virtual coords for
         # structure zones, real coords for overworld zones.
         screen_key = f"{entity.screen_x},{entity.screen_y}"
+
+        # Consistency guard: ensure in_structure/structure_key match the entity's zone.
+        # Entities spawned inside structures may inherit the correct virtual screen_x/y
+        # but not have in_structure set. Correct both directions cheaply each tick.
+        if screen_key in self.structures:
+            if not getattr(entity, 'in_structure', False):
+                entity.in_structure = True
+                entity.structure_key = screen_key
+        elif getattr(entity, 'in_structure', False):
+            entity.in_structure = False
+            entity.structure_key = None
         
         # EXECUTE BEHAVIOR BASED ON STATE
         if hasattr(entity, 'ai_state'):
