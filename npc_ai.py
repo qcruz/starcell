@@ -470,11 +470,19 @@ class NpcAiMixin:
                             tx, ty = entity.current_target[1], entity.current_target[2]
                             dist = abs(entity.x - tx) + abs(entity.y - ty)
                             if dist == 0:
-                                # Somehow walked onto the target cell — clear and wander
-                                entity.quest_target = None
-                                entity.current_target = None
-                                entity.ai_state = 'wandering'
-                                entity.ai_state_timer = 2
+                                if entity.target_type == 'shelter':
+                                    # On the house cell — try to enter directly
+                                    cell_type = entity.current_target[3] if len(entity.current_target) >= 4 else 'HOUSE'
+                                    self.npc_enter_structure(entity, screen_key, tx, ty, cell_type)
+                                    if entity.in_structure:
+                                        entity.current_target = None
+                                        entity.target_type = None
+                                else:
+                                    # Walked onto a non-shelter target — clear and wander
+                                    entity.quest_target = None
+                                    entity.current_target = None
+                                    entity.ai_state = 'wandering'
+                                    entity.ai_state_timer = 2
                             elif dist > 1:
                                 self.move_toward_position(entity, tx, ty, screen_key)
                                 # If at exit, try to cross
@@ -487,15 +495,14 @@ class NpcAiMixin:
                                            if 0 <= tx < GRID_WIDTH and 0 <= ty < GRID_HEIGHT else '')
                                 if _actual not in _stone_cells:
                                     entity.current_target = None  # Re-find next rock next tick
-                            elif dist == 1 and entity.target_type == 'special' and entity._special_target_type == 'shelter':
-                                # Adjacent to shelter — enter immediately (bypass random chance)
-                                self.npc_enter_structure(entity, screen_key, tx, ty,
-                                                         entity.current_target[3] if len(entity.current_target) >= 4 else 'HOUSE')
-                                entity.current_target = None
-                                entity.target_type = None
-                                entity._special_target_type = None
-                                entity._special_target_lock = 0
-                            # else dist == 1: adjacent, let state machine handle idle transition
+                            elif dist == 1 and entity.target_type == 'shelter':
+                                # Adjacent to shelter — enter at 100%, clear only after confirmed
+                                cell_type = entity.current_target[3] if len(entity.current_target) >= 4 else 'HOUSE'
+                                self.npc_enter_structure(entity, screen_key, tx, ty, cell_type)
+                                if entity.in_structure:
+                                    entity.current_target = None
+                                    entity.target_type = None
+                            # else dist == 1: adjacent, let try_npc_enter_structure handle opportunistic entry
                         elif len(entity.current_target) >= 2 and isinstance(entity.current_target[0], (int, float)):
                             self.move_toward_position(entity, entity.current_target[0], entity.current_target[1], screen_key)
                             self._try_targeting_zone_cross(entity, entity_id)
