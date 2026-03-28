@@ -131,6 +131,7 @@ class GameCoreMixin:
         # Debug visualization
         self.debug_memory_lanes = False  # Shows trader memory lanes and targets
         self.debug_entity_ai = True  # Shows entity AI state and target info
+        self.debug_npc_targets = True   # Draws a coloured border on each NPC's current_target cell
 
         # Persistent settings (loaded from settings.json)
         self.ambient_music_enabled = True

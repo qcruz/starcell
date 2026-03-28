@@ -2636,12 +2636,14 @@ class NpcAiMixin:
         if role_type:
             candidates[role_type] = ROLE_BASE
 
-        # ── Tier 6: Resource (linear urgency + proximity + health bonus) ──────────
-        # Linear so NPCs pursue food/water at ~30% missing (beats ROLE_BASE=40),
-        # not ~60% missing as the old quadratic curve required.
-        # proximity_mult: up to 3× for adjacent cells, 1× at 8+ cells away
-        # health_mult:    up to 2× when near death (HP regen needs fed/hydrated)
-        _hp_mult = 1.0 + max(0.0, 1.0 - entity.health / max(1, entity.max_health))
+        # ── Tier 6: Resource (urgency + proximity + explosive HP scaling) ───────────
+        # RESOURCE_BASE is kept very low (20). At full HP even an empty stat produces
+        # a weak score (~60 max) that rarely beats role/quest. The hp_mult is quadratic
+        # and grows explosively as HP drops — once starvation/dehydration damage starts,
+        # resource rapidly dominates all other tiers.
+        # hp_mult: 1.0 at full HP → ~3.5 at 50% → ~7.4 at 20% → 11.0 at 0%
+        _hp_deficit = max(0.0, 1.0 - entity.health / max(1, entity.max_health))
+        _hp_mult = 1.0 + _hp_deficit ** 2 * 10.0
         for res_type, level, maxv in (
             ('water', entity.thirst,  entity.max_thirst),
             ('food',  entity.hunger,  entity.max_hunger),

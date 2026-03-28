@@ -300,8 +300,8 @@ QUEST_BASE           = 100   # flat score for active assigned/lore quest target
 ROLE_BASE            = 85    # flat score for archetype work (farming, mining, etc.) — just below QUEST_BASE
 SPECIAL_BASE         = 50    # flat score per eligible special-pool candidate
 SPECIAL_LOCK_TICKS   = 60    # ticks a chosen special type stays locked within the special pool
-TARGET_LOCK_TICKS    = 200   # ticks a chosen target type is held before re-rolling
-RESOURCE_BASE        = 100   # max resource score (at 0% remaining); quadratic urgency curve
+TARGET_LOCK_TICKS    = 300   # ticks a chosen target type is held before re-rolling
+RESOURCE_BASE        = 20    # base resource score — kept low; hp_mult provides the real urgency
 MIN_RESOURCE_URGENCY = 0.30  # stat must be below 70% full before food/water enters candidates
 
 # Maps quest focus type → role target type for the role tier of targeting.

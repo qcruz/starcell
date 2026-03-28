@@ -486,11 +486,15 @@ class HudMixin:
                             self.screen.blit(state_text,
                                              (int(pixel_x + 2), int(pixel_y + debug_y_offset + 10)))
 
-                        # Target type — always show if set (full string up to 8 chars)
+                        # Target type — show with special subtype if applicable
                         ttype = getattr(entity, 'target_type', None)
                         if ttype:
-                            ttype_text = self.tiny_font.render(
-                                ttype[:8], True, (80, 220, 255))
+                            if ttype == 'special':
+                                subtype = getattr(entity, '_special_target_type', None)
+                                ttype_label = f"spc/{subtype[:4]}" if subtype else 'spc/?'
+                            else:
+                                ttype_label = ttype[:8]
+                            ttype_text = self.tiny_font.render(ttype_label, True, (80, 220, 255))
                             self.screen.blit(ttype_text,
                                              (int(pixel_x + 2), int(pixel_y + debug_y_offset + 20)))
 
@@ -543,6 +547,38 @@ class HudMixin:
                                             target_surface.set_alpha(150)
                                             target_surface.fill((0, 255, 0))  # GREEN
                                             self.screen.blit(target_surface, (target_x * CELL_SIZE + 2, target_y * CELL_SIZE + 2))
+
+            # Debug: Draw NPC current target highlights
+            if getattr(self, 'debug_npc_targets', False):
+                _TARGET_COLORS = {
+                    'hostile':      (220, 50,  50),   # red
+                    'keeper_target':(180, 80, 220),   # purple
+                    'quest_target': (255, 220,  0),   # yellow
+                    'food':         (255, 160, 40),   # orange
+                    'water':        (50,  200, 255),  # cyan
+                    'special':      (255, 120,  0),   # bright orange
+                }
+                _ROLE_COLOR = (80, 220, 80)  # green for all role types
+                screen_key = f"{self.player['screen_x']},{self.player['screen_y']}"
+                if screen_key in self.screen_entities:
+                    for _eid in self.screen_entities[screen_key]:
+                        _ent = self.entities.get(_eid)
+                        if not _ent:
+                            continue
+                        _ct = getattr(_ent, 'current_target', None)
+                        _ttype = getattr(_ent, 'target_type', None)
+                        if not _ct or not _ttype:
+                            continue
+                        _col = _TARGET_COLORS.get(_ttype, _ROLE_COLOR)
+                        # Resolve target cell coords
+                        if isinstance(_ct, tuple) and len(_ct) >= 3 and _ct[0] == 'cell':
+                            _tx, _ty = _ct[1], _ct[2]
+                        elif isinstance(_ct, tuple) and len(_ct) >= 2 and isinstance(_ct[0], (int, float)):
+                            _tx, _ty = int(_ct[0]), int(_ct[1])
+                        else:
+                            continue
+                        pygame.draw.rect(self.screen, _col,
+                                         (_tx * CELL_SIZE, _ty * CELL_SIZE, CELL_SIZE, CELL_SIZE), 2)
 
             # ── Draw player character (or autopilot proxy) ──────────────────
             proxy = (self.entities.get(self.autopilot_proxy_id)
