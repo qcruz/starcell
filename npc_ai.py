@@ -496,6 +496,14 @@ class NpcAiMixin:
                                            if 0 <= tx < GRID_WIDTH and 0 <= ty < GRID_HEIGHT else '')
                                 if _actual not in _stone_cells:
                                     entity.current_target = None  # Re-find next rock next tick
+                            elif dist == 1 and entity.target_type == 'role':
+                                # Miners enter MINESHAFT when adjacent; other rock cells handled by behavior_config
+                                cell_type = entity.current_target[3] if len(entity.current_target) >= 4 else ''
+                                if cell_type in ('CAVE', 'MINESHAFT') and getattr(entity, 'quest_focus', None) == 'MINE':
+                                    self.npc_enter_structure(entity, screen_key, tx, ty, cell_type)
+                                    if entity.in_structure:
+                                        entity.current_target = None
+                                        entity.target_type = None
                             elif dist == 1 and entity.target_type == 'shelter':
                                 # Adjacent to shelter — enter at 100%, clear only after confirmed
                                 cell_type = entity.current_target[3] if len(entity.current_target) >= 4 else 'HOUSE'
@@ -2185,6 +2193,7 @@ class NpcAiMixin:
                         if entity.props.get('hostile', False):
                             entity.hunger = min(entity.max_hunger, entity.hunger + random.randint(1, 2))
                             entity.thirst = min(entity.max_thirst, entity.thirst + random.randint(1, 2))
+                            entity.health = min(entity.max_health, entity.health + random.randint(1, 2))
                         self.show_attack_animation(self.player['x'], self.player['y'], entity=entity, magic_type=magic_type)
                         entity.energy = max(0, getattr(entity, 'energy', 1) - 2)
                     else:
@@ -2220,6 +2229,7 @@ class NpcAiMixin:
                         if entity.props.get('hostile', False):
                             entity.hunger = min(entity.max_hunger, entity.hunger + random.randint(1, 2))
                             entity.thirst = min(entity.max_thirst, entity.thirst + random.randint(1, 2))
+                            entity.health = min(entity.max_health, entity.health + random.randint(1, 2))
                         closest_enemy.last_attacked_tick = self.tick
                         entity.energy = max(0, getattr(entity, 'energy', 1) - 2)
                         self.show_attack_animation(closest_enemy.x, closest_enemy.y, entity=entity, target_entity=closest_enemy, magic_type=magic_type)
@@ -2658,9 +2668,12 @@ class NpcAiMixin:
                 and not getattr(entity, 'in_structure', False)):
             _shelter = self._find_closest_shelter(entity, screen_key)
             if _shelter:
+                # Combat/labour types have a weaker night shelter drive
+                _LOW_SHELTER = frozenset({'MINER', 'GUARD', 'WARRIOR', 'COMMANDER'})
+                _shelter_mult = 0.25 if entity.type in _LOW_SHELTER else 1.0
                 if (self.is_night and not entity.props.get('nocturnal', False)):
-                    # Night: high-priority shelter
-                    candidates['shelter'] = SHELTER_BASE
+                    # Night: high-priority shelter (reduced for combat/labour types)
+                    candidates['shelter'] = SHELTER_BASE * _shelter_mult
                 else:
                     # Day: low-priority fallback when resources or health are low
                     _hp_frac = entity.health / max(1, entity.max_health)

@@ -498,6 +498,7 @@ class WorldGenerationMixin:
                 self.spawn_house_npc(structure_data)
         elif structure_type == 'CAVE':
             self.place_cave_chests(structure_data, depth)
+            self._spawn_cave_entities(structure_data)
 
         # Register in zone priority system
         if zone_key not in self.structure_zones:
@@ -740,6 +741,33 @@ class WorldGenerationMixin:
     # -------------------------------------------------------------------------
     # House NPC spawn
     # -------------------------------------------------------------------------
+
+    def _spawn_cave_entities(self, structure_data):
+        """Spawn bats and spiders in a newly generated cave interior."""
+        grid = structure_data['grid']
+        # Collect walkable positions away from the entrance
+        entrance_x, entrance_y = structure_data.get('entrance', (GRID_WIDTH // 2, GRID_HEIGHT - 2))
+        walkable = [
+            (x, y) for y in range(1, GRID_HEIGHT - 1) for x in range(1, GRID_WIDTH - 1)
+            if not CELL_TYPES.get(grid[y][x], {}).get('solid', False)
+            and abs(x - entrance_x) + abs(y - entrance_y) > 4
+        ]
+        if not walkable:
+            return
+        random.shuffle(walkable)
+        spawned = 0
+        for x, y in walkable:
+            if spawned >= 4:
+                break
+            ntype = 'BAT' if random.random() < 0.6 else 'SPIDER'
+            chance = 0.35 if ntype == 'BAT' else 0.25
+            if random.random() < chance:
+                ent = Entity(ntype, x, y, 0, 0, 1)
+                eid = self.next_entity_id
+                self.next_entity_id += 1
+                self.entities[eid] = ent
+                structure_data.setdefault('entities', []).append(eid)
+                spawned += 1
 
     def spawn_house_npc(self, structure_data):
         """Spawn a single NPC (farmer or trader) in a house"""
