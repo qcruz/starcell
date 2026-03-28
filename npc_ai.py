@@ -229,10 +229,11 @@ class NpcAiMixin:
             entity.in_structure = False
             entity.structure_key = None
 
-        # Structure behavior — handled entirely here; skip state machine for in-structure NPCs
+        # Structure exit logic — returns True if exit was handled (skip state machine),
+        # False if entity stays inside and state machine should run normally.
         if entity.in_structure:
-            self.handle_in_structure_npc(entity, entity_id)
-            return
+            if self.handle_in_structure_npc(entity, entity_id):
+                return
 
         # EXECUTE BEHAVIOR BASED ON STATE
         if hasattr(entity, 'ai_state'):
@@ -2651,14 +2652,24 @@ class NpcAiMixin:
         if special:
             candidates['special'] = SPECIAL_BASE
 
-        # ── Tier 4b: Shelter (night, peaceful, non-nocturnal humanoids) ──────────
-        if (self.is_night
-                and not entity.props.get('hostile', False)
-                and not entity.props.get('nocturnal', False)
+        # ── Tier 4b: Shelter ──────────────────────────────────────────────────────
+        if (not entity.props.get('hostile', False)
                 and entity.props.get('humanoid', False)
                 and not getattr(entity, 'in_structure', False)):
-            if self._find_closest_shelter(entity, screen_key):
-                candidates['shelter'] = SHELTER_BASE
+            _shelter = self._find_closest_shelter(entity, screen_key)
+            if _shelter:
+                if (self.is_night and not entity.props.get('nocturnal', False)):
+                    # Night: high-priority shelter
+                    candidates['shelter'] = SHELTER_BASE
+                else:
+                    # Day: low-priority fallback when resources or health are low
+                    _hp_frac = entity.health / max(1, entity.max_health)
+                    _food_urg = max(0.0, 1.0 - entity.hunger / max(1, entity.max_hunger))
+                    _water_urg = max(0.0, 1.0 - entity.thirst / max(1, entity.max_thirst))
+                    _max_urg = max(_food_urg, _water_urg)
+                    if _max_urg > 0.5 or _hp_frac < 0.5:
+                        _day_shelter = _max_urg * 10.0 * max(0.5, 2.0 - _hp_frac)
+                        candidates['shelter'] = _day_shelter
 
         # ── Tier 5: Role (archetype work targets) ─────────────────────────────
         role_type = self._evaluate_role_tier(entity, screen_key)

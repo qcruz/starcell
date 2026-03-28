@@ -1028,6 +1028,13 @@ class NpcAiMovementMixin:
         entity.structure_key = structure_key
         entity.last_structure_change_tick = self.tick
 
+        # Clear stale targeting state — same cleanup as zone transition
+        entity.target_type = None
+        entity.current_target = None
+        entity.ai_state = 'idle'
+        entity.ai_state_timer = 1
+        entity._target_type_lock_until = 0
+
         # Add entrance cells to memory lane
         if not hasattr(entity, 'memory_lane'):
             entity.memory_lane = []
@@ -2335,39 +2342,33 @@ class NpcAiMovementMixin:
                             wants_to_exit = True
                             break
 
-        _restless_moved = False
         if wants_to_exit:
-            # Actively move toward exit and leave.
-            # Track position before the call — only use move_npc_toward_structure_exit
-            # as a fallback when try_npc_exit_structure is blocked (both move entity.x/y;
-            # calling both when unblocked causes 2-cell jumps per update → visual flicker).
+            # Actively move toward exit — track position to avoid double-move
             _pre_x, _pre_y = entity.x, entity.y
             self.try_npc_exit_structure(entity)
             if entity.in_structure and entity.x == _pre_x and entity.y == _pre_y:
-                # Blocked — try alternative pathfinding
                 self.move_npc_toward_structure_exit(entity)
-        else:
-            # Low chance to exit anyway (restless NPCs)
-            if random.random() < 0.05:
-                _rx, _ry = entity.x, entity.y
-                self.try_npc_exit_structure(entity)
-                _restless_moved = (entity.x != _rx or entity.y != _ry)
+            # Exit was handled — block state machine this tick
+            return True
 
-        # If still in structure after exit attempt, do structure behavior
+        # Low chance to exit anyway (restless NPCs)
+        if random.random() < 0.05:
+            _rx, _ry = entity.x, entity.y
+            self.try_npc_exit_structure(entity)
+            if entity.x != _rx or entity.y != _ry:
+                return True  # Restless exit moved entity — skip state machine
+
+        # MINER in cave: fully handled by behavior_config, not the state machine
         if entity.in_structure:
-            # Miners mine in caves, peaceful NPCs rest in houses
             zone_biome = self.screens.get(f"{entity.screen_x},{entity.screen_y}", {}).get('biome', '')
             if entity.type == 'MINER' and zone_biome == 'CAVE':
                 behavior_config = entity.props.get('behavior_config')
                 if behavior_config:
                     self.execute_entity_behavior(entity, behavior_config)
-            else:
-                # Rest/wander — skip if restless exit already moved this entity this tick
-                if not _restless_moved and random.random() < 0.1:
-                    self.wander_entity(entity)
+                return True
 
-        # Always signal that the caller must return — never fall through to overworld AI
-        return True
+        # Entity stays in structure — let state machine run normally for food/water/behavior
+        return False
 
     def _find_closest_any_entity(self, entity, screen_key):
         """Closest entity of any kind (combat_all quest) — never returns self."""
