@@ -304,12 +304,13 @@ TARGET_LOCK_TICKS    = 300   # ticks a chosen target type is held before re-roll
 RESOURCE_BASE        = 20    # base resource score — kept low; hp_mult provides the real urgency
 MIN_RESOURCE_URGENCY = 0.30  # stat must be below 70% full before food/water enters candidates
 
-# Maps quest focus type → role target type for the role tier of targeting.
-ROLE_TARGET_BY_QUEST = {
-    'FARM':   'crop',
-    'LUMBER': 'tree',
-    'MINE':   'stone',
-    'GATHER': 'resource',
+# Maps quest focus type → list of eligible target cell/entity/item strings.
+# Used by _evaluate_role_tier and find_closest_eligible_target.
+ROLE_CELL_TARGETS = {
+    'FARM':   ['SAND', 'DIRT', 'SOIL', 'GRASS', 'CARROT1', 'CARROT2', 'CARROT3'],
+    'LUMBER': ['TREE1', 'TREE2', 'TREE3'],
+    'MINE':   ['STONE', 'IRON_ORE', 'CAVE', 'MINESHAFT'],
+    'GATHER': ['STONE', 'TREE1', 'TREE2', 'IRON_ORE'],
 }
 
 # Cells that clearing_action will NOT attack (structures, furniture, terrain walls).
@@ -1023,7 +1024,7 @@ ENTITY_TYPES = {
             'idleness': 0.05,        # Takes occasional breaks
             'flee_chance': 0.70,
             'combat_chance': 0.30,
-            'target_types': ['food', 'water', 'resource', 'crop']
+            'target_types': ['food', 'water', 'resource']
         }
     },
     'GUARD': {
@@ -1282,7 +1283,7 @@ ENTITY_TYPES = {
             'idleness': 0.20,
             'flee_chance': 0.60,
             'combat_chance': 0.40,
-            'target_types': ['hostile', 'food', 'water', 'structure', 'tree']
+            'target_types': ['hostile', 'food', 'water', 'structure']
         }
     },
     'MINER': {
