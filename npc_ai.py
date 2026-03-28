@@ -228,7 +228,12 @@ class NpcAiMixin:
         elif getattr(entity, 'in_structure', False):
             entity.in_structure = False
             entity.structure_key = None
-        
+
+        # Structure behavior — handled entirely here; skip state machine for in-structure NPCs
+        if entity.in_structure:
+            self.handle_in_structure_npc(entity, entity_id)
+            return
+
         # EXECUTE BEHAVIOR BASED ON STATE
         if hasattr(entity, 'ai_state'):
             if entity.ai_state == 'combat':
@@ -693,19 +698,14 @@ class NpcAiMixin:
                     del self.dropped_items[screen_key][pos_key]
                     entity.gain_xp(1)  # XP for picking up items
 
-        # Structure behavior - NPCs enter/exit houses and caves
-        if entity.in_structure:
-            self.handle_in_structure_npc(entity, entity_id)
-            return
+        # In overworld
+        is_peaceful = not entity.props.get('hostile', False)
+        is_nocturnal = entity.props.get('nocturnal', False)
+        if self.is_night and is_peaceful and not is_nocturnal:
+            # Night: high-priority shelter-seeking — find and move toward nearest house
+            self._npc_seek_shelter(entity, screen_key)
         else:
-            # In overworld
-            is_peaceful = not entity.props.get('hostile', False)
-            is_nocturnal = entity.props.get('nocturnal', False)
-            if self.is_night and is_peaceful and not is_nocturnal:
-                # Night: high-priority shelter-seeking — find and move toward nearest house
-                self._npc_seek_shelter(entity, screen_key)
-            else:
-                self.try_npc_enter_structure(entity, screen_key)
+            self.try_npc_enter_structure(entity, screen_key)
         
         # Warrior home zone return behavior
         if entity.type == 'WARRIOR' and hasattr(entity, 'home_zone'):
