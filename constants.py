@@ -1018,12 +1018,12 @@ ENTITY_TYPES = {
             'wander_when_idle': True
         },
         'ai_params': {
-            'aggressiveness': 0.65,  # High — farmers actively seek crops/soil to work
-            'passiveness': 0.15,     # Rarely drops task to wander
-            'idleness': 0.10,        # Takes occasional breaks
+            'aggressiveness': 0.85,  # High — farmers actively seek crops/soil to work
+            'passiveness': 0.10,     # Rarely drops task to wander
+            'idleness': 0.05,        # Takes occasional breaks
             'flee_chance': 0.70,
             'combat_chance': 0.30,
-            'target_types': ['food', 'water', 'resource']
+            'target_types': ['food', 'water', 'resource', 'crop']
         }
     },
     'GUARD': {
@@ -1216,7 +1216,7 @@ ENTITY_TYPES = {
             'aggressiveness': 0.25,  # 25% - focused on crafting
             'passiveness': 0.25,     # 25% - takes breaks
             'idleness': 0.30,        # 30% - often at forge/idle
-            'target_types': ['food', 'water', 'structure']
+            'target_types': ['food', 'water', 'structure', 'resource']
         }
     },
     'WIZARD': {
@@ -1282,7 +1282,7 @@ ENTITY_TYPES = {
             'idleness': 0.20,
             'flee_chance': 0.60,
             'combat_chance': 0.40,
-            'target_types': ['hostile', 'food', 'water', 'structure']
+            'target_types': ['hostile', 'food', 'water', 'structure', 'tree']
         }
     },
     'MINER': {

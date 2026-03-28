@@ -2654,9 +2654,7 @@ class NpcAiMixin:
                     continue  # Stat above threshold — skip until meaningfully depleted
                 _res_target = self.find_closest_target_by_type(entity, res_type, screen_key)
                 if _res_target:
-                    _rdist  = self.get_target_distance(entity, _res_target)
-                    _prox   = 1.0 + max(0.0, 8.0 - _rdist) / 4.0
-                    candidates[res_type] = RESOURCE_BASE * urgency * _prox * _hp_mult
+                    candidates[res_type] = RESOURCE_BASE * urgency * _hp_mult
 
         if not candidates:
             return None
