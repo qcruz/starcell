@@ -2113,13 +2113,36 @@ class NpcAiMovementMixin:
     # ── Quest-focus target finders ────────────────────────────────────────────
 
     def _find_closest_crop(self, entity, screen_key):
-        """Closest harvestable crop or workable soil (farming quest)."""
+        """Closest harvestable crop or workable soil (farming quest).
+
+        Daytime: DIRT is highest priority so farmers actively till the land.
+        Nighttime / harvest mode: ripe carrots first, then soil work.
+        In-structure: searches the parent overworld zone instead and returns
+        the structure exit as the immediate navigation step so the farmer exits
+        toward the work rather than wandering inside.
+        """
+        # ── In-structure: route toward exit if farming work exists in overworld ──
+        if getattr(entity, 'in_structure', False) and entity.structure_key:
+            struct = (self.structures.get(entity.structure_key)
+                      or self.screens.get(entity.structure_key))
+            if struct:
+                parent_screen = struct.get('parent_screen')
+                if parent_screen:
+                    ow_key = f"{parent_screen[0]},{parent_screen[1]}"
+                    if self._crop_exists_in_screen(ow_key):
+                        exit_pos = struct.get('exit', (GRID_WIDTH // 2, GRID_HEIGHT // 2))
+                        return ('cell', exit_pos[0], exit_pos[1], 'EXIT')
         if screen_key not in self.screens:
             return None
         screen = self.screens[screen_key]
+        # Day: prioritise DIRT (land to till) → SOIL → harvest → GRASS
+        # Night: ripe carrots first (harvest while sheltered is not an issue)
+        is_day = not getattr(self, 'is_night', False)
+        if is_day:
+            priority = {'DIRT': 0, 'SOIL': 1, 'CARROT3': 2, 'CARROT2': 3, 'GRASS': 4}
+        else:
+            priority = {'CARROT3': 0, 'CARROT2': 1, 'SOIL': 2, 'DIRT': 3, 'GRASS': 4}
         closest, best_score = None, float('inf')
-        # Lower priority index = preferred target
-        priority = {'CARROT3': 0, 'CARROT2': 1, 'SOIL': 2, 'GRASS': 3, 'DIRT': 3}
         for y in range(GRID_HEIGHT):
             for x in range(GRID_WIDTH):
                 cell = screen['grid'][y][x]
@@ -2131,6 +2154,18 @@ class NpcAiMovementMixin:
                     best_score = score
                     closest = ('cell', x, y, cell)
         return closest
+
+    def _crop_exists_in_screen(self, screen_key):
+        """Return True if any farmable cell exists in the given screen."""
+        if screen_key not in self.screens:
+            return False
+        g = self.screens[screen_key]['grid']
+        farmable = {'DIRT', 'SOIL', 'GRASS', 'CARROT1', 'CARROT2', 'CARROT3'}
+        for row in g:
+            for cell in row:
+                if cell in farmable:
+                    return True
+        return False
 
     def _find_closest_tree(self, entity, screen_key):
         """Closest choppable tree (building quest)."""

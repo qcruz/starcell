@@ -1622,10 +1622,9 @@ class NpcAiMixin:
             """Translate a target-type string into a concrete current_target value."""
             if ttype == 'quest_target':
                 return self._quest_target_as_current(entity)
-            if ttype == 'food':
-                return self.find_closest_target_by_type(entity, 'food', screen_key)
-            if ttype == 'water':
-                return self.find_closest_target_by_type(entity, 'water', screen_key)
+            if ttype in ('food', 'water', 'crop', 'tree', 'stone', 'resource',
+                         'clearing_action', 'chest_dump'):
+                return self.find_closest_target_by_type(entity, ttype, screen_key)
             return None
 
         if entity.ai_state == 'idle':
