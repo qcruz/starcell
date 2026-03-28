@@ -491,8 +491,10 @@ class Entity:
         self.inventory = self.props.get('inventory', {}).copy() if 'inventory' in self.props else {}
         
         # Item levels and names - track level of each item type
-        self.item_levels = {}  # {item_name: level}
-        self.item_names = {}   # {item_name: custom_name} for legendary items
+        self.item_levels = {}     # {item_name: int level}
+        self.item_names = {}      # {item_name: custom_name} for legendary items
+        self.item_xp = {}         # {item_name: cumulative xp}
+        self.item_durability = {} # {item_name: durability bonus (0.0–max)}
         
         # Zone travel cooldown
         self.last_zone_change_tick = -999  # Track when last changed zones (start very negative so can travel immediately)
@@ -509,6 +511,9 @@ class Entity:
         # Experience
         self.xp = 0
         self.xp_to_level = 100 * level
+
+        # Task completion counter — incremented each time entity completes a work action
+        self.tasks_completed = 0
         
         # Age (in years) - start at random age
         if entity_type == 'SKELETON':
@@ -846,14 +851,24 @@ class Entity:
                     self.quest_target = None   # force new target assignment
                     print(f"  {name_str} switched focus: {old_focus} → {self.quest_focus}")
     
-    def drink(self, water_value=40):
-        """Drink water to restore thirst — fills bar to max."""
-        self.thirst = self.max_thirst
-    
-    def gain_xp(self, amount):
+    def gain_xp(self, amount=1):
         self.xp += amount
         if self.xp >= self.xp_to_level:
             self.level_up()
+
+    def gain_item_xp(self, item_name, amount=1):
+        """Award XP to an item; levels it up when 100 XP per level is reached.
+        Level formula: item_level = 1 + item_xp // 100.
+        On level-up: reset durability to 0.5 * new_level.
+        """
+        self.item_xp[item_name] = self.item_xp.get(item_name, 0) + amount
+        old_level = self.item_levels.get(item_name, 1)
+        new_level = 1 + self.item_xp[item_name] // 100
+        if new_level > old_level:
+            self.item_levels[item_name] = new_level
+            self.item_durability[item_name] = round(0.5 * new_level, 2)
+            name_str = self.name if self.name else self.type
+            print(f"  {name_str}'s {item_name} leveled up to +{new_level}!")
     
     def level_up(self):
         self.level += 1
