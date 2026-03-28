@@ -2094,12 +2094,6 @@ class NpcAiMovementMixin:
             return self.find_closest_structure(entity, screen_key)
         elif target_type == 'resource':
             return self.find_closest_resource(entity, screen_key)
-        elif target_type == 'crop':
-            return self._find_closest_crop(entity, screen_key)
-        elif target_type == 'tree':
-            return self._find_closest_tree(entity, screen_key)
-        elif target_type == 'stone':
-            return self._find_closest_stone(entity, screen_key)
         elif target_type == 'any_entity':
             return self._find_closest_any_entity(entity, screen_key)
         elif target_type == 'quest_target':
@@ -2112,37 +2106,37 @@ class NpcAiMovementMixin:
             return None
         return None
 
-    # ── Role target cell sets ─────────────────────────────────────────────────
-    _CROP_CELLS  = frozenset({'SAND', 'DIRT', 'SOIL', 'GRASS',
-                              'CARROT1', 'CARROT2', 'CARROT3'})
-    _TREE_CELLS  = frozenset({'TREE1', 'TREE2', 'TREE3'})
-    _STONE_CELLS = frozenset({'IRON_ORE', 'STONE', 'CAVE', 'MINESHAFT', 'CAVE_WALL'})
+    def find_closest_eligible_target(self, entity, screen_key, target_list):
+        """Find the nearest target matching any entry in target_list.
 
-    # ── Generic zone-aware role target finder ─────────────────────────────────
-
-    def _scan_grid_nearest(self, entity, screen_key, target_cells):
-        """Return ('cell', x, y, cell_type) for the nearest matching cell, or None."""
-        if screen_key not in self.screens:
-            return None
-        g = self.screens[screen_key]['grid']
-        closest, best_dist = None, float('inf')
-        for y in range(GRID_HEIGHT):
-            for x in range(GRID_WIDTH):
-                if g[y][x] in target_cells:
-                    dist = abs(x - entity.x) + abs(y - entity.y)
-                    if dist < best_dist:
-                        best_dist = dist
-                        closest = ('cell', x, y, g[y][x])
-        return closest
-
-    def _find_role_target_zone_aware(self, entity, screen_key, target_cells):
-        """Zone-aware role target search for all NPC archetypes.
-
-        In structure: skips current zone (interior floors trigger false matches),
-        scans parent overworld only, returns exit position if a target is found.
-        In overworld: scans current zone and returns the closest matching cell.
-        Returns None if no target found in any reachable zone.
+        target_list entries can be cell type strings or entity type strings.
+        Scans the current zone first; if the entity is inside a structure and a
+        match is found in the parent overworld zone, returns the exit position so
+        the NPC navigates out.  Returns None if nothing found.
         """
+        target_set = frozenset(target_list)
+
+        def _scan(skey):
+            closest, best_dist = None, float('inf')
+            if skey in self.screens:
+                g = self.screens[skey]['grid']
+                for y in range(GRID_HEIGHT):
+                    for x in range(GRID_WIDTH):
+                        if g[y][x] in target_set:
+                            dist = abs(x - entity.x) + abs(y - entity.y)
+                            if dist < best_dist:
+                                best_dist = dist
+                                closest = ('cell', x, y, g[y][x])
+            if skey in self.screen_entities:
+                for eid in self.screen_entities[skey]:
+                    e = self.entities.get(eid)
+                    if e and e is not entity and e.is_alive() and e.type in target_set:
+                        dist = abs(e.x - entity.x) + abs(e.y - entity.y)
+                        if dist < best_dist:
+                            best_dist = dist
+                            closest = eid
+            return closest
+
         if getattr(entity, 'in_structure', False) and entity.structure_key:
             struct = (self.structures.get(entity.structure_key)
                       or self.screens.get(entity.structure_key))
@@ -2150,22 +2144,12 @@ class NpcAiMovementMixin:
                 parent_screen = struct.get('parent_screen')
                 if parent_screen:
                     ow_key = f"{parent_screen[0]},{parent_screen[1]}"
-                    if self._scan_grid_nearest(entity, ow_key, target_cells):
+                    if _scan(ow_key):
                         exit_pos = struct.get('exit', (GRID_WIDTH // 2, GRID_HEIGHT // 2))
                         return ('cell', exit_pos[0], exit_pos[1], 'EXIT')
             return None
-        return self._scan_grid_nearest(entity, screen_key, target_cells)
 
-    # ── Quest-focus target finders ────────────────────────────────────────────
-
-    def _find_closest_crop(self, entity, screen_key):
-        return self._find_role_target_zone_aware(entity, screen_key, self._CROP_CELLS)
-
-    def _find_closest_tree(self, entity, screen_key):
-        return self._find_role_target_zone_aware(entity, screen_key, self._TREE_CELLS)
-
-    def _find_closest_stone(self, entity, screen_key):
-        return self._find_role_target_zone_aware(entity, screen_key, self._STONE_CELLS)
+        return _scan(screen_key)
 
     # Cells that peaceful humanoids seek as night shelter.
     # Excludes CAVE/MINESHAFT — those only enter via combat-driven logic.

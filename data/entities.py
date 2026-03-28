@@ -110,7 +110,7 @@ ENTITY_TYPES = {
             'idleness': 0.05,        # Takes occasional breaks
             'flee_chance': 0.70,
             'combat_chance': 0.30,
-            'target_types': ['food', 'water', 'resource', 'crop']
+            'target_types': ['food', 'water', 'resource']
         }
     },
     'GUARD': {
@@ -369,7 +369,7 @@ ENTITY_TYPES = {
             'idleness': 0.20,
             'flee_chance': 0.60,
             'combat_chance': 0.40,
-            'target_types': ['hostile', 'food', 'water', 'structure', 'tree']
+            'target_types': ['hostile', 'food', 'water', 'structure']
         }
     },
     'MINER': {
