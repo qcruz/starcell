@@ -466,6 +466,7 @@ class GameCoreMixin:
             'BARREL':                'barrel.png',
             'BUSH':                  'bush.png',
             'EMPTY_CRATE':           'emptycrate.png',
+            'APPLE_CRATE':           'applecrate.png',
             'FLOWER_PATTERN1':       'flowerpattern1.png',
             'FLOWER_PATTERN2':       'flowerpattern2.png',
             'FLOWER_PATTERN3':       'flowerpattern3.png',
