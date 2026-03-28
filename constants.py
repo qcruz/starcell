@@ -296,12 +296,13 @@ KEEPER_RANGE = {1: 1, 2: 5, 3: None}
 # See ai/targeting_overview.md for full design doc and rationale.
 KEEPER_BASE          = {1: 50, 2: 35, 3: 20, 4: 10}  # base score per keeper type
 KEEPER_URGENCY_SCALE = {1: 8,  2: 5,  3: 0,  4: 0}   # score added per cell of drift past range
-QUEST_BASE           = 80    # flat score for active assigned/lore quest target
+QUEST_BASE           = 100   # flat score for active assigned/lore quest target
 ROLE_BASE            = 15    # flat score for archetype work (farming, mining, etc.)
 SPECIAL_BASE         = 50    # flat score per eligible special-pool candidate
 SPECIAL_LOCK_TICKS   = 60    # ticks a chosen special type stays locked within the special pool
 TARGET_LOCK_TICKS    = 200   # ticks a chosen target type is held before re-rolling
 RESOURCE_BASE        = 100   # max resource score (at 0% remaining); quadratic urgency curve
+MIN_RESOURCE_URGENCY = 0.30  # stat must be below 70% full before food/water enters candidates
 
 # Maps quest focus type → role target type for the role tier of targeting.
 ROLE_TARGET_BY_QUEST = {

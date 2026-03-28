@@ -1649,6 +1649,7 @@ class NpcAiMixin:
                     entity.target_type = target_type
                     entity.current_target = _resolve_current_target(target_type)
                     entity.ai_state_timer = 2
+                    entity._target_lock_used = True  # mark lock consumed so next idle re-rolls
                 else:
                     # Nothing to target — wander instead
                     entity.ai_state = 'wandering'
@@ -1671,6 +1672,7 @@ class NpcAiMixin:
                     entity.target_type = target_type
                     entity.current_target = _resolve_current_target(target_type)
                     entity.ai_state_timer = 2
+                    entity._target_lock_used = True  # mark lock consumed so next idle re-rolls
                 else:
                     # Nothing to target — keep wandering longer
                     entity.ai_state_timer = 3
@@ -2642,8 +2644,8 @@ class NpcAiMixin:
         ):
             if res_type in entity.target_types:
                 urgency = max(0.0, 1.0 - level / max(1, maxv))
-                if urgency <= 0.0:
-                    continue  # Stat is full — skip; a zero-score entry would win by default
+                if urgency < MIN_RESOURCE_URGENCY:
+                    continue  # Stat above threshold — skip until meaningfully depleted
                 _res_target = self.find_closest_target_by_type(entity, res_type, screen_key)
                 if _res_target:
                     _rdist  = self.get_target_distance(entity, _res_target)
@@ -2653,11 +2655,13 @@ class NpcAiMixin:
         if not candidates:
             return None
 
-        # If a previous roll is still locked and the type is still a valid candidate, keep it
+        # If a previous roll is still locked, the type is still a valid candidate,
+        # and the NPC hasn't yet acted on it, keep the locked choice
         if self.tick < getattr(entity, '_target_type_lock_until', 0):
-            locked = getattr(entity, '_target_type_chosen', None)
-            if locked and locked in candidates:
-                return locked
+            if not getattr(entity, '_target_lock_used', False):
+                locked = getattr(entity, '_target_type_chosen', None)
+                if locked and locked in candidates:
+                    return locked
 
         # Weighted random roll — scores are used directly as weights
         types = list(candidates.keys())
@@ -2666,6 +2670,7 @@ class NpcAiMixin:
 
         entity._target_type_chosen = chosen
         entity._target_type_lock_until = self.tick + TARGET_LOCK_TICKS
+        entity._target_lock_used = False
 
         return chosen
 
