@@ -290,7 +290,7 @@ NPC_BASE_QUEST = {
 # Type 1 (guard): stands within 1 cell of target — door guard, escort
 # Type 2 (patrol): roams within 5 cells of target — area patrol
 # Type 3 (zone): anchored to zone but no specific target — full-zone roam (default)
-KEEPER_RANGE = {1: 1, 2: 5, 3: None}
+KEEPER_RANGE = {1: 5, 2: 15, 3: None}
 
 # ── NPC targeting priority scoring constants ─────────────────────────────────
 # See ai/targeting_overview.md for full design doc and rationale.

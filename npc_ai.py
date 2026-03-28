@@ -2740,13 +2740,14 @@ class NpcAiMixin:
                     entity._quest_update_counter = 0
                     self._try_complete_assigned_quest(entity)
 
-        # GENERAL MODE — every ~10 updates, 60% chance to assign a specific target
+        # GENERAL MODE — only for non-role quest types (FARM/LUMBER/MINE/GATHER handled by role tier)
         if entity.quest_target is None and entity._quest_update_counter >= 10:
             entity._quest_update_counter = 0
-            if random.random() < 0.60:
-                self._assign_specific_quest_target(entity, screen_key)
-                if entity.quest_target is not None:
-                    return QUEST_BASE
+            if quest_focus not in ROLE_TARGET_BY_QUEST:
+                if random.random() < 0.60:
+                    self._assign_specific_quest_target(entity, screen_key)
+                    if entity.quest_target is not None:
+                        return QUEST_BASE
 
         # No specific target active — role tier handles general archetype work
         return None
