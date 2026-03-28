@@ -169,9 +169,9 @@ STONE_SAND_TO_DIRT_RATE          = 0.05 * CA_DECAY_RATE  # 0.000005 — sand adj
 
 # Entity Survival
 HUNGER_DECAY_RATE = 0.02        # Base hunger loss per decay call (humanoids get 6× this)
-THIRST_DECAY_RATE = 0.5         # Base thirst loss per decay call — drains in ~200 calls (~half max rain gap)
+THIRST_DECAY_RATE = 0.02        # Base thirst loss per decay call — matches hunger rate
 HUMANOID_DRAIN_MULTIPLIER = 6.0 # Humanoid hunger multiplier
-HUMANOID_THIRST_MULTIPLIER = 2.0 # Humanoid thirst multiplier (2× base — drain in ~100 calls)
+HUMANOID_THIRST_MULTIPLIER = 6.0 # Humanoid thirst multiplier — matches hunger (drain in ~833 calls)
 STARVATION_DAMAGE = 1.0         # HP loss per decay call when hunger==0
 DEHYDRATION_DAMAGE = 1.5        # HP loss per decay call when thirst==0
 BASE_HEALING_RATE = 1.5         # HP regen per tick when fed/hydrated
@@ -297,7 +297,7 @@ KEEPER_RANGE = {1: 1, 2: 5, 3: None}
 KEEPER_BASE          = {1: 50, 2: 35, 3: 20, 4: 10}  # base score per keeper type
 KEEPER_URGENCY_SCALE = {1: 8,  2: 5,  3: 0,  4: 0}   # score added per cell of drift past range
 QUEST_BASE           = 100   # flat score for active assigned/lore quest target
-ROLE_BASE            = 15    # flat score for archetype work (farming, mining, etc.)
+ROLE_BASE            = 85    # flat score for archetype work (farming, mining, etc.) — just below QUEST_BASE
 SPECIAL_BASE         = 50    # flat score per eligible special-pool candidate
 SPECIAL_LOCK_TICKS   = 60    # ticks a chosen special type stays locked within the special pool
 TARGET_LOCK_TICKS    = 200   # ticks a chosen target type is held before re-rolling
