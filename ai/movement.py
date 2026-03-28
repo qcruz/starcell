@@ -1540,18 +1540,29 @@ class NpcAiMovementMixin:
         entity.world_y = float(entity.y)
 
     def find_closest_food_source(self, entity, screen_key):
-        """Find closest food (cell or entity)"""
-        if screen_key not in self.screens:
-            return None
+        """Find closest food (cell or entity).
 
-        screen = self.screens[screen_key]
-        closest = None
-        closest_dist = float('inf')
-
-        # Get food sources from props
+        When inside a structure, searches the structure grid so APPLE_CRATE
+        and other in-structure food sources are visible to the targeting system.
+        """
         food_sources = entity.props.get('food_sources', [])
         if not food_sources:
             return None
+
+        # Choose the correct grid to search
+        if getattr(entity, 'in_structure', False):
+            struct_key = getattr(entity, 'structure_key', None)
+            grid_obj = (self.structures.get(struct_key)
+                        or self.screens.get(struct_key))
+        else:
+            grid_obj = self.screens.get(screen_key)
+
+        if not grid_obj:
+            return None
+
+        screen = grid_obj
+        closest = None
+        closest_dist = float('inf')
 
         # Check food cells
         for y in range(GRID_HEIGHT):
@@ -1563,8 +1574,8 @@ class NpcAiMovementMixin:
                         closest_dist = dist
                         closest = ('cell', x, y, cell)
 
-        # Check edible entities
-        if screen_key in self.screen_entities:
+        # Check edible entities (overworld only — in-structure entities share subscreen coords)
+        if not getattr(entity, 'in_structure', False) and screen_key in self.screen_entities:
             for other_id in self.screen_entities[screen_key]:
                 if other_id not in self.entities:
                     continue
@@ -1578,21 +1589,36 @@ class NpcAiMovementMixin:
         return closest
 
     def find_closest_water_source(self, entity, screen_key):
-        """Find closest water cell"""
-        if screen_key not in self.screens:
+        """Find closest water source cell matching entity's water_sources list.
+
+        When the entity is inside a structure, searches the structure grid so
+        WATER_TROUGH cells inside houses are visible to the targeting system.
+        """
+        water_sources = entity.props.get('water_sources', ['WATER'])
+
+        # Choose the correct grid to search
+        if getattr(entity, 'in_structure', False):
+            struct_key = getattr(entity, 'structure_key', None)
+            grid_obj = (self.structures.get(struct_key)
+                        or self.screens.get(struct_key))
+        else:
+            grid_obj = self.screens.get(screen_key)
+
+        if not grid_obj:
             return None
 
-        screen = self.screens[screen_key]
+        grid = grid_obj['grid']
         closest = None
         closest_dist = float('inf')
 
         for y in range(GRID_HEIGHT):
             for x in range(GRID_WIDTH):
-                if screen['grid'][y][x] == 'WATER':
+                cell = grid[y][x]
+                if cell in water_sources:
                     dist = abs(x - entity.x) + abs(y - entity.y)
                     if dist < closest_dist:
                         closest_dist = dist
-                        closest = ('cell', x, y, 'WATER')
+                        closest = ('cell', x, y, cell)
 
         return closest
 
@@ -2344,31 +2370,6 @@ class NpcAiMovementMixin:
                 if behavior_config:
                     self.execute_entity_behavior(entity, behavior_config)
             else:
-                # Thirsty NPCs seek the water trough inside the structure
-                if entity.thirst < entity.max_thirst * 0.5:
-                    sub = self.structures.get(entity.structure_key) or self.screens.get(entity.structure_key)
-                    if sub:
-                        _trough = None
-                        _tdist = float('inf')
-                        for _ty in range(GRID_HEIGHT):
-                            for _tx in range(GRID_WIDTH):
-                                if sub['grid'][_ty][_tx] == 'WATER_TROUGH':
-                                    _d = abs(_tx - entity.x) + abs(_ty - entity.y)
-                                    if _d < _tdist:
-                                        _tdist = _d
-                                        _trough = (_tx, _ty)
-                        if _trough:
-                            if _tdist <= 1:
-                                entity.drink(entity.max_thirst)
-                            else:
-                                _tx, _ty = _trough
-                                _dx = 1 if _tx > entity.x else (-1 if _tx < entity.x else 0)
-                                _dy = 1 if _ty > entity.y else (-1 if _ty < entity.y else 0)
-                                _nx, _ny = entity.x + _dx, entity.y + _dy
-                                if 0 <= _nx < GRID_WIDTH and 0 <= _ny < GRID_HEIGHT:
-                                    if not CELL_TYPES.get(sub['grid'][_ny][_nx], {}).get('solid', False):
-                                        entity.x, entity.y = _nx, _ny
-                            return True
                 # Rest/wander — skip if restless exit already moved this entity this tick
                 if not _restless_moved and random.random() < 0.1:
                     self.wander_entity(entity)
