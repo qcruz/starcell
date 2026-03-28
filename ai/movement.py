@@ -1324,8 +1324,9 @@ class NpcAiMovementMixin:
                         # Animals (non-humanoid) don't enter houses
                         if not entity.props.get('humanoid', False):
                             continue
-                        # Original random entry for HOUSE, STONE_HOUSE, etc.
-                        if random.random() < 0.1:
+                        # Shelter-targeting NPCs enter with high certainty; others opportunistically
+                        chance = 0.9 if getattr(entity, 'target_type', None) == 'shelter' else 0.1
+                        if random.random() < chance:
                             self.npc_enter_structure(entity, screen_key, check_x, check_y, cell)
                             return
 
