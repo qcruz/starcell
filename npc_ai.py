@@ -1634,8 +1634,14 @@ class NpcAiMixin:
             """Translate a target-type string into a concrete current_target value."""
             if ttype == 'quest_target':
                 return self._quest_target_as_current(entity)
-            if ttype in ('food', 'water', 'crop', 'tree', 'stone', 'resource'):
+            if ttype in ('food', 'water', 'resource'):
                 return self.find_closest_target_by_type(entity, ttype, screen_key)
+            if ttype == 'role':
+                quest_focus = getattr(entity, 'quest_focus', None)
+                target_list = ROLE_CELL_TARGETS.get(quest_focus, [])
+                if target_list:
+                    return self.find_closest_eligible_target(entity, screen_key, target_list)
+                return None
             if ttype == 'special':
                 subtype = getattr(entity, '_special_target_type', None)
                 if subtype:
@@ -2634,7 +2640,7 @@ class NpcAiMixin:
         # ── Tier 5: Role (archetype work targets) ─────────────────────────────
         role_type = self._evaluate_role_tier(entity, screen_key)
         if role_type:
-            candidates[role_type] = ROLE_BASE
+            candidates['role'] = ROLE_BASE
 
         # ── Tier 6: Resource (urgency + proximity + explosive HP scaling) ───────────
         # RESOURCE_BASE is kept very low (20). At full HP even an empty stat produces
@@ -2741,7 +2747,7 @@ class NpcAiMixin:
         # GENERAL MODE — only for non-role quest types (FARM/LUMBER/MINE/GATHER handled by role tier)
         if entity.quest_target is None and entity._quest_update_counter >= 10:
             entity._quest_update_counter = 0
-            if quest_focus not in ROLE_TARGET_BY_QUEST:
+            if quest_focus not in ROLE_CELL_TARGETS:
                 if random.random() < 0.60:
                     self._assign_specific_quest_target(entity, screen_key)
                     if entity.quest_target is not None:
@@ -2751,12 +2757,11 @@ class NpcAiMixin:
         return None
 
     def _evaluate_role_tier(self, entity, screen_key):
-        """Return the role target type string for the entity's archetype, or None."""
+        """Return 'role' if the entity's archetype has a reachable role target, or None."""
         quest_focus = getattr(entity, 'quest_focus', None)
-        role_type = ROLE_TARGET_BY_QUEST.get(quest_focus)
-        if role_type and role_type in entity.target_types:
-            if self.find_closest_target_by_type(entity, role_type, screen_key):
-                return role_type
+        target_list = ROLE_CELL_TARGETS.get(quest_focus)
+        if target_list and self.find_closest_eligible_target(entity, screen_key, target_list):
+            return 'role'
         return None
 
     def _evaluate_special_tier(self, entity, screen_key):
