@@ -1321,6 +1321,9 @@ class NpcAiMovementMixin:
                                     self.npc_enter_structure(entity, screen_key, check_x, check_y, cell)
                                     return
                     else:
+                        # Animals (non-humanoid) don't enter houses
+                        if not entity.props.get('humanoid', False):
+                            continue
                         # Original random entry for HOUSE, STONE_HOUSE, etc.
                         if random.random() < 0.1:
                             self.npc_enter_structure(entity, screen_key, check_x, check_y, cell)
@@ -2143,6 +2146,9 @@ class NpcAiMovementMixin:
 
     def _npc_seek_shelter(self, entity, screen_key):
         """Night shelter-seeking: move toward nearest house and enter at high probability."""
+        # Animals don't shelter in houses
+        if not entity.props.get('humanoid', False):
+            return
         if screen_key not in self.screens:
             return
         grid = self.screens[screen_key]['grid']
@@ -2338,6 +2344,31 @@ class NpcAiMovementMixin:
                 if behavior_config:
                     self.execute_entity_behavior(entity, behavior_config)
             else:
+                # Thirsty NPCs seek the water trough inside the structure
+                if entity.thirst < entity.max_thirst * 0.5:
+                    sub = self.structures.get(entity.structure_key) or self.screens.get(entity.structure_key)
+                    if sub:
+                        _trough = None
+                        _tdist = float('inf')
+                        for _ty in range(GRID_HEIGHT):
+                            for _tx in range(GRID_WIDTH):
+                                if sub['grid'][_ty][_tx] == 'WATER_TROUGH':
+                                    _d = abs(_tx - entity.x) + abs(_ty - entity.y)
+                                    if _d < _tdist:
+                                        _tdist = _d
+                                        _trough = (_tx, _ty)
+                        if _trough:
+                            if _tdist <= 1:
+                                entity.drink(entity.max_thirst)
+                            else:
+                                _tx, _ty = _trough
+                                _dx = 1 if _tx > entity.x else (-1 if _tx < entity.x else 0)
+                                _dy = 1 if _ty > entity.y else (-1 if _ty < entity.y else 0)
+                                _nx, _ny = entity.x + _dx, entity.y + _dy
+                                if 0 <= _nx < GRID_WIDTH and 0 <= _ny < GRID_HEIGHT:
+                                    if not CELL_TYPES.get(sub['grid'][_ny][_nx], {}).get('solid', False):
+                                        entity.x, entity.y = _nx, _ny
+                            return True
                 # Rest/wander — skip if restless exit already moved this entity this tick
                 if not _restless_moved and random.random() < 0.1:
                     self.wander_entity(entity)

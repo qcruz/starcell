@@ -2585,19 +2585,23 @@ class NpcAiMixin:
                 candidates['hostile'] = h_score
 
         # ── Tier 2: Keeper ────────────────────────────────────────────────────
-        if getattr(entity, 'keeper', False) and getattr(entity, 'keeper_target_pos', None):
+        # Skip entirely when inside a structure — subscreen coords ≠ overworld coords,
+        # so kdist would be meaningless and could force wasteful navigation.
+        if getattr(entity, 'keeper', False) and getattr(entity, 'keeper_target_pos', None) \
+                and not getattr(entity, 'in_structure', False):
             ktype  = getattr(entity, 'keeper_type', None) or 3
             kbase  = KEEPER_BASE.get(ktype, 20)
             krange = KEEPER_RANGE.get(ktype)
             kscale = KEEPER_URGENCY_SCALE.get(ktype, 0)
             kpos   = entity.keeper_target_pos
             kdist  = abs(entity.x - kpos[0]) + abs(entity.y - kpos[1])
-            # Within range: don't add to candidates — entity wanders freely
-            # Outside range: base + urgency scaling to pull them back
-            if krange is not None and kdist <= krange:
-                pass  # in range, no keeper urgency
+            # For types with an explicit range: zero score when inside range.
+            # For zone keepers (type 3/4, krange=None): treat within 5 cells as "at target".
+            _effective_range = krange if krange is not None else 5
+            if kdist <= _effective_range:
+                pass  # at target — no keeper urgency; food/water/quest take over
             else:
-                drift = max(0, kdist - krange) if krange is not None else 0
+                drift = max(0, kdist - _effective_range)
                 candidates['keeper_target'] = kbase + drift * kscale
 
         # ── Tier 3: Quest (assigned/lore only — not base role quests) ─────────

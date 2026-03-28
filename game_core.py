@@ -1107,35 +1107,43 @@ class GameCoreMixin:
                         self.set_grid_cell(screen, x, y, cell_info['grows_to'])
                     
                     # Degradation (for crops and cobblestone)
-                    elif 'degrades_to' in cell_info and random.random() < cell_info.get('degrade_rate', 0):
-                        # Special handling for cobblestone - only decay outside center lanes
-                        if cell == 'COBBLESTONE':
-                            center_x = GRID_WIDTH // 2
-                            center_y = GRID_HEIGHT // 2
-                            
-                            # Check if in center lanes (±2 cells)
-                            on_horizontal_center = abs(y - center_y) <= 2
-                            on_vertical_center = abs(x - center_x) <= 2
-                            
-                            # Don't decay if on main roads
-                            if on_horizontal_center or on_vertical_center:
-                                continue
-                            
-                            # Check if touching structures (house, camp, cave)
-                            has_structure_neighbor = False
-                            for nx, ny in [(x-1, y), (x+1, y), (x, y-1), (x, y+1)]:
-                                if 0 <= nx < GRID_WIDTH and 0 <= ny < GRID_HEIGHT:
-                                    neighbor_cell = screen['grid'][ny][nx]
-                                    if neighbor_cell in ['HOUSE', 'CAMP', 'CAVE', 'MINESHAFT']:
-                                        has_structure_neighbor = True
-                                        break
-                            
-                            # Don't decay if near structures
-                            if has_structure_neighbor:
-                                continue
-                        
-                        # Apply decay
-                        self.set_grid_cell(screen, x, y, cell_info['degrades_to'])
+                    elif 'degrades_to' in cell_info:
+                        base_rate = cell_info.get('degrade_rate', 0)
+                        decay_target = cell_info['degrades_to']
+
+                        # Carrots decay faster on hostile terrain (cobblestone/sand)
+                        if cell in ('CARROT1', 'CARROT2', 'CARROT3'):
+                            _has_cob = _has_sand = False
+                            for _nx, _ny in ((x-1,y),(x+1,y),(x,y-1),(x,y+1)):
+                                if 0 <= _nx < GRID_WIDTH and 0 <= _ny < GRID_HEIGHT:
+                                    _nc = screen['grid'][_ny][_nx]
+                                    if _nc == 'COBBLESTONE':
+                                        _has_cob = True
+                                    elif _nc == 'SAND':
+                                        _has_sand = True
+                            if _has_cob:
+                                base_rate *= 50.0
+                            elif _has_sand:
+                                base_rate *= 10.0
+                                if cell == 'CARROT1':
+                                    decay_target = 'DIRT'
+
+                        if random.random() < base_rate:
+                            # Cobblestone: only decay outside center lanes and away from structures
+                            if cell == 'COBBLESTONE':
+                                center_x = GRID_WIDTH // 2
+                                center_y = GRID_HEIGHT // 2
+                                if abs(y - center_y) <= 2 or abs(x - center_x) <= 2:
+                                    continue
+                                skip = False
+                                for nx, ny in [(x-1, y), (x+1, y), (x, y-1), (x, y+1)]:
+                                    if 0 <= nx < GRID_WIDTH and 0 <= ny < GRID_HEIGHT:
+                                        if screen['grid'][ny][nx] in ('HOUSE', 'CAMP', 'CAVE', 'MINESHAFT'):
+                                            skip = True
+                                            break
+                                if skip:
+                                    continue
+                            self.set_grid_cell(screen, x, y, decay_target)
 
         # Track last update
         self.screen_last_update[key] = self.tick

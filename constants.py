@@ -294,7 +294,7 @@ KEEPER_RANGE = {1: 1, 2: 5, 3: None}
 
 # ── NPC targeting priority scoring constants ─────────────────────────────────
 # See ai/targeting_overview.md for full design doc and rationale.
-KEEPER_BASE          = {1: 60, 2: 40, 3: 20, 4: 15}  # base score per keeper type
+KEEPER_BASE          = {1: 50, 2: 35, 3: 20, 4: 10}  # base score per keeper type
 KEEPER_URGENCY_SCALE = {1: 8,  2: 5,  3: 0,  4: 0}   # score added per cell of drift past range
 QUEST_BASE           = 80    # flat score for active assigned/lore quest target
 ROLE_BASE            = 40    # flat score for archetype work (farming, mining, etc.)
@@ -490,10 +490,10 @@ CELL_TYPES = {
                 'harvest': {'item': 'carrot', 'amount': 1}},
     'CARROT2': {'color': COLORS['CARROT2'], 'label': 'Crt2', 'solid': False,
                 'grows_to': 'CARROT3', 'growth_rate': 0.015,  # 1.5% (was 0.8%, not 4%)
-                'degrades_to': 'GRASS', 'degrade_rate': 0.0001,  # Very slow decay
+                'degrades_to': 'CARROT1', 'degrade_rate': 0.0001,  # Step down, not straight to GRASS
                 'harvest': {'item': 'carrot', 'amount': 2}},
     'CARROT3': {'color': COLORS['CARROT3'], 'label': 'Crt3', 'solid': False,
-                'degrades_to': 'GRASS', 'degrade_rate': 0.00005,  # Very slow decay
+                'degrades_to': 'CARROT2', 'degrade_rate': 0.00005,  # Step down
                 'harvest': {'item': 'carrot', 'amount': 3}},
     'SAND': {'color': COLORS['SAND'], 'label': 'Snd', 'solid': False, 'grows_to': 'CACTUS', 'growth_rate': 0.0001},
     'COBBLESTONE': {'color': COLORS['COBBLESTONE'], 'label': 'Cob', 'solid': False, 'degrades_to': 'DIRT', 'degrade_rate': 0.00001},  # Very persistent

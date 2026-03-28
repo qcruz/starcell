@@ -390,29 +390,47 @@ class ZonesMixin:
                         self.set_grid_cell(screen, x, y, cell_info['grows_to'])
                     elif cell == 'WELL' and _biome == 'DESERT' and random.random() < min(1.0, 0.00002 * _tp):
                         self.set_grid_cell(screen, x, y, 'DESERT_WELL')
-                    elif 'degrades_to' in cell_info and random.random() < min(1.0, cell_info.get('degrade_rate', 0) * _tp * _decay_factor):
-                        if cell == 'COBBLESTONE':
-                            center_x = GRID_WIDTH // 2
-                            center_y = GRID_HEIGHT // 2
-                            on_horizontal_center = abs(y - center_y) <= 2
-                            on_vertical_center = abs(x - center_x) <= 2
-                            if on_horizontal_center or on_vertical_center:
-                                continue
-                            has_structure_neighbor = False
-                            for nx, ny in [(x-1, y), (x+1, y), (x, y-1), (x, y+1)]:
-                                if 0 <= nx < GRID_WIDTH and 0 <= ny < GRID_HEIGHT:
-                                    neighbor_cell = screen['grid'][ny][nx]
-                                    if neighbor_cell in ['HOUSE', 'CAMP', 'CAVE', 'MINESHAFT']:
-                                        has_structure_neighbor = True
-                                        break
-                            if has_structure_neighbor:
-                                continue
+                    elif 'degrades_to' in cell_info:
+                        _base_rate = cell_info.get('degrade_rate', 0)
+                        _decay_target = cell_info['degrades_to']
 
-                        old_cell = cell
-                        self.set_grid_cell(screen, x, y, cell_info['degrades_to'])
+                        # Carrots decay faster on hostile terrain (cobblestone/sand)
+                        if cell in ('CARROT1', 'CARROT2', 'CARROT3'):
+                            _has_cob = _has_sand = False
+                            for _nx, _ny in ((x-1,y),(x+1,y),(x,y-1),(x,y+1)):
+                                if 0 <= _nx < GRID_WIDTH and 0 <= _ny < GRID_HEIGHT:
+                                    _nc = screen['grid'][_ny][_nx]
+                                    if _nc == 'COBBLESTONE':
+                                        _has_cob = True
+                                    elif _nc == 'SAND':
+                                        _has_sand = True
+                            if _has_cob:
+                                _base_rate *= 50.0
+                            elif _has_sand:
+                                _base_rate *= 10.0
+                                if cell == 'CARROT1':
+                                    _decay_target = 'DIRT'
 
-                        if old_cell == 'HOUSE':
-                            self.process_house_destruction(x, y, zone_key)
+                        if random.random() < min(1.0, _base_rate * _tp * _decay_factor):
+                            if cell == 'COBBLESTONE':
+                                center_x = GRID_WIDTH // 2
+                                center_y = GRID_HEIGHT // 2
+                                if abs(y - center_y) <= 2 or abs(x - center_x) <= 2:
+                                    continue
+                                skip = False
+                                for nx, ny in [(x-1, y), (x+1, y), (x, y-1), (x, y+1)]:
+                                    if 0 <= nx < GRID_WIDTH and 0 <= ny < GRID_HEIGHT:
+                                        if screen['grid'][ny][nx] in ('HOUSE', 'CAMP', 'CAVE', 'MINESHAFT'):
+                                            skip = True
+                                            break
+                                if skip:
+                                    continue
+
+                            old_cell = cell
+                            self.set_grid_cell(screen, x, y, _decay_target)
+
+                            if old_cell == 'HOUSE':
+                                self.process_house_destruction(x, y, zone_key)
 
         # Desert rock/ore formation — SAND slowly solidifies into STONE;
         # existing STONE rarely yields IRON_ORE
@@ -542,6 +560,13 @@ class ZonesMixin:
         # Extra decay passes for distant zones: 1 extra per 4 zones beyond dist 8, cap 4
         _extra_decay = max(0, min(4, (_dist_from_player - 8) // 4)) if _dist_from_player > 8 else 0
 
+        # Extra decay from zone overcrowding: 1 extra per 4 entities above 8, cap 3
+        _zone_pop = sum(
+            1 for eid in self.screen_entities.get(zone_key, [])
+            if eid in self.entities and self.entities[eid].is_alive()
+        )
+        _pop_extra = max(0, min(3, (_zone_pop - 8) // 4)) if _zone_pop > 8 else 0
+
         if zone_key in self.screen_entities:
             entities_to_remove = []
 
@@ -582,7 +607,7 @@ class ZonesMixin:
                     entity.age += 1
 
                 entity.decay_stats()
-                for _ in range(_extra_decay):
+                for _ in range(_extra_decay + _pop_extra):
                     entity.decay_stats()
 
                 # NPC item consumption: remove full stack of a random item
