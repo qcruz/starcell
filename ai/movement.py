@@ -2137,9 +2137,13 @@ class NpcAiMovementMixin:
                             closest = eid
             return closest
 
-        if getattr(entity, 'in_structure', False) and entity.structure_key:
-            struct = (self.structures.get(entity.structure_key)
-                      or self.screens.get(entity.structure_key))
+        # Determine structure context: prefer entity flag, fall back to screen_key lookup
+        # (entities spawned inside structures may have in_structure=False but correct screen_key)
+        s_key = (entity.structure_key if getattr(entity, 'in_structure', False) else None) \
+                or (screen_key if screen_key in self.structures else None)
+
+        if s_key:
+            struct = self.structures.get(s_key) or self.screens.get(s_key)
             if struct:
                 parent_screen = struct.get('parent_screen')
                 if parent_screen:
@@ -2175,18 +2179,12 @@ class NpcAiMovementMixin:
     # STRUCTURE TRANSITION HELPERS — shelter-seeking and in-structure dispatch
     # ══════════════════════════════════════════════════════════════════════
 
-    def _npc_seek_shelter(self, entity, screen_key):
-        """Night shelter-seeking: move toward nearest house and enter at high probability."""
-        # Animals don't shelter in houses
-        if not entity.props.get('humanoid', False):
-            return
+    def _find_closest_shelter(self, entity, screen_key):
+        """Return the nearest enterable house cell as a target tuple, or None if none found."""
         if screen_key not in self.screens:
-            return
+            return None
         grid = self.screens[screen_key]['grid']
-
-        # Scan for closest enterable house cell
-        best_dist = 999
-        best_x = best_y = best_cell = None
+        best_dist, best = float('inf'), None
         for sy in range(GRID_HEIGHT):
             for sx in range(GRID_WIDTH):
                 c = grid[sy][sx]
@@ -2194,20 +2192,8 @@ class NpcAiMovementMixin:
                     d = abs(entity.x - sx) + abs(entity.y - sy)
                     if d < best_dist:
                         best_dist = d
-                        best_x, best_y, best_cell = sx, sy, c
-
-        if best_x is None:
-            # No house in zone — use normal low-chance entry as fallback
-            self.try_npc_enter_structure(entity, screen_key)
-            return
-
-        if best_dist <= 1:
-            # Adjacent — 80% chance to enter immediately
-            if random.random() < 0.80:
-                self.npc_enter_structure(entity, screen_key, best_x, best_y, best_cell)
-        else:
-            # Move toward house
-            self.move_toward_position(entity, best_x, best_y, screen_key)
+                        best = ('cell', sx, sy, c)
+        return best
 
     def npc_seek_shelter(self, entity):
         """NPCs seek shelter (house/camp) at night and enter idle state when there"""

@@ -698,14 +698,8 @@ class NpcAiMixin:
                     del self.dropped_items[screen_key][pos_key]
                     entity.gain_xp(1)  # XP for picking up items
 
-        # In overworld
-        is_peaceful = not entity.props.get('hostile', False)
-        is_nocturnal = entity.props.get('nocturnal', False)
-        if self.is_night and is_peaceful and not is_nocturnal:
-            # Night: high-priority shelter-seeking — find and move toward nearest house
-            self._npc_seek_shelter(entity, screen_key)
-        else:
-            self.try_npc_enter_structure(entity, screen_key)
+        # In overworld — opportunistic structure entry (state machine handles targeted navigation)
+        self.try_npc_enter_structure(entity, screen_key)
         
         # Warrior home zone return behavior
         if entity.type == 'WARRIOR' and hasattr(entity, 'home_zone'):
@@ -1653,6 +1647,8 @@ class NpcAiMixin:
                 if target_list:
                     return self.find_closest_eligible_target(entity, screen_key, target_list)
                 return None
+            if ttype == 'shelter':
+                return self._find_closest_shelter(entity, screen_key)
             if ttype == 'special':
                 subtype = getattr(entity, '_special_target_type', None)
                 if subtype:
@@ -2435,21 +2431,21 @@ class NpcAiMixin:
         target = None
 
         if focus in ('farming', 'FARM'):
-            target = self._find_closest_crop(entity, screen_key)
+            target = self.find_closest_eligible_target(entity, screen_key, ROLE_CELL_TARGETS.get('FARM', []))
             if target is None and entity.level >= 5:
                 for dsx, dsy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
                     adj = f"{entity.screen_x + dsx},{entity.screen_y + dsy}"
-                    target = self._find_closest_crop(entity, adj)
+                    target = self.find_closest_eligible_target(entity, adj, ROLE_CELL_TARGETS.get('FARM', []))
                     if target:
                         break
 
         elif focus in ('building', 'LUMBER'):
-            target = self._find_closest_tree(entity, screen_key)
+            target = self.find_closest_eligible_target(entity, screen_key, ROLE_CELL_TARGETS.get('LUMBER', []))
             if target is None:
                 target = self.find_closest_structure(entity, screen_key)
 
         elif focus in ('mining', 'MINE'):
-            target = self._find_closest_stone(entity, screen_key)
+            target = self.find_closest_eligible_target(entity, screen_key, ROLE_CELL_TARGETS.get('MINE', []))
 
         elif focus == 'crafting':
             target = self.find_closest_structure(entity, screen_key)
@@ -2647,6 +2643,15 @@ class NpcAiMixin:
         special = self._evaluate_special_tier(entity, screen_key)
         if special:
             candidates['special'] = SPECIAL_BASE
+
+        # ── Tier 4b: Shelter (night, peaceful, non-nocturnal humanoids) ──────────
+        if (self.is_night
+                and not entity.props.get('hostile', False)
+                and not entity.props.get('nocturnal', False)
+                and entity.props.get('humanoid', False)
+                and not getattr(entity, 'in_structure', False)):
+            if self._find_closest_shelter(entity, screen_key):
+                candidates['shelter'] = SHELTER_BASE
 
         # ── Tier 5: Role (archetype work targets) ─────────────────────────────
         role_type = self._evaluate_role_tier(entity, screen_key)
