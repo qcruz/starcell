@@ -466,6 +466,7 @@ class GameCoreMixin:
             'BARREL':                'barrel.png',
             'BUSH':                  'bush.png',
             'EMPTY_CRATE':           'emptycrate.png',
+            'APPLE_CRATE':           'applecrate.png',
             'FLOWER_PATTERN1':       'flowerpattern1.png',
             'FLOWER_PATTERN2':       'flowerpattern2.png',
             'FLOWER_PATTERN3':       'flowerpattern3.png',
@@ -494,6 +495,11 @@ class GameCoreMixin:
             # UI sprites (faction banners — not items, so not found by the ITEMS loop)
             'blue_banner':           'blue_banner.png',
             'red_banner':            'red_banner.png',
+            # Attack swipe animations — directional
+            'swipe_down':            'down_swipe.png',
+            'swipe_up':              'up_swipe.png',
+            'swipe_left':            'left_swipe.png',
+            'swipe_right':           'right_swipe.png',
         }
 
         # Weapon / armour sprites — subdir has a space so they can't be found by the
@@ -745,15 +751,20 @@ class GameCoreMixin:
         entity = self.entities[entity_id]
         screen_key = f"{entity.screen_x},{entity.screen_y}"
         
-        # Log death reason if not from combat
+        # Track and log death cause
         if entity.health <= 0:
+            _dc = getattr(self, 'death_counts', {})
             if hasattr(entity, 'age') and hasattr(entity, 'max_age') and entity.age > entity.max_age:
-                name_str = entity.name if entity.name else entity.type
-                print(f"{name_str} died of old age at {entity.age} years (max: {entity.max_age})")
+                _dc['old_age'] = _dc.get('old_age', 0) + 1
             elif entity.hunger <= 0:
-                print(f"{entity.type} died from starvation at ({entity.x}, {entity.y})")
+                _dc['starvation'] = _dc.get('starvation', 0) + 1
             elif entity.thirst <= 0:
-                print(f"{entity.type} died from dehydration at ({entity.x}, {entity.y})")
+                _dc['dehydration'] = _dc.get('dehydration', 0) + 1
+            elif getattr(entity, 'killed_by', None) is not None:
+                _dc['combat'] = _dc.get('combat', 0) + 1
+            else:
+                _dc['other'] = _dc.get('other', 0) + 1
+            self.death_counts = _dc
         
         # Free keeper slot if this entity was a keeper
         if getattr(entity, 'keeper', False):
@@ -1097,35 +1108,43 @@ class GameCoreMixin:
                         self.set_grid_cell(screen, x, y, cell_info['grows_to'])
                     
                     # Degradation (for crops and cobblestone)
-                    elif 'degrades_to' in cell_info and random.random() < cell_info.get('degrade_rate', 0):
-                        # Special handling for cobblestone - only decay outside center lanes
-                        if cell == 'COBBLESTONE':
-                            center_x = GRID_WIDTH // 2
-                            center_y = GRID_HEIGHT // 2
-                            
-                            # Check if in center lanes (±2 cells)
-                            on_horizontal_center = abs(y - center_y) <= 2
-                            on_vertical_center = abs(x - center_x) <= 2
-                            
-                            # Don't decay if on main roads
-                            if on_horizontal_center or on_vertical_center:
-                                continue
-                            
-                            # Check if touching structures (house, camp, cave)
-                            has_structure_neighbor = False
-                            for nx, ny in [(x-1, y), (x+1, y), (x, y-1), (x, y+1)]:
-                                if 0 <= nx < GRID_WIDTH and 0 <= ny < GRID_HEIGHT:
-                                    neighbor_cell = screen['grid'][ny][nx]
-                                    if neighbor_cell in ['HOUSE', 'CAMP', 'CAVE', 'MINESHAFT']:
-                                        has_structure_neighbor = True
-                                        break
-                            
-                            # Don't decay if near structures
-                            if has_structure_neighbor:
-                                continue
-                        
-                        # Apply decay
-                        self.set_grid_cell(screen, x, y, cell_info['degrades_to'])
+                    elif 'degrades_to' in cell_info:
+                        base_rate = cell_info.get('degrade_rate', 0)
+                        decay_target = cell_info['degrades_to']
+
+                        # Carrots decay faster on hostile terrain (cobblestone/sand)
+                        if cell in ('CARROT1', 'CARROT2', 'CARROT3'):
+                            _has_cob = _has_sand = False
+                            for _nx, _ny in ((x-1,y),(x+1,y),(x,y-1),(x,y+1)):
+                                if 0 <= _nx < GRID_WIDTH and 0 <= _ny < GRID_HEIGHT:
+                                    _nc = screen['grid'][_ny][_nx]
+                                    if _nc == 'COBBLESTONE':
+                                        _has_cob = True
+                                    elif _nc == 'SAND':
+                                        _has_sand = True
+                            if _has_cob:
+                                base_rate *= 50.0
+                            elif _has_sand:
+                                base_rate *= 10.0
+                                if cell == 'CARROT1':
+                                    decay_target = 'DIRT'
+
+                        if random.random() < base_rate:
+                            # Cobblestone: only decay outside center lanes and away from structures
+                            if cell == 'COBBLESTONE':
+                                center_x = GRID_WIDTH // 2
+                                center_y = GRID_HEIGHT // 2
+                                if abs(y - center_y) <= 2 or abs(x - center_x) <= 2:
+                                    continue
+                                skip = False
+                                for nx, ny in [(x-1, y), (x+1, y), (x, y-1), (x, y+1)]:
+                                    if 0 <= nx < GRID_WIDTH and 0 <= ny < GRID_HEIGHT:
+                                        if screen['grid'][ny][nx] in ('HOUSE', 'CAMP', 'CAVE', 'MINESHAFT'):
+                                            skip = True
+                                            break
+                                if skip:
+                                    continue
+                            self.set_grid_cell(screen, x, y, decay_target)
 
         # Track last update
         self.screen_last_update[key] = self.tick
@@ -2889,6 +2908,7 @@ class GameCoreMixin:
                 entity_id = self.next_entity_id
                 self.next_entity_id += 1
                 self.entities[entity_id] = entity
+                self.entities_spawned_total = getattr(self, 'entities_spawned_total', 0) + 1
 
                 if structure_key not in self.screen_entities:
                     self.screen_entities[structure_key] = []
@@ -3095,7 +3115,8 @@ class GameCoreMixin:
         self.bug_catcher.flush()
         try:
             self.save_game(path='debug/auto_debug_save.json')
-            print("[AutoDebug] Save written to debug/auto_debug_save.json")
+            self.save_game(path='savegame.json')
+            print("[AutoDebug] Save written to debug/auto_debug_save.json and savegame.json")
         except Exception as exc:
             print(f"[AutoDebug] Save failed: {exc}")
         try:

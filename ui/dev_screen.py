@@ -16,8 +16,11 @@ class DevScreenMixin:
             b = screen.get('biome', 'UNKNOWN')
             biome_counts[b] = biome_counts.get(b, 0) + 1
 
-        # Entities
-        type_counts  = {}
+        # Entities — type averages (doubles merged into base type)
+        from collections import defaultdict
+        _ts = defaultdict(lambda: {'n': 0, 'hp': 0.0, 'max_hp': 0.0,
+                                   'hunger': 0.0, 'thirst': 0.0,
+                                   'level': 0.0, 'xp': 0, 'tasks': 0})
         level_counts = {}
         alive_count  = 0
         total_npc_items = 0
@@ -25,12 +28,36 @@ class DevScreenMixin:
             if entity.health <= 0:
                 continue
             alive_count += 1
-            type_counts[entity.type] = type_counts.get(entity.type, 0) + 1
-            lv = getattr(entity, 'level', 1)
+            base = entity.type.replace('_double', '')
+            s = _ts[base]
+            s['n']      += 1
+            s['hp']     += entity.health
+            s['max_hp'] += entity.max_health
+            s['hunger'] += getattr(entity, 'hunger', 0)
+            s['thirst'] += getattr(entity, 'thirst', 0)
+            s['level']  += getattr(entity, 'level', 1.0)
+            s['xp']     += getattr(entity, 'xp', 0)
+            s['tasks']  += getattr(entity, 'tasks_completed', 0)
+            lv = int(getattr(entity, 'level', 1))
             level_counts[lv] = level_counts.get(lv, 0) + 1
             inv = getattr(entity, 'inventory', {})
             if isinstance(inv, dict):
                 total_npc_items += sum(inv.values())
+
+        npc_type_averages = {}
+        for btype, s in _ts.items():
+            n = s['n']
+            npc_type_averages[btype] = {
+                'n':      n,
+                'hp':     round(s['hp']     / n),
+                'max_hp': round(s['max_hp'] / n),
+                'hunger': round(s['hunger'] / n),
+                'thirst': round(s['thirst'] / n),
+                'level':  round(s['level']  / n, 2),
+                'xp':     round(s['xp']     / n),
+                'tasks':  round(s['tasks']  / n, 1),
+            }
+        npc_type_averages = dict(sorted(npc_type_averages.items(), key=lambda x: -x[1]['n']))
 
         # Structures — scan every cell grid
         tracked = ('HOUSE', 'STONE_HOUSE', 'CAVE', 'MINESHAFT',
@@ -146,10 +173,28 @@ class DevScreenMixin:
                 item_totals[iname] = item_totals.get(iname, 0) + icount
         top_npc_items = sorted(item_totals.items(), key=lambda x: -x[1])[:12]
 
+        # Completed quests by type (cumulative, tracked in lore/engine.py)
+        quests_completed_by_type = dict(sorted(
+            getattr(self, 'quests_completed_by_type', {}).items(),
+            key=lambda x: -x[1]
+        ))
+
+        # Death cause counts (session)
+        _dc = getattr(self, 'death_counts', {})
+        death_counts = {
+            'starvation':  _dc.get('starvation',  0),
+            'dehydration': _dc.get('dehydration', 0),
+            'combat':      _dc.get('combat',      0),
+            'old_age':     _dc.get('old_age',     0),
+            'other':       _dc.get('other',       0),
+        }
+        total_deaths   = sum(death_counts.values())
+        entities_spawned_total = getattr(self, 'entities_spawned_total', 0)
+
         return {
             'total_domains':     len(getattr(self, 'domains', {})),
             'biome_counts':      dict(sorted(biome_counts.items())),
-            'type_counts':       dict(sorted(type_counts.items(), key=lambda x: -x[1])),
+            'npc_type_averages': npc_type_averages,
             'level_counts':      dict(sorted(level_counts.items())),
             'alive_count':       alive_count,
             'se_alive_count':    se_alive_count,
@@ -172,7 +217,11 @@ class DevScreenMixin:
             'zones_deleted':     getattr(self, 'zones_deleted', 0),
             'faction_data':      faction_data,
             'domain_data':       domain_data,
-            'top_npc_items':     top_npc_items,
+            'top_npc_items':              top_npc_items,
+            'quests_completed_by_type':   quests_completed_by_type,
+            'death_counts':              death_counts,
+            'total_deaths':              total_deaths,
+            'entities_spawned_total':    entities_spawned_total,
         }
 
     # ── Renderer ───────────────────────────────────────────────────────────────
@@ -279,9 +328,17 @@ class DevScreenMixin:
         # ══════════════════════════════════════════════════════════════════════
         cx, cy = 245, TOP
 
-        cy = _h(f"ENTITIES [GLOBAL]  alive {stats['alive_count']} / se {stats['se_alive_count']}", cx, cy)
-        for etype, count in stats['type_counts'].items():
-            cy = _t(f"  {etype:<18} {count}", cx, cy)
+        cy = _h(f"NPC AVERAGES  alive {stats['alive_count']} / se {stats['se_alive_count']}", cx, cy)
+        hdr = f"  {'TYPE':<12} {'N':>4}  {'HP':>4} {'mHP':>4}  {'FD':>3} {'H2O':>3}  {'LV':>4}  {'TC':>5}"
+        cy = _t(hdr, cx, cy, HDR)
+        for btype, av in stats['npc_type_averages'].items():
+            name = btype[:12]
+            row = (f"  {name:<12} {av['n']:>4}  {av['hp']:>4} {av['max_hp']:>4}"
+                   f"  {av['hunger']:>3} {av['thirst']:>3}  {av['level']:>4.1f}  {av['tasks']:>5.1f}")
+            # Colour row: red if avg HP < 30% of avg max_hp
+            hp_pct = av['hp'] / max(1, av['max_hp'])
+            row_col = RED if hp_pct < 0.3 else (YEL if hp_pct < 0.6 else DAT)
+            cy = _t(row, cx, cy, row_col)
 
         cy += 8
         cy = _h("BY LEVEL", cx, cy)
@@ -309,6 +366,32 @@ class DevScreenMixin:
                 cy = _t(f"  {qt:<22} {count}", cx, cy)
         else:
             cy = _t("  (none)", cx, cy)
+
+        cy += 8
+        cy = _h("QUESTS COMPLETED (session)", cx, cy)
+        if stats['quests_completed_by_type']:
+            for qt, count in stats['quests_completed_by_type'].items():
+                cy = _t(f"  {qt:<22} {count}", cx, cy)
+        else:
+            cy = _t("  (none yet)", cx, cy)
+
+        cy += 8
+        dc = stats['death_counts']
+        total_d = stats['total_deaths']
+        spawned = stats['entities_spawned_total']
+        alive   = stats['alive_count']
+        # alive + total_deaths should equal spawned (integrity check)
+        check_ok = (alive + total_d) <= spawned
+        check_col = GRN if check_ok else RED
+        cy = _h("DEATHS (session)", cx, cy)
+        cy = _t(f"  starvation  {dc['starvation']:>5}", cx, cy)
+        cy = _t(f"  dehydration {dc['dehydration']:>5}", cx, cy)
+        cy = _t(f"  combat      {dc['combat']:>5}", cx, cy)
+        cy = _t(f"  old age     {dc['old_age']:>5}", cx, cy)
+        cy = _t(f"  other       {dc['other']:>5}", cx, cy)
+        cy = _t(f"  total dead  {total_d:>5}", cx, cy)
+        cy = _t(f"  spawned     {spawned:>5}", cx, cy)
+        cy = _t(f"  alive now   {alive:>5}  (dead+alive≤spawn)", cx, cy, check_col)
 
         cy += 8
         cy = _h("BLOAT WATCH", cx, cy)
@@ -341,6 +424,8 @@ class DevScreenMixin:
         cy = _t(f"  followers             {len(self.followers):>6}", cx, cy)
         cy = _t(f"  zone_keepers zones    {len(self.zone_keepers):>6}", cx, cy)
         cy = _t(f"  active quests (NPC)   {sum(stats['npc_quest_counts'].values()):>6}", cx, cy)
+        total_tasks = sum(getattr(e, 'tasks_completed', 0) for e in self.entities.values() if e.health > 0)
+        cy = _t(f"  NPC tasks completed   {total_tasks:>6}", cx, cy)
 
         # ══════════════════════════════════════════════════════════════════════
         # Column 4 — Zone priority queue                               x=706

@@ -5,25 +5,436 @@ Reviewed from `debug/bugcatcher.log` after each session.
 
 ---
 
-## Session 54 — PENDING (cave/structure bug focus)
+## Session 64 — 2026-03-27 (tasks_completed tracking in action primitives)
 
 **Fixes applied before this run:**
-- Offscreen-only spawning: cave hostile, night skeleton, termite, and population maintenance now all skipped for the player's current zone. Only raids still fire in current zone.
-- Death drops: all items now land at exact death cell (no ±2 scatter).
-- Resource priority: linear urgency (NPCs pursue water/food at 30% missing, not 60%).
-- Chest decay: 0.5%/update chance to dump contents as dropped items.
-- WARRIOR added to all biome initial spawn tables (0.35–0.40).
-- Hostile spawns reduced ~25%; raid base halved (0.05→0.025).
-- Watchdog enhanced: structures now log `ai_state_timer`, `frozen_flag` (>600 ticks), `world_x/y`, `in_subscreen`, `in_combat`, `facing`, `anim_frame` per entity. Entity sample adds `in_subscreen`, `subscreen_key`, `ai_state_timer`. New integrity check: `entity_frozen_in_structure` fires when timer >600.
+- `tasks_completed` increment added to `action_harvest_cell`, `action_transform_cell`, `action_place_cell` in `ai/actions.py` — covers FARMER/LUMBERJACK/MINER archetype work going through behavior_config path
+- `_try_complete_assigned_quest` now increments `tasks_completed` + awards entity XP for base quest cycles (previously silently no-oped)
+- Quest target assignment rate raised from 20% → 60% per 10 AI updates
 
-**Watchdog focus this session: structure/cave behavior**
-- `watchdog_structure_sample`: look for entities with `frozen_flag: true` — these are freezing bugs
-- `integrity_anomaly / entity_frozen_in_structure`: direct freeze reports
-- `integrity_anomaly / entity_in_subscreen_but_in_screen_entities`: teleport/ghost candidates
-- `watchdog_entity_sample`: look for entities with `in_subscreen: true` while their zone is an overworld key
-- Target: spend session inside a cave. Document any freeze, teleport, or ghost entity seen.
+**Run stats:** Tick 97921→101821 (CONTINUE). ~65s. Clean shutdown. Log was trimmed (1364 dropped lines from prior session).
 
-**Run stats:** TBD
+**Tasks_completed (963 quest samples, 3900 ticks):**
+- total across all samples: 15; non-zero samples: 9; max per entity: 3
+- By type: BLACKSMITH max=3, FARMER max=2, LUMBERJACK max=1, MINER max=0
+- BLACKSMITH (GATHER focus) completes tasks by navigating to CHEST targets via quest idle block
+- MINER max=0: likely no STONE cells adjacent in overworld zones during this short run
+- Short session (65s) limits observed completions for off-screen entities (90-tick updates → ~43 possible per session)
+
+**AI state distribution (963 quest samples):**
+- flee: 195 (20%), targeting: 307 (32%), wandering: 297 (31%), idle: 106 (11%), combat: 58 (6%)
+- 20% flee is high — many entities in threat-response mode not doing archetype work
+
+**Quest focus breakdown:**
+- Both uppercase ('MINE', 'FARM', 'LUMBER') and lowercase ('mining', 'farming', 'building') observed — two initialization paths; both handled in `_assign_specific_quest_target` (lines 2403–2423)
+- 44/963 entities had quest_target set (4.6%) — low but expected given 60% chance per 10 updates
+
+**Integrity:**
+- `entity_not_in_subscreen_but_in_subscreen_entities`: still escalating (tracked in held_back.md)
+
+**OBSERVATION:** `tasks_completed` increments ARE working — non-zero values confirmed for FARMER, LUMBERJACK, BLACKSMITH. Infrastructure correct. Low per-session totals are expected given short run time and off-screen throttling (not a bug). Longer sessions needed for meaningful baseline.
+
+**OBSERVATION:** MINER tasks_completed=0 across all samples despite 3900-tick run — miners are likely in overworld zones without adjacent STONE/ORE. Needs verification in a longer session to confirm vs. false negative.
+
+---
+
+## Session 63 — 2026-03-27 (quest completion diagnosis + tracking)
+
+**Fixes applied before this run:**
+- `tasks_completed` attribute added to Entity.__init__
+- `_try_complete_assigned_quest` fixed to count base quest cycles (was silently no-oping for all autonomous NPCs)
+- TC column added to dev_screen NPC averages and quest section total
+- `tasks_completed` added to Watchdog `_sample_npc_quests` entries
+- `tasks_completed` saved/loaded in save_load.py
+
+**Run stats:** ~245s session. ~1348 entities. 14 total task completions observed.
+
+**Tasks_completed:** Only 14 completions across 1348 entities in 245s. Root cause: `tasks_completed` was only incremented in the quest target arrival idle block (keeper/lore quests), NOT in `action_harvest_cell` where archetype work actually happens. The idle block fires when `target_type == 'quest_target'` which requires the entity to navigate to a specific quest_target cell — most archetype work bypasses this path entirely via the role tier.
+
+**Root cause analysis completed:**
+- FARMER/LUMBERJACK/MINER archetype actions go: `determine_target_type` → role tier → `find_closest_target_by_type` → navigate → `action_harvest_cell` — this path does NOT go through the quest idle block
+- `farmer_behavior()` and `lumberjack_behavior()` defined in npc_ai.py but never called (dead code)
+- BLACKSMITH (GATHER) and WIZARD (SEARCH) handled in `_assign_specific_quest_target` but find different targets
+
+**Fix identified:** Add `tasks_completed` increment directly in `action_harvest_cell`, `action_transform_cell`, `action_place_cell` — implemented in Session 64 commit.
+
+---
+
+## Session 62 — 2026-03-26 (continued observation)
+
+**Fixes applied before this run:** None — continuation run to observe XP accumulation trend.
+
+**Run stats:** Tick 66233→78393 (CONTINUE). ~213s. Clean shutdown.
+
+**Population (tick 74933):**
+- alive=1259, spawned_this_session=~80
+- death_counts: {combat:37, dehydration:23, starvation:1, other:1} — balanced causes
+
+**Level distribution (tick 77633):**
+- L1=1266, L2=8, L3=4, L4=2 (total 1280)
+- Level gradient forming: L2>L3>L4 ✓
+- **L4 entities now exist** — progression confirmed across multiple levels
+
+**Notable XP accumulation (entity samples):**
+- LUMBERJACK id=416: 99 XP (almost L2!)
+- LUMBERJACK id=1171: 85 XP
+- WOLF id=1528: 81 XP
+- TERMITE_double id=1922: 359 XP (L4!)
+- BLACKSMITH id=2168: 100 XP (exactly L2)
+- FARMER id=1424: 37 XP, WOLF_double id=1977: 31 XP
+
+Wide variety of entity types (FARMER, LUMBERJACK, MINER, WARRIOR, GOBLIN, WOLF, BLACKSMITH) all accumulating XP through eat/drink/combat actions. XP system is working across all roles.
+
+**Resource health:** both_bars_80pct=771/1280 (60%), health_80pct=765/1280 (60%).
+
+**State histogram (tick 77633):**
+```
+combat+flee: 411/1280 = 32%   wandering|water: 63
+```
+- Combat+flee holding steady at 32% (was 47% in session 58)
+- `wandering|water: 63` — slight uptick from 52 (session 61). Zone-exit fix reduces new accumulation but older save-file entities persist in stale state.
+
+**Integrity:**
+- `keeper_no_target`: WOLF ids 678, 679 (persistent across sessions), WOLF_double 139 (new)
+- `entity_not_in_subscreen_but_in_subscreen_entities: 280` — GROWING (178→280). Confirmed escalating bug: entity exits subscreen but remains in `subscreen_entities` dict. Same class as bat animation desync. Needs fix.
+
+**CONFIRMED BUG (escalating):** `entity_not_in_subscreen_but_in_subscreen_entities` — 280 events, growing each session. Entity's `in_subscreen` flag cleared but entity ID stays in `subscreen_entities` dict. Root cause likely in `npc_exit_structure` or `handle_in_structure_npc` exit path not cleaning up `subscreen_entities`. Requires audit of all subscreen exit paths.
+
+**OBSERVATION:** XP progression working as designed. Level gradient {L1:1266, L2:8, L3:4, L4:2} shows decreasing distribution across levels. Multiple entity types showing 50–99 XP — next sessions should see more L2 crossings.
+
+---
+
+## Session 61 — 2026-03-26 (NPC action XP + item XP/durability system)
+
+**Fixes applied before this run:**
+- `gain_xp(1)` added to all NPC non-walking actions: eat, drink, item pickup, chest loot/deposit, auto meat-consume in combat
+- Item XP/durability system: `item_xp`, `item_durability`, `gain_item_xp()` on Entity; weapons degrade -0.01 durability per attack and award item XP; armor awards item XP when wearer is hit; wizard spells award item XP per cast
+- AttributeError fix: `getattr`/`hasattr` guards for legacy entities in save that lack new attrs
+
+**Crash during first run attempt:** `AttributeError: 'Entity' object has no attribute 'item_durability'` — entities from pre-existing save loaded correctly via save_load.py but some entities created mid-session lacked the new attr from old in-memory state. Fixed with guards before second run.
+
+**Run stats:** Tick 54628→66233 (CONTINUE). ~213s. Clean shutdown.
+
+**Population (tick 64500):**
+- alive=1183, spawned_this_session=110
+- death_counts: {combat:54, dehydration:36, other:1}
+
+**Level distribution (tick 63300):**
+- L1=1153, L2=7, L3=6 (total 1166)
+- Entity samples show XP IS accumulating: BANDIT id=960 level=1.03 (3 XP), FARMER id=159 level=1.11 (11 XP)
+- Rate still slow: ~5–15 XP per session for active entities; need ~100 XP for L2 → 5–10 sessions per entity to level
+
+**Resource health:** both_bars_80pct=669/1166 (57%), health_80pct=681/1166 (58%).
+
+**State histogram (tick 63300):**
+```
+wandering|none: 176   combat+flee: 387/1166 = 33%   wandering|water: 52
+```
+- Combat+flee: **33%** — major improvement from 47% in session 59, 44% in session 58. Flee window tightening (30t, 5 cells) is confirmed working.
+- `wandering|water: 52` — gradually decreasing (58→56→55→52). Zone-exit fix slowly clearing old stale states.
+
+**Integrity:**
+- `keeper_no_target` (type 2): WOLF ids 678, 679 persistent across sessions — these are likely wolves whose assigned keeper_target died or left zone
+- `entity_not_in_subscreen_but_in_subscreen_entities: 178` — same LUMBERJACK 555 recurring
+
+**OBSERVATION:** XP accumulation confirmed working for humanoid NPCs. Progression is slow (~1 level per 5–10 sessions), which matches the "slowly leveling over time" goal. The level distribution is not yet showing a clear gradient because: (a) most entities start at L1/0 XP each session from new spawns, (b) entities die before reaching L2, (c) the 100-XP threshold is significant relative to current action frequency.
+
+**OBSERVATION:** item_xp/item_durability system running without errors. No level-up events logged for items yet (expected — weapons need 100 combat attacks).
+
+---
+
+## Session 60 — 2026-03-26 (zone-exit resource target_type clear)
+
+**Fixes applied before this run:**
+- Clear `target_type`/`current_target`/`ai_state` to wandering on successful zone transition when `target_type` is food/water (`ai/movement.py:559`)
+
+**Run stats:** Tick 42720→54628 (CONTINUE). ~213s. Clean shutdown.
+
+**Population (latest snapshot, tick 51420):**
+- alive=1035, spawned_this_session=211
+- death_counts: {combat:58, dehydration:34} — no starvation deaths
+
+**Level distribution (tick 54120):**
+- L1=1053, L2=9, L3=6, L5=1 (total 1069)
+- Still only ~1.5% of population above L1. No humanoid leveling from activity observed.
+
+**Resource health:** both_bars_80pct=678/1069 (63%), health_80pct=664/1069 (62%). Consistent with prior sessions.
+
+**State histogram (tick 54120, total 1069):**
+```
+targeting|hostile: 197   wandering|none: 173   flee|none: 156
+combat|hostile: 146      targeting|water: 58   wandering|water: 56
+idle|hostile: 44         flee|hostile: 33      targeting|keeper_target: 32
+idle|water: 28           targeting|food: 24    wandering|clearing_action: 21
+flee|water: 14           ...
+```
+- Combat+flee: (156+33+146+14+3+3+1)=356+146 = ~47% of population (slightly up from 44% session 59)
+- `wandering|water: 56` unchanged from session 59 (55). Zone-exit fix didn't visibly reduce the cluster yet — likely because entities loaded from save already had stale state; fix prevents new accumulation going forward.
+
+**Integrity:**
+- `keeper_no_target` (type 2): WOLF ids 211, 573, 678, 679, 969, WOLF_double 1259, LUMBERJACK 625 — persistent type-2 keepers with no target across both integrity snapshots
+- `entity_not_in_subscreen_but_in_subscreen_entities: 175` (NEW) — LUMBERJACK 555 in zone -1060,0 has `in_subscreen=False` but is still listed in `subscreen_entities` for that zone. Same flag/data-structure desync as bat animation bug.
+
+**OBSERVATION:** `wandering|water: 56` unchanged. Zone-exit fix prevents new accumulation but pre-existing entities from save carry stale `target_type`. Will clear naturally as entities die and respawn.
+
+**OBSERVATION:** Level distribution stagnant. 1.5% above L1 despite 54k+ ticks of world time. Root cause: XP is only awarded at a few specific call sites (combat hits, rare harvest rolls), not for the full range of NPC actions. Need to award XP for all non-walking actions.
+
+**CONFIRMED BUG:** `entity_not_in_subscreen_but_in_subscreen_entities` — 175 events all pointing to LUMBERJACK 555. Entity exited subscreen but `subscreen_entities` dict was not cleaned up. Cousin of the bat animation rendering bug. Needs subscreen exit path audit.
+
+---
+
+## Session 59 — 2026-03-26 (flee window + enemy radius tightened)
+
+**Fixes applied before this run:**
+- Flee exit: `recently_attacked` window 60→30 ticks; `enemy_nearby` radius 8→5 cells
+
+**Run stats:** Tick 29811→42720 (CONTINUE). ~213s. Clean shutdown.
+
+**Population:**
+- tick 34611: alive=852, deaths={combat:47, dehydration:13}
+- tick 38511: alive=916, deaths={combat:59, dehydration:42}
+- tick 42411: alive=925, deaths={combat:99, dehydration:65, starvation:1}
+
+**Level distribution:**
+- tick 37311: L1=891, L2=12, L3=4 (total 907)
+- tick 41211: L1=907, L2=12, L3=6 (total 925)
+
+L2 count tripled from session 58 (5→12). L3 growing slowly (2→6). Still only TERMITEs leveling from activity (8 level-ups, all TERMITE 1→2/2→3).
+
+**Resource health:** both_bars_80pct=588/925 (64%), health_80pct=595/925 (64%).
+
+**State histogram (tick 41211):**
+```
+targeting|hostile: 161   wandering|none: 146   flee|none: 136
+combat|hostile: 106      wandering|water: 55   targeting|water: 44
+```
+
+Combat+flee states: 403/925 = 44% (down from 48% in session 58). Trend improving slowly.
+
+**Death balance:** combat:99, dehydration:65, starvation:1 — first starvation death. Old age deaths dropped to 0 (short run window).
+
+### OBSERVATION — Humanoid NPCs still not leveling via activity
+
+Level gains are exclusively from TERMITEs because they complete mining actions frequently. Humanoid NPCs have three barriers:
+1. **Combat/flee locks them out of role tasks** (still 44% of population in combat states)
+2. **Role resources may be depleted** — FARMERs need CARROT3, LUMBERJACKs need TREEs; long-running world may have depleted farmland in active zones
+3. **Zone travel XP** should be firing but may not be frequent enough to accumulate 100 XP
+
+### OBSERVATION — `wandering|water` growing (46→55)
+
+Despite target_type clear in wandering handler, water-seeking entities accumulate because new entities keep spawning into water-scarce zones and the zone-exit fallback (`seek_zone_exit`) doesn't clear target_type. Entities cycle: targeting(water)→exit→new zone→targeting(water)→exit... without clearing target_type between cycles.
+
+**Fix planned:** Clear `target_type` in the zone-exit success path when the resource target type is food/water (the entity found no resource in old zone, entering new zone with a fresh start).
+
+---
+
+## Session 58 — 2026-03-26 (hunger overflow fix, continued world)
+
+**Fixes applied before this run:**
+- `save_load.py`: hunger/thirst clamped to [0, max] on load (fixes BLACKSMITH overflow)
+- `entity.py`: `decay_stats()` clamps to [0, max]; `regenerate_health()` clamps fractions to [0, 1]
+- Watchdog: `hunger_exceeds_max` / `thirst_exceeds_max` integrity checks added
+- Save files sanitized
+
+**Run stats:** Tick 19032→29811 (CONTINUE). ~180s. Clean shutdown.
+
+**Population over time:**
+- tick 20532: alive=624, deaths={combat:25, dehydration:9, old_age:1, other:1}
+- tick 24432: alive=714, deaths={combat:53, dehydration:35, old_age:1}
+- tick 28332: alive=783, deaths={combat:79, dehydration:55, old_age:1}
+
+**Resource health:** `both_bars_80pct`=528/760 (69%), `health_80pct`=533/760 (70%). Food/water fixes are holding well — most entities stay fed and hydrated.
+
+**Death balance:** Combat (79) now exceeds dehydration (55). Old age deaths appearing (1). Improving balance.
+
+**Level distribution (tick 27132):** L1=750, L2=5, L3=2, L5=3 — still 98%+ at L1. 8 level-ups this session, ALL TERMITEs.
+
+**State histogram:** `flee|none: 146`, `targeting|hostile: 131`, `combat|hostile: 91` → **368/760 entities (48%) in combat or flee at any given tick.** Peaceful NPCs can't complete role actions when half their ticks go to combat states.
+
+**Integrity:** 5x `entity_not_in_subscreen_but_in_subscreen_entities` — pre-existing issue, not new.
+
+### OBSERVATION — Combat pressure is blocking level gain for humanoid NPCs
+
+TERMITEs are the only entities leveling because they complete mining actions quickly and aren't pulled into combat (they're not targeted by most hostiles). Humanoid NPCs (FARMER, LUMBERJACK, MINER) spend nearly half their time in flee/combat states, meaning they rarely complete enough role actions (harvest, chop, mine) to accumulate 100 XP for L2.
+
+**Primary bottleneck:** Too many hostile entities per zone → peaceful NPCs constantly engage. Need to reduce hostile spawn density or shrink hostile aggro range so friendly NPCs can work without being pulled in.
+
+### OBSERVATION — `wandering|water: 48-49` persists after fix
+
+The `target_type` clear in wandering state reduced this (was 58 at session 56), but 48-49 remain. Entities must be entering `wandering` via a path that bypasses the `elif entity.ai_state == 'wandering':` handler (e.g., directly from targeting state with no tick before the handler runs). Cosmetic — doesn't affect gameplay but obscures histogram signal.
+
+### CONFIRMED — Hunger overflow fully fixed
+
+No `hunger_exceeds_max` integrity events logged. Entity 165 (BLACKSMITH) functioning normally.
+
+---
+
+## Session 57 — 2026-03-26 (level-up restore + continue-save mode)
+
+**Fixes applied before this run:**
+- `level_up_from_activity`: full health/hunger/thirst restore on integer level crossing
+- Zone-exit urgency threshold: 0.6 → 0.4 (entities seek exits earlier when dehydrated)
+- `flee` state: clears `target_type` to prevent stale resource type in histogram
+- Watchdog `ai_state_cycling`: now logs `level_histogram`, `both_bars_80pct`, `health_80pct_count`
+- Auto-debug: always continues from `savegame.json` when it exists (was 50/50)
+- Auto-debug shutdown: also saves to `savegame.json` so next session continues from same world
+
+**Run stats:** Tick 12630→15630 (CONTINUE from Session 56). ~50s extension. Clean shutdown.
+
+**Population (tick 13530):** alive=512, spawned=45 (session-delta), deaths={combat:4, dehydration:2}
+
+**Level-up events:** 8 level-ups logged — all TERMITEs (1→2 and one 2→3). No humanoid NPC level-ups observed. TERMITEs level faster because they complete mining actions more frequently.
+
+**AI state cycling not sampled** — session too short to hit the cycling category.
+
+### CRITICAL BUG FOUND — BLACKSMITH entity hunger=9955/max=100
+
+Entity eid=165 (BLACKSMITH) had `hunger=9955.279` with `max_hunger=100` in the save file. This caused:
+- `regenerate_health()` to compute `h_frac=99.55` → `regen ≈ 7500/tick` → entity invincible
+- HUD bar to render food width at 99× the bar_width, creating a visually massive bar
+
+**Root causes identified:**
+1. `save_load.py` loaded `entity.hunger = entity_data['hunger']` with no cap — bad value from older save persisted
+2. `regenerate_health()` did not clamp `h_frac` to [0, 1] — glitched hunger caused superhuman regen
+3. `decay_stats()` decremented without capping at `max_hunger` — glitched value took thousands of ticks to decay naturally
+
+**Fixes applied immediately after session:**
+- `save_load.py`: `entity.hunger = min(entity.max_hunger, max(0, entity_data['hunger']))` on load
+- `engine/entity.py`: `decay_stats` clamps both values to `[0, max]`; `regenerate_health` clamps fractions to `[0, 1]`
+- Watchdog: new integrity check `hunger_exceeds_max` / `thirst_exceeds_max` (also flags `is_hard_cap` at 9999)
+- Both save files sanitized in-place (entity 165 hunger/thirst reset to max)
+
+---
+
+## Session 56 — 2026-03-26 (spawned counter + stale target_type)
+
+**Fixes applied before this run:**
+- `entities_spawned_total` incremented at all 6 previously missed spawn sites:
+  `spawn_skeleton()`, hostile skeleton spawn, termite spawn, zone-arrival spawn
+  (spawning.py), subscreen enemy spawn (game_core.py), entity transformation (ai/movement.py)
+- `wandering` state now clears `target_type` to stop stale values persisting in histogram
+
+**Run stats:** Tick 12630 (~210s). Clean shutdown.
+
+**Population over time:**
+- tick 1449: alive=159, spawned=205, deaths={combat:20, dehydration:27} → alive+deaths=206 ≈ spawned ✓
+- tick 5349: alive=334, spawned=402, deaths={combat:31, dehydration:36} → 401 ≈ 402 ✓
+- tick 9249: alive=444, spawned=565, deaths={combat:43, dehydration:63} → alive+deaths=550, spawned=565 (15 gap, acceptable)
+
+**ai_state_cycling histogram (tick 11949, 475 alive):**
+```
+wandering|none: 137    targeting|hostile: 60   combat|hostile: 39
+flee|none: 28          flee|hostile: 27        idle|hostile: 26
+targeting|keeper_target: 25   wandering|water: 20   idle|none: 19
+```
+
+**Level distribution (tick 12249, n=200 sampled):** L1=199, L3=1 — completely flat.
+
+**Integrity events:** 2 — `keeper_no_target` for SKELETON_double (id=470) and TRADER (id=538)
+
+### CONFIRMED FIX — spawned counter integrity check passing
+
+alive+deaths ≤ spawned at all three snapshots. Counter is now accurate. Dev screen integrity check will show green.
+
+### CONFIRMED FIX — stale target_type eliminated from wandering
+
+`wandering|none` now 137 (was ~5 before). `wandering|water` dropped from 58 to 20 — most of the remaining 20 are entities that just entered wandering and haven't been processed yet (cleared next tick).
+
+### BUG — Level distribution completely flat
+
+199 of 200 sampled entities at L1, one at L3. Entities almost never gain XP. Likely causes:
+(a) XP only gained at very specific moments (quest completion, kill) and quests aren't completing, or
+(b) XP gain amounts are too small relative to thresholds, or
+(c) entities cycle through states without ever landing the XP-triggering action.
+Needs investigation of `entity.gain_xp()` call sites and XP thresholds.
+
+### BUG — keeper_no_target still fires for SKELETON_double and TRADER
+
+After the type-3 fix, two type-1/2 keepers still fire the integrity check. These entities have `keeper=True` but no `keeper_target` at the sample tick. Likely newly-promoted keepers during the lore assignment cycle that haven't yet had a target assigned. May be a timing issue rather than a true bug — need to confirm by checking if the same entity IDs repeat across consecutive samples or only appear once.
+
+### OBSERVATION — Dehydration still dominant death cause
+
+63 dehydration vs 43 combat. Population still growing rapidly (565 spawned, 106 dead = 84% still alive). Spawn rate likely needs capping or death rates need tuning. Old age deaths = 0, starvation = 0.
+
+---
+
+## Session 55 — 2026-03-26 (zone-exit fallback + death tracking)
+
+**Fixes applied before this run:**
+- `keeper_no_target` integrity check: now skips keeper_type=3 (zone wanderers naturally have no target)
+- Targeting state: food/water miss with urgency≥60% now calls `seek_zone_exit` instead of wandering in place
+- Watchdog `_sample_player`: now logs `death_counts`, `entities_spawned_total`, `entities_alive`
+
+**Run stats:** Tick 10446 (~174s). Clean shutdown.
+
+**Population over time:**
+- tick 1596: alive=162, spawned=93, deaths={dehydration:56, combat:31}
+- tick 5496: alive=331, spawned=126, deaths={dehydration:61, combat:34}
+- tick 9396: alive=389, spawned=157, deaths={dehydration:89, combat:53}
+
+**ai_state_cycling histogram (tick 8196, 373 alive):**
+```
+wandering|water: 58     targeting|hostile: 29   targeting|water: 27
+targeting|keeper_target:21  wandering|clearing_action:21  idle|hostile:20
+targeting|food: 17      idle|keeper_target:13   idle|water:13
+```
+
+**food_behavior (tick 7896):** Only 1 hungry NPC (BLACKSMITH hunger=60/100 targeting keeper). Food fixes working well.
+
+**Integrity events:** 0 (keeper_no_target false positive eliminated)
+
+### CONFIRMED — Death tracking working; dehydration dominant
+
+Death counts are logged correctly. Dehydration is the dominant cause (89 vs 53 combat by tick 9396), starvation=0. This is expected — food fixes from previous session resolved starvation, but water scarcity remains (FARMERs in zones with no water source). Zone-exit fallback should help but may need more time to observe impact.
+
+### BUG — `entities_spawned_total` severely undercounts
+
+At tick 1596: alive=162, deaths=87 → total ever alive ≥249, but `entities_spawned_total`=93. The counter is missing most spawn events. Likely cause: initial `new_game()` entity creation and/or some spawn paths in `spawning.py` that don't hit the 4 incremented sites. Needs full grep of entity creation calls.
+
+### OBSERVATION — `wandering|water: 58` large cluster
+
+58 entities stuck in `wandering` with stale `target_type='water'` — these are entities that couldn't find water in their zone. Zone-exit fix fires at urgency≥60% but many may be below that threshold, or seek_zone_exit may put them into the exit/wander path which shows as `wandering`. The stale `target_type` after transitioning to wandering is also a cosmetic issue — `target_type` should be cleared on wandering transition.
+
+### OBSERVATION — `targeting|keeper_target: 21` persists
+
+Still 21 entities in `targeting|keeper_target`. These may be legitimate (outside range returning to anchor), but the count is higher than expected. Will monitor next session.
+
+---
+
+## Session 54 — PENDING → SUPERSEDED (AI priority cycling + death balance)
+
+**Current dev phase goal:** Tune entity behavior so all three death types occur in
+roughly balanced proportions (starvation ≈ combat ≈ old age), level distribution
+shows a slowly growing tail of L2+ NPCs, and quest completions accumulate steadily.
+Current + dead should always equal all-time spawned total (integrity check).
+
+**Fixes applied before this run:**
+- `_try_adjacent_consume`: probabilistic gate (% missing = chance), checks own cell
+  first so NPCs walking over food fill bar; fills to max_hunger/max_thirst.
+- Targeting state food/water handler: fills to max_hunger/max_thirst (not fixed 40).
+- `find_and_move_to_water`: fills to max_thirst on drink.
+- Keeper score: excluded from candidates when within range (was score=1, could win
+  when entity had nothing else to do).
+- Passive grazers skip cell decay when eating.
+- Swipe animation positioned at attacker cell (was at target cell).
+- Death cause tracking: `death_counts` dict in `game_core.remove_entity`.
+- `entities_spawned_total` counter incremented at all 4 spawn sites in spawning.py.
+- Watchdog: new `ai_state_cycling` category — logs all entities with full priority
+  stack state + histogram of ai_state × target_type combinations.
+- Dev screen: new DEATHS section (starvation/dehydration/combat/old_age/other),
+  spawned total, alive count, and alive+dead≤spawned integrity check.
+
+**Watchdog focus this run:**
+- `watchdog_ai_state_cycling` → `state_histogram`: check for excess idle/wandering
+  with low hunger (should be food or water), or keeper_target dominating when
+  entities should be on quests or role tasks
+- `watchdog_ai_state_cycling` → individual entries: look for entities with
+  `hunger_pct < 0.4` and `target_type` not 'food'; or `keeper_in_range: true` and
+  `target_type = keeper_target`
+- `watchdog_food_behavior`: confirm hungry entities are reaching food cells
+- Dev screen DEATHS section: note starvation vs combat vs old age split each run
+
+**Run stats:** Tick 15461 (~257s). Clean shutdown. Population 268→367→451 over session. 0 deaths logged (death_counts not yet in watchdog at this point). Level distribution flat: L1=191, L2=6-7.
 
 ---
 

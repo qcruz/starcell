@@ -558,6 +558,12 @@ class NpcAiMovementMixin:
                         self.screen_entities[new_screen_key] = []
                     self.screen_entities[new_screen_key].append(entity_id)
 
+                    # Clear stale resource target_type so entity re-evaluates in new zone
+                    if getattr(entity, 'target_type', None) in ('food', 'water'):
+                        entity.target_type = None
+                        entity.current_target = None
+                        entity.ai_state = 'wandering'
+
     def try_entity_screen_crossing(self, entity, new_x, new_y):
         """Seamlessly transition entity to adjacent zone when they walk through an exit corridor.
 
@@ -1162,7 +1168,7 @@ class NpcAiMovementMixin:
         structure_type = structure.get('type', '')
 
         # HOUSE HEALING LOGIC
-        if interior_type == 'HOUSE_INTERIOR':
+        if structure_type == 'HOUSE_INTERIOR':
             # Apply accelerated healing in houses
             if entity.health < entity.max_health:
                 heal_amount = BASE_HEALING_RATE * HOUSE_HEALING_MULTIPLIER
@@ -1186,7 +1192,7 @@ class NpcAiMovementMixin:
                     self.npc_exit_structure(entity)
 
         # CAVE LOGIC (dangerous, no healing)
-        elif interior_type == 'CAVE':
+        elif structure_type == 'CAVE':
             # Caves are dangerous - NPCs should flee if injured
             if entity.health < entity.max_health * 0.5:
                 # Injured in cave - high chance to flee back to surface
@@ -1315,6 +1321,9 @@ class NpcAiMovementMixin:
                                     self.npc_enter_structure(entity, screen_key, check_x, check_y, cell)
                                     return
                     else:
+                        # Animals (non-humanoid) don't enter houses
+                        if not entity.props.get('humanoid', False):
+                            continue
                         # Original random entry for HOUSE, STONE_HOUSE, etc.
                         if random.random() < 0.1:
                             self.npc_enter_structure(entity, screen_key, check_x, check_y, cell)
@@ -1499,6 +1508,7 @@ class NpcAiMovementMixin:
         new_id = self.next_entity_id
         self.next_entity_id += 1
         self.entities[new_id] = new_entity
+        self.entities_spawned_total = getattr(self, 'entities_spawned_total', 0) + 1
 
         if screen_key not in self.screen_entities:
             self.screen_entities[screen_key] = []
@@ -1530,18 +1540,29 @@ class NpcAiMovementMixin:
         entity.world_y = float(entity.y)
 
     def find_closest_food_source(self, entity, screen_key):
-        """Find closest food (cell or entity)"""
-        if screen_key not in self.screens:
-            return None
+        """Find closest food (cell or entity).
 
-        screen = self.screens[screen_key]
-        closest = None
-        closest_dist = float('inf')
-
-        # Get food sources from props
+        When inside a structure, searches the structure grid so APPLE_CRATE
+        and other in-structure food sources are visible to the targeting system.
+        """
         food_sources = entity.props.get('food_sources', [])
         if not food_sources:
             return None
+
+        # Choose the correct grid to search
+        if getattr(entity, 'in_structure', False):
+            struct_key = getattr(entity, 'structure_key', None)
+            grid_obj = (self.structures.get(struct_key)
+                        or self.screens.get(struct_key))
+        else:
+            grid_obj = self.screens.get(screen_key)
+
+        if not grid_obj:
+            return None
+
+        screen = grid_obj
+        closest = None
+        closest_dist = float('inf')
 
         # Check food cells
         for y in range(GRID_HEIGHT):
@@ -1553,8 +1574,8 @@ class NpcAiMovementMixin:
                         closest_dist = dist
                         closest = ('cell', x, y, cell)
 
-        # Check edible entities
-        if screen_key in self.screen_entities:
+        # Check edible entities (overworld only — in-structure entities share subscreen coords)
+        if not getattr(entity, 'in_structure', False) and screen_key in self.screen_entities:
             for other_id in self.screen_entities[screen_key]:
                 if other_id not in self.entities:
                     continue
@@ -1568,21 +1589,36 @@ class NpcAiMovementMixin:
         return closest
 
     def find_closest_water_source(self, entity, screen_key):
-        """Find closest water cell"""
-        if screen_key not in self.screens:
+        """Find closest water source cell matching entity's water_sources list.
+
+        When the entity is inside a structure, searches the structure grid so
+        WATER_TROUGH cells inside houses are visible to the targeting system.
+        """
+        water_sources = entity.props.get('water_sources', ['WATER'])
+
+        # Choose the correct grid to search
+        if getattr(entity, 'in_structure', False):
+            struct_key = getattr(entity, 'structure_key', None)
+            grid_obj = (self.structures.get(struct_key)
+                        or self.screens.get(struct_key))
+        else:
+            grid_obj = self.screens.get(screen_key)
+
+        if not grid_obj:
             return None
 
-        screen = self.screens[screen_key]
+        grid = grid_obj['grid']
         closest = None
         closest_dist = float('inf')
 
         for y in range(GRID_HEIGHT):
             for x in range(GRID_WIDTH):
-                if screen['grid'][y][x] == 'WATER':
+                cell = grid[y][x]
+                if cell in water_sources:
                     dist = abs(x - entity.x) + abs(y - entity.y)
                     if dist < closest_dist:
                         closest_dist = dist
-                        closest = ('cell', x, y, 'WATER')
+                        closest = ('cell', x, y, cell)
 
         return closest
 
@@ -1889,26 +1925,22 @@ class NpcAiMovementMixin:
                     food_x, food_y = closest_food[0], closest_food[1]
                     food_cell = food_identifier
 
-                    # Different food values for different cell sources
-                    if food_cell.startswith('CARROT'):
-                        food_value = 40  # Crops are nutritious
-                    elif food_cell == 'GRASS':
-                        food_value = 20  # Grass is less filling
-                    else:
-                        food_value = 30  # Default
-
-                    entity.eat(food_value)
+                    # Fill hunger to max — eating a food cell is a full meal
+                    entity.eat(entity.max_hunger)
 
                     # Consume the food cell (and not enchanted)
-                    if not self.is_cell_enchanted(food_x, food_y, screen_key):
-                        if screen['grid'][food_y][food_x].startswith('CARROT'):
-                            # Carrots decay to DIRT when eaten
-                            if random.random() < GRASS_DECAY_ON_EAT:  # Use same rate as grass
-                                screen['grid'][food_y][food_x] = 'DIRT'
-                            else:
-                                screen['grid'][food_y][food_x] = 'SOIL'
-                        elif screen['grid'][food_y][food_x] == 'GRASS':
-                            if random.random() < GRASS_DECAY_ON_EAT:  # Now 60% chance
+                    # Passive grazers (non-hostile animals with GRASS food source) never decay cells
+                    _passive_grazer = (not entity.props.get('hostile', False) and
+                                       'GRASS' in entity.props.get('food_sources', []))
+                    if not self.is_cell_enchanted(food_x, food_y, screen_key) and not _passive_grazer:
+                        current_cell = screen['grid'][food_y][food_x]
+                        if current_cell.startswith('CARROT'):
+                            # 50% chance to decay one level; otherwise cell is unchanged
+                            if random.random() < 0.5:
+                                _carrot_decay = {'CARROT3': 'CARROT2', 'CARROT2': 'CARROT1', 'CARROT1': 'SOIL'}
+                                screen['grid'][food_y][food_x] = _carrot_decay.get(current_cell, 'SOIL')
+                        elif current_cell == 'GRASS':
+                            if random.random() < GRASS_DECAY_ON_EAT:
                                 screen['grid'][food_y][food_x] = 'DIRT'
 
                 elif food_category == 'entity':
@@ -1973,7 +2005,7 @@ class NpcAiMovementMixin:
 
             # Drink if adjacent
             if closest_dist <= 1:
-                entity.drink()
+                entity.drink(entity.max_thirst)
                 # Water has chance to decay to dirt when drunk
                 water_x, water_y = closest_water[0], closest_water[1]
                 if not self.is_cell_enchanted(water_x, water_y, screen_key):
@@ -2133,6 +2165,217 @@ class NpcAiMovementMixin:
                     closest_dist = dist
                     closest = ('cell', x, y, cell)
         return closest
+
+    # ══════════════════════════════════════════════════════════════════════
+    # STRUCTURE TRANSITION HELPERS — shelter-seeking and in-structure dispatch
+    # ══════════════════════════════════════════════════════════════════════
+
+    def _npc_seek_shelter(self, entity, screen_key):
+        """Night shelter-seeking: move toward nearest house and enter at high probability."""
+        # Animals don't shelter in houses
+        if not entity.props.get('humanoid', False):
+            return
+        if screen_key not in self.screens:
+            return
+        grid = self.screens[screen_key]['grid']
+
+        # Scan for closest enterable house cell
+        best_dist = 999
+        best_x = best_y = best_cell = None
+        for sy in range(GRID_HEIGHT):
+            for sx in range(GRID_WIDTH):
+                c = grid[sy][sx]
+                if CELL_TYPES.get(c, {}).get('enterable', False) and c not in ('CAVE', 'MINESHAFT'):
+                    d = abs(entity.x - sx) + abs(entity.y - sy)
+                    if d < best_dist:
+                        best_dist = d
+                        best_x, best_y, best_cell = sx, sy, c
+
+        if best_x is None:
+            # No house in zone — use normal low-chance entry as fallback
+            self.try_npc_enter_structure(entity, screen_key)
+            return
+
+        if best_dist <= 1:
+            # Adjacent — 80% chance to enter immediately
+            if random.random() < 0.80:
+                self.npc_enter_structure(entity, screen_key, best_x, best_y, best_cell)
+        else:
+            # Move toward house
+            self.move_toward_position(entity, best_x, best_y, screen_key)
+
+    def npc_seek_shelter(self, entity):
+        """NPCs seek shelter (house/camp) at night and enter idle state when there"""
+        # Already inside a structure — don't scan overworld grid or re-enter
+        if entity.in_structure:
+            return False
+        screen_key = f"{entity.screen_x},{entity.screen_y}"
+        if screen_key not in self.screens:
+            return False
+
+        screen = self.screens[screen_key]
+
+        # Initialize idle state if not present
+        if not hasattr(entity, 'is_idle'):
+            entity.is_idle = False
+
+        # Check for threats - break idle state
+        if entity.is_idle:
+            # Check for hostiles nearby
+            has_threat = False
+            if screen_key in self.screen_entities:
+                for eid in self.screen_entities[screen_key]:
+                    if eid in self.entities:
+                        other = self.entities[eid]
+                        if other.props.get('hostile'):
+                            dist = abs(entity.x - other.x) + abs(entity.y - other.y)
+                            if dist <= 5:  # Threat within 5 cells
+                                has_threat = True
+                                break
+
+            # Break idle if threatened or low resources (nighttime check disabled)
+            if has_threat or entity.hunger < 30 or entity.thirst < 30:
+                entity.is_idle = False
+                return False
+
+            # Stay idle - don't move
+            return True
+
+        # Find nearest shelter (HOUSE preferred, then CAMP)
+        nearest_house = None
+        nearest_camp = None
+        min_house_dist = float('inf')
+        min_camp_dist = float('inf')
+
+        for y in range(GRID_HEIGHT):
+            for x in range(GRID_WIDTH):
+                cell = screen['grid'][y][x]
+                dist = abs(entity.x - x) + abs(entity.y - y)
+
+                if cell == 'HOUSE' and dist < min_house_dist:
+                    min_house_dist = dist
+                    nearest_house = (x, y)
+                elif cell == 'CAMP' and dist < min_camp_dist:
+                    min_camp_dist = dist
+                    nearest_camp = (x, y)
+
+        # Move toward nearest shelter (prefer house)
+        if nearest_house and min_house_dist <= 15:
+            if min_house_dist <= 1:
+                # Adjacent to house — enter it
+                hx, hy = nearest_house
+                self.npc_enter_structure(entity, screen_key, hx, hy, 'HOUSE')
+                entity.is_idle = True
+                return True
+            else:
+                entity.is_idle = False
+                self.move_entity_towards(entity, nearest_house[0], nearest_house[1])
+                return True
+
+        elif nearest_camp and min_camp_dist <= 15:
+            if min_camp_dist <= 2:
+                entity.is_idle = True
+                return True
+            else:
+                entity.is_idle = False
+                self.move_entity_towards(entity, nearest_camp[0], nearest_camp[1])
+                return True
+
+        # No shelter nearby - not idle
+        entity.is_idle = False
+        return False  # No shelter found or too far
+
+    def handle_in_structure_npc(self, entity, entity_id):
+        """Handle all AI logic for an entity that is currently inside a structure.
+
+        Decides whether to exit (day/night rules, overcrowding, combat urgency) and
+        dispatches in-structure behavior (mine, wander, rest).  Returns True so the
+        caller can `return` immediately after — execution must not fall through to
+        overworld AI with stale screen_key.
+        """
+        # Daytime: non-nocturnal NPCs should actively try to exit structures
+        # Nighttime: nocturnal entities should actively try to exit
+        wants_to_exit = False
+
+        if not self.is_night and not entity.props.get('nocturnal', False):
+            # Daytime + not nocturnal = want to be outside working
+            wants_to_exit = True
+        elif self.is_night and entity.props.get('nocturnal', False):
+            # Nighttime + nocturnal = want to be outside hunting
+            wants_to_exit = True
+
+        # Overcrowding: keepers never leave; everyone else may be pushed out
+        # when the structure is too full. Chance = local_pop * 10% per update.
+        if not getattr(entity, 'keeper', False):
+            zone_key = f"{entity.screen_x},{entity.screen_y}"
+            local_pop = len([
+                eid for eid in self.screen_entities.get(zone_key, [])
+                if eid in self.entities and self.entities[eid].is_alive()
+            ])
+            if local_pop > 3 and random.random() < local_pop * 0.10:
+                wants_to_exit = True
+
+        # Hostile entities: emerge from caves at night, shelter during day
+        if entity.props.get('hostile', False):
+            zone_biome = self.screens.get(f"{entity.screen_x},{entity.screen_y}", {}).get('biome', '')
+            if zone_biome == 'CAVE':
+                wants_to_exit = self.is_night   # night → ascend/exit; day → stay
+            else:
+                wants_to_exit = False           # non-cave structures: stay regardless
+
+        # Combat-capable NPCs (guards/warriors) detect nearby hostiles outside and rush to defend
+        if not wants_to_exit and entity.type in ('GUARD', 'WARRIOR') \
+                and entity.structure_key in self.structures:
+            sub = self.structures[entity.structure_key]
+            parent_screen = sub.get('parent_screen')
+            parent_cell = sub.get('parent_cell', (GRID_WIDTH // 2, GRID_HEIGHT // 2))
+            entrance_x, entrance_y = parent_cell
+            overworld_key = (f"{parent_screen[0]},{parent_screen[1]}"
+                             if parent_screen else f"{entity.screen_x},{entity.screen_y}")
+            for oid in self.screen_entities.get(overworld_key, []):
+                if oid in self.entities:
+                    other = self.entities[oid]
+                    # Skip player followers — they are friendly regardless of hostile prop
+                    if oid in getattr(self, 'followers', []):
+                        continue
+                    if other.props.get('hostile', False):
+                        if abs(other.x - entrance_x) + abs(other.y - entrance_y) <= 8:
+                            wants_to_exit = True
+                            break
+
+        _restless_moved = False
+        if wants_to_exit:
+            # Actively move toward exit and leave.
+            # Track position before the call — only use move_npc_toward_structure_exit
+            # as a fallback when try_npc_exit_structure is blocked (both move entity.x/y;
+            # calling both when unblocked causes 2-cell jumps per update → visual flicker).
+            _pre_x, _pre_y = entity.x, entity.y
+            self.try_npc_exit_structure(entity)
+            if entity.in_structure and entity.x == _pre_x and entity.y == _pre_y:
+                # Blocked — try alternative pathfinding
+                self.move_npc_toward_structure_exit(entity)
+        else:
+            # Low chance to exit anyway (restless NPCs)
+            if random.random() < 0.05:
+                _rx, _ry = entity.x, entity.y
+                self.try_npc_exit_structure(entity)
+                _restless_moved = (entity.x != _rx or entity.y != _ry)
+
+        # If still in structure after exit attempt, do structure behavior
+        if entity.in_structure:
+            # Miners mine in caves, peaceful NPCs rest in houses
+            zone_biome = self.screens.get(f"{entity.screen_x},{entity.screen_y}", {}).get('biome', '')
+            if entity.type == 'MINER' and zone_biome == 'CAVE':
+                behavior_config = entity.props.get('behavior_config')
+                if behavior_config:
+                    self.execute_entity_behavior(entity, behavior_config)
+            else:
+                # Rest/wander — skip if restless exit already moved this entity this tick
+                if not _restless_moved and random.random() < 0.1:
+                    self.wander_entity(entity)
+
+        # Always signal that the caller must return — never fall through to overworld AI
+        return True
 
     def _find_closest_any_entity(self, entity, screen_key):
         """Closest entity of any kind (combat_all quest) — never returns self."""

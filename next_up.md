@@ -1,18 +1,17 @@
 # StarCell — Next Up
 
-> Two tiers. Claude works Tier 1 top-to-bottom without asking. Tier 2 items require explicit user sign-off before any code is written — post the item in chat, wait for a clear "go ahead."
-> @qcruz manages additions and order.
->Always start by reviewing committ history for recent updates and changes from others. Reconcile project documentation (implemented features, bug report, roadmap, etc) at the begining and end of each session.
+> @qcruz manages additions and order. Always start by reviewing commit history for recent updates and changes. Reconcile project documentation (implemented features, bug report, roadmap, etc) at the beginning and end of each session.
+
 ---
 
-## Tier 1 — Autonomous
-
-Small additions using existing systems and minimal changes to code.
+- [ ] Enchanted cell interaction popup — when player interacts with an enchanted cell, show a small 2-option popup: left = Decay (shows target decay cell type as a sprite preview), right = Grow (shows target grow cell type as a sprite preview); clicking either transforms the cell to the target type, costs player magic equivalent to a spell cast, and leaves the cell enchanted so it can be interacted with again; cell order for decay/grow targets comes from the cell type masterlist entry for that cell type; lets players freeze and sculpt terrain at a magic cost without breaking the enchantment
+- [ ] Cell type masterlist — create `data/cell_order.md` listing every cell type in the game in ascending order of rarity/resource-cost/ecological complexity: raw terrain (CAVE_WALL, WALL, CLIFF, SAND, DIRT, STONE, COBBLESTONE, WATER, DEEP_WATER) → vegetation (GRASS, SOIL, CARROT1-3, FLOWER, FLOWER_PATTERN1-3, BUSH, CACTUS, TREE1-3) → water features (WELL, DESERT_WELL, WATER_TROUGH) → structures/furniture (CAMP, FLOOR_WOOD, CAVE_FLOOR, PLANKS, WOOD_TABLE, WOOD_CHAIR, BOOKSHELF, BED_BLUE, BED_WHITE, SMALL_POTTED_PLANT, BLUE_MUSHROOM, BARREL, EMPTY_CRATE, APPLE_CRATE, CHEST, OPEN_CHEST, LOCKED_CHEST, FORGE, WATER_TROUGH, WALL) → buildings (HOUSE, STONE_HOUSE) → underground (CAVE, MINESHAFT, STAIRS_DOWN, STAIRS_UP) → special/rare (GRAVESTONE, BROKEN_GRAVESTONE, RUINED_SANDSTONE_COLUMN, IRON_ORE, SOIL, BED variants). Include for each entry: label, decay target, grow target, harvest item (if any), notes on rarity/role. This list feeds loot tables, crafting tiers, quest rewards, shop inventories, and the enchanted-cell grow/decay system.
+- [ ] Resource and NPC behavior balancing pass — review hunger/thirst drain rates, food spawn density, carrot growth rates, passive adjacent consume thresholds; observe NPCs finding food in practice and tune so entities are rarely at critical hunger in a normal zone with carrots/grass present; also review water access near wells and WATER cells
 
 - [ ] Status effects as a first-class system — add `entity.status_effects = {effect: ticks_remaining}` dict and `tick_status_effects()` pass; wire poisoned/burning/cold/bleeding as entries; replaces per-site hacks and unlocks The Hunger poison water, fire cells, and bleed-on-hit as one-liners
 - [ ] Player reputation ripple effects — hostile NPCs in a zone flee when player reputation exceeds threshold; traders offer 10–20% discount at high rep; zone Keeper greets player by name once rep threshold crossed; no new UI, condition checks on existing paths only
 - [ ] Zone memory / history scars — after any zone with >10 entity deaths, leave persistent marks: scorched tile variants, non-decaying bone piles, zone name suffix ("the Blighted"); pipe LoreEngine zone-death counts into visible cell state
-- [ ] Item durability — `durability` field on equipped items, decremented on each hit; at 0 breaks to `broken_<item>` junk; creates constant economic pressure that makes blacksmith and crafting feel necessary; repair recipes already handled by crafting system
+- [ ] Item durability (extend) — base system implemented (weapon damage bonus 0.75→0, −0.01/attack; armor/spell XP; item_levels via gain_item_xp); next: add `broken_<item>` on durability=0; repair recipes; blacksmith repair interaction; UI badge showing item level and durability bar
 - [ ] Day/night NPC faction shift — at night guards patrol instead of idle, farmers shelter, bandits become aggressive even in neutral zones; one `self.is_night` condition check added to faction behavior dispatch
 - [ ] Wandering merchant caravan — TRADER NPC spawns at world edge once every N days, travels a path through several zones, despawns at far edge; carries rare items not in normal loot tables; wires existing travel behavior, trader inventory, and zone transition system
 - [ ] Boss concept: The Silence — a zone that has gone completely quiet (no spawns, no ambient, no growth); one ancient high-HP entity inside that ignores the player for ~60 ticks, then pursues zone-to-zone until killed; zero new systems, purely tuned pursuit AI and a suppressed spawn rate flag
@@ -33,8 +32,8 @@ Small additions using existing systems and minimal changes to code.
 
 - [ ] More sprites, cells, NPCs, and biomes
 
-- [ ] Skeleton doubles (and all doubles) need to process the same as their single counterparts (skeelton doubles should take constant damage during the day while outside)
-- [ ] Double entities should have a chance to split back in to singles every update tick if NPC population is low enough. Split inventory, levels, quest, etc randomly for now.
+- [ ] Skeleton doubles (and all doubles) need to process the same as their single counterparts (skeleton doubles should take constant damage during the day while outside)
+- [ ] Double entities should have a chance to split back into singles every update tick if NPC population is low enough. Split inventory, levels, quest, etc randomly for now.
 - [ ] Hard cap on total number of same entity in zone - if more than 15 of the same entity type in zone, single or double, singles get 'absorbed' into doubles automatically - double entity gets level increase.
 - [ ] Add a few random items to barrels as well, picked up when interacted (same handling as chests, but lower quality loot table)
 - [ ] When player drops items on a chest cell, they should move to the chest inventory
@@ -45,7 +44,8 @@ Small additions using existing systems and minimal changes to code.
 - [ ] Add spell energy cost — spells draw from energy pool; drain health if insufficient
 - [ ] Add poisoned status effect — HP drain per tick; cured by antidote or milk
 - [ ] Add burning status effect — HP drain per tick; spreads to adjacent flammable cells
-- [ ] Add cold status effect — immobile for duration;
+- [ ] Add cold status effect — immobile for duration
+- [ ] Fix subscreen desync — `entity_not_in_subscreen_but_in_subscreen_entities` growing each session (178→280); entity `in_subscreen` flag is cleared but entity ID remains in `subscreen_entities` dict; audit all `npc_exit_structure` and `handle_in_structure_npc` exit paths to ensure `subscreen_entities[key].remove(entity_id)` is called on every exit
 - [ ] Remove dead debug prints outside autopilot.py and debug/
 - [ ] Add named villains — LoreEngine occasionally designates a high-level hostile NPC with unique stat boost and artifact drop
 - [ ] Wire higher NPC level → reduced hostile raid chance in zone and reduced structure destruction probability
@@ -55,32 +55,19 @@ Small additions using existing systems and minimal changes to code.
 - [ ] Audit monolith methods extracted to mixins — remove duplicates from game_core.py and npc_ai.py
 - [ ] Consolidate functionality — code cleanup pass
 
----
-
-## Tier 2 — Needs Explicit Approval
-
-Post the item in chat before starting. Wait for a clear "go ahead." These introduce new entity types, structure types, UI systems, or world generation systems that require design decisions.
-
-### New Entity Types
-
-### New Structure Types
-- [ ] chance for stone house to become fort or belltower - fort spawns traveling soldiers (agressive) of the local faction, belltower spawns guards (relaxed, protect zone)
-- [ ] Add Tavern structure — NPC gathering point; rest/time-skip; Tavernkeeper quests, spawn 1-2 'adventurer NPCs (start off with hogh player favorability, will follow player from level 1, low follower energy cost (~30 energy reduction while following)).
-- [ ] Add Blacksmith structure — dedicated smithing building; forge enables higher level weapons and echanted weapons.
+- [ ] chance for stone house to become fort or belltower - fort spawns traveling soldiers (aggressive) of the local faction, belltower spawns guards (relaxed, protect zone)
+- [ ] Add Tavern structure — NPC gathering point; rest/time-skip; Tavernkeeper quests, spawn 1-2 adventurer NPCs (start off with high player favorability, will follow player from level 1, low follower energy cost (~30 energy reduction while following))
+- [ ] Add Blacksmith structure — dedicated smithing building; forge enables higher level weapons and enchanted weapons
 - [ ] Add Crypt structure — sealed underground zone; undead spawns; Vampire or Lich boss room at depth
 - [ ] Add Temple/Shrine structure — visit grants buff; Identify curse; unique quest giver
-- [ ] Add Ancient Ruins structure type — crumbling zone; Golem and Mechanica guardians;
+- [ ] Add Ancient Ruins structure type — crumbling zone; Golem and Mechanica guardians
 - [ ] Add Library/Archive structure — Wizard Keeper; Tome items teach rare spells; ghost scholar guards
 - [ ] Add oasis structure to desert zones — water source cell cluster in desert; NPCs and animals seek it
 - [ ] Add waypoint stone structure — player teleports between owned waypoints; significant time passes on use
 - [ ] Add barn/pen structure — houses livestock; prevents animal wandering
-
-### New UI Systems
 - [ ] Add world map view — zoomed-out explored zone overlay with names and faction colors
 - [ ] Add achievement system — milestone tracking; HUD notification on unlock
-
-### New World and Game Systems
-- [ ] Expand Keeper system - keeper types include different distance ranges and ties to cell, NPC, or item.
+- [ ] Expand Keeper system - keeper types include different distance ranges and ties to cell, NPC, or item
 - [ ] Add quest assignment - some NPCs can be given quest from player quest inventory, will then pursue quest target
 - [ ] Add foraging spawns — wild mushrooms, berries, herbs in forest and cave zones; biome rules
 - [ ] Add NPC daily schedules — field at dawn, tavern at evening, temple on rest days

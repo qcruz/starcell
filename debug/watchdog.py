@@ -33,7 +33,7 @@ from debug.fixes import fix_entity_subscreen_flag
 
 
 class Watchdog:
-    CATEGORIES = ['entities', 'cells', 'zones', 'player', 'structures', 'followers', 'npc_actions', 'keepers', 'npc_quests', 'inventory_state', 'favor']
+    CATEGORIES = ['entities', 'cells', 'zones', 'player', 'structures', 'followers', 'npc_actions', 'keepers', 'npc_quests', 'inventory_state', 'favor', 'food_behavior', 'ai_state_cycling']
     SAMPLE_INTERVAL   = 300    # ticks between cycles (~5 s at 60 fps)
     MAX_ENTRIES_PER_SAMPLE = 200  # max JSON entries per category per cycle
     BACKUP1_INTERVAL  = 3600   # ~60 s at 60 fps
@@ -61,17 +61,19 @@ class Watchdog:
         self._category_index += 1
 
         _SAMPLERS = {
-            'entities':        self._sample_entities,
-            'cells':           self._sample_cells,
-            'zones':           self._sample_zones,
-            'player':          self._sample_player,
-            'structures':      self._sample_structures,
-            'followers':       self._sample_followers,
-            'npc_actions':     self._sample_npc_actions,
-            'keepers':         self._sample_keepers,
-            'npc_quests':      self._sample_npc_quests,
-            'inventory_state': self._sample_inventory_state,
-            'favor':           self._sample_favor,
+            'entities':         self._sample_entities,
+            'cells':            self._sample_cells,
+            'zones':            self._sample_zones,
+            'player':           self._sample_player,
+            'structures':       self._sample_structures,
+            'followers':        self._sample_followers,
+            'npc_actions':      self._sample_npc_actions,
+            'keepers':          self._sample_keepers,
+            'npc_quests':       self._sample_npc_quests,
+            'inventory_state':  self._sample_inventory_state,
+            'favor':            self._sample_favor,
+            'food_behavior':    self._sample_food_behavior,
+            'ai_state_cycling': self._sample_ai_state_cycling,
         }
         _SAMPLERS[category](tick, game)
 
@@ -261,6 +263,9 @@ class Watchdog:
             'trader_display': bool(getattr(game, 'trader_display', None)),
             'inspected_npc': getattr(game, 'inspected_npc', None),
             'ap_input_queue_len': len(getattr(game, '_ap_input_queue', [])),
+            'death_counts': dict(getattr(game, 'death_counts', {})),
+            'entities_spawned_total': getattr(game, 'entities_spawned_total', 0),
+            'entities_alive': len(game.entities),
         })
         # Stagnation check: flag if proxy grid hasn't changed since last player sample
         if proxy_pos and getattr(game, 'autopilot', False):
@@ -469,12 +474,15 @@ class Watchdog:
             })
 
             # Integrity: flag keepers with no target reference
-            if not kt:
+            # Type 3 = zone wanderer; naturally has no target — skip false positive
+            _ktype = getattr(entity, 'keeper_type', None)
+            if not kt and _ktype in (1, 2):
                 self.bug_catcher.log({
                     'tick': tick, 'category': 'watchdog_integrity',
                     'check': 'keeper_no_target',
                     'id': eid, 'type': entity.type,
-                    'note': 'keeper=True but keeper_target is None — still searching or bug',
+                    'keeper_type': _ktype,
+                    'note': 'keeper=True (type 1/2) but keeper_target is None — still searching or bug',
                 })
 
     def _sample_npc_quests(self, tick: int, game) -> None:
@@ -517,6 +525,7 @@ class Watchdog:
                 'quest_focus': getattr(entity, 'quest_focus', None),
                 'quest_queue': [{'type': e.get('type'), 'base': e.get('base')} for e in queue] if queue else None,
                 'quest_target': target_desc,
+                'tasks_completed': getattr(entity, 'tasks_completed', 0),
                 'ai_state': getattr(entity, 'ai_state', None),
                 'keeper': getattr(entity, 'keeper', False),
                 'keeper_type': getattr(entity, 'keeper_type', None),
@@ -572,6 +581,138 @@ class Watchdog:
             'npc_count': len(entries),
             'npcs': entries,
             'inspected_npc': getattr(game, 'inspected_npc', None),
+        })
+
+    def _sample_food_behavior(self, tick: int, game) -> None:
+        """Track hungry NPCs and their food-targeting state across all loaded zones.
+
+        Flags the farmer idle/targeting toggle bug: a FARMER adjacent to a carrot
+        cell that keeps flipping between 'targeting' (food) and 'idle' without eating.
+        """
+        _CARROT_CELLS = {'CARROT1', 'CARROT2', 'CARROT3'}
+        entries = []
+        for eid, entity in game.entities.items():
+            if entity.health <= 0:
+                continue
+            hunger_pct = entity.hunger / max(1, entity.max_hunger)
+            if hunger_pct > 0.6:
+                continue  # Only watch hungry entities
+            screen_key = f"{entity.screen_x},{entity.screen_y}"
+            screen = game.screens.get(screen_key)
+            if not screen:
+                continue
+            grid = screen.get('grid', [])
+            # Find nearest carrot and its distance
+            nearest_carrot = None
+            nearest_dist = float('inf')
+            for dy in range(-3, 4):
+                for dx in range(-3, 4):
+                    nx, ny = entity.x + dx, entity.y + dy
+                    if 0 <= nx < 24 and 0 <= ny < 18:
+                        try:
+                            if grid[ny][nx] in _CARROT_CELLS:
+                                d = abs(dx) + abs(dy)
+                                if d < nearest_dist:
+                                    nearest_dist = d
+                                    nearest_carrot = (nx, ny, grid[ny][nx])
+                        except IndexError:
+                            pass
+            entries.append({
+                'id': eid,
+                'type': entity.type,
+                'zone': screen_key,
+                'grid': [entity.x, entity.y],
+                'hunger': round(entity.hunger, 1),
+                'max_hunger': entity.max_hunger,
+                'hunger_pct': round(hunger_pct, 2),
+                'ai_state': getattr(entity, 'ai_state', None),
+                'target_type': getattr(entity, 'target_type', None),
+                'current_target': getattr(entity, 'current_target', None),
+                'nearest_carrot': nearest_carrot,
+                'nearest_carrot_dist': nearest_dist if nearest_carrot else None,
+                'adjacent_to_food': nearest_dist <= 1 if nearest_carrot else False,
+            })
+        self.bug_catcher.log({
+            'tick': tick,
+            'category': 'watchdog_food_behavior',
+            'hungry_npc_count': len(entries),
+            'npcs': self._trim(tick, 'food_behavior', entries),
+        })
+
+    def _sample_ai_state_cycling(self, tick: int, game) -> None:
+        """Snapshot the full AI priority state for every loaded entity.
+
+        Designed to catch target-type cycling bugs: quest → keeper → special →
+        role → resource.  Logs each entity's current position in the priority
+        stack so bad state (e.g. repeatedly flipping food↔idle, or keeper winning
+        when in range, or quest never firing) shows up across consecutive cycles.
+
+        Also tallies a summary histogram of ai_state × target_type combinations
+        so the session review can spot population-level imbalances at a glance.
+        """
+        entries = []
+        state_hist = {}   # {(ai_state, target_type): count}
+        for eid, entity in game.entities.items():
+            if entity.health <= 0:
+                continue
+            ai_state    = getattr(entity, 'ai_state', None)
+            target_type = getattr(entity, 'target_type', None)
+            key = (ai_state or 'none', target_type or 'none')
+            state_hist[key] = state_hist.get(key, 0) + 1
+
+            h_pct = round(entity.hunger / max(1, entity.max_hunger), 2)
+            t_pct = round(entity.thirst / max(1, entity.max_thirst), 2)
+            entries.append({
+                'id':            eid,
+                'type':          entity.type,
+                'zone':          f"{entity.screen_x},{entity.screen_y}",
+                'level':         round(entity.level, 1),
+                'ai_state':      ai_state,
+                'target_type':   target_type,
+                'current_target':str(getattr(entity, 'current_target', None)),
+                'target_priority': getattr(entity, 'target_priority', None),
+                'hunger_pct':    h_pct,
+                'thirst_pct':    t_pct,
+                'in_combat':     getattr(entity, 'in_combat', False),
+                'quest_focus':   getattr(entity, 'quest_focus', None),
+                'keeper':        getattr(entity, 'keeper', False),
+                'keeper_type':   getattr(entity, 'keeper_type', None),
+                'keeper_in_range': (
+                    getattr(entity, 'keeper', False) and
+                    getattr(entity, 'keeper_target_pos', None) is not None and
+                    (abs(entity.x - entity.keeper_target_pos[0]) +
+                     abs(entity.y - entity.keeper_target_pos[1])) <=
+                    (getattr(entity, 'keeper_type', 3) and 4)
+                ),
+            })
+
+        # Serialise histogram with string keys for JSON
+        hist_serialised = {f"{s}|{t}": c for (s, t), c in
+                           sorted(state_hist.items(), key=lambda x: -x[1])}
+
+        # Health / resource / level summary stats
+        hp_pcts   = [round(e['hunger_pct'], 2) for e in entries]  # reuse entries field names
+        alive     = len(entries)
+        hp_full   = sum(1 for e in entries
+                        if e['hunger_pct'] >= 0.8 and e['thirst_pct'] >= 0.8)
+        level_hist = {}
+        for e in entries:
+            lv = int(e['level'])
+            level_hist[lv] = level_hist.get(lv, 0) + 1
+        health_80_plus = sum(
+            1 for eid, entity in game.entities.items()
+            if entity.health > 0 and entity.health / max(1, entity.max_health) >= 0.8
+        )
+
+        self.bug_catcher.log({
+            'tick':              tick,
+            'category':          'watchdog_ai_state_cycling',
+            'total_alive':       alive,
+            'state_histogram':   hist_serialised,
+            'level_histogram':   {str(k): v for k, v in sorted(level_hist.items())},
+            'both_bars_80pct':   hp_full,
+            'health_80pct_count': health_80_plus,
+            'npcs':              self._trim(tick, 'ai_state_cycling', entries),
         })
 
     def _sample_spiders(self, tick: int, game) -> None:
@@ -702,6 +843,32 @@ class Watchdog:
                     'entity_id': fid,
                     'entity_type': fe.type,
                     'ai_state': getattr(fe, 'ai_state', None),
+                })
+
+        # Check 5: resource values exceeding max (glitch detector)
+        _RESOURCE_HARD_CAP = 9999
+        for eid, entity in game.entities.items():
+            if entity.health <= 0:
+                continue
+            mh = getattr(entity, 'max_hunger', None)
+            mt = getattr(entity, 'max_thirst', None)
+            h  = getattr(entity, 'hunger', 0)
+            t  = getattr(entity, 'thirst', 0)
+            if mh and h > mh + 1:
+                self.bug_catcher.log({
+                    'tick': tick, 'category': 'integrity_anomaly',
+                    'check': 'hunger_exceeds_max',
+                    'entity_id': eid, 'entity_type': entity.type,
+                    'hunger': h, 'max_hunger': mh,
+                    'is_hard_cap': h >= _RESOURCE_HARD_CAP,
+                })
+            if mt and t > mt + 1:
+                self.bug_catcher.log({
+                    'tick': tick, 'category': 'integrity_anomaly',
+                    'check': 'thirst_exceeds_max',
+                    'entity_id': eid, 'entity_type': entity.type,
+                    'thirst': t, 'max_thirst': mt,
+                    'is_hard_cap': t >= _RESOURCE_HARD_CAP,
                 })
 
     # ------------------------------------------------------------------

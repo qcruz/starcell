@@ -14,7 +14,7 @@ from constants import (
     DIRT_TO_GRASS_RATE, GRASS_TO_DIRT_RATE, DIRT_TO_SAND_DROUGHT_RATE,
     GRASS_TO_TREE_RATE, TREE_TO_GRASS_CROWD_RATE,
     SAND_TO_DIRT_WATER_RATE, CACTUS_TO_SAND_DROUGHT_RATE, TREE_TO_GRASS_DROUGHT_RATE,
-    GRASS_TO_FLOWER_RATE, FLOWER_TO_GRASS_RATE,
+    GRASS_TO_FLOWER_RATE, GRASS_TO_FLOWER_PATTERN_RATE, FLOWER_TO_GRASS_RATE,
     WATER_TO_DEEP_WATER_RATE, DEEP_WATER_TO_WATER_RATE,
     WATER_TO_BASE_ISOLATED_RATE, DIRT_TO_FLOWER_WATER_RATE, DIRT_TO_WATER_RAIN_RATE,
     SAND_TO_DIRT_STONE_RATE,
@@ -409,11 +409,17 @@ class CellsMixin:
                         new_grid[y][x] = 'WATER'
                         _ca_rule = 'GRASS_TO_WATER_RAIN_RATE'
 
-                # Flower spread
+                # Flower spread (simple flower near water)
                 elif cell == 'GRASS' and 1 <= flower_count <= 2 and total_water >= 1:
                     if random.random() < min(1.0, GRASS_TO_FLOWER_RATE * _growth):
                         new_grid[y][x] = 'FLOWER'
                         _ca_rule = 'GRASS_TO_FLOWER_RATE'
+
+                # Grass → flower pattern (spontaneous, near water edge)
+                elif cell == 'GRASS' and total_water >= 1 and biome not in ('DESERT', 'MOUNTAINS'):
+                    if random.random() < min(1.0, GRASS_TO_FLOWER_PATTERN_RATE * _growth):
+                        new_grid[y][x] = random.choice(['FLOWER_PATTERN1', 'FLOWER_PATTERN2', 'FLOWER_PATTERN3'])
+                        _ca_rule = 'GRASS_TO_FLOWER_PATTERN_RATE'
 
                 # Flower death (overcrowding or drought)
                 elif cell == 'FLOWER' and (flower_count >= 4 or total_water == 0):

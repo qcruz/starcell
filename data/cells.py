@@ -98,10 +98,10 @@ CELL_TYPES = {
                 'harvest': {'item': 'carrot', 'amount': 1}},
     'CARROT2': {'color': COLORS['CARROT2'], 'label': 'Crt2', 'solid': False,
                 'grows_to': 'CARROT3', 'growth_rate': 0.015,  # 1.5% (was 0.8%, not 4%)
-                'degrades_to': 'GRASS', 'degrade_rate': 0.0001,  # Very slow decay
+                'degrades_to': 'CARROT1', 'degrade_rate': 0.0001,  # Step down, not straight to GRASS
                 'harvest': {'item': 'carrot', 'amount': 2}},
     'CARROT3': {'color': COLORS['CARROT3'], 'label': 'Crt3', 'solid': False,
-                'degrades_to': 'GRASS', 'degrade_rate': 0.00005,  # Very slow decay
+                'degrades_to': 'CARROT2', 'degrade_rate': 0.00005,  # Step down
                 'harvest': {'item': 'carrot', 'amount': 3}},
     'SAND': {'color': COLORS['SAND'], 'label': 'Snd', 'solid': False},
     'COBBLESTONE': {'color': COLORS['COBBLESTONE'], 'label': 'Cob', 'solid': False, 'degrades_to': 'DIRT', 'degrade_rate': 0.00001},  # Very persistent

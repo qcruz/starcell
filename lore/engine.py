@@ -748,7 +748,10 @@ class LoreEngineMixin:
                 quest.target_info = f"Return to {giver_name}"
                 qt_name = QUEST_TYPES.get(quest.quest_type, {}).get('name', quest.quest_type)
                 print(f"NPC quest [{qt_name}] complete! Return to {giver_name} for XP.")
-                self.sound.on_quest_complete()
+                # Tally completions by quest type (no sound — NPC completions are background events)
+                _cbt = getattr(self, 'quests_completed_by_type', {})
+                _cbt[quest.quest_type] = _cbt.get(quest.quest_type, 0) + 1
+                self.quests_completed_by_type = _cbt
 
     def _npc_quest_zone(self, quest):
         """Return the target zone key for a quest, trying all possible sources."""

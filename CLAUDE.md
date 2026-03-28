@@ -24,7 +24,7 @@ The project owner (@qcruz) handles creative direction: roadmap additions, system
 ## Development Loop
 
 ```
-1. Read next_up.md → pick the first unchecked Tier 1 item
+1. Read next_up.md → pick the first unchecked item
 2. Read relevant source files → understand current code
 3. Implement → commit to dev-q-updates
 4. @qcruz reviews dev-q-updates manually
@@ -37,25 +37,20 @@ The project owner (@qcruz) handles creative direction: roadmap additions, system
 
 ---
 
-## Autonomous vs. Approval Rule
+## Work Rule
 
-`next_up.md` has two tiers. This rule governs which tier an item belongs to and what is required before starting.
+`next_up.md` is a single ordered list. Work items top to bottom. @qcruz controls order and additions.
 
-**Tier 1 — Build autonomously:**
-- Small additions to existing systems
-- No new entity types, structure types, or major UI systems
-- Examples: config value changes, wiring existing keys/calls, adding a status effect, porting a method between files, small data additions, code cleanup
-
-**Tier 2 — Requires explicit user approval:**
+**Post in chat before starting any item that introduces:**
 - New entity types (any new entry in ENTITY_TYPES)
 - New structure types (any new zone or subscreen layout)
 - New major UI panels or tabs
 - New world-generation systems
 - New game loops or economy systems (fishing, crafting stations, bounties, etc.)
 
-**Before starting a Tier 2 item:** post the item name in chat and wait for a clear "go ahead" before writing any code. Do not infer approval from roadmap entries or previous conversations.
+Wait for a clear "go ahead" before writing any code on those. Do not infer approval from roadmap entries or previous conversations.
 
-**When adding new items:** Tier 1 items go at the bottom of the Tier 1 list, ordered by scope (smallest first). Tier 2 items go in the appropriate subsection of the Tier 2 list. Far-future or speculative items belong in `roadmap.md` only — do not add them to `next_up.md` until prerequisite systems are in place.
+**When adding new items:** add at the position @qcruz specifies, or at the bottom if unspecified. Far-future or speculative items belong in `roadmap.md` only — do not add them to `next_up.md` until prerequisite systems are in place.
 
 ---
 
@@ -157,7 +152,7 @@ Run a cleanup session every ~5 feature additions or when the codebase shows sign
 |---|---|
 | `main_branch_prep.md` | **Pre-merge checklist for main.** Read before any merge to main. Contains all required code changes, value adjustments, and file removals. |
 | `roadmap.md` | Big-picture feature vision. Owner-maintained. Do not edit during development. |
-| `next_up.md` | Two-tier work list: Tier 1 (autonomous) and Tier 2 (needs approval). Claude reads Tier 1 top to bottom. Owner-maintained. |
+| `next_up.md` | Single ordered work list. Claude works top to bottom. Owner-maintained. |
 | `current_features.md` | Technical implementation notes for completed and in-progress features. No planned items — those belong in `roadmap.md`. |
 | `debug/bug_report.md` | Session-by-session autopilot observations and confirmed bug fixes |
 | `debug/held_back.md` | Issues held back from advancement: 3+ sessions unresolved, adverse impact, or pending code review |
