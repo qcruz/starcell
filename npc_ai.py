@@ -2652,7 +2652,22 @@ class NpcAiMixin:
 
         if not candidates:
             return None
-        return max(candidates, key=candidates.get)
+
+        # If a previous roll is still locked and the type is still a valid candidate, keep it
+        if self.tick < getattr(entity, '_target_type_lock_until', 0):
+            locked = getattr(entity, '_target_type_chosen', None)
+            if locked and locked in candidates:
+                return locked
+
+        # Weighted random roll — scores are used directly as weights
+        types = list(candidates.keys())
+        weights = list(candidates.values())
+        chosen = random.choices(types, weights=weights, k=1)[0]
+
+        entity._target_type_chosen = chosen
+        entity._target_type_lock_until = self.tick + TARGET_LOCK_TICKS
+
+        return chosen
 
     # ── Targeting tier helpers ────────────────────────────────────────────────
 

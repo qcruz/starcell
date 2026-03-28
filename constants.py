@@ -299,7 +299,8 @@ KEEPER_URGENCY_SCALE = {1: 8,  2: 5,  3: 0,  4: 0}   # score added per cell of d
 QUEST_BASE           = 80    # flat score for active assigned/lore quest target
 ROLE_BASE            = 15    # flat score for archetype work (farming, mining, etc.)
 SPECIAL_BASE         = 50    # flat score per eligible special-pool candidate
-SPECIAL_LOCK_TICKS   = 60    # ticks a chosen special target type stays locked
+SPECIAL_LOCK_TICKS   = 60    # ticks a chosen special type stays locked within the special pool
+TARGET_LOCK_TICKS    = 200   # ticks a chosen target type is held before re-rolling
 RESOURCE_BASE        = 100   # max resource score (at 0% remaining); quadratic urgency curve
 
 # Maps quest focus type → role target type for the role tier of targeting.
