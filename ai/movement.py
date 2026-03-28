@@ -2121,17 +2121,13 @@ class NpcAiMovementMixin:
         In-structure: searches the parent overworld zone and returns the
         structure exit as the immediate nav step so the farmer heads out.
         """
-        # ── In-structure: route toward exit if farming work exists in overworld ──
+        # ── In-structure: always route toward exit — farming belongs outside ──
         if getattr(entity, 'in_structure', False) and entity.structure_key:
             struct = (self.structures.get(entity.structure_key)
                       or self.screens.get(entity.structure_key))
             if struct:
-                parent_screen = struct.get('parent_screen')
-                if parent_screen:
-                    ow_key = f"{parent_screen[0]},{parent_screen[1]}"
-                    if self._crop_exists_in_screen(ow_key):
-                        exit_pos = struct.get('exit', (GRID_WIDTH // 2, GRID_HEIGHT // 2))
-                        return ('cell', exit_pos[0], exit_pos[1], 'EXIT')
+                exit_pos = struct.get('exit', (GRID_WIDTH // 2, GRID_HEIGHT // 2))
+                return ('cell', exit_pos[0], exit_pos[1], 'EXIT')
         if screen_key not in self.screens:
             return None
         screen = self.screens[screen_key]
