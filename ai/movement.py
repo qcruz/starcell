@@ -2112,47 +2112,60 @@ class NpcAiMovementMixin:
             return None
         return None
 
-    # ── Quest-focus target finders ────────────────────────────────────────────
+    # ── Role target cell sets ─────────────────────────────────────────────────
+    _CROP_CELLS  = frozenset({'SAND', 'DIRT', 'SOIL', 'GRASS',
+                              'CARROT1', 'CARROT2', 'CARROT3'})
+    _TREE_CELLS  = frozenset({'TREE1', 'TREE2', 'TREE3'})
+    _STONE_CELLS = frozenset({'IRON_ORE', 'STONE', 'CAVE', 'MINESHAFT', 'CAVE_WALL'})
 
-    def _find_closest_crop(self, entity, screen_key):
-        """Closest harvestable crop or workable soil (farming quest).
+    # ── Generic zone-aware role target finder ─────────────────────────────────
 
-        All farmable cell types have equal weight — closest cell wins.
-        In-structure: searches the parent overworld zone and returns the
-        structure exit as the immediate nav step so the farmer heads out.
+    def _scan_grid_nearest(self, entity, screen_key, target_cells):
+        """Return ('cell', x, y, cell_type) for the nearest matching cell, or None."""
+        if screen_key not in self.screens:
+            return None
+        g = self.screens[screen_key]['grid']
+        closest, best_dist = None, float('inf')
+        for y in range(GRID_HEIGHT):
+            for x in range(GRID_WIDTH):
+                if g[y][x] in target_cells:
+                    dist = abs(x - entity.x) + abs(y - entity.y)
+                    if dist < best_dist:
+                        best_dist = dist
+                        closest = ('cell', x, y, g[y][x])
+        return closest
+
+    def _find_role_target_zone_aware(self, entity, screen_key, target_cells):
+        """Zone-aware role target search for all NPC archetypes.
+
+        In structure: skips current zone (interior floors trigger false matches),
+        scans parent overworld only, returns exit position if a target is found.
+        In overworld: scans current zone and returns the closest matching cell.
+        Returns None if no target found in any reachable zone.
         """
-        # ── In-structure: always route toward exit — farming belongs outside ──
         if getattr(entity, 'in_structure', False) and entity.structure_key:
             struct = (self.structures.get(entity.structure_key)
                       or self.screens.get(entity.structure_key))
             if struct:
-                exit_pos = struct.get('exit', (GRID_WIDTH // 2, GRID_HEIGHT // 2))
-                return ('cell', exit_pos[0], exit_pos[1], 'EXIT')
-        if screen_key not in self.screens:
+                parent_screen = struct.get('parent_screen')
+                if parent_screen:
+                    ow_key = f"{parent_screen[0]},{parent_screen[1]}"
+                    if self._scan_grid_nearest(entity, ow_key, target_cells):
+                        exit_pos = struct.get('exit', (GRID_WIDTH // 2, GRID_HEIGHT // 2))
+                        return ('cell', exit_pos[0], exit_pos[1], 'EXIT')
             return None
-        screen = self.screens[screen_key]
-        farmable = {'DIRT', 'SOIL', 'GRASS', 'CARROT1', 'CARROT2', 'CARROT3'}
-        closest, best_dist = None, float('inf')
-        for y in range(GRID_HEIGHT):
-            for x in range(GRID_WIDTH):
-                if screen['grid'][y][x] in farmable:
-                    dist = abs(x - entity.x) + abs(y - entity.y)
-                    if dist < best_dist:
-                        best_dist = dist
-                        closest = ('cell', x, y, screen['grid'][y][x])
-        return closest
+        return self._scan_grid_nearest(entity, screen_key, target_cells)
 
-    def _crop_exists_in_screen(self, screen_key):
-        """Return True if any farmable cell exists in the given screen."""
-        if screen_key not in self.screens:
-            return False
-        g = self.screens[screen_key]['grid']
-        farmable = {'DIRT', 'SOIL', 'GRASS', 'CARROT1', 'CARROT2', 'CARROT3'}
-        for row in g:
-            for cell in row:
-                if cell in farmable:
-                    return True
-        return False
+    # ── Quest-focus target finders ────────────────────────────────────────────
+
+    def _find_closest_crop(self, entity, screen_key):
+        return self._find_role_target_zone_aware(entity, screen_key, self._CROP_CELLS)
+
+    def _find_closest_tree(self, entity, screen_key):
+        return self._find_role_target_zone_aware(entity, screen_key, self._TREE_CELLS)
+
+    def _find_closest_stone(self, entity, screen_key):
+        return self._find_role_target_zone_aware(entity, screen_key, self._STONE_CELLS)
 
     # Cells that peaceful humanoids seek as night shelter.
     # Excludes CAVE/MINESHAFT — those only enter via combat-driven logic.
@@ -2173,39 +2186,6 @@ class NpcAiMovementMixin:
                         closest = ('cell', x, y, g[y][x])
         return closest
 
-    def _find_closest_tree(self, entity, screen_key):
-        """Closest choppable tree (building quest)."""
-        if screen_key not in self.screens:
-            return None
-        screen = self.screens[screen_key]
-        closest, closest_dist = None, float('inf')
-        for y in range(GRID_HEIGHT):
-            for x in range(GRID_WIDTH):
-                if screen['grid'][y][x] in ('TREE1', 'TREE2', 'TREE3'):
-                    dist = abs(x - entity.x) + abs(y - entity.y)
-                    if dist < closest_dist:
-                        closest_dist = dist
-                        closest = ('cell', x, y, screen['grid'][y][x])
-        return closest
-
-    def _find_closest_stone(self, entity, screen_key):
-        """Closest miner target: stone, iron ore, cave, or mineshaft."""
-        if screen_key not in self.screens:
-            return None
-        screen = self.screens[screen_key]
-        closest, closest_dist = None, float('inf')
-        # Priority: ore > stone > cave > mineshaft (lower dist wins within same priority)
-        _priority = {'IRON_ORE': 0, 'STONE': 1, 'CAVE': 2, 'MINESHAFT': 3, 'CAVE_WALL': 4}
-        for y in range(GRID_HEIGHT):
-            for x in range(GRID_WIDTH):
-                cell = screen['grid'][y][x]
-                if cell not in _priority:
-                    continue
-                dist = abs(x - entity.x) + abs(y - entity.y) + _priority[cell] * 0.5
-                if dist < closest_dist:
-                    closest_dist = dist
-                    closest = ('cell', x, y, cell)
-        return closest
 
     # ══════════════════════════════════════════════════════════════════════
     # STRUCTURE TRANSITION HELPERS — shelter-seeking and in-structure dispatch
