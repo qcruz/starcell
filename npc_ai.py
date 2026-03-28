@@ -471,7 +471,7 @@ class NpcAiMixin:
                                            if 0 <= tx < GRID_WIDTH and 0 <= ty < GRID_HEIGHT else '')
                                 if _actual not in _stone_cells:
                                     entity.current_target = None  # Re-find next rock next tick
-                            elif dist == 1 and entity.target_type == 'shelter':
+                            elif dist == 1 and entity.target_type == 'special' and entity._special_target_type == 'shelter':
                                 # Adjacent to shelter — enter immediately (bypass random chance)
                                 self.npc_enter_structure(entity, screen_key, tx, ty,
                                                          entity.current_target[3] if len(entity.current_target) >= 4 else 'HOUSE')
@@ -613,7 +613,7 @@ class NpcAiMixin:
                             behavior_config = entity.props.get('behavior_config')
                             if behavior_config:
                                 self.execute_entity_behavior(entity, behavior_config)
-                        elif entity.target_type == 'clearing_action':
+                        elif entity.target_type == 'special' and entity._special_target_type == 'clearing_action':
                             # Attack adjacent blocking cell — 15% destroy chance, no item drops
                             ct = self._find_clearing_target(entity, screen_key)
                             if ct:
@@ -1634,9 +1634,13 @@ class NpcAiMixin:
             """Translate a target-type string into a concrete current_target value."""
             if ttype == 'quest_target':
                 return self._quest_target_as_current(entity)
-            if ttype in ('food', 'water', 'crop', 'tree', 'stone', 'resource',
-                         'shelter', 'clearing_action', 'chest_dump'):
+            if ttype in ('food', 'water', 'crop', 'tree', 'stone', 'resource'):
                 return self.find_closest_target_by_type(entity, ttype, screen_key)
+            if ttype == 'special':
+                subtype = getattr(entity, '_special_target_type', None)
+                if subtype:
+                    return self.find_closest_target_by_type(entity, subtype, screen_key)
+                return None
             return None
 
         if entity.ai_state == 'idle':
@@ -2625,7 +2629,7 @@ class NpcAiMixin:
         # ── Tier 4: Special (sticky opportunistic pool) ───────────────────────
         special = self._evaluate_special_tier(entity, screen_key)
         if special:
-            candidates[special[0]] = special[1]
+            candidates['special'] = SPECIAL_BASE
 
         # ── Tier 5: Role (archetype work targets) ─────────────────────────────
         role_type = self._evaluate_role_tier(entity, screen_key)
@@ -2809,8 +2813,7 @@ class NpcAiMixin:
         entity._special_target_type = chosen
         entity._special_target_lock = SPECIAL_LOCK_TICKS
         # Shelter at night gets a boosted score so it beats role/resource competition
-        score = SPECIAL_BASE * 2 if chosen == 'shelter' else SPECIAL_BASE
-        return (chosen, score)
+        return (chosen, SPECIAL_BASE)
 
     def _special_condition_met(self, entity, stype, screen_key):
         """Return True if the condition that triggered a special lock is still valid."""
