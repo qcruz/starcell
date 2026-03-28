@@ -471,6 +471,14 @@ class NpcAiMixin:
                                            if 0 <= tx < GRID_WIDTH and 0 <= ty < GRID_HEIGHT else '')
                                 if _actual not in _stone_cells:
                                     entity.current_target = None  # Re-find next rock next tick
+                            elif dist == 1 and entity.target_type == 'shelter':
+                                # Adjacent to shelter — enter immediately (bypass random chance)
+                                self.npc_enter_structure(entity, screen_key, tx, ty,
+                                                         entity.current_target[3] if len(entity.current_target) >= 4 else 'HOUSE')
+                                entity.current_target = None
+                                entity.target_type = None
+                                entity._special_target_type = None
+                                entity._special_target_lock = 0
                             # else dist == 1: adjacent, let state machine handle idle transition
                         elif len(entity.current_target) >= 2 and isinstance(entity.current_target[0], (int, float)):
                             self.move_toward_position(entity, entity.current_target[0], entity.current_target[1], screen_key)
@@ -1617,13 +1625,17 @@ class NpcAiMixin:
         _t_missing = 1.0 - entity.thirst / max(1, entity.max_thirst)
         _survival_urgency = (_h_missing + _t_missing) / 2.0
         _eff_aggr = min(1.0, aggressiveness + _survival_urgency)
+        # Night boost: peaceful overworld NPCs are more likely to pick up shelter target
+        if (self.is_night and not entity.props.get('hostile', False)
+                and not getattr(entity, 'in_structure', False)):
+            _eff_aggr = min(1.0, _eff_aggr + 0.4)
 
         def _resolve_current_target(ttype):
             """Translate a target-type string into a concrete current_target value."""
             if ttype == 'quest_target':
                 return self._quest_target_as_current(entity)
             if ttype in ('food', 'water', 'crop', 'tree', 'stone', 'resource',
-                         'clearing_action', 'chest_dump'):
+                         'shelter', 'clearing_action', 'chest_dump'):
                 return self.find_closest_target_by_type(entity, ttype, screen_key)
             return None
 
@@ -2764,13 +2776,21 @@ class NpcAiMixin:
         if self._find_clearing_target(entity, screen_key):
             candidates.append('clearing_action')
 
+        # shelter: at night, peaceful humanoids seek the nearest house to enter
+        if (self.is_night and not entity.props.get('hostile', False)
+                and not getattr(entity, 'in_structure', False)):
+            if self._find_nearest_shelter(entity, screen_key):
+                candidates.append('shelter')
+
         if not candidates:
             return None
 
         chosen = random.choice(candidates)
         entity._special_target_type = chosen
         entity._special_target_lock = SPECIAL_LOCK_TICKS
-        return (chosen, SPECIAL_BASE)
+        # Shelter at night gets a boosted score so it beats role/resource competition
+        score = SPECIAL_BASE * 2 if chosen == 'shelter' else SPECIAL_BASE
+        return (chosen, score)
 
     def _special_condition_met(self, entity, stype, screen_key):
         """Return True if the condition that triggered a special lock is still valid."""
@@ -2779,6 +2799,11 @@ class NpcAiMixin:
             return inv_count >= 20 and bool(self._find_chest_in_zone(entity, screen_key))
         if stype == 'clearing_action':
             return bool(self._find_clearing_target(entity, screen_key))
+        if stype == 'shelter':
+            return (self.is_night
+                    and not entity.props.get('hostile', False)
+                    and not getattr(entity, 'in_structure', False)
+                    and bool(self._find_nearest_shelter(entity, screen_key)))
         if stype == 'trade':
             return False  # stub
         return False

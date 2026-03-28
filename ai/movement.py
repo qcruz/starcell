@@ -2088,6 +2088,8 @@ class NpcAiMovementMixin:
             return self.find_closest_food_source(entity, screen_key)
         elif target_type == 'water':
             return self.find_closest_water_source(entity, screen_key)
+        elif target_type == 'shelter':
+            return self._find_nearest_shelter(entity, screen_key)
         elif target_type == 'structure':
             return self.find_closest_structure(entity, screen_key)
         elif target_type == 'resource':
@@ -2115,11 +2117,9 @@ class NpcAiMovementMixin:
     def _find_closest_crop(self, entity, screen_key):
         """Closest harvestable crop or workable soil (farming quest).
 
-        Daytime: DIRT is highest priority so farmers actively till the land.
-        Nighttime / harvest mode: ripe carrots first, then soil work.
-        In-structure: searches the parent overworld zone instead and returns
-        the structure exit as the immediate navigation step so the farmer exits
-        toward the work rather than wandering inside.
+        All farmable cell types have equal weight — closest cell wins.
+        In-structure: searches the parent overworld zone and returns the
+        structure exit as the immediate nav step so the farmer heads out.
         """
         # ── In-structure: route toward exit if farming work exists in overworld ──
         if getattr(entity, 'in_structure', False) and entity.structure_key:
@@ -2135,24 +2135,15 @@ class NpcAiMovementMixin:
         if screen_key not in self.screens:
             return None
         screen = self.screens[screen_key]
-        # Day: prioritise DIRT (land to till) → SOIL → harvest → GRASS
-        # Night: ripe carrots first (harvest while sheltered is not an issue)
-        is_day = not getattr(self, 'is_night', False)
-        if is_day:
-            priority = {'DIRT': 0, 'SOIL': 1, 'CARROT3': 2, 'CARROT2': 3, 'GRASS': 4}
-        else:
-            priority = {'CARROT3': 0, 'CARROT2': 1, 'SOIL': 2, 'DIRT': 3, 'GRASS': 4}
-        closest, best_score = None, float('inf')
+        farmable = {'DIRT', 'SOIL', 'GRASS', 'CARROT1', 'CARROT2', 'CARROT3'}
+        closest, best_dist = None, float('inf')
         for y in range(GRID_HEIGHT):
             for x in range(GRID_WIDTH):
-                cell = screen['grid'][y][x]
-                p = priority.get(cell)
-                if p is None:
-                    continue
-                score = abs(x - entity.x) + abs(y - entity.y) + p * 0.1
-                if score < best_score:
-                    best_score = score
-                    closest = ('cell', x, y, cell)
+                if screen['grid'][y][x] in farmable:
+                    dist = abs(x - entity.x) + abs(y - entity.y)
+                    if dist < best_dist:
+                        best_dist = dist
+                        closest = ('cell', x, y, screen['grid'][y][x])
         return closest
 
     def _crop_exists_in_screen(self, screen_key):
@@ -2166,6 +2157,25 @@ class NpcAiMovementMixin:
                 if cell in farmable:
                     return True
         return False
+
+    # Cells that peaceful humanoids seek as night shelter.
+    # Excludes CAVE/MINESHAFT — those only enter via combat-driven logic.
+    _SHELTER_CELLS = frozenset({'HOUSE', 'STONE_HOUSE', 'FORT'})
+
+    def _find_nearest_shelter(self, entity, screen_key):
+        """Return ('cell', x, y, cell_type) for the nearest shelter entrance, or None."""
+        if screen_key not in self.screens:
+            return None
+        g = self.screens[screen_key]['grid']
+        closest, best_dist = None, float('inf')
+        for y in range(GRID_HEIGHT):
+            for x in range(GRID_WIDTH):
+                if g[y][x] in self._SHELTER_CELLS:
+                    dist = abs(x - entity.x) + abs(y - entity.y)
+                    if dist < best_dist:
+                        best_dist = dist
+                        closest = ('cell', x, y, g[y][x])
+        return closest
 
     def _find_closest_tree(self, entity, screen_key):
         """Closest choppable tree (building quest)."""
