@@ -2104,6 +2104,19 @@ class NpcAiMovementMixin:
             return self.find_closest_resource(entity, screen_key)
         elif target_type == 'any_entity':
             return self._find_closest_any_entity(entity, screen_key)
+        elif target_type == 'role':
+            quest_focus = getattr(entity, 'quest_focus', None)
+            priority_list = ROLE_CELL_PRIORITY.get(quest_focus, [])
+            if priority_list:
+                for _ct in priority_list:
+                    _r = self.find_closest_eligible_target(entity, screen_key, [_ct])
+                    if _r:
+                        return _r
+                return None
+            target_list = ROLE_CELL_TARGETS.get(quest_focus, [])
+            if target_list:
+                return self.find_closest_eligible_target(entity, screen_key, target_list)
+            return None
         elif target_type == 'quest_target':
             # Direct passthrough — entity.quest_target is already the resolved target
             return getattr(entity, 'quest_target', None)
@@ -2151,6 +2164,12 @@ class NpcAiMovementMixin:
                 or (screen_key if screen_key in self.structures else None)
 
         if s_key:
+            # Scan the current structure first — e.g. miners finding ore inside a cave.
+            result = _scan(s_key)
+            if result:
+                return result
+            # Nothing in the structure — check parent overworld and return exit position
+            # so the entity can navigate out to reach the target.
             struct = self.structures.get(s_key) or self.screens.get(s_key)
             if struct:
                 parent_screen = struct.get('parent_screen')

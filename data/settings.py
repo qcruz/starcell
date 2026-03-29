@@ -222,6 +222,21 @@ DISTANCE_3_ENTITY_COVERAGE = 0.6    # Update 60% of entities at distance 3+
 NEW_ZONE_INSTANTIATE_CHANCE = 0.05  # 5% chance to instantiate a new random zone per update cycle
 ZONE_SOFT_CAP = 200                 # Overworld zone count above which new instantiation drops sharply
 
+# NPC role targeting — maps quest_focus → eligible target cell/entity types.
+# Used by find_closest_eligible_target and _resolve_current_target.
+ROLE_CELL_TARGETS = {
+    'FARM':   ['SAND', 'DIRT', 'SOIL', 'GRASS', 'CARROT1', 'CARROT2', 'CARROT3'],
+    'LUMBER': ['TREE1', 'TREE2', 'TREE3'],
+    'MINE':   ['STONE', 'IRON_ORE', 'CAVE', 'MINESHAFT'],
+    'GATHER': ['STONE', 'TREE1', 'TREE2', 'IRON_ORE'],
+}
+
+# Priority order for ROLE targeting — tried one type at a time, first found wins.
+# MINE: prefer raw CAVE excavation → IRON_ORE → STONE → MINESHAFT entry.
+ROLE_CELL_PRIORITY = {
+    'MINE': ['CAVE', 'IRON_ORE', 'STONE', 'MINESHAFT'],
+}
+
 # ============================================================================
 # END GAME BALANCE CONFIGURATION
 # ============================================================================

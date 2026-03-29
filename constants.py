@@ -1303,7 +1303,7 @@ ENTITY_TYPES = {
         'max_hunger': 100,
         'max_thirst': 100,
         'strength': 21,
-        'speed': 0.8,
+        'speed': 1.0,
         'food_sources': ['CARROT1', 'CARROT2', 'CARROT3', 'APPLE_CRATE', 'BLUE_MUSHROOM'],
         'water_sources': ['WATER', 'WELL', 'WATER_TROUGH'],
         'hostile': False,
@@ -1321,8 +1321,8 @@ ENTITY_TYPES = {
             'wander_when_idle': True  # Wander between mining
         },
         'ai_params': {
-            'aggressiveness': 0.75,  # High — miners consistently seek rocks/ore/caves
-            'passiveness': 0.10,     # Rarely drops task
+            'aggressiveness': 0.88,  # High — miners consistently seek rocks/ore/caves
+            'passiveness': 0.07,     # Rarely drops task
             'idleness': 0.05,        # Rarely idles
             'flee_chance': 0.65,
             'combat_chance': 0.35,
