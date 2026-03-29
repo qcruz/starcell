@@ -138,6 +138,10 @@ Run a cleanup session every ~5 feature additions or when the codebase shows sign
 - Two methods doing the same thing with slight variations → merge into one with a parameter
 - Parallel data structures that could be one dict → merge
 - Any mixin that is now empty because all its methods were extracted → remove from Game MRO in `main.py`
+- Special-case dispatch blocks that duplicate existing mechanics → remove the special case and extend the general mechanic to cover the edge case
+
+**Architecture principle — unify under the simplest mechanic:**
+The goal is fewest code paths for the most behavior. When a special-case block handles something that a general system already handles almost correctly, the right fix is to extend the general system — not add another branch. Every duplicated code path is future debt: two places to update on each change, two sources of subtle divergence. Concrete example: `handle_in_structure_npc` (ai/movement.py) duplicated day/night exit logic and overcrowding logic that already existed in the state machine and `seek_zone_exit`. The correct fix is to extend `seek_zone_exit` to treat structure exits as zone exits, and add exit-intent conditions directly to `update_entity_ai_state` — then delete `handle_in_structure_npc` entirely. Structures are zones; zone exits are zone exits.
 
 **Do not remove:**
 - The legacy monolith files entirely (extraction is ongoing)
