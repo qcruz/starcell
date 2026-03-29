@@ -980,7 +980,7 @@ class NpcAiMovementMixin:
         # Get or create structure
         interior_type = CELL_TYPES[entrance_type]['interior_type']
 
-        if entrance_type == 'CAVE':
+        if entrance_type in ('CAVE', 'MINESHAFT'):
             # Use unified cave system — key by parent overworld coords, not entity's current
             # coords which may be virtual if entity is already inside a structure
             if entity.in_structure:

@@ -471,15 +471,22 @@ class NpcAiMixin:
                             tx, ty = entity.current_target[1], entity.current_target[2]
                             dist = abs(entity.x - tx) + abs(entity.y - ty)
                             if dist == 0:
-                                if entity.target_type == 'shelter':
-                                    # On the house cell — try to enter directly
-                                    cell_type = entity.current_target[3] if len(entity.current_target) >= 4 else 'HOUSE'
+                                cell_type = entity.current_target[3] if len(entity.current_target) >= 4 else ''
+                                _is_enterable = (
+                                    entity.target_type == 'shelter'
+                                    or (entity.target_type == 'role'
+                                        and cell_type in ('CAVE', 'MINESHAFT')
+                                        and getattr(entity, 'quest_focus', None) == 'MINE')
+                                )
+                                if _is_enterable:
+                                    if not cell_type:
+                                        cell_type = 'HOUSE'
                                     self.npc_enter_structure(entity, screen_key, tx, ty, cell_type)
                                     if entity.in_structure:
                                         entity.current_target = None
                                         entity.target_type = None
                                 else:
-                                    # Walked onto a non-shelter target — clear and wander
+                                    # Walked onto a non-enterable target — clear and wander
                                     entity.quest_target = None
                                     entity.current_target = None
                                     entity.ai_state = 'wandering'
