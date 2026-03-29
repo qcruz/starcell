@@ -475,7 +475,7 @@ class NpcAiMixin:
                                 _is_enterable = (
                                     entity.target_type == 'shelter'
                                     or (entity.target_type == 'role'
-                                        and cell_type in ('CAVE', 'MINESHAFT')
+                                        and cell_type == 'MINESHAFT'
                                         and getattr(entity, 'quest_focus', None) == 'MINE')
                                 )
                                 if _is_enterable:
@@ -504,9 +504,9 @@ class NpcAiMixin:
                                 if _actual not in _stone_cells:
                                     entity.current_target = None  # Re-find next rock next tick
                             elif dist == 1 and entity.target_type == 'role':
-                                # Miners enter MINESHAFT when adjacent; other rock cells handled by behavior_config
+                                # Miners enter MINESHAFT when adjacent; CAVE is mined by behavior_config
                                 cell_type = entity.current_target[3] if len(entity.current_target) >= 4 else ''
-                                if cell_type in ('CAVE', 'MINESHAFT') and getattr(entity, 'quest_focus', None) == 'MINE':
+                                if cell_type == 'MINESHAFT' and getattr(entity, 'quest_focus', None) == 'MINE':
                                     self.npc_enter_structure(entity, screen_key, tx, ty, cell_type)
                                     if entity.in_structure:
                                         entity.current_target = None
