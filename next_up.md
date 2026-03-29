@@ -17,6 +17,7 @@
 - [ ] Boss concept: The Silence — a zone that has gone completely quiet (no spawns, no ambient, no growth); one ancient high-HP entity inside that ignores the player for ~60 ticks, then pursues zone-to-zone until killed; zero new systems, purely tuned pursuit AI and a suppressed spawn rate flag
 - [ ] Boss concept: The Sleeper — deep cave level that looks normal until any item is picked up; massive STONE_GIANT variant wakes and STAIRS_UP becomes blocked by cave-in (CAVE_WALL placed over stair cells); every 30 ticks adds more CAVE_WALL cells, shrinking playable space; player must kill it before the cave collapses; uses existing cave gen + timed cell placement tied to entity alive status
 - [ ] Monolith extraction pass — extract in-structure behavior block from npc_ai.py into ai/movement.py; target ~200-line reduction from monolith before status effects and boss zone work begins
+- [ ] Remove handle_in_structure_npc — unify structure exit under existing zone-exit and state-machine mechanics: extend seek_zone_exit to handle entity.in_structure (structure exit = zone exit), add exit-intent conditions to update_entity_ai_state (day/night × nocturnal, overcrowding, guard hostile detection), remove the handle_in_structure_npc call from update_entity_ai and delete the function; MINER cave behavior falls through naturally via existing role targeting + find_closest_eligible_target structure scan
 - [ ] Review and formalize `dynamic_to_item_conversion` — audit all code paths that convert dynamic follower/entity state to inventory items; ensure consistent naming, cleanup on death, and no stale entries survive between sessions
 - [ ] NPC targeting priority function — replace ad-hoc target selection with a scored priority system; each candidate gets a score based on type (hostile, special, resource, quest target, water, food); NPC picks highest-scoring target; scores tunable per entity type via ai_params
 - [ ] NPC trader targeting and trade system — when NPC inventory is full, NPC seeks nearby chest (existing dump logic) or nearby TRADER; if TRADER is adjacent, NPC trades surplus inventory items for gold; if NPC gold exceeds threshold, buys a random item from the TRADER's inventory
@@ -53,7 +54,7 @@
 - [ ] Port Autopilot AI — keeper use quest-targeting and obstacle-clearing loop; goal matches NPC archetype
 - [ ] Add basic seasonal system — four seasons; season flag used by crop and weather rules
 - [ ] Audit monolith methods extracted to mixins — remove duplicates from game_core.py and npc_ai.py
-- [ ] Consolidate functionality — code cleanup pass
+- [ ] Consolidate functionality — code cleanup pass (see CLAUDE.md Architecture principle for concrete examples and strategy)
 
 - [ ] chance for stone house to become fort or belltower - fort spawns traveling soldiers (aggressive) of the local faction, belltower spawns guards (relaxed, protect zone)
 - [ ] Add Tavern structure — NPC gathering point; rest/time-skip; Tavernkeeper quests, spawn 1-2 adventurer NPCs (start off with high player favorability, will follow player from level 1, low follower energy cost (~30 energy reduction while following))

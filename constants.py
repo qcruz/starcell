@@ -169,9 +169,9 @@ STONE_SAND_TO_DIRT_RATE          = 0.05 * CA_DECAY_RATE  # 0.000005 — sand adj
 
 # Entity Survival
 HUNGER_DECAY_RATE = 0.02        # Base hunger loss per decay call (humanoids get 6× this)
-THIRST_DECAY_RATE = 0.5         # Base thirst loss per decay call — drains in ~200 calls (~half max rain gap)
+THIRST_DECAY_RATE = 0.02        # Base thirst loss per decay call — matches hunger rate
 HUMANOID_DRAIN_MULTIPLIER = 6.0 # Humanoid hunger multiplier
-HUMANOID_THIRST_MULTIPLIER = 2.0 # Humanoid thirst multiplier (2× base — drain in ~100 calls)
+HUMANOID_THIRST_MULTIPLIER = 6.0 # Humanoid thirst multiplier — matches hunger (drain in ~833 calls)
 STARVATION_DAMAGE = 1.0         # HP loss per decay call when hunger==0
 DEHYDRATION_DAMAGE = 1.5        # HP loss per decay call when thirst==0
 BASE_HEALING_RATE = 1.5         # HP regen per tick when fed/hydrated
@@ -290,24 +290,34 @@ NPC_BASE_QUEST = {
 # Type 1 (guard): stands within 1 cell of target — door guard, escort
 # Type 2 (patrol): roams within 5 cells of target — area patrol
 # Type 3 (zone): anchored to zone but no specific target — full-zone roam (default)
-KEEPER_RANGE = {1: 1, 2: 5, 3: None}
+KEEPER_RANGE = {1: 5, 2: 15, 3: None}
 
 # ── NPC targeting priority scoring constants ─────────────────────────────────
 # See ai/targeting_overview.md for full design doc and rationale.
 KEEPER_BASE          = {1: 50, 2: 35, 3: 20, 4: 10}  # base score per keeper type
 KEEPER_URGENCY_SCALE = {1: 8,  2: 5,  3: 0,  4: 0}   # score added per cell of drift past range
-QUEST_BASE           = 80    # flat score for active assigned/lore quest target
-ROLE_BASE            = 40    # flat score for archetype work (farming, mining, etc.)
-SPECIAL_BASE         = 50    # flat score per eligible special-pool candidate
-SPECIAL_LOCK_TICKS   = 60    # ticks a chosen special target type stays locked
-RESOURCE_BASE        = 100   # max resource score (at 0% remaining); quadratic urgency curve
+QUEST_BASE           = 100   # flat score for active assigned/lore quest target
+SHELTER_BASE         = 95    # flat score for night shelter-seeking (humanoid, peaceful, non-nocturnal)
+ROLE_BASE            = 70    # flat score for archetype work (farming, mining, etc.)
+SPECIAL_BASE         = 35    # flat score per eligible special-pool candidate
+SPECIAL_LOCK_TICKS   = 60    # ticks a chosen special type stays locked within the special pool
+TARGET_LOCK_TICKS    = 300   # ticks a chosen target type is held before re-rolling
+RESOURCE_BASE        = 20    # base resource score — kept low; hp_mult provides the real urgency
+MIN_RESOURCE_URGENCY = 0.30  # stat must be below 70% full before food/water enters candidates
 
-# Maps quest focus type → role target type for the role tier of targeting.
-ROLE_TARGET_BY_QUEST = {
-    'FARM':   'crop',
-    'LUMBER': 'tree',
-    'MINE':   'stone',
-    'GATHER': 'resource',
+# Maps quest focus type → list of eligible target cell/entity/item strings.
+# Used by _evaluate_role_tier and find_closest_eligible_target.
+ROLE_CELL_TARGETS = {
+    'FARM':   ['SAND', 'DIRT', 'SOIL', 'GRASS', 'CARROT1', 'CARROT2', 'CARROT3'],
+    'LUMBER': ['TREE1', 'TREE2', 'TREE3'],
+    'MINE':   ['STONE', 'IRON_ORE', 'CAVE', 'MINESHAFT'],
+    'GATHER': ['STONE', 'TREE1', 'TREE2', 'IRON_ORE'],
+}
+
+# Priority order for ROLE targeting — tried one type at a time, first found wins.
+# MINE: prefer to excavate raw CAVE → IRON_ORE → STONE → enter MINESHAFT to go deeper.
+ROLE_CELL_PRIORITY = {
+    'MINE': ['CAVE', 'IRON_ORE', 'STONE', 'MINESHAFT'],
 }
 
 # Cells that clearing_action will NOT attack (structures, furniture, terrain walls).
@@ -593,7 +603,10 @@ CELL_TYPES = {
         'color': COLORS['BLUE_MUSHROOM'],
         'label': 'BMsh',
         'solid': True,
-        'drops': [{'item': 'blue_mushroom', 'amount': 1, 'chance': 1.0}],
+        'drops': [
+            {'item': 'blue_mushroom', 'amount': 1, 'chance': 1.0},
+            {'cell': 'CAVE_FLOOR', 'chance': 1.0},
+        ],
     },
     'BED_BLUE': {
         'color': COLORS['BED_BLUE'],
@@ -1000,7 +1013,7 @@ ENTITY_TYPES = {
         'max_thirst': 100,
         'strength': 13,
         'speed': 1.0,
-        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3', 'APPLE_CRATE'],
+        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3', 'APPLE_CRATE', 'BLUE_MUSHROOM'],
         'water_sources': ['WATER', 'WELL', 'WATER_TROUGH'],
         'hostile': False,
         'humanoid': True,
@@ -1016,9 +1029,9 @@ ENTITY_TYPES = {
             'wander_when_idle': True
         },
         'ai_params': {
-            'aggressiveness': 0.65,  # High — farmers actively seek crops/soil to work
-            'passiveness': 0.15,     # Rarely drops task to wander
-            'idleness': 0.10,        # Takes occasional breaks
+            'aggressiveness': 0.85,  # High — farmers actively seek crops/soil to work
+            'passiveness': 0.10,     # Rarely drops task to wander
+            'idleness': 0.05,        # Takes occasional breaks
             'flee_chance': 0.70,
             'combat_chance': 0.30,
             'target_types': ['food', 'water', 'resource']
@@ -1032,7 +1045,7 @@ ENTITY_TYPES = {
         'max_thirst': 100,
         'strength': 31,
         'speed': 1.2,
-        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3', 'APPLE_CRATE'],
+        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3', 'APPLE_CRATE', 'BLUE_MUSHROOM'],
         'water_sources': ['WATER', 'WELL', 'WATER_TROUGH'],
         'hostile': False,
         'humanoid': True,
@@ -1064,7 +1077,7 @@ ENTITY_TYPES = {
         'max_thirst': 100,
         'strength': 26,
         'speed': 1.2,
-        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3', 'APPLE_CRATE'],
+        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3', 'APPLE_CRATE', 'BLUE_MUSHROOM'],
         'water_sources': ['WATER', 'WELL', 'WATER_TROUGH'],
         'hostile': False,
         'humanoid': True,
@@ -1096,7 +1109,7 @@ ENTITY_TYPES = {
         'max_thirst': 100,
         'strength': 31,
         'speed': 1.2,
-        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3', 'APPLE_CRATE'],
+        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3', 'APPLE_CRATE', 'BLUE_MUSHROOM'],
         'water_sources': ['WATER', 'WELL', 'WATER_TROUGH'],
         'hostile': False,
         'humanoid': True,
@@ -1129,7 +1142,7 @@ ENTITY_TYPES = {
         'max_thirst': 100,
         'strength': 41,
         'speed': 1.0,
-        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3', 'APPLE_CRATE'],
+        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3', 'APPLE_CRATE', 'BLUE_MUSHROOM'],
         'water_sources': ['WATER', 'WELL', 'WATER_TROUGH'],
         'hostile': False,
         'humanoid': True,
@@ -1162,7 +1175,7 @@ ENTITY_TYPES = {
         'max_thirst': 100,
         'strength': 11,
         'speed': 0.8,
-        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3', 'APPLE_CRATE'],
+        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3', 'APPLE_CRATE', 'BLUE_MUSHROOM'],
         'water_sources': ['WATER', 'WELL', 'WATER_TROUGH'],
         'hostile': False,
         'humanoid': True,
@@ -1194,7 +1207,7 @@ ENTITY_TYPES = {
         'max_thirst': 100,
         'strength': 25,
         'speed': 0.7,
-        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3', 'APPLE_CRATE'],
+        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3', 'APPLE_CRATE', 'BLUE_MUSHROOM'],
         'water_sources': ['WATER', 'WELL', 'WATER_TROUGH'],
         'hostile': False,
         'humanoid': True,
@@ -1214,7 +1227,7 @@ ENTITY_TYPES = {
             'aggressiveness': 0.25,  # 25% - focused on crafting
             'passiveness': 0.25,     # 25% - takes breaks
             'idleness': 0.30,        # 30% - often at forge/idle
-            'target_types': ['food', 'water', 'structure']
+            'target_types': ['food', 'water', 'structure', 'resource']
         }
     },
     'WIZARD': {
@@ -1225,7 +1238,7 @@ ENTITY_TYPES = {
         'max_thirst': 100,
         'strength': 13,
         'speed': 1.0,
-        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3', 'APPLE_CRATE'],
+        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3', 'APPLE_CRATE', 'BLUE_MUSHROOM'],
         'water_sources': ['WATER', 'WELL', 'WATER_TROUGH'],
         'hostile': False,
         'humanoid': True,
@@ -1258,7 +1271,7 @@ ENTITY_TYPES = {
         'max_thirst': 100,
         'strength': 19,
         'speed': 0.9,
-        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3', 'APPLE_CRATE'],
+        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3', 'APPLE_CRATE', 'BLUE_MUSHROOM'],
         'water_sources': ['WATER', 'WELL', 'WATER_TROUGH'],
         'hostile': False,
         'humanoid': True,
@@ -1290,8 +1303,8 @@ ENTITY_TYPES = {
         'max_hunger': 100,
         'max_thirst': 100,
         'strength': 21,
-        'speed': 0.8,
-        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3', 'APPLE_CRATE'],
+        'speed': 1.0,
+        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3', 'APPLE_CRATE', 'BLUE_MUSHROOM'],
         'water_sources': ['WATER', 'WELL', 'WATER_TROUGH'],
         'hostile': False,
         'humanoid': True,
@@ -1308,8 +1321,8 @@ ENTITY_TYPES = {
             'wander_when_idle': True  # Wander between mining
         },
         'ai_params': {
-            'aggressiveness': 0.75,  # High — miners consistently seek rocks/ore/caves
-            'passiveness': 0.10,     # Rarely drops task
+            'aggressiveness': 0.88,  # High — miners consistently seek rocks/ore/caves
+            'passiveness': 0.07,     # Rarely drops task
             'idleness': 0.05,        # Rarely idles
             'flee_chance': 0.65,
             'combat_chance': 0.35,
@@ -1325,7 +1338,7 @@ ENTITY_TYPES = {
         'max_thirst': 100,
         'strength': 22,
         'speed': 1.3,
-        'food_sources': [],
+        'food_sources': ['BLUE_MUSHROOM'],
         'water_sources': ['WATER'],
         'hostile': True,
         'humanoid': True,
@@ -1353,7 +1366,7 @@ ENTITY_TYPES = {
         'max_thirst': 100,
         'strength': 13,
         'speed': 1.1,
-        'food_sources': [],
+        'food_sources': ['BLUE_MUSHROOM'],
         'water_sources': ['WATER'],
         'hostile': True,
         'humanoid': True,

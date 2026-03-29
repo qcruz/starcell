@@ -140,6 +140,10 @@ class NpcAiActionsMixin:
                     # Default: turn to GRASS
                     screen['grid'][cy][cx] = 'GRASS'
 
+                # House collapse: eject occupants and drop items when a house is destroyed
+                if cell in ('HOUSE', 'STONE_HOUSE') and screen['grid'][cy][cx] != cell:
+                    self.on_house_collapsed(screen_key, cx, cy)
+
                 # Level-up from activity
                 if not is_player and activity:
                     actor.level_up_from_activity(activity, self)
@@ -458,6 +462,77 @@ class NpcAiActionsMixin:
                         entity.level_up_from_activity('chop', self)
                     return
 
+    def on_house_collapsed(self, screen_key, cell_x, cell_y):
+        """Eject occupants and drop contents when a house cell is destroyed."""
+        px, py = map(int, screen_key.split(','))
+
+        # Find the interior structure linked to this house cell
+        structure_key = None
+        for key, sub in self.structures.items():
+            if (sub.get('parent_screen') == (px, py)
+                    and sub.get('parent_cell') == (cell_x, cell_y)
+                    and sub.get('type') == 'HOUSE_INTERIOR'):
+                structure_key = key
+                break
+        if not structure_key:
+            return
+
+        # Find a walkable ejection point adjacent to where the house was
+        eject_x, eject_y = cell_x, cell_y
+        grid = self.screens.get(screen_key, {}).get('grid', [])
+        for dx, dy in [(0, 1), (1, 0), (-1, 0), (0, -1), (1, 1), (-1, 1), (1, -1), (-1, -1)]:
+            nx, ny = cell_x + dx, cell_y + dy
+            if 0 <= nx < GRID_WIDTH and 0 <= ny < GRID_HEIGHT and grid:
+                if not CELL_TYPES.get(grid[ny][nx], {}).get('solid', False):
+                    eject_x, eject_y = nx, ny
+                    break
+
+        # Eject all entities from the interior
+        for eid in list(self.screen_entities.get(structure_key, [])):
+            if eid not in self.entities:
+                continue
+            entity = self.entities[eid]
+            if structure_key in self.screen_entities and eid in self.screen_entities[structure_key]:
+                self.screen_entities[structure_key].remove(eid)
+            if screen_key not in self.screen_entities:
+                self.screen_entities[screen_key] = []
+            if eid not in self.screen_entities[screen_key]:
+                self.screen_entities[screen_key].append(eid)
+            entity.screen_x, entity.screen_y = px, py
+            entity.x, entity.y = eject_x, eject_y
+            entity.world_x, entity.world_y = float(eject_x), float(eject_y)
+            entity.in_structure = False
+            entity.structure_key = None
+            entity.last_structure_change_tick = self.tick
+            # Collapse damage: 35–50% of max health
+            collapse_dmg = entity.max_health * (0.35 + random.random() * 0.15)
+            entity.take_damage(collapse_dmg, None)
+            entity.target_type = None
+            entity.current_target = None
+            entity.ai_state = 'idle'
+            entity._target_type_lock_until = 0
+
+        # Collect chest contents; 30% of items destroyed immediately
+        all_items = {}
+        chest_contents = getattr(self, 'chest_contents', {})
+        for (cx, cy), _chest_type in self.structures[structure_key].get('chests', {}).items():
+            ck = f"{structure_key}:{cx},{cy}"
+            contents = chest_contents.pop(ck, {})
+            for item, count in contents.items():
+                survive = max(0, int(count * 0.7))
+                if survive > 0:
+                    all_items[item] = all_items.get(item, 0) + survive
+
+        # Drop surviving items at the ejection point
+        if all_items:
+            drop_key = f"{eject_x},{eject_y}"
+            if screen_key not in self.dropped_items:
+                self.dropped_items[screen_key] = {}
+            existing = self.dropped_items[screen_key].get(drop_key, {})
+            for item, count in all_items.items():
+                existing[item] = existing.get(item, 0) + count
+            self.dropped_items[screen_key][drop_key] = existing
+
     def try_mine_rock(self, entity, screen_key):
         """Try to mine nearby rocks (similar to chopping trees)"""
         screen = self.screens[screen_key]
@@ -493,7 +568,7 @@ class NpcAiActionsMixin:
             check_y = entity.y + dy
             if 0 <= check_x < GRID_WIDTH and 0 <= check_y < GRID_HEIGHT:
                 cell = screen['grid'][check_y][check_x]
-                if cell in ('STONE', 'IRON_ORE'):
+                if cell in ('STONE', 'IRON_ORE', 'CAVE'):
                     entity.update_facing_toward(check_x, check_y)
                     entity.trigger_action_animation()
                     self.show_attack_animation(check_x, check_y, entity=entity)
@@ -512,13 +587,26 @@ class NpcAiActionsMixin:
                                     (hasattr(self, 'inventory') and
                                      (self.inventory.has_item('pickaxe') or self.inventory.has_item('stone_pickaxe'))))
 
-                        if cell == 'IRON_ORE':
+                        if cell == 'CAVE':
+                            # Excavate cave entrance → MINESHAFT (high conversion rate)
+                            mineshaft_count = sum(1 for row in screen['grid']
+                                                  for c in row if c == 'MINESHAFT')
+                            if mineshaft_count < MINESHAFT_MAX_PER_ZONE:
+                                screen['grid'][check_y][check_x] = 'MINESHAFT'
+                                if has_tool:
+                                    entity.inventory['stone'] = entity.inventory.get('stone', 0) + 1
+                            else:
+                                screen['grid'][check_y][check_x] = 'STONE'
+                            entity.level_up_from_activity('mine', self)
+                            entity.current_target = None
+                            return
+                        elif cell == 'IRON_ORE':
                             # Mine iron ore → biome base cell
                             if has_tool:
                                 entity.inventory['iron_ore'] = entity.inventory.get('iron_ore', 0) + 1
                             _biome = screen.get('biome', 'FOREST')
                             _base = {'DESERT': 'SAND', 'MOUNTAINS': 'DIRT', 'TUNDRA': 'DIRT',
-                                     'SWAMP': 'DIRT', 'PLAINS': 'GRASS'}.get(_biome, 'GRASS')
+                                     'SWAMP': 'DIRT', 'PLAINS': 'GRASS', 'CAVE': 'CAVE_FLOOR'}.get(_biome, 'GRASS')
                             screen['grid'][check_y][check_x] = _base
                             entity.level_up_from_activity('mine', self)
                         else:
@@ -532,14 +620,35 @@ class NpcAiActionsMixin:
                                 screen['grid'][check_y][check_x] = 'MINESHAFT'
                                 if has_tool:
                                     entity.inventory['stone'] = entity.inventory.get('stone', 0) + 1
-                                print(f"Miner dug a mineshaft at ({check_x}, {check_y})!")
                                 entity.level_up_from_activity('mine', self)
                             else:
-                                # Mine the rock - convert to dirt, give stone only with tool
+                                # Mine the rock - convert to cave floor or dirt
                                 if has_tool:
                                     entity.inventory['stone'] = entity.inventory.get('stone', 0) + 2
-                                screen['grid'][check_y][check_x] = 'DIRT'
+                                _stone_base = 'CAVE_FLOOR' if screen.get('biome') == 'CAVE' else 'DIRT'
+                                screen['grid'][check_y][check_x] = _stone_base
                                 entity.level_up_from_activity('mine', self)
+
+                        # While inside a cave, small chance to dig a deeper passage
+                        if screen.get('biome') == 'CAVE' and random.random() < 0.05:
+                            _cur_depth = self.structures.get(screen_key, {}).get('depth', 1)
+                            if _cur_depth < 3:
+                                _vx, _vy = entity.screen_x, entity.screen_y
+                                _deeper = self.generate_structure_zone(
+                                    _vx, _vy, 'CAVE', check_x, check_y, _cur_depth + 1)
+                                if _deeper:
+                                    # Clear 3x3 around entry point for walkability
+                                    for _cdy in range(-1, 2):
+                                        for _cdx in range(-1, 2):
+                                            _ny = check_y + _cdy
+                                            _nx = check_x + _cdx
+                                            if (0 < _ny < GRID_HEIGHT - 1
+                                                    and 0 < _nx < GRID_WIDTH - 1):
+                                                if screen['grid'][_ny][_nx] not in (
+                                                        'STAIRS_UP', 'CAVE_WALL'):
+                                                    screen['grid'][_ny][_nx] = 'CAVE_FLOOR'
+                                    screen['grid'][check_y][check_x] = 'STAIRS_DOWN'
+
                         # Clear stale target so state machine immediately seeks next rock
                         entity.current_target = None
                     return

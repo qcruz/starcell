@@ -980,7 +980,7 @@ class NpcAiMovementMixin:
         # Get or create structure
         interior_type = CELL_TYPES[entrance_type]['interior_type']
 
-        if entrance_type == 'CAVE':
+        if entrance_type in ('CAVE', 'MINESHAFT'):
             # Use unified cave system — key by parent overworld coords, not entity's current
             # coords which may be virtual if entity is already inside a structure
             if entity.in_structure:
@@ -1027,6 +1027,13 @@ class NpcAiMovementMixin:
         entity.in_structure = True
         entity.structure_key = structure_key
         entity.last_structure_change_tick = self.tick
+
+        # Clear stale targeting state — same cleanup as zone transition
+        entity.target_type = None
+        entity.current_target = None
+        entity.ai_state = 'idle'
+        entity.ai_state_timer = 1
+        entity._target_type_lock_until = 0
 
         # Add entrance cells to memory lane
         if not hasattr(entity, 'memory_lane'):
@@ -1324,8 +1331,9 @@ class NpcAiMovementMixin:
                         # Animals (non-humanoid) don't enter houses
                         if not entity.props.get('humanoid', False):
                             continue
-                        # Original random entry for HOUSE, STONE_HOUSE, etc.
-                        if random.random() < 0.1:
+                        # Shelter-targeting NPCs enter with certainty; others opportunistically
+                        chance = 1.0 if getattr(entity, 'target_type', None) == 'shelter' else 0.1
+                        if random.random() < chance:
                             self.npc_enter_structure(entity, screen_key, check_x, check_y, cell)
                             return
 
@@ -2088,18 +2096,27 @@ class NpcAiMovementMixin:
             return self.find_closest_food_source(entity, screen_key)
         elif target_type == 'water':
             return self.find_closest_water_source(entity, screen_key)
+        elif target_type == 'shelter':
+            return self._find_nearest_shelter(entity, screen_key)
         elif target_type == 'structure':
             return self.find_closest_structure(entity, screen_key)
         elif target_type == 'resource':
             return self.find_closest_resource(entity, screen_key)
-        elif target_type == 'crop':
-            return self._find_closest_crop(entity, screen_key)
-        elif target_type == 'tree':
-            return self._find_closest_tree(entity, screen_key)
-        elif target_type == 'stone':
-            return self._find_closest_stone(entity, screen_key)
         elif target_type == 'any_entity':
             return self._find_closest_any_entity(entity, screen_key)
+        elif target_type == 'role':
+            quest_focus = getattr(entity, 'quest_focus', None)
+            priority_list = ROLE_CELL_PRIORITY.get(quest_focus, [])
+            if priority_list:
+                for _ct in priority_list:
+                    _r = self.find_closest_eligible_target(entity, screen_key, [_ct])
+                    if _r:
+                        return _r
+                return None
+            target_list = ROLE_CELL_TARGETS.get(quest_focus, [])
+            if target_list:
+                return self.find_closest_eligible_target(entity, screen_key, target_list)
+            return None
         elif target_type == 'quest_target':
             # Direct passthrough — entity.quest_target is already the resolved target
             return getattr(entity, 'quest_target', None)
@@ -2110,78 +2127,91 @@ class NpcAiMovementMixin:
             return None
         return None
 
-    # ── Quest-focus target finders ────────────────────────────────────────────
+    def find_closest_eligible_target(self, entity, screen_key, target_list):
+        """Find the nearest target matching any entry in target_list.
 
-    def _find_closest_crop(self, entity, screen_key):
-        """Closest harvestable crop or workable soil (farming quest)."""
+        target_list entries can be cell type strings or entity type strings.
+        Scans the current zone first; if the entity is inside a structure and a
+        match is found in the parent overworld zone, returns the exit position so
+        the NPC navigates out.  Returns None if nothing found.
+        """
+        target_set = frozenset(target_list)
+
+        def _scan(skey):
+            closest, best_dist = None, float('inf')
+            if skey in self.screens:
+                g = self.screens[skey]['grid']
+                for y in range(GRID_HEIGHT):
+                    for x in range(GRID_WIDTH):
+                        if g[y][x] in target_set:
+                            dist = abs(x - entity.x) + abs(y - entity.y)
+                            if dist < best_dist:
+                                best_dist = dist
+                                closest = ('cell', x, y, g[y][x])
+            if skey in self.screen_entities:
+                for eid in self.screen_entities[skey]:
+                    e = self.entities.get(eid)
+                    if e and e is not entity and e.is_alive() and e.type in target_set:
+                        dist = abs(e.x - entity.x) + abs(e.y - entity.y)
+                        if dist < best_dist:
+                            best_dist = dist
+                            closest = eid
+            return closest
+
+        # Determine structure context: prefer entity flag, fall back to screen_key lookup
+        # (entities spawned inside structures may have in_structure=False but correct screen_key)
+        s_key = (entity.structure_key if getattr(entity, 'in_structure', False) else None) \
+                or (screen_key if screen_key in self.structures else None)
+
+        if s_key:
+            # Scan the current structure first — e.g. miners finding ore inside a cave.
+            result = _scan(s_key)
+            if result:
+                return result
+            # Nothing in the structure — check parent overworld and return exit position
+            # so the entity can navigate out to reach the target.
+            struct = self.structures.get(s_key) or self.screens.get(s_key)
+            if struct:
+                parent_screen = struct.get('parent_screen')
+                if parent_screen:
+                    ow_key = f"{parent_screen[0]},{parent_screen[1]}"
+                    if _scan(ow_key):
+                        exit_pos = struct.get('exit', (GRID_WIDTH // 2, GRID_HEIGHT // 2))
+                        return ('cell', exit_pos[0], exit_pos[1], 'EXIT')
+            return None
+
+        return _scan(screen_key)
+
+    # Cells that peaceful humanoids seek as night shelter.
+    # Excludes CAVE/MINESHAFT — those only enter via combat-driven logic.
+    _SHELTER_CELLS = frozenset({'HOUSE', 'STONE_HOUSE', 'FORT'})
+
+    def _find_nearest_shelter(self, entity, screen_key):
+        """Return ('cell', x, y, cell_type) for the nearest shelter entrance, or None."""
         if screen_key not in self.screens:
             return None
-        screen = self.screens[screen_key]
-        closest, best_score = None, float('inf')
-        # Lower priority index = preferred target
-        priority = {'CARROT3': 0, 'CARROT2': 1, 'SOIL': 2, 'GRASS': 3, 'DIRT': 3}
+        g = self.screens[screen_key]['grid']
+        closest, best_dist = None, float('inf')
         for y in range(GRID_HEIGHT):
             for x in range(GRID_WIDTH):
-                cell = screen['grid'][y][x]
-                p = priority.get(cell)
-                if p is None:
-                    continue
-                score = abs(x - entity.x) + abs(y - entity.y) + p * 0.1
-                if score < best_score:
-                    best_score = score
-                    closest = ('cell', x, y, cell)
-        return closest
-
-    def _find_closest_tree(self, entity, screen_key):
-        """Closest choppable tree (building quest)."""
-        if screen_key not in self.screens:
-            return None
-        screen = self.screens[screen_key]
-        closest, closest_dist = None, float('inf')
-        for y in range(GRID_HEIGHT):
-            for x in range(GRID_WIDTH):
-                if screen['grid'][y][x] in ('TREE1', 'TREE2', 'TREE3'):
+                if g[y][x] in self._SHELTER_CELLS:
                     dist = abs(x - entity.x) + abs(y - entity.y)
-                    if dist < closest_dist:
-                        closest_dist = dist
-                        closest = ('cell', x, y, screen['grid'][y][x])
+                    if dist < best_dist:
+                        best_dist = dist
+                        closest = ('cell', x, y, g[y][x])
         return closest
 
-    def _find_closest_stone(self, entity, screen_key):
-        """Closest miner target: stone, iron ore, cave, or mineshaft."""
-        if screen_key not in self.screens:
-            return None
-        screen = self.screens[screen_key]
-        closest, closest_dist = None, float('inf')
-        # Priority: ore > stone > cave > mineshaft (lower dist wins within same priority)
-        _priority = {'IRON_ORE': 0, 'STONE': 1, 'CAVE': 2, 'MINESHAFT': 3, 'CAVE_WALL': 4}
-        for y in range(GRID_HEIGHT):
-            for x in range(GRID_WIDTH):
-                cell = screen['grid'][y][x]
-                if cell not in _priority:
-                    continue
-                dist = abs(x - entity.x) + abs(y - entity.y) + _priority[cell] * 0.5
-                if dist < closest_dist:
-                    closest_dist = dist
-                    closest = ('cell', x, y, cell)
-        return closest
 
     # ══════════════════════════════════════════════════════════════════════
     # STRUCTURE TRANSITION HELPERS — shelter-seeking and in-structure dispatch
     # ══════════════════════════════════════════════════════════════════════
 
-    def _npc_seek_shelter(self, entity, screen_key):
-        """Night shelter-seeking: move toward nearest house and enter at high probability."""
-        # Animals don't shelter in houses
-        if not entity.props.get('humanoid', False):
-            return
+    def _find_closest_shelter(self, entity, screen_key):
+        """Return the nearest enterable house cell as a target tuple, or None if none found."""
         if screen_key not in self.screens:
-            return
+            return None
         grid = self.screens[screen_key]['grid']
-
-        # Scan for closest enterable house cell
-        best_dist = 999
-        best_x = best_y = best_cell = None
+        best_dist, best = float('inf'), None
         for sy in range(GRID_HEIGHT):
             for sx in range(GRID_WIDTH):
                 c = grid[sy][sx]
@@ -2189,20 +2219,8 @@ class NpcAiMovementMixin:
                     d = abs(entity.x - sx) + abs(entity.y - sy)
                     if d < best_dist:
                         best_dist = d
-                        best_x, best_y, best_cell = sx, sy, c
-
-        if best_x is None:
-            # No house in zone — use normal low-chance entry as fallback
-            self.try_npc_enter_structure(entity, screen_key)
-            return
-
-        if best_dist <= 1:
-            # Adjacent — 80% chance to enter immediately
-            if random.random() < 0.80:
-                self.npc_enter_structure(entity, screen_key, best_x, best_y, best_cell)
-        else:
-            # Move toward house
-            self.move_toward_position(entity, best_x, best_y, screen_key)
+                        best = ('cell', sx, sy, c)
+        return best
 
     def npc_seek_shelter(self, entity):
         """NPCs seek shelter (house/camp) at night and enter idle state when there"""
@@ -2323,6 +2341,12 @@ class NpcAiMovementMixin:
             else:
                 wants_to_exit = False           # non-cave structures: stay regardless
 
+        # MINERs in caves: invert day/night — mine during the day, exit at night
+        if entity.type == 'MINER':
+            _miner_biome = self.screens.get(f"{entity.screen_x},{entity.screen_y}", {}).get('biome', '')
+            if _miner_biome == 'CAVE':
+                wants_to_exit = self.is_night   # day → stay and mine; night → ascend
+
         # Combat-capable NPCs (guards/warriors) detect nearby hostiles outside and rush to defend
         if not wants_to_exit and entity.type in ('GUARD', 'WARRIOR') \
                 and entity.structure_key in self.structures:
@@ -2343,39 +2367,33 @@ class NpcAiMovementMixin:
                             wants_to_exit = True
                             break
 
-        _restless_moved = False
         if wants_to_exit:
-            # Actively move toward exit and leave.
-            # Track position before the call — only use move_npc_toward_structure_exit
-            # as a fallback when try_npc_exit_structure is blocked (both move entity.x/y;
-            # calling both when unblocked causes 2-cell jumps per update → visual flicker).
+            # Actively move toward exit — track position to avoid double-move
             _pre_x, _pre_y = entity.x, entity.y
             self.try_npc_exit_structure(entity)
             if entity.in_structure and entity.x == _pre_x and entity.y == _pre_y:
-                # Blocked — try alternative pathfinding
                 self.move_npc_toward_structure_exit(entity)
-        else:
-            # Low chance to exit anyway (restless NPCs)
-            if random.random() < 0.05:
-                _rx, _ry = entity.x, entity.y
-                self.try_npc_exit_structure(entity)
-                _restless_moved = (entity.x != _rx or entity.y != _ry)
+            # Exit was handled — block state machine this tick
+            return True
 
-        # If still in structure after exit attempt, do structure behavior
+        # Low chance to exit anyway (restless NPCs)
+        if random.random() < 0.05:
+            _rx, _ry = entity.x, entity.y
+            self.try_npc_exit_structure(entity)
+            if entity.x != _rx or entity.y != _ry:
+                return True  # Restless exit moved entity — skip state machine
+
+        # MINER in cave: fully handled by behavior_config, not the state machine
         if entity.in_structure:
-            # Miners mine in caves, peaceful NPCs rest in houses
             zone_biome = self.screens.get(f"{entity.screen_x},{entity.screen_y}", {}).get('biome', '')
             if entity.type == 'MINER' and zone_biome == 'CAVE':
                 behavior_config = entity.props.get('behavior_config')
                 if behavior_config:
                     self.execute_entity_behavior(entity, behavior_config)
-            else:
-                # Rest/wander — skip if restless exit already moved this entity this tick
-                if not _restless_moved and random.random() < 0.1:
-                    self.wander_entity(entity)
+                return True
 
-        # Always signal that the caller must return — never fall through to overworld AI
-        return True
+        # Entity stays in structure — let state machine run normally for food/water/behavior
+        return False
 
     def _find_closest_any_entity(self, entity, screen_key):
         """Closest entity of any kind (combat_all quest) — never returns self."""

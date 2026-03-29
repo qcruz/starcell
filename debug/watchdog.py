@@ -779,8 +779,9 @@ class Watchdog:
                         apply=True,
                     )
 
-            # Check 2: in_structure=False but found in a true structure zone
+            # Check 2: in_structure=False but found in a true structure zone — log and fix.
             if not entity_in_structure_flag and eid in entity_in_structures:
+                correct_key = entity_in_structures[eid][0]
                 self.bug_catcher.log({
                     'tick': tick,
                     'category': 'integrity_anomaly',
@@ -789,7 +790,11 @@ class Watchdog:
                     'entity_type': entity.type,
                     'zone': zone_key,
                     'found_in_structures': entity_in_structures[eid],
+                    'fix_applied': True,
+                    'corrected_structure_key': correct_key,
                 })
+                entity.in_structure = True
+                entity.structure_key = correct_key
 
         # Check 3: frozen entities inside structures (ai_state_timer stuck >600 ticks)
         for sub_key in structure_keys:
