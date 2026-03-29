@@ -606,7 +606,7 @@ class NpcAiActionsMixin:
                                 entity.inventory['iron_ore'] = entity.inventory.get('iron_ore', 0) + 1
                             _biome = screen.get('biome', 'FOREST')
                             _base = {'DESERT': 'SAND', 'MOUNTAINS': 'DIRT', 'TUNDRA': 'DIRT',
-                                     'SWAMP': 'DIRT', 'PLAINS': 'GRASS'}.get(_biome, 'GRASS')
+                                     'SWAMP': 'DIRT', 'PLAINS': 'GRASS', 'CAVE': 'CAVE_FLOOR'}.get(_biome, 'GRASS')
                             screen['grid'][check_y][check_x] = _base
                             entity.level_up_from_activity('mine', self)
                         else:
@@ -620,14 +620,35 @@ class NpcAiActionsMixin:
                                 screen['grid'][check_y][check_x] = 'MINESHAFT'
                                 if has_tool:
                                     entity.inventory['stone'] = entity.inventory.get('stone', 0) + 1
-                                print(f"Miner dug a mineshaft at ({check_x}, {check_y})!")
                                 entity.level_up_from_activity('mine', self)
                             else:
-                                # Mine the rock - convert to dirt, give stone only with tool
+                                # Mine the rock - convert to cave floor or dirt
                                 if has_tool:
                                     entity.inventory['stone'] = entity.inventory.get('stone', 0) + 2
-                                screen['grid'][check_y][check_x] = 'DIRT'
+                                _stone_base = 'CAVE_FLOOR' if screen.get('biome') == 'CAVE' else 'DIRT'
+                                screen['grid'][check_y][check_x] = _stone_base
                                 entity.level_up_from_activity('mine', self)
+
+                        # While inside a cave, small chance to dig a deeper passage
+                        if screen.get('biome') == 'CAVE' and random.random() < 0.05:
+                            _cur_depth = self.structures.get(screen_key, {}).get('depth', 1)
+                            if _cur_depth < 3:
+                                _vx, _vy = entity.screen_x, entity.screen_y
+                                _deeper = self.generate_structure_zone(
+                                    _vx, _vy, 'CAVE', check_x, check_y, _cur_depth + 1)
+                                if _deeper:
+                                    # Clear 3x3 around entry point for walkability
+                                    for _cdy in range(-1, 2):
+                                        for _cdx in range(-1, 2):
+                                            _ny = check_y + _cdy
+                                            _nx = check_x + _cdx
+                                            if (0 < _ny < GRID_HEIGHT - 1
+                                                    and 0 < _nx < GRID_WIDTH - 1):
+                                                if screen['grid'][_ny][_nx] not in (
+                                                        'STAIRS_UP', 'CAVE_WALL'):
+                                                    screen['grid'][_ny][_nx] = 'CAVE_FLOOR'
+                                    screen['grid'][check_y][check_x] = 'STAIRS_DOWN'
+
                         # Clear stale target so state machine immediately seeks next rock
                         entity.current_target = None
                     return

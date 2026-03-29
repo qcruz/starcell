@@ -201,7 +201,10 @@ CELL_TYPES = {
         'color': COLORS['BLUE_MUSHROOM'],
         'label': 'BMsh',
         'solid': True,
-        'drops': [{'item': 'blue_mushroom', 'amount': 1, 'chance': 1.0}],
+        'drops': [
+            {'item': 'blue_mushroom', 'amount': 1, 'chance': 1.0},
+            {'cell': 'CAVE_FLOOR', 'chance': 1.0},
+        ],
     },
     'BED_BLUE': {
         'color': (70, 130, 180),

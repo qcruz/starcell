@@ -402,6 +402,16 @@ class CellsMixin:
                         if 1 <= _mush_adj <= 2 and random.random() < min(1.0, 0.8 * CA_GROWTH_RATE * _growth):
                             new_grid[y][x] = 'BLUE_MUSHROOM'
                             _ca_rule = 'CAVE_FLOOR_TO_BLUE_MUSHROOM'
+                        else:
+                            # Cave floor with 3+ solid stone neighbors slowly re-solidifies
+                            _solid_adj = sum(
+                                1 for cdx, cdy in ((0,-1),(0,1),(-1,0),(1,0))
+                                if 0 <= x+cdx < GRID_WIDTH and 0 <= y+cdy < GRID_HEIGHT
+                                and screen['grid'][y+cdy][x+cdx] in ('STONE', 'CAVE_WALL', 'IRON_ORE')
+                            )
+                            if _solid_adj >= 3 and random.random() < min(1.0, 2.0 * CA_GROWTH_RATE * _growth):
+                                new_grid[y][x] = 'STONE'
+                                _ca_rule = 'CAVE_FLOOR_TO_STONE'
 
                 # Grass → Water (rain flooding only)
                 elif cell == 'GRASS' and total_water >= 1 and self.is_raining:
@@ -487,6 +497,14 @@ class CellsMixin:
                     if _mush_all >= 5 and random.random() < min(1.0, 2 * CA_DECAY_RATE * _decay):
                         new_grid[y][x] = 'CAVE_FLOOR'
                         _ca_rule = 'BLUE_MUSHROOM_TO_CAVE_FLOOR'
+
+                # STONE in cave: very slow chance to become IRON_ORE (depth-scaled)
+                elif cell == 'STONE' and biome == 'CAVE':
+                    _cave_depth = self.screens.get(key, {}).get('depth', 1)
+                    _ore_rate = CA_GROWTH_RATE * 0.5 * _cave_depth
+                    if random.random() < min(1.0, _ore_rate * _growth):
+                        new_grid[y][x] = 'IRON_ORE'
+                        _ca_rule = 'STONE_TO_IRON_ORE_CAVE'
 
                 # Base terrain pressure: any GRASS/SAND/DIRT cell with 3+ neighbors of a different
                 # base terrain type has a small chance to convert to that type.

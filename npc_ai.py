@@ -1666,6 +1666,13 @@ class NpcAiMixin:
                 return self.find_closest_target_by_type(entity, ttype, screen_key)
             if ttype == 'role':
                 quest_focus = getattr(entity, 'quest_focus', None)
+                priority_list = ROLE_CELL_PRIORITY.get(quest_focus, [])
+                if priority_list:
+                    for _cell_type in priority_list:
+                        _result = self.find_closest_eligible_target(entity, screen_key, [_cell_type])
+                        if _result:
+                            return _result
+                    return None
                 target_list = ROLE_CELL_TARGETS.get(quest_focus, [])
                 if target_list:
                     return self.find_closest_eligible_target(entity, screen_key, target_list)

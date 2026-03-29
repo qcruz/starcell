@@ -2322,6 +2322,12 @@ class NpcAiMovementMixin:
             else:
                 wants_to_exit = False           # non-cave structures: stay regardless
 
+        # MINERs in caves: invert day/night — mine during the day, exit at night
+        if entity.type == 'MINER':
+            _miner_biome = self.screens.get(f"{entity.screen_x},{entity.screen_y}", {}).get('biome', '')
+            if _miner_biome == 'CAVE':
+                wants_to_exit = self.is_night   # day → stay and mine; night → ascend
+
         # Combat-capable NPCs (guards/warriors) detect nearby hostiles outside and rush to defend
         if not wants_to_exit and entity.type in ('GUARD', 'WARRIOR') \
                 and entity.structure_key in self.structures:
