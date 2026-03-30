@@ -900,7 +900,17 @@ class NpcAiMovementMixin:
                 entity.stuck_counter += 1
 
     def seek_zone_exit(self, entity, entity_id=None):
-        """Make entity move towards nearest zone exit"""
+        """Make entity move towards nearest zone exit.
+
+        Structures are treated as zones — if the entity is inside a structure,
+        the exit is the structure staircase, not an overworld edge.
+        """
+        # Structure exit: same mechanic as overworld zone exit
+        if getattr(entity, 'in_structure', False):
+            self.move_npc_toward_structure_exit(entity)
+            self.try_npc_exit_structure(entity)
+            return
+
         screen_key = f"{entity.screen_x},{entity.screen_y}"
 
         # Warriors with factions: check for coordinated expansion
@@ -2117,6 +2127,15 @@ class NpcAiMovementMixin:
             if target_list:
                 return self.find_closest_eligible_target(entity, screen_key, target_list)
             return None
+        elif target_type == 'travel':
+            # Structure exit: return the exit cell so targeting state navigates there
+            if getattr(entity, 'in_structure', False) and getattr(entity, 'structure_key', None):
+                structure = (self.structures.get(entity.structure_key)
+                             or self.screens.get(entity.structure_key))
+                if structure:
+                    exit_pos = structure.get('exit', (GRID_WIDTH // 2, GRID_HEIGHT // 2))
+                    return ('cell', exit_pos[0], exit_pos[1], 'EXIT')
+            return None
         elif target_type == 'quest_target':
             # Direct passthrough — entity.quest_target is already the resolved target
             return getattr(entity, 'quest_target', None)
@@ -2302,98 +2321,6 @@ class NpcAiMovementMixin:
         # No shelter nearby - not idle
         entity.is_idle = False
         return False  # No shelter found or too far
-
-    def handle_in_structure_npc(self, entity, entity_id):
-        """Handle all AI logic for an entity that is currently inside a structure.
-
-        Decides whether to exit (day/night rules, overcrowding, combat urgency) and
-        dispatches in-structure behavior (mine, wander, rest).  Returns True so the
-        caller can `return` immediately after — execution must not fall through to
-        overworld AI with stale screen_key.
-        """
-        # Daytime: non-nocturnal NPCs should actively try to exit structures
-        # Nighttime: nocturnal entities should actively try to exit
-        wants_to_exit = False
-
-        if not self.is_night and not entity.props.get('nocturnal', False):
-            # Daytime + not nocturnal = want to be outside working
-            wants_to_exit = True
-        elif self.is_night and entity.props.get('nocturnal', False):
-            # Nighttime + nocturnal = want to be outside hunting
-            wants_to_exit = True
-
-        # Overcrowding: keepers never leave; everyone else may be pushed out
-        # when the structure is too full. Chance = local_pop * 10% per update.
-        if not getattr(entity, 'keeper', False):
-            zone_key = f"{entity.screen_x},{entity.screen_y}"
-            local_pop = len([
-                eid for eid in self.screen_entities.get(zone_key, [])
-                if eid in self.entities and self.entities[eid].is_alive()
-            ])
-            if local_pop > 3 and random.random() < local_pop * 0.10:
-                wants_to_exit = True
-
-        # Hostile entities: emerge from caves at night, shelter during day
-        if entity.props.get('hostile', False):
-            zone_biome = self.screens.get(f"{entity.screen_x},{entity.screen_y}", {}).get('biome', '')
-            if zone_biome == 'CAVE':
-                wants_to_exit = self.is_night   # night → ascend/exit; day → stay
-            else:
-                wants_to_exit = False           # non-cave structures: stay regardless
-
-        # MINERs in caves: invert day/night — mine during the day, exit at night
-        if entity.type == 'MINER':
-            _miner_biome = self.screens.get(f"{entity.screen_x},{entity.screen_y}", {}).get('biome', '')
-            if _miner_biome == 'CAVE':
-                wants_to_exit = self.is_night   # day → stay and mine; night → ascend
-
-        # Combat-capable NPCs (guards/warriors) detect nearby hostiles outside and rush to defend
-        if not wants_to_exit and entity.type in ('GUARD', 'WARRIOR') \
-                and entity.structure_key in self.structures:
-            sub = self.structures[entity.structure_key]
-            parent_screen = sub.get('parent_screen')
-            parent_cell = sub.get('parent_cell', (GRID_WIDTH // 2, GRID_HEIGHT // 2))
-            entrance_x, entrance_y = parent_cell
-            overworld_key = (f"{parent_screen[0]},{parent_screen[1]}"
-                             if parent_screen else f"{entity.screen_x},{entity.screen_y}")
-            for oid in self.screen_entities.get(overworld_key, []):
-                if oid in self.entities:
-                    other = self.entities[oid]
-                    # Skip player followers — they are friendly regardless of hostile prop
-                    if oid in getattr(self, 'followers', []):
-                        continue
-                    if other.props.get('hostile', False):
-                        if abs(other.x - entrance_x) + abs(other.y - entrance_y) <= 8:
-                            wants_to_exit = True
-                            break
-
-        if wants_to_exit:
-            # Actively move toward exit — track position to avoid double-move
-            _pre_x, _pre_y = entity.x, entity.y
-            self.try_npc_exit_structure(entity)
-            if entity.in_structure and entity.x == _pre_x and entity.y == _pre_y:
-                self.move_npc_toward_structure_exit(entity)
-            # Exit was handled — block state machine this tick
-            return True
-
-        # Low chance to exit anyway (restless NPCs)
-        if random.random() < 0.05:
-            _rx, _ry = entity.x, entity.y
-            self.try_npc_exit_structure(entity)
-            if entity.x != _rx or entity.y != _ry:
-                return True  # Restless exit moved entity — skip state machine
-
-        # MINER in cave: fully handled by behavior_config, not the state machine
-        if entity.in_structure:
-            zone_biome = self.screens.get(f"{entity.screen_x},{entity.screen_y}", {}).get('biome', '')
-            if entity.type == 'MINER' and zone_biome == 'CAVE':
-                behavior_config = entity.props.get('behavior_config')
-                if behavior_config:
-                    self.execute_entity_behavior(entity, behavior_config)
-                return True
-
-        # Entity stays in structure — let state machine run normally for food/water/behavior
-        return False
 
     def _find_closest_any_entity(self, entity, screen_key):
         """Closest entity of any kind (combat_all quest) — never returns self."""

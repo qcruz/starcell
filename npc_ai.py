@@ -229,12 +229,6 @@ class NpcAiMixin:
             entity.in_structure = False
             entity.structure_key = None
 
-        # Structure exit logic — returns True if exit was handled (skip state machine),
-        # False if entity stays inside and state machine should run normally.
-        if entity.in_structure:
-            if self.handle_in_structure_npc(entity, entity_id):
-                return
-
         # EXECUTE BEHAVIOR BASED ON STATE
         if hasattr(entity, 'ai_state'):
             if entity.ai_state == 'combat':
@@ -472,29 +466,40 @@ class NpcAiMixin:
                             dist = abs(entity.x - tx) + abs(entity.y - ty)
                             if dist == 0:
                                 cell_type = entity.current_target[3] if len(entity.current_target) >= 4 else ''
-                                _is_enterable = (
-                                    entity.target_type == 'shelter'
-                                    or (entity.target_type == 'role'
-                                        and cell_type == 'MINESHAFT'
-                                        and getattr(entity, 'quest_focus', None) == 'MINE')
-                                )
-                                if _is_enterable:
-                                    if not cell_type:
-                                        cell_type = 'HOUSE'
-                                    self.npc_enter_structure(entity, screen_key, tx, ty, cell_type)
-                                    if entity.in_structure:
-                                        entity.current_target = None
-                                        entity.target_type = None
-                                else:
-                                    # Walked onto a non-enterable target — clear and wander
-                                    entity.quest_target = None
+                                if cell_type == 'EXIT':
+                                    # At structure exit — trigger actual exit via unified seek_zone_exit
+                                    self.seek_zone_exit(entity, entity_id)
                                     entity.current_target = None
-                                    entity.ai_state = 'wandering'
-                                    entity.ai_state_timer = 2
+                                    entity.target_type = None
+                                else:
+                                    _is_enterable = (
+                                        entity.target_type == 'shelter'
+                                        or (entity.target_type == 'role'
+                                            and cell_type == 'MINESHAFT'
+                                            and getattr(entity, 'quest_focus', None) == 'MINE')
+                                    )
+                                    if _is_enterable:
+                                        if not cell_type:
+                                            cell_type = 'HOUSE'
+                                        self.npc_enter_structure(entity, screen_key, tx, ty, cell_type)
+                                        if entity.in_structure:
+                                            entity.current_target = None
+                                            entity.target_type = None
+                                    else:
+                                        # Walked onto a non-enterable target — clear and wander
+                                        entity.quest_target = None
+                                        entity.current_target = None
+                                        entity.ai_state = 'wandering'
+                                        entity.ai_state_timer = 2
                             elif dist > 1:
                                 self.move_toward_position(entity, tx, ty, screen_key)
                                 # If at exit, try to cross
                                 self._try_targeting_zone_cross(entity, entity_id)
+                            elif dist == 1 and len(entity.current_target) >= 4 and entity.current_target[3] == 'EXIT':
+                                # Adjacent to structure exit — trigger exit
+                                self.seek_zone_exit(entity, entity_id)
+                                entity.current_target = None
+                                entity.target_type = None
                             elif dist == 1 and entity.target_type == 'stone' and len(entity.current_target) >= 4:
                                 # Verify the stone target cell still exists; clear if depleted
                                 _stone_cells = ('STONE', 'IRON_ORE', 'CAVE', 'MINESHAFT', 'CAVE_WALL')
@@ -2825,6 +2830,65 @@ class NpcAiMixin:
             return 'role'
         return None
 
+    def _should_travel_exit(self, entity, screen_key):
+        """Return True if entity currently in a structure should exit.
+
+        Evaluated once per special-tier roll; becomes the condition for the
+        'travel' special sub-type lock.
+        """
+        if not getattr(entity, 'in_structure', False):
+            return False
+        if getattr(entity, 'keeper', False):
+            return False
+
+        is_nocturnal = entity.props.get('nocturnal', False)
+        is_hostile   = entity.props.get('hostile', False)
+        biome = self.screens.get(screen_key, {}).get('biome', '')
+
+        # Day/night × nocturnal
+        if not is_nocturnal and not self.is_night:
+            # Non-nocturnal during day: wants to be outside — except miners in caves
+            if not (entity.type == 'MINER' and biome == 'CAVE'):
+                return True
+        if is_nocturnal and self.is_night:
+            return True
+
+        # Miners exit caves at night
+        if entity.type == 'MINER' and biome == 'CAVE' and self.is_night:
+            return True
+
+        # Hostile cave entities: exit at night
+        if is_hostile and biome == 'CAVE' and self.is_night:
+            return True
+
+        # Overcrowding
+        local_pop = len([
+            eid for eid in self.screen_entities.get(screen_key, [])
+            if eid in self.entities and self.entities[eid].is_alive()
+        ])
+        if local_pop > 3 and random.random() < local_pop * 0.10:
+            return True
+
+        # Guards/warriors: rush out when hostiles are near the parent entrance
+        if entity.type in ('GUARD', 'WARRIOR') and getattr(entity, 'structure_key', None) in self.structures:
+            sub = self.structures[entity.structure_key]
+            parent_screen = sub.get('parent_screen')
+            parent_cell   = sub.get('parent_cell', (GRID_WIDTH // 2, GRID_HEIGHT // 2))
+            entrance_x, entrance_y = parent_cell
+            ow_key = (f"{parent_screen[0]},{parent_screen[1]}"
+                      if parent_screen else screen_key)
+            for oid in self.screen_entities.get(ow_key, []):
+                if oid not in self.entities:
+                    continue
+                if oid in getattr(self, 'followers', []):
+                    continue
+                other = self.entities[oid]
+                if other.props.get('hostile', False):
+                    if abs(other.x - entrance_x) + abs(other.y - entrance_y) <= 8:
+                        return True
+
+        return False
+
     def _evaluate_special_tier(self, entity, screen_key):
         """Sticky special-pool evaluation. Returns (type_string, SPECIAL_BASE) or None.
 
@@ -2867,6 +2931,10 @@ class NpcAiMixin:
         if self._find_clearing_target(entity, screen_key):
             candidates.append('clearing_action')
 
+        # travel: entity in structure should exit based on day/night/overcrowd/defense
+        if self._should_travel_exit(entity, screen_key):
+            candidates.append('travel')
+
         # shelter: at night, peaceful humanoids seek the nearest house to enter
         if (self.is_night and not entity.props.get('hostile', False)
                 and not getattr(entity, 'in_structure', False)):
@@ -2894,6 +2962,8 @@ class NpcAiMixin:
                     and not entity.props.get('hostile', False)
                     and not getattr(entity, 'in_structure', False)
                     and bool(self._find_nearest_shelter(entity, screen_key)))
+        if stype == 'travel':
+            return self._should_travel_exit(entity, screen_key)
         if stype == 'trade':
             return False  # stub
         return False
