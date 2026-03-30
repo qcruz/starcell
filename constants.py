@@ -329,8 +329,6 @@ CLEARING_EXEMPT = frozenset({
     'WATER_TROUGH', 'SMALL_POTTED_PLANT',
     'WELL', 'DESERT_WELL',
     'WATER', 'DEEP_WATER',
-    # Cave/mine cells — handled by try_mine_rock, not the generic clearing action
-    'STONE', 'IRON_ORE', 'CAVE_WALL',
 })
 
 # Maps entity type → keeper patrol type.  Defaults to 3 for anything not listed.

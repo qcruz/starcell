@@ -134,8 +134,6 @@ class ZonesMixin:
                     self.deinstantiate_structure_zone(struct_key)
                     continue
                 cx, cy = cell_pos
-                if not (0 <= cx < GRID_WIDTH and 0 <= cy < GRID_HEIGHT):
-                    continue
                 parent_screen = self.screens[parent]
                 parent_cell = parent_screen['grid'][cy][cx]
                 if parent_cell not in ('HOUSE', 'STONE_HOUSE', 'CAVE', 'MINESHAFT'):
