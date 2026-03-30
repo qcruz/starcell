@@ -363,29 +363,32 @@ class NpcAiMovementMixin:
         return exit_x, exit_y
 
     def _try_targeting_zone_cross(self, entity, entity_id):
-        """If the entity is at a zone exit, attempt to transition to the next zone.
+        """If the entity is near a zone exit, attempt to transition to the next zone.
 
         Called after a targeting-mode move so entities naturally flow through
         zone boundaries when pursuing a cross-zone target.
         Uses the seamless crossing path (30-tick cooldown) so entities don't stall.
-        """
-        at_exit, direction = self.is_at_exit(entity.x, entity.y)
-        if at_exit:
-            # Map exit direction to one-step-out-of-bounds coordinate
-            if direction == 'top':
-                oob_x, oob_y = entity.x, -1
-            elif direction == 'bottom':
-                oob_x, oob_y = entity.x, GRID_HEIGHT
-            elif direction == 'left':
-                oob_x, oob_y = -1, entity.y
-            else:  # right
-                oob_x, oob_y = GRID_WIDTH, entity.y
 
-            old_zone = f"{entity.screen_x},{entity.screen_y}"
-            self.try_entity_screen_crossing(entity, oob_x, oob_y)
-            new_zone = f"{entity.screen_x},{entity.screen_y}"
-            if old_zone != new_zone:
-                entity.memory_lane = []  # Clear memory for fresh zone
+        Uses proximity checks (within 1 cell of boundary) rather than exact boundary
+        cells, because exact boundary cells are WALL cells unreachable by pathfinding.
+        """
+        x, y = entity.x, entity.y
+        if y <= 1:
+            oob_x, oob_y = x, -1
+        elif y >= GRID_HEIGHT - 2:
+            oob_x, oob_y = x, GRID_HEIGHT
+        elif x <= 1:
+            oob_x, oob_y = -1, y
+        elif x >= GRID_WIDTH - 2:
+            oob_x, oob_y = GRID_WIDTH, y
+        else:
+            return  # Not near any boundary
+
+        old_zone = f"{entity.screen_x},{entity.screen_y}"
+        self.try_entity_screen_crossing(entity, oob_x, oob_y)
+        new_zone = f"{entity.screen_x},{entity.screen_y}"
+        if old_zone != new_zone:
+            entity.memory_lane = []  # Clear memory for fresh zone
 
     def _find_valid_entrance_cell(self, target_screen, entry_x, entry_y, center_x, center_y):
         """Find the nearest walkable cell at a zone entrance when the computed spot is solid.

@@ -468,6 +468,12 @@ class NpcAiMixin:
                                 self.move_toward_position(entity, exit_x, exit_y, screen_key)
                                 # If at exit, try to cross
                                 self._try_targeting_zone_cross(entity, entity_id)
+                                # Timeout: if stuck chasing cross-zone for too long, drop target
+                                entity._cross_zone_chase_ticks = getattr(entity, '_cross_zone_chase_ticks', 0) + 1
+                                if entity._cross_zone_chase_ticks > 180:
+                                    entity.current_target = None
+                                    entity.ai_state = 'wandering'
+                                    entity._cross_zone_chase_ticks = 0
                         else:
                             entity.current_target = None
                             entity.ai_state = 'wandering'
@@ -1165,6 +1171,7 @@ class NpcAiMixin:
                             # Reset stuck target tracking on zone change
                             entity.target_stuck_counter = 0
                             entity.last_target_position = None
+                            entity._cross_zone_chase_ticks = 0
                             
                             # Chance to level up from traveling
                             entity.level_up_from_activity('travel', self)
