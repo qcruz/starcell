@@ -619,7 +619,7 @@ class SpawningMixin:
         elif roll < 0.60:
             hostile_type = 'GOBLIN'
         elif roll < 0.80:
-            hostile_type = 'WOLF'
+            hostile_type = 'SKELETON'
         else:
             hostile_type = 'BANDIT'
 

@@ -226,8 +226,20 @@ class NpcAiMixin:
                 entity.in_structure = True
                 entity.structure_key = screen_key
         elif getattr(entity, 'in_structure', False):
+            old_structure_key = entity.structure_key
             entity.in_structure = False
             entity.structure_key = None
+            # Clean up screen_entities: entity's screen_x/y already points to overworld
+            # but it may still be listed under the old structure key — remove it and
+            # ensure it's registered in the correct overworld bucket.
+            if old_structure_key and old_structure_key in self.screen_entities:
+                if entity_id in self.screen_entities[old_structure_key]:
+                    self.screen_entities[old_structure_key].remove(entity_id)
+                overworld_key = screen_key  # screen_key is already the overworld zone
+                if overworld_key not in self.screen_entities:
+                    self.screen_entities[overworld_key] = []
+                if entity_id not in self.screen_entities[overworld_key]:
+                    self.screen_entities[overworld_key].append(entity_id)
 
         # EXECUTE BEHAVIOR BASED ON STATE
         if hasattr(entity, 'ai_state'):
@@ -2356,11 +2368,17 @@ class NpcAiMixin:
                     # Target died — quest complete
                     entity.keeper_target = None
                     entity.keeper_target_pos = None
+                    if getattr(entity, 'keeper_type', 0) == 2:
+                        entity.keeper = False
+                        entity.keeper_type = 0
                     self._try_complete_assigned_quest(entity)
             else:
                 # Entity ID no longer in entities dict — treat as gone
                 entity.keeper_target = None
                 entity.keeper_target_pos = None
+                if getattr(entity, 'keeper_type', 0) == 2:
+                    entity.keeper = False
+                    entity.keeper_type = 0
                 self._try_complete_assigned_quest(entity)
 
         elif kt['type'] == 'item':

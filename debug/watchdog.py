@@ -202,6 +202,7 @@ class Watchdog:
                 'exits': zone_data.get('exits'),
                 'has_chests': bool(zone_data.get('chests')),
                 'chest_count': len(zone_data.get('chests', {})),
+                'entity_count': len(entity_ids),
                 'entity_ids': entity_ids,
                 'entity_types': entity_types,
             })
