@@ -79,16 +79,24 @@ Issues in `held_back.md` are **not abandoned** — they get a clear symptom, sus
 
 **Purpose:** Stress-test new features by running the autopilot headlessly for 2–3 min sessions and reviewing the Watchdog log.
 
+**Game launch path:** The game is launched via `~/StarCell/launcher/StarCell.app`. It runs from `~/StarCell` (NOT the local dev copy at `~/Desktop/porn/starcell`). The Watchdog log is at `~/StarCell/debug/bugcatcher.log` and the save file is at `~/StarCell/savegame.json`.
+
+**Log analysis protocol — mandatory before any analysis:**
+1. Read `~/StarCell/savegame.json` and note the `"tick"` value (e.g. `431010`).
+2. Read `~/StarCell/debug/bugcatcher.log` and note the tick range of the entries.
+3. If the log tick range does NOT overlap the save file tick, the log is stale — flag this immediately and do not analyze stale data.
+4. All log analysis must reference `~/StarCell/debug/bugcatcher.log`, not the dev-copy at `~/Desktop/porn/starcell/debug/`.
+
 **To run a session:**
 ```bash
-# Enable AUTO_DEBUG locally (git-ignored, never committed):
-echo "True" > debug/auto_debug.cfg
-cd /path/to/starcell
-python3 main.py
-# After the session, disable it:
-echo "False" > debug/auto_debug.cfg
+# The auto_debug.cfg flag controls console debug prints only.
+# Watchdog ALWAYS logs on dev-q-updates branch regardless of this flag.
+echo "True" > ~/StarCell/debug/auto_debug.cfg   # optional: enable verbose prints
+# User launches ~/StarCell/launcher/StarCell.app
+# After the session:
+echo "False" > ~/StarCell/debug/auto_debug.cfg
 ```
-Session ends automatically (2–3 min timer). Review `debug/bug_catcher.log` and update `debug/bug_report.md` with findings.
+Session ends automatically (2–3 min timer). Review `~/StarCell/debug/bugcatcher.log` and update `debug/bug_report.md` with findings.
 
 **REQUIRED after every single run — no exceptions:**
 - Add a `## Session N` entry to `debug/bug_report.md` immediately after the session ends
