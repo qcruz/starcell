@@ -2992,6 +2992,7 @@ class GameCoreMixin:
     def new_game(self):
         """Start a new game"""
         self.bug_catcher.clear()
+        self.watchdog.snapshot_on_start(self.tick, self)
         self.player = {
             'x': 12, 'y': 9, 
             'screen_x': 0, 'screen_y': 0,

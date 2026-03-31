@@ -33,8 +33,8 @@ from debug.fixes import fix_entity_subscreen_flag
 
 
 class Watchdog:
-    CATEGORIES = ['entities', 'cells', 'zones', 'player', 'structures', 'followers', 'npc_actions', 'keepers', 'npc_quests', 'inventory_state', 'favor', 'food_behavior', 'ai_state_cycling']
-    SAMPLE_INTERVAL   = 300    # ticks between cycles (~5 s at 60 fps)
+    CATEGORIES = ['entities', 'cells', 'zones', 'player', 'structures', 'caves', 'followers', 'npc_actions', 'keepers', 'npc_quests', 'inventory_state', 'favor', 'food_behavior', 'ai_state_cycling']
+    SAMPLE_INTERVAL   = 120    # ticks between cycles (~2 s at 60 fps)
     MAX_ENTRIES_PER_SAMPLE = 200  # max JSON entries per category per cycle
     BACKUP1_INTERVAL  = 3600   # ~60 s at 60 fps
     BACKUP2_INTERVAL  = 7200   # ~120 s at 60 fps
@@ -66,6 +66,7 @@ class Watchdog:
             'zones':            self._sample_zones,
             'player':           self._sample_player,
             'structures':       self._sample_structures,
+            'caves':            self._sample_caves,
             'followers':        self._sample_followers,
             'npc_actions':      self._sample_npc_actions,
             'keepers':          self._sample_keepers,
@@ -78,6 +79,7 @@ class Watchdog:
         _SAMPLERS[category](tick, game)
 
         self._sample_spiders(tick, game)
+        self._sample_hostiles_in_caves(tick, game)
         self._check_integrity(tick, game)
         self._maybe_backup(tick, game)
         self.bug_catcher.flush()
@@ -715,6 +717,135 @@ class Watchdog:
             'health_80pct_count': health_80_plus,
             'npcs':              self._trim(tick, 'ai_state_cycling', entries),
         })
+
+    def snapshot_on_start(self, tick: int, game) -> None:
+        """Fire an immediate full snapshot on new game or load — bypasses interval gate.
+
+        Captures player state, all caves, hostile-in-cave state, and a zone/entity
+        summary so there is always at least one data point regardless of session length.
+        """
+        self._last_run_tick = tick  # Prevent double-fire on the next normal update cycle
+        self._sample_player(tick, game)
+        self._sample_zones(tick, game)
+        self._sample_structures(tick, game)
+        self._sample_caves(tick, game)
+        self._sample_hostiles_in_caves(tick, game)
+        self._sample_spiders(tick, game)
+        self._check_integrity(tick, game)
+        self.bug_catcher.log({
+            'tick': tick,
+            'category': 'session_start_snapshot',
+            'total_entities': len(game.entities),
+            'total_zones': len(game.screens),
+            'total_structures': len(game.structures),
+            'cave_count': sum(
+                1 for v in game.structures.values()
+                if v.get('type') == 'CAVE'
+            ),
+        })
+        self.bug_catcher.flush()
+
+    def _sample_caves(self, tick: int, game) -> None:
+        """Sample all cave structures: entity state, cell composition, AI health."""
+        structures = getattr(game, 'structures', {})
+        screen_entities = getattr(game, 'screen_entities', {})
+        cave_items = [(k, v) for k, v in structures.items() if v.get('type') == 'CAVE']
+
+        if not cave_items:
+            self.bug_catcher.log({
+                'tick': tick,
+                'category': 'watchdog_cave_sample',
+                'note': 'no cave structures exist',
+            })
+            return
+
+        for cave_key, cave_data in cave_items:
+            entity_ids = screen_entities.get(cave_key, [])
+            entity_details = []
+            for eid in entity_ids:
+                if eid not in game.entities:
+                    continue
+                e = game.entities[eid]
+                timer = getattr(e, 'ai_state_timer', 0) or 0
+                entity_details.append({
+                    'id': eid,
+                    'type': e.type,
+                    'grid': [e.x, e.y],
+                    'world': [round(getattr(e, 'world_x', e.x), 2),
+                              round(getattr(e, 'world_y', e.y), 2)],
+                    'health': e.health,
+                    'ai_state': getattr(e, 'ai_state', None),
+                    'ai_state_timer': timer,
+                    'frozen_flag': timer > 600,
+                    'in_structure': getattr(e, 'in_structure', False),
+                    'structure_key': getattr(e, 'structure_key', None),
+                    'in_combat': getattr(e, 'in_combat', False),
+                    'current_target': getattr(e, 'current_target', None),
+                    'is_moving': getattr(e, 'is_moving', None),
+                    'anim_frame': getattr(e, 'anim_frame', None),
+                    'anim_timer': getattr(e, 'anim_timer', None),
+                    'facing': getattr(e, 'facing', None),
+                })
+            grid = cave_data.get('grid', [])
+            cell_counts: dict = {}
+            for row in grid:
+                for cell in row:
+                    cell_counts[cell] = cell_counts.get(cell, 0) + 1
+            self.bug_catcher.log({
+                'tick': tick,
+                'category': 'watchdog_cave_sample',
+                'key': cave_key,
+                'depth': cave_data.get('depth'),
+                'parent_screen': str(cave_data.get('parent_screen')),
+                'parent_cell': str(cave_data.get('parent_cell')),
+                'entity_count': len(entity_ids),
+                'entities': entity_details,
+                'frozen_count': sum(1 for e in entity_details if e.get('frozen_flag')),
+                'cell_counts': cell_counts,
+            })
+
+    def _sample_hostiles_in_caves(self, tick: int, game) -> None:
+        """Every cycle: log every hostile entity inside any cave structure.
+
+        Captures full movement + AI state so frozen/stuck hostiles are visible
+        without waiting for the 'caves' category cycle.
+        """
+        structures = getattr(game, 'structures', {})
+        screen_entities = getattr(game, 'screen_entities', {})
+        cave_keys = {k for k, v in structures.items() if v.get('type') == 'CAVE'}
+        if not cave_keys:
+            return
+
+        player_zone = f"{game.player.get('screen_x', 0)},{game.player.get('screen_y', 0)}"
+
+        for cave_key in cave_keys:
+            for eid in screen_entities.get(cave_key, []):
+                if eid not in game.entities:
+                    continue
+                e = game.entities[eid]
+                if not e.props.get('hostile', False):
+                    continue
+                self.bug_catcher.log({
+                    'tick': tick,
+                    'category': 'cave_hostile_sample',
+                    'cave_key': cave_key,
+                    'player_in_cave': player_zone == cave_key,
+                    'id': eid,
+                    'type': e.type,
+                    'grid': [e.x, e.y],
+                    'world': [round(getattr(e, 'world_x', e.x), 2),
+                              round(getattr(e, 'world_y', e.y), 2)],
+                    'ai_state': getattr(e, 'ai_state', None),
+                    'ai_state_timer': getattr(e, 'ai_state_timer', 0),
+                    'in_combat': getattr(e, 'in_combat', False),
+                    'current_target': getattr(e, 'current_target', None),
+                    'is_moving': getattr(e, 'is_moving', None),
+                    'anim_frame': getattr(e, 'anim_frame', None),
+                    'anim_timer': getattr(e, 'anim_timer', None),
+                    'in_structure': getattr(e, 'in_structure', False),
+                    'structure_key': getattr(e, 'structure_key', None),
+                    'health': e.health,
+                })
 
     def _sample_spiders(self, tick: int, game) -> None:
         """Log full animation + AI state for every BLACK_SPIDER every cycle — no trimming."""
