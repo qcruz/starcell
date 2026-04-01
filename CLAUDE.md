@@ -50,6 +50,13 @@ The project owner (@qcruz) handles creative direction: roadmap additions, system
 
 Wait for a clear "go ahead" before writing any code on those. Do not infer approval from roadmap entries or previous conversations.
 
+**Bug fixes also require confirmation before implementing.** When a bug is identified:
+1. Post the diagnosed root cause in chat — clearly state what you believe is causing it and why.
+2. Post the proposed fix — describe the change and which files it touches.
+3. Wait for explicit approval before writing any code.
+
+Do not implement a bug fix speculatively even if the cause seems obvious. Diagnosis and implementation are two separate steps, and @qcruz approves both.
+
 **When adding new items:** add at the position @qcruz specifies, or at the bottom if unspecified. Far-future or speculative items belong in `roadmap.md` only — do not add them to `next_up.md` until prerequisite systems are in place.
 
 ---

@@ -448,7 +448,7 @@ class WorldGenerationMixin:
         elif structure_type == 'CAVE':
             ax = align_x if align_x is not None else cell_x
             ay = align_y if align_y is not None else cell_y
-            grid, stairs_down_pos, cave_reachable = self.generate_cave_interior(depth, ax, ay)
+            grid, stairs_down_pos = self.generate_cave_interior(depth, ax, ay)
             entrance_pos = (max(2, min(GRID_WIDTH - 3, ax)), max(2, min(GRID_HEIGHT - 3, ay)))
         else:
             grid = [['FLOOR_WOOD' for _ in range(GRID_WIDTH)] for _ in range(GRID_HEIGHT)]
@@ -473,8 +473,6 @@ class WorldGenerationMixin:
                 parent_screen_x, parent_screen_y
             ),
         }
-        if structure_type == 'CAVE':
-            structure_data['_reachable_cells'] = cave_reachable
 
         # Register as a full zone (in both dicts for backward-compat metadata lookups)
         self.structures[zone_key] = structure_data
@@ -624,8 +622,7 @@ class WorldGenerationMixin:
 
         entrance_x/y: parent cell coordinates used to align STAIRS_UP position.
         STAIRS_UP is always placed at the aligned position (all depths).
-        Returns (grid, stairs_down_pos, reachable_cells) where stairs_down_pos is (x, y) or None
-        and reachable_cells is the set of (x, y) positions reachable from the entrance.
+        Returns (grid, stairs_down_pos) where stairs_down_pos is (x, y) or None.
         """
         grid = []
         for y in range(GRID_HEIGHT):
@@ -698,31 +695,7 @@ class WorldGenerationMixin:
                     break
                 attempts += 1
 
-        # Flood-fill from STAIRS_UP to find all reachable floor cells.
-        # Isolated CAVE_FLOOR pockets (surrounded by solid cells) become STONE
-        # so entities can never get permanently trapped inside them.
-        reachable = set()
-        flood_queue = [(up_x, up_y)]
-        reachable.add((up_x, up_y))
-        while flood_queue:
-            cx, cy = flood_queue.pop(0)
-            for fdx, fdy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
-                nx, ny = cx + fdx, cy + fdy
-                if (0 < nx < GRID_WIDTH - 1 and 0 < ny < GRID_HEIGHT - 1
-                        and (nx, ny) not in reachable
-                        and not CELL_TYPES.get(grid[ny][nx], {}).get('solid', False)):
-                    reachable.add((nx, ny))
-                    flood_queue.append((nx, ny))
-
-        # Seal any isolated walkable cells that are unreachable from the entrance
-        for fy in range(1, GRID_HEIGHT - 1):
-            for fx in range(1, GRID_WIDTH - 1):
-                if (not CELL_TYPES.get(grid[fy][fx], {}).get('solid', False)
-                        and grid[fy][fx] not in ('STAIRS_UP', 'STAIRS_DOWN')
-                        and (fx, fy) not in reachable):
-                    grid[fy][fx] = 'STONE'
-
-        return grid, stairs_down_pos, reachable
+        return grid, stairs_down_pos
 
     # -------------------------------------------------------------------------
     # Chest placement
@@ -772,22 +745,13 @@ class WorldGenerationMixin:
     def _spawn_cave_entities(self, structure_data):
         """Spawn bats and spiders in a newly generated cave interior."""
         grid = structure_data['grid']
+        # Collect walkable positions away from the entrance
         entrance_x, entrance_y = structure_data.get('entrance', (GRID_WIDTH // 2, GRID_HEIGHT - 2))
-        # Use flood-fill reachable set if available; otherwise fall back to solid check only.
-        # This ensures entities are never spawned in isolated floor pockets.
-        reachable = structure_data.get('_reachable_cells', None)
-        if reachable is not None:
-            walkable = [
-                (x, y) for (x, y) in reachable
-                if not CELL_TYPES.get(grid[y][x], {}).get('solid', False)
-                and abs(x - entrance_x) + abs(y - entrance_y) > 4
-            ]
-        else:
-            walkable = [
-                (x, y) for y in range(1, GRID_HEIGHT - 1) for x in range(1, GRID_WIDTH - 1)
-                if not CELL_TYPES.get(grid[y][x], {}).get('solid', False)
-                and abs(x - entrance_x) + abs(y - entrance_y) > 4
-            ]
+        walkable = [
+            (x, y) for y in range(1, GRID_HEIGHT - 1) for x in range(1, GRID_WIDTH - 1)
+            if not CELL_TYPES.get(grid[y][x], {}).get('solid', False)
+            and abs(x - entrance_x) + abs(y - entrance_y) > 4
+        ]
         if not walkable:
             return
         random.shuffle(walkable)

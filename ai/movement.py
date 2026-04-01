@@ -165,23 +165,6 @@ class NpcAiMovementMixin:
                 entity.memory_lane = entity.memory_lane[half:]
             entity.stuck_counter = 0
 
-            # Last resort: entity stuck in a structure 30+ consecutive clear cycles.
-            # Teleport to the structure entrance so it can navigate freely again.
-            if getattr(entity, 'in_structure', False):
-                if not hasattr(entity, '_wander_fail_count'):
-                    entity._wander_fail_count = 0
-                entity._wander_fail_count += 1
-                if entity._wander_fail_count >= 10:
-                    entrance = screen.get('entrance') or screen.get('exit')
-                    if entrance:
-                        entity.x = entrance[0]
-                        entity.y = entrance[1]
-                        entity.target_x = entrance[0]
-                        entity.target_y = entrance[1]
-                        if hasattr(entity, 'memory_lane'):
-                            entity.memory_lane = []
-                    entity._wander_fail_count = 0
-
     def move_toward_position(self, entity, target_x, target_y, screen_key):
         """Move entity one step toward target position with obstacle avoidance.
 
