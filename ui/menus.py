@@ -6,6 +6,44 @@ from constants import (
     GRID_WIDTH, GRID_HEIGHT,
 )
 
+# ── Game Options screen layout ────────────────────────────────────────────────
+# Each section is (header_label, [(flag_name, display_label), ...])
+_GAME_OPTIONS_SECTIONS = [
+    ('CELLULAR AUTOMATA', [
+        ('ca_enabled',      'Master CA Toggle'),
+        ('ca_tree_spread',  'Tree Spread'),
+        ('ca_sand_spread',  'Sand / Desert Spread'),
+        ('ca_water_spread', 'Water Flooding'),
+        ('ca_grass_growth', 'Grass Growth'),
+        ('ca_drought',      'Drought Effects'),
+    ]),
+    ('ENTITY SPAWNING', [
+        ('spawn_goblins',         'Goblins & Bandits'),
+        ('spawn_wolves',          'Wolves'),
+        ('spawn_bats',            'Bats'),
+        ('spawn_skeletons_night', 'Night Skeletons'),
+        ('spawn_cave_hostiles',   'Cave Hostiles'),
+        ('spawn_termites',        'Termites'),
+    ]),
+    ('GAME DIFFICULTY', [
+        ('hunger_decay',             'Hunger Decay'),
+        ('thirst_decay',             'Thirst Decay'),
+        ('starvation_damage',        'Starvation Damage'),
+        ('old_age_damage',           'Old Age Damage'),
+        ('skeleton_daylight_damage', 'Skeleton Daylight Damage'),
+    ]),
+    ('WORLD EVENTS', [
+        ('raids_enabled',   'Raid Events'),
+        ('weather_enabled', 'Weather / Rain'),
+    ]),
+    ('FACTIONS & SOCIETY', [
+        ('keeper_assignments', 'Keeper Assignments'),
+        ('npc_aging',          'NPC Aging'),
+        ('npc_promotions',     'NPC Promotions (Commander/King)'),
+        ('faction_wars',       'Faction Wars'),
+    ]),
+]
+
 
 class MenusMixin:
     """Main menu, pause screen, trader UI, NPC inspection, item tooltip,
@@ -97,6 +135,7 @@ class MenusMixin:
         pause_opts = [
             "P / ESC - Resume",
             "S - Save Game",
+            "O - Game Options",
             "M - Main Menu",
         ]
         y = 240
@@ -129,6 +168,110 @@ class MenusMixin:
         push_time = getattr(self, 'last_push_time', 'Unknown')
         push_text = self.tiny_font.render(f"Last push: {push_time}", True, COLORS['GRAY'])
         self.screen.blit(push_text, (SCREEN_WIDTH // 2 - push_text.get_width() // 2, y + 10))
+
+    # -------------------------------------------------------------------------
+    # Game Options screen
+    # -------------------------------------------------------------------------
+
+    def draw_game_options(self):
+        """Draw the Game Options subscreen (opened from pause menu via O)."""
+        opts = getattr(self, 'game_opts', None)
+        if opts is None:
+            return
+
+        # Base: draw the paused game world + overlay
+        self.draw_game()
+        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+        overlay.set_alpha(180)
+        overlay.fill(COLORS['BLACK'])
+        self.screen.blit(overlay, (0, 0))
+
+        # Panel geometry
+        panel_w = 520
+        panel_h = SCREEN_HEIGHT - 100
+        panel_x = SCREEN_WIDTH // 2 - panel_w // 2
+        panel_y = 50
+        pygame.draw.rect(self.screen, (30, 30, 40), (panel_x, panel_y, panel_w, panel_h))
+        pygame.draw.rect(self.screen, COLORS['YELLOW'], (panel_x, panel_y, panel_w, panel_h), 2)
+
+        # Title
+        title = self.font.render("GAME OPTIONS", True, COLORS['YELLOW'])
+        self.screen.blit(title, (SCREEN_WIDTH // 2 - title.get_width() // 2, panel_y + 10))
+
+        hint = self.tiny_font.render("↑↓ / Scroll to navigate  •  Click to toggle  •  O / ESC to close",
+                                     True, COLORS['GRAY'])
+        self.screen.blit(hint, (SCREEN_WIDTH // 2 - hint.get_width() // 2, panel_y + 36))
+
+        # Scrollable content area
+        content_top = panel_y + 58
+        content_h = panel_h - 62
+        scroll = getattr(self, '_game_opts_scroll', 0)
+
+        # Clip drawing to the content area
+        clip_rect = pygame.Rect(panel_x, content_top, panel_w, content_h)
+        self.screen.set_clip(clip_rect)
+
+        # Build rows and compute total height so we can clamp scroll
+        ROW_H = 24
+        HEADER_H = 30
+        INDENT = 30
+        CB_SIZE = 14
+        col_x = panel_x + INDENT
+        y = content_top - scroll
+
+        # Collect clickable rects for click handling (screen coords, pre-clip)
+        toggle_rects = []
+
+        for header, toggles in _GAME_OPTIONS_SECTIONS:
+            # Section header
+            hdr = self.small_font.render(header, True, COLORS['CYAN'])
+            self.screen.blit(hdr, (col_x, y + 6))
+            y += HEADER_H
+
+            for flag_name, label in toggles:
+                checked = getattr(opts, flag_name, True)
+                row_y = y
+
+                # Checkbox
+                box_rect = pygame.Rect(col_x, row_y + (ROW_H - CB_SIZE) // 2, CB_SIZE, CB_SIZE)
+                pygame.draw.rect(self.screen, COLORS['WHITE'], box_rect, 2)
+                if checked:
+                    pygame.draw.line(self.screen, COLORS['WHITE'],
+                                     (col_x + 2, row_y + ROW_H // 2 + 1),
+                                     (col_x + 5, row_y + ROW_H // 2 + 5), 2)
+                    pygame.draw.line(self.screen, COLORS['WHITE'],
+                                     (col_x + 5, row_y + ROW_H // 2 + 5),
+                                     (col_x + CB_SIZE - 2, row_y + (ROW_H - CB_SIZE) // 2 + 2), 2)
+
+                # Label (dimmed when off)
+                lbl_color = COLORS['WHITE'] if checked else COLORS['GRAY']
+                lbl = self.small_font.render(label, True, lbl_color)
+                self.screen.blit(lbl, (col_x + CB_SIZE + 8, row_y + (ROW_H - lbl.get_height()) // 2))
+
+                # Store full-row clickable rect (unclipped screen coords, adjusted for scroll)
+                click_rect = pygame.Rect(col_x, row_y, panel_w - INDENT - 10, ROW_H)
+                toggle_rects.append((flag_name, click_rect))
+
+                y += ROW_H
+
+            y += 6  # gap after section
+
+        self.screen.set_clip(None)
+
+        # Draw scroll indicator if content overflows
+        total_h = y + scroll - (content_top)
+        if total_h > content_h:
+            bar_h = max(20, int(content_h * content_h / total_h))
+            bar_y = content_top + int(scroll / (total_h - content_h) * (content_h - bar_h))
+            pygame.draw.rect(self.screen, COLORS['GRAY'],
+                             (panel_x + panel_w - 8, bar_y, 6, bar_h))
+
+        # Clamp and store scroll
+        max_scroll = max(0, total_h - content_h)
+        self._game_opts_scroll = min(max(0, scroll), max_scroll)
+        self._game_opts_total_h = total_h
+        self._game_opts_content_h = content_h
+        self._game_opts_toggle_rects = toggle_rects
 
     # -------------------------------------------------------------------------
     # Trader UI

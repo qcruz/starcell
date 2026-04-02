@@ -155,10 +155,20 @@ class CellsMixin:
 
         _tp = getattr(self, 'time_pass_speed', 1.0)
 
+        # Per-rule CA flags from game_opts (default True when game_opts not yet set)
+        _opts = getattr(self, 'game_opts', None)
+        _ca_tree   = True if not _opts else _opts.ca_tree_spread
+        _ca_sand   = True if not _opts else _opts.ca_sand_spread
+        _ca_water  = True if not _opts else _opts.ca_water_spread
+        _ca_grass  = True if not _opts else _opts.ca_grass_growth
+        _ca_drt    = True if not _opts else _opts.ca_drought
+
         # Drought modifier: growth slows and decay accelerates the longer it hasn't rained.
         # Full drought severity is reached at 9000 ticks (~2.5 min) without rain.
         drought_ticks = self.tick - self.zone_last_rain.get(key, self.tick)
         drought_severity = min(drought_ticks / 9000.0, 1.0)   # 0.0 = just rained, 1.0 = max drought
+        if not _ca_drt:
+            drought_severity = 0.0
         _growth = max(0.1, 1.0 - drought_severity * 0.9) * _tp  # decays to 10% of base at max drought
         _decay  = (1.0 + drought_severity * 0.5) * _tp           # rises to 1.5x base at max drought
 
@@ -240,24 +250,24 @@ class CellsMixin:
 
                 # Dirt → Water (flooding, rain only — highest priority for dirt)
                 if cell == 'DIRT' and total_water >= 3 and self.is_raining:
-                    if random.random() < min(1.0, DIRT_TO_WATER_RAIN_RATE * _tp):
+                    if _ca_water and random.random() < min(1.0, DIRT_TO_WATER_RAIN_RATE * _tp):
                         new_grid[y][x] = 'WATER'
                         _ca_rule ='DIRT_TO_WATER_RAIN_RATE'
 
                 # Sand → Water (rain flooding — 2x dirt rate; sand absorbs water faster)
                 elif cell == 'SAND' and total_water >= 3 and self.is_raining:
-                    if random.random() < min(1.0, DIRT_TO_WATER_RAIN_RATE * 2.0 * _tp):
+                    if _ca_water and random.random() < min(1.0, DIRT_TO_WATER_RAIN_RATE * 2.0 * _tp):
                         new_grid[y][x] = 'WATER'
 
                 # Dirt → Grass (water >= 2)
                 elif cell == 'DIRT' and total_water >= 2:
-                    if random.random() < min(1.0, DIRT_TO_GRASS_RATE * _growth):
+                    if _ca_grass and random.random() < min(1.0, DIRT_TO_GRASS_RATE * _growth):
                         new_grid[y][x] = 'GRASS'
                         _ca_rule ='DIRT_TO_GRASS_RATE'
 
                 # Dirt → Grass (water == 1, extra small chance)
                 elif cell == 'DIRT' and total_water == 1 and sand_count == 0:
-                    if random.random() < min(1.0, DIRT_TO_GRASS_WATER_RATE * _growth):
+                    if _ca_grass and random.random() < min(1.0, DIRT_TO_GRASS_WATER_RATE * _growth):
                         new_grid[y][x] = 'GRASS'
                         _ca_rule ='DIRT_TO_GRASS_WATER_RATE'
 
@@ -272,20 +282,20 @@ class CellsMixin:
 
                 # Dirt → Sand (any sand neighbor, no water — desertification spread, non-desert only)
                 elif cell == 'DIRT' and total_water == 0 and sand_count >= 1 and biome != 'DESERT':
-                    if random.random() < min(1.0, DIRT_TO_SAND_SPREAD_RATE * _decay):
+                    if _ca_sand and random.random() < min(1.0, DIRT_TO_SAND_SPREAD_RATE * _decay):
                         new_grid[y][x] = 'SAND'
                         _ca_rule ='DIRT_TO_SAND_SPREAD_RATE'
 
                 # Dirt → Sand (severe drought, no grass at all — non-desert only)
                 elif cell == 'DIRT' and total_water == 0 and grass_count == 0 and biome != 'DESERT':
-                    if random.random() < min(1.0, DIRT_TO_SAND_DROUGHT_RATE * _decay):
+                    if _ca_sand and random.random() < min(1.0, DIRT_TO_SAND_DROUGHT_RATE * _decay):
                         new_grid[y][x] = 'SAND'
                         _ca_rule ='DIRT_TO_SAND_DROUGHT_RATE'
 
                 # Dirt → Sand (ambient baseline — all biomes, very slow erosion when dry)
                 elif cell == 'DIRT' and total_water == 0:
                     _ambient = DIRT_TO_SAND_DESERT_AMBIENT_RATE if biome == 'DESERT' else DIRT_TO_SAND_AMBIENT_RATE
-                    if random.random() < min(1.0, _ambient * _decay):
+                    if _ca_sand and random.random() < min(1.0, _ambient * _decay):
                         new_grid[y][x] = 'SAND'
                         _ca_rule = 'DIRT_TO_SAND_AMBIENT_RATE'
 
@@ -302,7 +312,7 @@ class CellsMixin:
 
                 # Tree spread (needs grass, water, no cobblestone, and not desert)
                 elif cell == 'GRASS' and biome != 'DESERT' and cobblestone_count == 0 and 1 <= tree_count <= 2 and total_water >= 1:
-                    if random.random() < min(1.0, GRASS_TO_TREE_RATE * _growth):
+                    if _ca_tree and random.random() < min(1.0, GRASS_TO_TREE_RATE * _growth):
                         new_grid[y][x] = 'TREE1'
                         _ca_rule = 'GRASS_TO_TREE_RATE'
 
@@ -415,7 +425,7 @@ class CellsMixin:
 
                 # Grass → Water (rain flooding only)
                 elif cell == 'GRASS' and total_water >= 1 and self.is_raining:
-                    if random.random() < min(1.0, GRASS_TO_WATER_RAIN_RATE * _tp):
+                    if _ca_water and random.random() < min(1.0, GRASS_TO_WATER_RAIN_RATE * _tp):
                         new_grid[y][x] = 'WATER'
                         _ca_rule = 'GRASS_TO_WATER_RAIN_RATE'
 
