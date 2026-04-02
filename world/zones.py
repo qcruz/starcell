@@ -609,7 +609,7 @@ class ZonesMixin:
                 _opts = getattr(self, 'game_opts', None)
                 age_interval = max(1, int(600 / _tp))
                 if (not _opts or _opts.npc_aging):
-                    if self.tick % age_interval == 0 and entity.type != 'SKELETON':
+                    if self.tick % age_interval == 0 and entity.type not in ('SKELETON', 'SKELETON_double'):
                         entity.age += 1
 
                 # Pre-set disabled stats to max so decay_stats doesn't drain them
@@ -640,8 +640,8 @@ class ZonesMixin:
                         if (self.tick - getattr(entity, 'last_attacked_tick', 0)) > 60:
                             entity.health = min(entity.max_health, entity.health + 5 * min(count, 10))
 
-                # Skeletons burn in daylight
-                if (entity.type == 'SKELETON' and not self.is_night
+                # Skeletons burn in daylight (singles and doubles)
+                if (entity.type in ('SKELETON', 'SKELETON_double') and not self.is_night
                         and (not _opts or _opts.skeleton_daylight_damage)):
                     entity.health -= SKELETON_DAYLIGHT_DAMAGE
                     if entity.health <= 0:
@@ -682,6 +682,13 @@ class ZonesMixin:
                     continue
 
                 self.update_entity_ai(entity_id, entity)
+
+                # Double entities trample grass to dirt as they pass (heavier footprint)
+                if entity.type.endswith('_double') and random.random() < 0.05:
+                    _dx, _dy = entity.x, entity.y
+                    if 0 <= _dx < GRID_WIDTH and 0 <= _dy < GRID_HEIGHT:
+                        if screen['grid'][_dy][_dx] == 'GRASS':
+                            screen['grid'][_dy][_dx] = 'DIRT'
 
                 # Butterfly grows flowers as it passes over grass/dirt
                 if entity.type == 'BUTTERFLY' and random.random() < 0.04:

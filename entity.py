@@ -893,8 +893,9 @@ class Entity:
     
     def can_merge_with(self, other):
         """Check if this entity can merge with another"""
-        return (self.type == other.type and 
-                abs(self.level - other.level) <= 1)
+        return (self.type == other.type and
+                abs(self.level - other.level) <= 1 and
+                abs(self.x - other.x) <= 2 and abs(self.y - other.y) <= 2)
     
     def merge_with(self, other):
         """Merge with another entity, taking their stats and becoming a _double type"""

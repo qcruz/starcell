@@ -1131,45 +1131,38 @@ class NpcAiMixin:
             at_exit, _ = self.is_at_exit(entity.x, entity.y)
             
             if at_exit:
-                # Check cooldown - prevent rapid zone hopping
+                # Ramp-up: probability of crossing scales up over time since last zone change
                 ticks_since_last_change = self.tick - entity.last_zone_change_tick
-                if ticks_since_last_change < ZONE_CHANGE_COOLDOWN:
-                    # Still on cooldown - can't change zones yet
-                    pass
-                else:
-                    # Cooldown expired - can travel
-                    can_travel = True
-                    
-                    # Transition rate: 30% for normal NPCs, 100% for autopilot proxy
-                    is_proxy_entity = entity.props.get('is_autopilot_proxy', False)
-                    travel_rate = 1.0 if is_proxy_entity else 0.3
+                ramp = min(1.0, ticks_since_last_change / NPC_CROSS_RAMP_TICKS)
 
-                    # Wolves are natural explorers — higher zone-crossing drive
-                    if entity.type in ('WOLF', 'WOLF_double'):
-                        travel_rate = max(travel_rate, 0.6)
+                # Transition rate: 30% for normal NPCs, 100% for autopilot proxy
+                is_proxy_entity = entity.props.get('is_autopilot_proxy', False)
+                travel_rate = 1.0 if is_proxy_entity else 0.3
 
-                    # Entities in targeting state with cross-zone target also always cross
-                    if entity.ai_state == 'targeting' and entity.current_target:
-                        travel_rate = 1.0
-                    
-                    if can_travel and random.random() < travel_rate:
-                        old_zone = f"{entity.screen_x},{entity.screen_y}"
-                        self.try_entity_zone_transition(entity_id, entity)
-                        new_zone = f"{entity.screen_x},{entity.screen_y}"
-                        
-                        # If successfully traveled
-                        if old_zone != new_zone:
-                            # Update cooldown timer
-                            entity.last_zone_change_tick = self.tick
-                            
-                            # Reset stuck target tracking on zone change
-                            entity.target_stuck_counter = 0
-                            entity.last_target_position = None
-                            
-                            # Chance to level up from traveling
-                            entity.level_up_from_activity('travel', self)
-                            
-                            # Entity traveled to new zone (silent)
+                # Wolves are natural explorers — higher zone-crossing drive
+                if entity.type in ('WOLF', 'WOLF_double'):
+                    travel_rate = max(travel_rate, 0.6)
+
+                # Entities in targeting state with cross-zone target also always cross
+                if entity.ai_state == 'targeting' and entity.current_target:
+                    travel_rate = 1.0
+
+                if random.random() < ramp * travel_rate:
+                    old_zone = f"{entity.screen_x},{entity.screen_y}"
+                    self.try_entity_zone_transition(entity_id, entity)
+                    new_zone = f"{entity.screen_x},{entity.screen_y}"
+
+                    # If successfully traveled
+                    if old_zone != new_zone:
+                        # Update cooldown timer
+                        entity.last_zone_change_tick = self.tick
+
+                        # Reset stuck target tracking on zone change
+                        entity.target_stuck_counter = 0
+                        entity.last_target_position = None
+
+                        # Chance to level up from traveling
+                        entity.level_up_from_activity('travel', self)
         
         # SAFETY CHECK: Validate entity position after all AI logic
         player_zone = f"{self.player['screen_x']},{self.player['screen_y']}"

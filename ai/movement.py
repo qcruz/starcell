@@ -461,8 +461,7 @@ class NpcAiMovementMixin:
             entity.last_zone_change_tick = -999  # Initialize if missing
 
         ticks_since_travel = self.tick - entity.last_zone_change_tick
-        if ticks_since_travel < ZONE_CHANGE_COOLDOWN:
-            # Too soon since last travel - prevent zone change
+        if random.random() > min(1.0, ticks_since_travel / NPC_CROSS_RAMP_TICKS):
             return
 
         screen = self.screens[screen_key]
@@ -620,8 +619,9 @@ class NpcAiMovementMixin:
                 else:
                     return  # Cell/item/no target — stay in zone
 
-        # Anti-bounce: prevent an immediate return trip
-        if self.tick - getattr(entity, 'last_zone_change_tick', -9999) < NPC_SEAMLESS_CROSS_COOLDOWN:
+        # Ramp-up: probability of crossing increases over time since last zone change
+        _ticks_since_cross = self.tick - getattr(entity, 'last_zone_change_tick', -9999)
+        if random.random() > min(1.0, _ticks_since_cross / NPC_CROSS_RAMP_TICKS):
             return
 
         screen_key = f"{entity.screen_x},{entity.screen_y}"
@@ -987,7 +987,7 @@ class NpcAiMovementMixin:
             entity.last_structure_change_tick = -999
 
         ticks_since_travel = self.tick - entity.last_structure_change_tick
-        if ticks_since_travel < ZONE_CHANGE_COOLDOWN:  # Reuse same cooldown
+        if random.random() > min(1.0, ticks_since_travel / NPC_CROSS_RAMP_TICKS):
             return
 
         # Get or create structure
@@ -1087,7 +1087,7 @@ class NpcAiMovementMixin:
             entity.last_structure_change_tick = -999
 
         ticks_since_travel = self.tick - entity.last_structure_change_tick
-        if ticks_since_travel < ZONE_CHANGE_COOLDOWN:  # Reuse same cooldown
+        if random.random() > min(1.0, ticks_since_travel / NPC_CROSS_RAMP_TICKS):
             return
 
         structure_key = entity.structure_key
