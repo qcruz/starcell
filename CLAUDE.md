@@ -33,6 +33,12 @@ The project owner (@qcruz) handles creative direction: roadmap additions, system
 7. Review debug/bug_report.md → fix confirmed bugs → commit to dev-q-updates
 8. Periodic: code cleanup session (see Code Cleanup below)
 9. @qcruz tests dev → pushes to main when satisfied
+10. End of session: pick one project doc at random and ensure it is up-to-date with
+    current game features. This means: fix stale descriptions, add entries for new
+    features, expand details, add or remove to-do items, note art/audio/design needs
+    introduced by recent work, or connect the doc's topic to systems added since it
+    was last touched. Any doc in the repo qualifies — code docs (docs/), design docs,
+    roadmap, art_direction, sound_design, etc. Commit and push the update.
 ```
 
 ---
