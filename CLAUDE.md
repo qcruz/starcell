@@ -186,8 +186,11 @@ The goal is fewest code paths for the most behavior. When a special-case block h
 | `autopilot.py` | Possession-model autopilot. Also the proving ground for NPC AI before porting |
 | `game_core.py` | Legacy monolith: init, player, input handling, new_game |
 | `npc_ai.py` | Legacy monolith: entity state machine, combat, day/night shelter |
+| `docs/` | Contributor documentation: plain-language guides + pseudo-code references for each major file |
 
 **Dual-import rule:** When adding items, cell types, or recipes, update BOTH `constants.py` AND the relevant `data/` module.
+
+**Docs maintenance rule:** When a documented file changes significantly (new methods, renamed behavior, restructured logic), update the corresponding `docs/*_plain.md` and `docs/*_pseudo.md` files in the same commit. Files currently documented: `npc_ai.py`, `ai/movement.py`, `ai/actions.py`, `game_core.py`, `world/generation.py`, `world/zones.py`. Priority order for remaining files: `engine/entity.py` → `systems/` → `autopilot.py` → `ui/` → `data/`.
 
 ---
 

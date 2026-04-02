@@ -190,6 +190,7 @@ See [BOUNTIES.md](BOUNTIES.md) for a prioritized list of open features with esti
 |---|---|
 | [current_features.md](current_features.md) | Full feature reference: all systems, controls, and config values |
 | [CLAUDE.md](CLAUDE.md) | How the codebase is structured and maintained — file roles, branch protocol, development loop |
+| [docs/](docs/) | Plain-language guides and pseudo-code references for every major source file — start here to understand how a specific system works |
 | [design_identity.md](design_identity.md) | Core design principles and what makes StarCell's simulation tick |
 | [commercial_use.md](commercial_use.md) | Rules for building and selling your own game on top of this engine |
 | [economy_balance.md](economy_balance.md) | Economy design: item values, NPC trade logic, balance targets |
