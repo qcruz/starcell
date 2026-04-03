@@ -3231,11 +3231,6 @@ class GameCoreMixin:
                 if self.autosave_enabled and self.tick > 0 and self.tick % (30 * FPS) == 0:
                     self.save_game()
 
-                # AUTO_DEBUG: hard-stop when wall-clock timer expires
-                if hasattr(self, '_auto_debug_end_time') and _time.time() >= self._auto_debug_end_time:
-                    self._auto_debug_shutdown()
-                    break
-
                 self.tick += 1
                 self.draw_game()
                 self.draw_dev_screen()
@@ -3250,7 +3245,13 @@ class GameCoreMixin:
                     self.draw_game_options()
                 else:
                     self.draw_paused()
-            
+
+            # AUTO_DEBUG: hard-stop when wall-clock timer expires — runs every loop
+            # iteration regardless of state so death/menu/paused don't trap the session.
+            if hasattr(self, '_auto_debug_end_time') and _time.time() >= self._auto_debug_end_time:
+                self._auto_debug_shutdown()
+                break
+
             pygame.display.flip()
             self.clock.tick(FPS)
         
