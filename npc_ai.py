@@ -485,7 +485,7 @@ class NpcAiMixin:
                                     entity.target_type = None
                                 else:
                                     _is_enterable = (
-                                        entity.target_type == 'shelter'
+                                        entity.target_type in ('shelter', 'visit')
                                         or (entity.target_type == 'role'
                                             and cell_type == 'MINESHAFT'
                                             and getattr(entity, 'quest_focus', None) == 'MINE')
@@ -528,8 +528,8 @@ class NpcAiMixin:
                                     if entity.in_structure:
                                         entity.current_target = None
                                         entity.target_type = None
-                            elif dist == 1 and entity.target_type == 'shelter':
-                                # Adjacent to shelter — enter at 100%, clear only after confirmed
+                            elif dist == 1 and entity.target_type in ('shelter', 'visit'):
+                                # Adjacent to shelter/visit target — enter, clear targeting state
                                 cell_type = entity.current_target[3] if len(entity.current_target) >= 4 else 'HOUSE'
                                 self.npc_enter_structure(entity, screen_key, tx, ty, cell_type)
                                 if entity.in_structure:
@@ -1689,6 +1689,10 @@ class NpcAiMixin:
                 return None
             if ttype == 'shelter':
                 return self._find_closest_shelter(entity, screen_key)
+            if ttype == 'visit':
+                # Set a timed duration so update_structure_npc_behavior knows when to exit
+                entity.visit_end_tick = self.tick + random.randint(VISIT_DURATION_MIN, VISIT_DURATION_MAX)
+                return self._find_closest_shelter(entity, screen_key)
             if ttype == 'special':
                 subtype = getattr(entity, '_special_target_type', None)
                 if subtype:
@@ -2713,6 +2717,16 @@ class NpcAiMixin:
                     if _max_urg > 0.5 or _hp_frac < 0.5:
                         _day_shelter = _max_urg * 10.0 * max(0.5, 2.0 - _hp_frac)
                         candidates['shelter'] = _day_shelter
+
+        # ── Tier 4c: Visit (casual house visit, peaceful humanoids, any time) ──
+        # Very low score (VISIT_BASE=8) — only wins when nothing urgent is queued.
+        # Separate from 'shelter' so exit logic differs (timed stay, not health-based).
+        if (not entity.props.get('hostile', False)
+                and entity.props.get('humanoid', False)
+                and not getattr(entity, 'in_structure', False)
+                and not self.is_night):
+            if self._find_closest_shelter(entity, screen_key):
+                candidates['visit'] = VISIT_BASE
 
         # ── Tier 5: Role (archetype work targets) ─────────────────────────────
         role_type = self._evaluate_role_tier(entity, screen_key)

@@ -304,6 +304,9 @@ SPECIAL_BASE         = 35    # flat score per eligible special-pool candidate
 SPECIAL_LOCK_TICKS   = 60    # ticks a chosen special type stays locked within the special pool
 TARGET_LOCK_TICKS    = 300   # ticks a chosen target type is held before re-rolling
 RESOURCE_BASE        = 20    # base resource score — kept low; hp_mult provides the real urgency
+VISIT_BASE           = 8     # flat score for casual daytime house visits (peaceful humanoids only)
+VISIT_DURATION_MIN   = 300   # minimum ticks a visiting NPC stays inside
+VISIT_DURATION_MAX   = 600   # maximum ticks a visiting NPC stays inside
 MIN_RESOURCE_URGENCY = 0.30  # stat must be below 70% full before food/water enters candidates
 
 # Maps quest focus type → list of eligible target cell/entity/item strings.

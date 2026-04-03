@@ -1295,15 +1295,21 @@ class NpcAiMovementMixin:
                         entity.hunger = min(entity.max_hunger, entity.hunger + 20)
                         entity.inventory['carrot'] = max(0, entity.inventory['carrot'] - 1)
 
-            # Check if fully recovered and should exit
-            health_full = entity.health >= entity.max_health * 0.95
-            hunger_ok = entity.hunger >= entity.max_hunger * 0.7
-            thirst_ok = entity.thirst >= entity.max_thirst * 0.7
+            # Visit exit: NPC came for a casual timed visit — leave when duration expires
+            visit_end = getattr(entity, 'visit_end_tick', None)
+            if visit_end is not None and self.tick >= visit_end:
+                entity.visit_end_tick = None
+                self.npc_exit_structure(entity)
+                return
 
-            if health_full and hunger_ok and thirst_ok:
-                # NPC is healthy, time to leave and get back to work
-                if random.random() < NPC_STRUCTURE_EXIT_CHANCE:
-                    self.npc_exit_structure(entity)
+            # Shelter exit: leave when fully recovered (only for non-visit stays)
+            if visit_end is None:
+                health_full = entity.health >= entity.max_health * 0.95
+                hunger_ok = entity.hunger >= entity.max_hunger * 0.7
+                thirst_ok = entity.thirst >= entity.max_thirst * 0.7
+                if health_full and hunger_ok and thirst_ok:
+                    if random.random() < NPC_STRUCTURE_EXIT_CHANCE:
+                        self.npc_exit_structure(entity)
 
         # CAVE LOGIC (dangerous, no healing)
         elif structure_type == 'CAVE':
@@ -1438,9 +1444,9 @@ class NpcAiMovementMixin:
                         # Animals (non-humanoid) don't enter houses
                         if not entity.props.get('humanoid', False):
                             continue
-                        # Only enter when explicitly targeting shelter — no opportunistic entry
-                        # for wandering NPCs passing by. Random entry causes visible pop-in/pop-out.
-                        if getattr(entity, 'target_type', None) == 'shelter':
+                        # Only enter when explicitly targeting shelter or visit — no opportunistic
+                        # entry for wandering NPCs passing by. Random entry causes visible pop-in/pop-out.
+                        if getattr(entity, 'target_type', None) in ('shelter', 'visit'):
                             self.npc_enter_structure(entity, screen_key, check_x, check_y, cell)
                             return
 
