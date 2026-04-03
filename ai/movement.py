@@ -1238,32 +1238,37 @@ class NpcAiMovementMixin:
         entity.structure_key = None
         entity.last_structure_change_tick = self.tick
 
-        # Position near the door cell in the parent zone
+        # Position near the door cell in the parent zone.
+        # Search by Manhattan distance (closest first) so entity appears right at the door,
+        # not arbitrarily far away which causes visible pop-in several cells from the entrance.
         door_x, door_y = parent_cell
         if parent_key in self.screens:
             screen = self.screens[parent_key]
-            for dy in range(-2, 3):
-                for dx in range(-2, 3):
-                    check_x = door_x + dx
-                    check_y = door_y + dy
-                    if 0 <= check_x < GRID_WIDTH and 0 <= check_y < GRID_HEIGHT:
-                        cell = screen['grid'][check_y][check_x]
-                        if cell in ['GRASS', 'DIRT', 'SAND', 'STONE'] and not CELL_TYPES[cell].get('solid', False):
-                            entity.x = check_x
-                            entity.y = check_y
-                            entity.world_x = float(check_x)
-                            entity.world_y = float(check_y)
+            for search_dist in range(3):
+                for dy in range(-search_dist, search_dist + 1):
+                    for dx in range(-search_dist, search_dist + 1):
+                        if abs(dy) + abs(dx) != search_dist:
+                            continue
+                        check_x = door_x + dx
+                        check_y = door_y + dy
+                        if 0 <= check_x < GRID_WIDTH and 0 <= check_y < GRID_HEIGHT:
+                            cell = screen['grid'][check_y][check_x]
+                            if cell in ['GRASS', 'DIRT', 'SAND', 'STONE'] and not CELL_TYPES[cell].get('solid', False):
+                                entity.x = check_x
+                                entity.y = check_y
+                                entity.world_x = float(check_x)
+                                entity.world_y = float(check_y)
 
-                            # Add exit area to memory lane to prevent immediate re-entry
-                            if not hasattr(entity, 'memory_lane'):
-                                entity.memory_lane = []
-                            for mdx in range(-1, 2):
-                                for mdy in range(-1, 2):
-                                    mem_cell = (check_x + mdx, check_y + mdy)
-                                    if len(entity.memory_lane) < entity.max_memory_length:
-                                        entity.memory_lane.append(mem_cell)
+                                # Add exit area to memory lane to prevent immediate re-entry
+                                if not hasattr(entity, 'memory_lane'):
+                                    entity.memory_lane = []
+                                for mdx in range(-1, 2):
+                                    for mdy in range(-1, 2):
+                                        mem_cell = (check_x + mdx, check_y + mdy)
+                                        if len(entity.memory_lane) < entity.max_memory_length:
+                                            entity.memory_lane.append(mem_cell)
 
-                            return
+                                return
 
         entity.world_x = float(entity.x)
         entity.world_y = float(entity.y)
@@ -1433,9 +1438,9 @@ class NpcAiMovementMixin:
                         # Animals (non-humanoid) don't enter houses
                         if not entity.props.get('humanoid', False):
                             continue
-                        # Shelter-targeting NPCs enter with certainty; others opportunistically
-                        chance = 1.0 if getattr(entity, 'target_type', None) == 'shelter' else 0.1
-                        if random.random() < chance:
+                        # Only enter when explicitly targeting shelter — no opportunistic entry
+                        # for wandering NPCs passing by. Random entry causes visible pop-in/pop-out.
+                        if getattr(entity, 'target_type', None) == 'shelter':
                             self.npc_enter_structure(entity, screen_key, check_x, check_y, cell)
                             return
 
