@@ -1295,13 +1295,20 @@ class NpcAiMovementMixin:
                         entity.hunger = min(entity.max_hunger, entity.hunger + 20)
                         entity.inventory['carrot'] = max(0, entity.inventory['carrot'] - 1)
 
-            # Check if fully recovered and should exit
+            # Casual visit: exit when visit_end_tick is reached
+            visit_end = getattr(entity, 'visit_end_tick', None)
+            if visit_end is not None and self.tick >= visit_end:
+                entity.visit_end_tick = None
+                self.npc_exit_structure(entity)
+                return
+
+            # Check if fully recovered and should exit (shelter/healing visits)
             health_full = entity.health >= entity.max_health * 0.95
             hunger_ok = entity.hunger >= entity.max_hunger * 0.7
             thirst_ok = entity.thirst >= entity.max_thirst * 0.7
 
-            if health_full and hunger_ok and thirst_ok:
-                # NPC is healthy, time to leave and get back to work
+            if health_full and hunger_ok and thirst_ok and visit_end is None:
+                # NPC is healthy and not on a timed visit — time to leave
                 if random.random() < NPC_STRUCTURE_EXIT_CHANCE:
                     self.npc_exit_structure(entity)
 
@@ -1438,9 +1445,9 @@ class NpcAiMovementMixin:
                         # Animals (non-humanoid) don't enter houses
                         if not entity.props.get('humanoid', False):
                             continue
-                        # Only enter when explicitly targeting shelter — no opportunistic entry
-                        # for wandering NPCs passing by. Random entry causes visible pop-in/pop-out.
-                        if getattr(entity, 'target_type', None) == 'shelter':
+                        # Only enter when explicitly targeting shelter or visit — no opportunistic
+                        # entry for wandering NPCs passing by.
+                        if getattr(entity, 'target_type', None) in ('shelter', 'visit'):
                             self.npc_enter_structure(entity, screen_key, check_x, check_y, cell)
                             return
 
@@ -2418,6 +2425,42 @@ class NpcAiMovementMixin:
         # No shelter nearby - not idle
         entity.is_idle = False
         return False  # No shelter found or too far
+
+    def npc_seek_visit(self, entity):
+        """Peaceful NPC casually visits a nearby house during the day.
+
+        Sets target_type='visit' and navigates to the house via the normal
+        targeting state. visit_end_tick marks when the entity should leave.
+        Separate from 'shelter' so daytime visits don't inherit nighttime urgency.
+        """
+        if entity.in_structure:
+            return False
+        screen_key = f"{entity.screen_x},{entity.screen_y}"
+        if screen_key not in self.screens:
+            return False
+
+        screen = self.screens[screen_key]
+        nearest_house = None
+        min_dist = float('inf')
+        for y in range(GRID_HEIGHT):
+            for x in range(GRID_WIDTH):
+                if screen['grid'][y][x] == 'HOUSE':
+                    dist = abs(entity.x - x) + abs(entity.y - y)
+                    if dist < min_dist and dist <= 12:
+                        min_dist = dist
+                        nearest_house = (x, y)
+
+        if not nearest_house:
+            return False
+
+        hx, hy = nearest_house
+        entity.target_type = 'visit'
+        entity.current_target = (hx, hy, 0, 'HOUSE')
+        entity.ai_state = 'targeting'
+        entity.ai_state_timer = 1
+        # Duration: stay for 300–600 ticks once inside
+        entity.visit_end_tick = self.tick + random.randint(300, 600)
+        return True
 
     def _find_closest_any_entity(self, entity, screen_key):
         """Closest entity of any kind (combat_all quest) — never returns self."""
