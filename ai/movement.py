@@ -480,29 +480,38 @@ class NpcAiMovementMixin:
         new_position = None
         exit_cells = []  # Track exit cells to add to memory
 
-        # Top entrance — any x position along top edge
-        if exits['top'] and entity.y <= 1:
+        # Corridor geometry (must match world/generation.py):
+        # Top/Bottom exits: 2 tiles wide at x = center_x-1 and center_x
+        # Left/Right exits: 2 tiles tall at y = center_y-1 and center_y
+        # Allow ±1 buffer so NPCs don't need pixel-exact positioning.
+        _cx_lo = center_x - 2
+        _cx_hi = center_x + 1
+        _cy_lo = center_y - 2
+        _cy_hi = center_y + 1
+
+        # Top entrance — must be within corridor
+        if exits['top'] and entity.y <= 1 and _cx_lo <= entity.x <= _cx_hi:
             transition_target = (entity.screen_x, entity.screen_y - 1)
             new_position = (entity.x, GRID_HEIGHT - 3)
             exit_cells = [(entity.x + dx, 0) for dx in range(-2, 3)]
             exit_cells.extend([(entity.x + dx, 1) for dx in range(-2, 3)])
 
-        # Bottom entrance — any x position along bottom edge
-        elif exits['bottom'] and entity.y >= GRID_HEIGHT - 2:
+        # Bottom entrance — must be within corridor
+        elif exits['bottom'] and entity.y >= GRID_HEIGHT - 2 and _cx_lo <= entity.x <= _cx_hi:
             transition_target = (entity.screen_x, entity.screen_y + 1)
             new_position = (entity.x, 2)
             exit_cells = [(entity.x + dx, GRID_HEIGHT - 1) for dx in range(-2, 3)]
             exit_cells.extend([(entity.x + dx, GRID_HEIGHT - 2) for dx in range(-2, 3)])
 
-        # Left entrance — any y position along left edge
-        elif exits['left'] and entity.x <= 1:
+        # Left entrance — must be within corridor
+        elif exits['left'] and entity.x <= 1 and _cy_lo <= entity.y <= _cy_hi:
             transition_target = (entity.screen_x - 1, entity.screen_y)
             new_position = (GRID_WIDTH - 3, entity.y)
             exit_cells = [(0, entity.y + dy) for dy in range(-2, 3)]
             exit_cells.extend([(1, entity.y + dy) for dy in range(-2, 3)])
 
-        # Right entrance — any y position along right edge
-        elif exits['right'] and entity.x >= GRID_WIDTH - 2:
+        # Right entrance — must be within corridor
+        elif exits['right'] and entity.x >= GRID_WIDTH - 2 and _cy_lo <= entity.y <= _cy_hi:
             transition_target = (entity.screen_x + 1, entity.screen_y)
             new_position = (2, entity.y)
             exit_cells = [(GRID_WIDTH - 1, entity.y + dy) for dy in range(-2, 3)]
@@ -657,10 +666,19 @@ class NpcAiMovementMixin:
         new_screen_y = entity.screen_y
         facing_after = entity.facing
 
-        # Verify entity is in the exit corridor for the direction they're stepping.
-        # Corridor geometry mirrors is_at_exit(): 2-tile span at each edge center.
+        # Corridor geometry (must match world/generation.py):
+        # Top/Bottom: 2 tiles wide at x = center_x-1, center_x; allow ±1 buffer.
+        # Left/Right: 2 tiles tall at y = center_y-1, center_y; allow ±1 buffer.
+        _cx_lo = center_x - 2
+        _cx_hi = center_x + 1
+        _cy_lo = center_y - 2
+        _cy_hi = center_y + 1
+
+        # Verify entity is stepping through the actual exit corridor.
         if new_y < 0:
             if not screen['exits']['top']:
+                return
+            if not (_cx_lo <= entity.x <= _cx_hi):
                 return
             new_screen_y -= 1
             new_y = GRID_HEIGHT - 2
@@ -668,17 +686,23 @@ class NpcAiMovementMixin:
         elif new_y >= GRID_HEIGHT:
             if not screen['exits']['bottom']:
                 return
+            if not (_cx_lo <= entity.x <= _cx_hi):
+                return
             new_screen_y += 1
             new_y = 1
             facing_after = 'down'
         elif new_x < 0:
             if not screen['exits']['left']:
                 return
+            if not (_cy_lo <= entity.y <= _cy_hi):
+                return
             new_screen_x -= 1
             new_x = GRID_WIDTH - 2
             facing_after = 'left'
         elif new_x >= GRID_WIDTH:
             if not screen['exits']['right']:
+                return
+            if not (_cy_lo <= entity.y <= _cy_hi):
                 return
             new_screen_x += 1
             new_x = 1
