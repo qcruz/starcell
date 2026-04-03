@@ -998,3 +998,12 @@ class HudMixin:
             # Draw cell/item inspect panel (Shift or inspect tool, no NPC at target)
             self.draw_inspect_target()
 
+            # AUTO_DEBUG countdown overlay — top-right corner
+            import time as _time
+            _end = getattr(self, '_auto_debug_end_time', None)
+            if _end is not None:
+                _secs_left = max(0, int(_end - _time.time()))
+                _cd_text = self.tiny_font.render(
+                    f"AUTO {_secs_left}s", True, (255, 220, 60))
+                self.screen.blit(_cd_text, (SCREEN_WIDTH - 70, 4))
+
