@@ -2750,9 +2750,11 @@ class NpcAiMixin:
                 if locked and locked in candidates:
                     return locked
 
-        # Weighted random roll — scores are used directly as weights
-        types = list(candidates.keys())
-        weights = list(candidates.values())
+        # Weighted random roll — filter zero-weight entries before choosing
+        types   = [t for t, w in candidates.items() if w > 0]
+        weights = [w for w in candidates.values() if w > 0]
+        if not types:
+            return None
         chosen = random.choices(types, weights=weights, k=1)[0]
 
         entity._target_type_chosen = chosen
