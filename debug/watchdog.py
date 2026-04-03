@@ -1008,6 +1008,83 @@ class Watchdog:
                     'is_hard_cap': t >= _RESOURCE_HARD_CAP,
                 })
 
+        # Check 6: entities alive but absent from every screen_entities bucket (HB-02).
+        # These entities receive no AI updates — hunger/thirst/health freeze.
+        all_tracked_eids: set = set()
+        for bucket_eids in screen_entities.values():
+            all_tracked_eids.update(bucket_eids)
+        for eid, entity in game.entities.items():
+            if entity.health <= 0:
+                continue
+            if eid not in all_tracked_eids:
+                self.bug_catcher.log({
+                    'tick': tick,
+                    'category': 'integrity_anomaly',
+                    'check': 'entity_orphaned_from_screen_entities',
+                    'entity_id': eid,
+                    'entity_type': entity.type,
+                    'zone': f"{entity.screen_x},{entity.screen_y}",
+                    'grid': [entity.x, entity.y],
+                    'ai_state': getattr(entity, 'ai_state', None),
+                    'hunger': getattr(entity, 'hunger', None),
+                    'thirst': getattr(entity, 'thirst', None),
+                    'note': 'alive entity not in any screen_entities bucket — AI updates skipped',
+                })
+
+        # Check 7: entities stuck targeting EXIT or structure cells in overworld zones (HB-01/HB-03).
+        # The structure freeze check (check 3) only covers structure-internal zones — this covers overworld.
+        overworld_keys = set(game.screens.keys()) - structure_keys
+        for zone_key in overworld_keys:
+            for eid in screen_entities.get(zone_key, []):
+                if eid not in game.entities:
+                    continue
+                e = game.entities[eid]
+                timer = getattr(e, 'ai_state_timer', 0) or 0
+                if timer <= 600:
+                    continue
+                target = getattr(e, 'current_target', None)
+                if not isinstance(target, list) or len(target) < 4:
+                    continue
+                target_kind = target[3]
+                if target_kind in ('EXIT', 'structure'):
+                    self.bug_catcher.log({
+                        'tick': tick,
+                        'category': 'integrity_anomaly',
+                        'check': 'entity_stuck_targeting_exit_or_structure',
+                        'entity_id': eid,
+                        'entity_type': e.type,
+                        'zone': zone_key,
+                        'grid': [e.x, e.y],
+                        'ai_state': getattr(e, 'ai_state', None),
+                        'ai_state_timer': timer,
+                        'current_target': target,
+                        'target_kind': target_kind,
+                        'stuck_counter': getattr(e, 'stuck_counter', 0),
+                        'note': f'overworld entity stuck {timer} ticks targeting {target_kind} cell',
+                    })
+
+        # Check 8: in_subscreen=True but entity present in overworld screen_entities (render bug).
+        # HUD skips rendering these, but they stay in the overworld render bucket — animation freezes.
+        for zone_key in overworld_keys:
+            for eid in screen_entities.get(zone_key, []):
+                if eid not in game.entities:
+                    continue
+                e = game.entities[eid]
+                if getattr(e, 'in_subscreen', False):
+                    self.bug_catcher.log({
+                        'tick': tick,
+                        'category': 'integrity_anomaly',
+                        'check': 'entity_in_subscreen_but_in_overworld_screen_entities',
+                        'entity_id': eid,
+                        'entity_type': e.type,
+                        'zone': zone_key,
+                        'subscreen_key': getattr(e, 'subscreen_key', None),
+                        'grid': [e.x, e.y],
+                        'ai_state': getattr(e, 'ai_state', None),
+                        'anim_frame': getattr(e, 'anim_frame', None),
+                        'note': 'in_subscreen=True but in overworld screen_entities — will not render correctly',
+                    })
+
     # ------------------------------------------------------------------
     # Rolling backup saves
     # ------------------------------------------------------------------
