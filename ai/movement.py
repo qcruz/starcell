@@ -532,6 +532,23 @@ class NpcAiMovementMixin:
                         target_cell = target_screen['grid'][new_y][new_x]
 
                 if new_x is not None and not CELL_TYPES.get(target_cell, {}).get('solid', False):
+                    # Diagnostic: log when entity leaves player's zone
+                    _player_zone = f"{self.player['screen_x']},{self.player['screen_y']}"
+                    if screen_key == _player_zone:
+                        self.bug_catcher.log({
+                            'tick': self.tick,
+                            'category': 'zone_exit_event',
+                            'event': 'zone_transition',
+                            'entity_id': entity_id,
+                            'entity_type': entity.type,
+                            'from_zone': screen_key,
+                            'to_zone': new_screen_key,
+                            'entity_x': entity.x,
+                            'entity_y': entity.y,
+                            'ai_state': getattr(entity, 'ai_state', None),
+                            'target_type': getattr(entity, 'target_type', None),
+                        })
+
                     # Remove from old screen
                     if screen_key in self.screen_entities:
                         if entity_id in self.screen_entities[screen_key]:
@@ -698,6 +715,22 @@ class NpcAiMovementMixin:
 
         # Transfer between screen entity lists
         old_sk = f"{entity.screen_x},{entity.screen_y}"
+        # Diagnostic: log when entity leaves player's zone via screen crossing
+        _player_zone = f"{self.player['screen_x']},{self.player['screen_y']}"
+        if old_sk == _player_zone:
+            self.bug_catcher.log({
+                'tick': self.tick,
+                'category': 'zone_exit_event',
+                'event': 'screen_crossing',
+                'entity_id': entity_id,
+                'entity_type': entity.type,
+                'from_zone': old_sk,
+                'to_zone': new_screen_key,
+                'entity_x': entity.x,
+                'entity_y': entity.y,
+                'ai_state': getattr(entity, 'ai_state', None),
+                'target_type': getattr(entity, 'target_type', None),
+            })
         if old_sk in self.screen_entities and entity_id in self.screen_entities[old_sk]:
             self.screen_entities[old_sk].remove(entity_id)
         self.screen_entities[new_screen_key].append(entity_id)
@@ -1033,6 +1066,23 @@ class NpcAiMovementMixin:
         if entity_id not in self.screen_entities[structure_key]:
             self.screen_entities[structure_key].append(entity_id)
 
+        # Diagnostic: log when entity leaves player's zone into a structure
+        _player_zone = f"{self.player['screen_x']},{self.player['screen_y']}"
+        if screen_key == _player_zone:
+            self.bug_catcher.log({
+                'tick': self.tick,
+                'category': 'zone_exit_event',
+                'event': 'enter_structure',
+                'entity_id': entity_id,
+                'entity_type': entity.type,
+                'from_zone': screen_key,
+                'to_structure': structure_key,
+                'entity_x': entity.x,
+                'entity_y': entity.y,
+                'ai_state': getattr(entity, 'ai_state', None),
+                'target_type': getattr(entity, 'target_type', None),
+            })
+
         # Update entity location to the structure zone's virtual coordinates
         vx, vy = map(int, structure_key.split(','))
         entity.screen_x = vx
@@ -1141,6 +1191,21 @@ class NpcAiMovementMixin:
             self.screen_entities[parent_key] = []
         if entity_id not in self.screen_entities[parent_key]:
             self.screen_entities[parent_key].append(entity_id)
+
+        # Diagnostic: log when entity returns to player's zone from a structure
+        _player_zone = f"{self.player['screen_x']},{self.player['screen_y']}"
+        if parent_key == _player_zone:
+            self.bug_catcher.log({
+                'tick': self.tick,
+                'category': 'zone_exit_event',
+                'event': 'exit_structure',
+                'entity_id': entity_id,
+                'entity_type': entity.type,
+                'from_structure': structure_key,
+                'to_zone': parent_key,
+                'ai_state': getattr(entity, 'ai_state', None),
+                'target_type': getattr(entity, 'target_type', None),
+            })
 
         # Restore entity location to parent overworld zone
         entity.screen_x = parent_screen[0]
