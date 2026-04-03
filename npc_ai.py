@@ -485,7 +485,7 @@ class NpcAiMixin:
                                     entity.target_type = None
                                 else:
                                     _is_enterable = (
-                                        entity.target_type in ('shelter', 'visit')
+                                        entity.target_type == 'shelter'
                                         or (entity.target_type == 'role'
                                             and cell_type == 'MINESHAFT'
                                             and getattr(entity, 'quest_focus', None) == 'MINE')
@@ -528,8 +528,8 @@ class NpcAiMixin:
                                     if entity.in_structure:
                                         entity.current_target = None
                                         entity.target_type = None
-                            elif dist == 1 and entity.target_type in ('shelter', 'visit'):
-                                # Adjacent to shelter/visit target — enter, clear targeting state
+                            elif dist == 1 and entity.target_type == 'shelter':
+                                # Adjacent to shelter — enter at 100%, clear only after confirmed
                                 cell_type = entity.current_target[3] if len(entity.current_target) >= 4 else 'HOUSE'
                                 self.npc_enter_structure(entity, screen_key, tx, ty, cell_type)
                                 if entity.in_structure:
@@ -856,18 +856,6 @@ class NpcAiMixin:
             if entity.type in peaceful_types and not entity.in_structure:
                 if self.npc_seek_shelter(entity):
                     return  # Sheltered, don't wander or do work behaviors
-
-        # Daytime visit: peaceful NPCs occasionally pop into a nearby house for a casual stay.
-        # Uses target_type='visit' — separate from 'shelter' so urgency and exit logic differ.
-        if (not self.is_night and not is_follower and not is_proxy and not is_keeper
-                and not entity.in_structure
-                and entity.ai_state in ('wandering', 'idle')
-                and not getattr(entity, 'target_type', None)
-                and random.random() < 0.002):
-            _visit_types = ['FARMER', 'TRADER', 'LUMBERJACK', 'MINER', 'BLACKSMITH', 'WIZARD']
-            if entity.type in _visit_types:
-                self.npc_seek_visit(entity)
-                # Don't return — entity starts navigating next tick via targeting state
 
         # PEACEFUL NPC THREAT DETECTION - DISABLED
         # Now handled by the reactive hostile proximity check in update_entity_ai_state
