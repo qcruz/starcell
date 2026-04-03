@@ -5,6 +5,28 @@ Reviewed from `debug/bugcatcher.log` after each session.
 
 ---
 
+## Session 65 — 2026-04-02 (launcher + timer fixes; new integrity checks)
+
+**Fixes applied before this run:**
+- Watchdog: 3 new integrity checks (check 6: entity_orphaned_from_screen_entities; check 7: entity_stuck_targeting_exit_or_structure; check 8: entity_in_subscreen_but_in_overworld_screen_entities)
+- Launcher: skip branch dialog when auto_debug.cfg is active (auto-select dev-q-updates)
+- main.py: mute all audio during AUTO_DEBUG sessions
+- npc_ai.py: filter zero-weight candidates before random.choices in determine_target_type (crash fix)
+- game_core.py: move AUTO_DEBUG timer check outside state dispatch so death/menu/paused states don't trap the session
+
+**Run stats:** Tick 77400→78000 (CONTINUE). ~600 ticks of playing time. No `auto_debug_shutdown` event logged — session stopped manually before timer elapsed. 1203 entities. No crash this run.
+
+**New integrity checks (6/7/8): 0 hits** — no orphaned entities, no overworld stuck-targeting, no in_subscreen render mismatches detected this session.
+
+**entity_not_in_subscreen_but_in_subscreen_entities: 56**
+All patched on session start (fix_applied=True). Entity types: BLACK_SPIDER×19, WOLF×8, TERMITE×8, MINER×6, BAT×5, FARMER×3, TRADER×2, GUARD×1, others. Concentrated in zones around x≈-1100 (cave-dense area). These are cave/mine dwellers whose `in_structure` flag is `False` even though their `screen_x,screen_y` matches the structure key — same persistent flag bug. Watchdog patch corrects the flag each load but root cause is unresolved.
+
+**OBSERVATION:** Session too short (~10s of game time) for AI state or population data. Timer fix confirmed working on subsequent manual test — no longer runs indefinitely.
+
+**OBSERVATION:** `random.choices` crash (ValueError: Total of weights must be greater than zero) did NOT recur this session — fix confirmed.
+
+---
+
 ## Session 64 — 2026-03-27 (tasks_completed tracking in action primitives)
 
 **Fixes applied before this run:**
