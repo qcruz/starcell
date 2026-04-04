@@ -592,6 +592,13 @@ class NpcAiMovementMixin:
                         entity.current_target = None
                         entity.ai_state = 'wandering'
 
+                    # TRADER gold replenishment on zone crossing
+                    if entity.type == 'TRADER':
+                        _cap  = int(200 * max(1.0, getattr(entity, 'level', 1.0)))
+                        _gold = entity.inventory.get('gold', 0)
+                        if _gold < _cap:
+                            entity.inventory['gold'] = min(_cap, _gold + TRADER_GOLD_REPLENISH)
+
     def try_entity_screen_crossing(self, entity, new_x, new_y):
         """Seamlessly transition entity to adjacent zone when they walk through an exit corridor.
 
@@ -2245,8 +2252,7 @@ class NpcAiMovementMixin:
         elif target_type == 'clearing_action':
             return self._find_clearing_target(entity, screen_key)
         elif target_type == 'trade':
-            # Stub — NPC trader trade system not yet built; always returns None
-            return None
+            return self._find_trade_partner(entity, screen_key)
         return None
 
     def find_closest_eligible_target(self, entity, screen_key, target_list):

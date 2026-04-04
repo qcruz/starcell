@@ -308,6 +308,9 @@ VISIT_BASE           = 8     # flat score for casual daytime house visits (peace
 VISIT_DURATION_MIN   = 300   # minimum ticks a visiting NPC stays inside
 VISIT_DURATION_MAX   = 600   # maximum ticks a visiting NPC stays inside
 MIN_RESOURCE_URGENCY = 0.30  # stat must be below 70% full before food/water enters candidates
+TRADE_BASE           = 12    # flat score for NPC-to-NPC trade (special pool candidate)
+TRADER_GOLD_REPLENISH = 50   # gold TRADERs gain per zone crossing (capped at 200 * level)
+NPC_TRADE_SEARCH_RADIUS = 8  # max Manhattan dist to find a trade partner
 
 # Maps quest focus type → list of eligible target cell/entity/item strings.
 # Used by _evaluate_role_tier and find_closest_eligible_target.

@@ -442,7 +442,8 @@ class CombatMixin:
             'fire': (255, 69, 0),          # Red-orange
             'ice': (173, 216, 230),        # Light blue
             'poison': (50, 205, 50),       # Lime green
-            'shadow': (75, 0, 130)         # Indigo
+            'shadow': (75, 0, 130),        # Indigo
+            'trade': (255, 215, 0),        # Gold
         }
 
         for anim in self.attack_animations[:]:
@@ -468,7 +469,15 @@ class CombatMixin:
             sprite_key = f"swipe_{facing}"
             swipe_sprite = self.sprite_manager.sprites.get(sprite_key) if hasattr(self, 'sprite_manager') else None
 
-            if swipe_sprite:
+            if anim.get('magic_type') == 'trade':
+                # Trade: render a gold '+' glyph at the recipient's position
+                _font = getattr(self, 'small_font', None) or getattr(self, 'font', None)
+                if _font:
+                    _surf = _font.render('+', True, magic_colors['trade'])
+                    _cx   = x_pos + CELL_SIZE // 2 - _surf.get_width() // 2
+                    _cy   = y_pos + CELL_SIZE // 4
+                    self.screen.blit(_surf, (_cx, _cy))
+            elif swipe_sprite:
                 # Tint magic attacks by drawing a colored overlay
                 if anim.get('magic_type') and anim['magic_type'] in magic_colors:
                     tinted = swipe_sprite.copy()

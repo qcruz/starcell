@@ -692,6 +692,17 @@ class NpcAiMixin:
                             entity._special_target_type = None
                             entity.ai_state = 'wandering'
                             entity.ai_state_timer = 2
+                        elif entity.target_type == 'special' and getattr(entity, '_special_target_type', None) == 'trade':
+                            # Adjacent to trade partner — execute exchange
+                            partner_id = entity.current_target if isinstance(entity.current_target, int) else None
+                            if partner_id and partner_id in self.entities:
+                                self._execute_npc_trade(entity, partner_id)
+                            else:
+                                entity.current_target       = None
+                                entity._special_target_lock = 0
+                                entity._special_target_type = None
+                                entity.ai_state             = 'wandering'
+                                entity.ai_state_timer       = 2
                         else:
                             # Generic target type — try behavior_config
                             behavior_config = entity.props.get('behavior_config')
@@ -2949,10 +2960,14 @@ class NpcAiMixin:
             if self._find_chest_in_zone(entity, screen_key):
                 candidates.append('chest_dump')
 
-        # trade: stub — NPC trader system not yet built
-        # if inv_count >= 20:
-        #     if self._find_trade_target(entity, screen_key):
-        #         candidates.append('trade')
+        # trade: peaceful humanoid with a nearby partner that has items
+        if (not entity.props.get('hostile', False)
+                and entity.props.get('humanoid', False)):
+            _partner = self._find_trade_partner(entity, screen_key)
+            if _partner is not None:
+                # TRADERs get 3× weight so they trade far more often
+                _trade_weight = 3 if entity.type == 'TRADER' else 1
+                candidates.extend(['trade'] * _trade_weight)
 
         # clearing_action: adjacent solid non-structure cell exists
         if self._find_clearing_target(entity, screen_key):
@@ -2992,8 +3007,112 @@ class NpcAiMixin:
         if stype == 'travel':
             return self._should_travel_exit(entity, screen_key)
         if stype == 'trade':
-            return False  # stub
+            return (not entity.props.get('hostile', False)
+                    and bool(self._find_trade_partner(entity, screen_key)))
         return False
+
+    def _find_trade_partner(self, entity, screen_key):
+        """Return entity ID of a nearby tradeable partner, or None.
+
+        Alignment rules:
+          - Peaceful humanoids trade only with other peaceful humanoids.
+          - Goblins trade only with other goblins.
+          - Bandits trade only with other bandits.
+        At least one side must have inventory items.
+        """
+        if entity.props.get('hostile', False):
+            return None
+        _is_goblin = entity.type == 'GOBLIN'
+        _is_bandit = entity.type == 'BANDIT'
+        best_id, best_dist = None, float('inf')
+        for oid in self.screen_entities.get(screen_key, []):
+            if oid not in self.entities:
+                continue
+            other = self.entities[oid]
+            if not other.is_alive() or other is entity:
+                continue
+            if not other.props.get('humanoid', False):
+                continue
+            # Alignment grouping
+            other_is_goblin = other.type == 'GOBLIN'
+            other_is_bandit = other.type == 'BANDIT'
+            other_hostile   = other.props.get('hostile', False)
+            if _is_goblin and not other_is_goblin:
+                continue
+            if _is_bandit and not other_is_bandit:
+                continue
+            if not _is_goblin and not _is_bandit and other_hostile:
+                continue
+            # At least one side must have something to give
+            e_items  = sum(entity.inventory.values()) if entity.inventory else 0
+            o_items  = sum(other.inventory.values())  if other.inventory  else 0
+            if not (e_items > 0 or o_items > 0):
+                continue
+            dist = abs(other.x - entity.x) + abs(other.y - entity.y)
+            if dist <= NPC_TRADE_SEARCH_RADIUS and dist < best_dist:
+                best_dist = dist
+                best_id   = oid
+        return best_id
+
+    def _execute_npc_trade(self, entity, partner_id):
+        """Execute a one-step item exchange between entity and partner.
+
+        Gold is preferred as currency (gives 1 coin).  If neither side has gold,
+        each gives half a random stack (min 1).  The '+' animation fires at both
+        positions so the player can observe trades happening nearby.
+        """
+        if partner_id not in self.entities:
+            return
+        partner = self.entities[partner_id]
+        if not partner.is_alive():
+            return
+
+        def _pick_give(inv):
+            """Return (item_name, count) to give, or None."""
+            if inv.get('gold', 0) > 0:
+                return ('gold', 1)
+            options = [(k, v) for k, v in inv.items() if v > 0]
+            if not options:
+                return None
+            item, count = random.choice(options)
+            return (item, max(1, count // 2))
+
+        entity_gives  = _pick_give(entity.inventory  if entity.inventory  else {})
+        partner_gives = _pick_give(partner.inventory if partner.inventory else {})
+
+        if not entity_gives and not partner_gives:
+            # Nothing to trade — bail and clear lock
+            entity.current_target       = None
+            entity._special_target_lock = 0
+            entity._special_target_type = None
+            entity.ai_state             = 'wandering'
+            entity.ai_state_timer       = 2
+            return
+
+        if entity_gives:
+            item, count = entity_gives
+            entity.inventory[item]  = max(0, entity.inventory.get(item, 0) - count)
+            if entity.inventory[item] == 0:
+                del entity.inventory[item]
+            partner.inventory[item] = partner.inventory.get(item, 0) + count
+            self.show_attack_animation(partner.x, partner.y, entity=entity, magic_type='trade')
+
+        if partner_gives:
+            item, count = partner_gives
+            partner.inventory[item] = max(0, partner.inventory.get(item, 0) - count)
+            if partner.inventory[item] == 0:
+                del partner.inventory[item]
+            entity.inventory[item]  = entity.inventory.get(item, 0) + count
+            self.show_attack_animation(entity.x, entity.y, entity=partner, magic_type='trade')
+
+        self.trades_completed = getattr(self, 'trades_completed', 0) + 1
+
+        # Clear trade state so entity re-evaluates on next idle cycle
+        entity.current_target       = None
+        entity._special_target_lock = 0
+        entity._special_target_type = None
+        entity.ai_state             = 'wandering'
+        entity.ai_state_timer       = 3
 
     def _find_chest_in_zone(self, entity, screen_key):
         """Return True if any CHEST or EMPTY_CRATE cell exists within 8 cells of entity."""

@@ -33,7 +33,7 @@ from debug.fixes import fix_entity_subscreen_flag
 
 
 class Watchdog:
-    CATEGORIES = ['entities', 'cells', 'zones', 'player', 'structures', 'caves', 'followers', 'npc_actions', 'keepers', 'npc_quests', 'inventory_state', 'favor', 'food_behavior', 'ai_state_cycling']
+    CATEGORIES = ['entities', 'cells', 'zones', 'player', 'structures', 'caves', 'followers', 'npc_actions', 'keepers', 'npc_quests', 'inventory_state', 'favor', 'food_behavior', 'ai_state_cycling', 'trade_events']
     SAMPLE_INTERVAL   = 120    # ticks between cycles (~2 s at 60 fps)
     MAX_ENTRIES_PER_SAMPLE = 200  # max JSON entries per category per cycle
     BACKUP1_INTERVAL  = 3600   # ~60 s at 60 fps
@@ -75,6 +75,7 @@ class Watchdog:
             'favor':            self._sample_favor,
             'food_behavior':    self._sample_food_behavior,
             'ai_state_cycling': self._sample_ai_state_cycling,
+            'trade_events':     self._sample_trade_events,
         }
         _SAMPLERS[category](tick, game)
 
@@ -875,6 +876,68 @@ class Watchdog:
                 'current_target': getattr(entity, 'current_target', None),
                 'health': entity.health,
                 'is_alive': entity.is_alive(),
+            })
+
+    def _sample_trade_events(self, tick: int, game) -> None:
+        """Snapshot trade-related state: trades_completed counter, TRADER inventories,
+        and any NPCs whose _special_target_type is 'trade' right now.
+        """
+        # Session-level counter
+        trades_done = getattr(game, 'trades_completed', 0)
+        self.bug_catcher.log({
+            'tick':            tick,
+            'category':        'watchdog_trade_events',
+            'trades_completed': trades_done,
+        })
+
+        # Snapshot all TRADERs: gold balance + inventory
+        traders = [
+            (eid, e) for eid, e in game.entities.items()
+            if e.type == 'TRADER' and e.health > 0
+        ]
+        for eid, entity in traders:
+            inv = dict(getattr(entity, 'inventory', {}) or {})
+            self.bug_catcher.log({
+                'tick':       tick,
+                'category':   'watchdog_trade_events',
+                'event':      'trader_snapshot',
+                'id':         eid,
+                'zone':       f"{entity.screen_x},{entity.screen_y}",
+                'grid':       [entity.x, entity.y],
+                'gold':       inv.get('gold', 0),
+                'inv_total':  sum(inv.values()),
+                'level':      round(getattr(entity, 'level', 1.0), 2),
+                'ai_state':   getattr(entity, 'ai_state', None),
+                'target_type': getattr(entity, 'target_type', None),
+                '_special_target_type': getattr(entity, '_special_target_type', None),
+            })
+
+        # Snapshot any NPC currently executing a trade
+        trading_now = [
+            (eid, e) for eid, e in game.entities.items()
+            if getattr(e, '_special_target_type', None) == 'trade' and e.health > 0
+        ]
+        for eid, entity in trading_now:
+            partner_id  = entity.current_target if isinstance(entity.current_target, int) else None
+            partner_zone = None
+            partner_type = None
+            if partner_id and partner_id in game.entities:
+                p = game.entities[partner_id]
+                partner_zone = f"{p.screen_x},{p.screen_y}"
+                partner_type = p.type
+            self.bug_catcher.log({
+                'tick':          tick,
+                'category':      'watchdog_trade_events',
+                'event':         'trade_in_progress',
+                'id':            eid,
+                'type':          entity.type,
+                'zone':          f"{entity.screen_x},{entity.screen_y}",
+                'partner_id':    partner_id,
+                'partner_type':  partner_type,
+                'partner_zone':  partner_zone,
+                'ai_state':      getattr(entity, 'ai_state', None),
+                'inv_total':     sum((getattr(entity, 'inventory', {}) or {}).values()),
+                'gold':          (getattr(entity, 'inventory', {}) or {}).get('gold', 0),
             })
 
     # ------------------------------------------------------------------
