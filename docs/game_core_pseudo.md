@@ -347,7 +347,9 @@ def handle_input(self):
             elif key == V:       friendly_fire = not friendly_fire
             elif key == C:       toggle_crafting_panel()
             elif key == I:       toggle_inventory_panel()
-            elif key == T:       toggle_tools_panel()
+            elif key == T:
+                if shift: open_npc_trade_window()   # inspected NPC inventory trade
+                else:     toggle_tools_panel()
             elif key == M:       toggle_magic_panel()
             elif key == U:       toggle_actions_panel()
             elif key == G:
@@ -362,8 +364,10 @@ def handle_input(self):
             elif key in DIGIT_KEYS: select_tool_slot(key - K_1)
 
         if event.type == MOUSEBUTTONDOWN:
-            handle_inventory_click(event.pos)
-            handle_quest_ui_click(event.pos)
+            if handle_npc_trade_click(event.pos): gain_xp(1)  # inventory trade window
+            else:
+                handle_inventory_click(event.pos)
+                handle_quest_ui_click(event.pos)
 ```
 
 ---
@@ -665,7 +669,8 @@ def run(self):
         update_quests()
         update_enchanted_cells()
         update_cells()          # distance-throttled cell automata
-        update_entities()       # distance-throttled AI updates
+        # NOTE: update_entities() is dead code — all NPC AI runs through
+        # zones.py probabilistic_zone_updates(), NOT called here.
 
         watchdog.update(tick, self)
 

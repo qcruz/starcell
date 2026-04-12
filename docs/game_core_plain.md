@@ -170,10 +170,13 @@ Pressing F near a non-hostile humanoid NPC toggles the follow/unfollow relations
 Called every tick. Scans active quests for completion conditions (cell count, entity kill count, item delivery) and awards XP/items on completion. Quest state is stored in `self.player['quests']` as a list of dicts with `type`, `target`, `progress`, and `reward` fields.
 
 ### `npc_trade_interaction`
-Called when the player presses N near a trader. Opens the trade panel if adjacent to a TRADER entity, or executes the first available recipe if the panel is already open. The trader's inventory is checked (not the player's) — the player pays gold by proximity-dropping it, and the trader dispenses goods from its own stock. If the trader has no stock for a recipe, the recipe appears but is grayed out.
+Called when the player presses N near a trader. Opens a fixed-recipe trade panel if adjacent to a TRADER entity, or executes the first available recipe if the panel is already open. Recipe ingredients are checked against the trader's inventory — the player pays gold by proximity-dropping it and the trader dispenses goods from its own stock.
 
-### Trade window helpers
-`open_trade_window`, `close_trade_window`, and `execute_trade` manage the panel lifecycle. Trade windows are modal — other panels can't be opened while a trade window is active. On close, any un-traded items the player placed return to their inventory.
+### `open_npc_trade_window`
+Called on Shift+T when an NPC is being inspected. Opens an inventory-style grid UI above the NPC showing every item in their inventory with a randomized gold price (5–10 per item, generated fresh each open). This is the newer trade system, distinct from the N-key recipe panel — it lets the player browse and buy individual items rather than fixed recipes.
+
+### `handle_npc_trade_click`
+Mouse-click handler for the inventory trade window opened by `open_npc_trade_window`. Maps screen coordinates to item slots, deducts gold from the player, transfers the item to player inventory, and refreshes the panel. Closes the panel automatically when the NPC's inventory is empty. Stored in `self.trader_display` dict; cleared on zone cross, panel close, or NPC departure.
 
 ---
 
