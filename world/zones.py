@@ -6,7 +6,7 @@ from constants import (
     MAX_CATCHUP_PER_FRAME, MAX_CYCLES_TO_SIMULATE,
     UPDATE_FREQUENCY, MAX_ZONES_PER_UPDATE,
     NEW_ZONE_INSTANTIATE_CHANCE, ZONE_SOFT_CAP,
-    SKELETON_DAYLIGHT_DAMAGE,
+    SKELETON_DAYLIGHT_DAMAGE, STARVATION_DAMAGE,
     CAMP_HEALING_MULTIPLIER, HOUSE_HEALING_MULTIPLIER,
     NPC_CAMP_PLACE_RATE, ENHANCED_SETTLEMENT_RATE,
     KEEPER_ENTITY_TYPE, KEEPER_ASSIGNMENT_RATE,
@@ -286,7 +286,9 @@ class ZonesMixin:
         self.decay_buried_items(zone_key, _decay_factor)
         self.consolidate_dropped_items(zone_key)
         self.consolidate_chests(zone_key)
-        self.assign_zone_keepers(zone_key)
+        _opts = getattr(self, 'game_opts', None)
+        if not _opts or _opts.keeper_assignments:
+            self.assign_zone_keepers(zone_key)
         # Wolf pack check: ~0.5% per update or on the 600-tick sweep
         if self.tick % 600 == 0 or random.random() < 0.005:
             self.assign_wolf_pack_keepers(zone_key)
@@ -302,14 +304,16 @@ class ZonesMixin:
                 'rain_timer': 0,
                 'rain_duration': 0,
             }
+        _opts = getattr(self, 'game_opts', None)
         _zr = self.zone_rain[zone_key]
-        _zr['weather_timer'] += 1
-        if _zr['weather_timer'] >= _zr['weather_cycle']:
-            _zr['weather_timer'] = 0
-            _zr['weather_cycle'] = random.randint(RAIN_FREQUENCY_MIN, RAIN_FREQUENCY_MAX)
-            _zr['is_raining'] = True
-            _zr['rain_duration'] = random.randint(RAIN_DURATION_MIN, RAIN_DURATION_MAX)
-            _zr['rain_timer'] = 0
+        if not _opts or _opts.weather_enabled:
+            _zr['weather_timer'] += 1
+            if _zr['weather_timer'] >= _zr['weather_cycle']:
+                _zr['weather_timer'] = 0
+                _zr['weather_cycle'] = random.randint(RAIN_FREQUENCY_MIN, RAIN_FREQUENCY_MAX)
+                _zr['is_raining'] = True
+                _zr['rain_duration'] = random.randint(RAIN_DURATION_MIN, RAIN_DURATION_MAX)
+                _zr['rain_timer'] = 0
         if _zr['is_raining']:
             _zr['rain_timer'] += 1
             if _zr['rain_timer'] >= _zr['rain_duration']:
@@ -602,13 +606,31 @@ class ZonesMixin:
 
 
                 # Age entities every 600 ticks (accelerated during time pass)
+                _opts = getattr(self, 'game_opts', None)
                 age_interval = max(1, int(600 / _tp))
-                if self.tick % age_interval == 0 and entity.type != 'SKELETON':
-                    entity.age += 1
+                if (not _opts or _opts.npc_aging):
+                    if self.tick % age_interval == 0 and entity.type not in ('SKELETON', 'SKELETON_double'):
+                        entity.age += 1
+
+                # Pre-set disabled stats to max so decay_stats doesn't drain them
+                if _opts and not _opts.hunger_decay:
+                    entity.hunger = entity.max_hunger
+                if _opts and not _opts.thirst_decay:
+                    entity.thirst = entity.max_thirst
+                _pre_hp_decay = entity.health
 
                 entity.decay_stats()
                 for _ in range(_extra_decay + _pop_extra):
                     entity.decay_stats()
+
+                # Restore health lost to disabled damage sources
+                if _opts:
+                    _n = 1 + _extra_decay + _pop_extra
+                    if not _opts.starvation_damage and entity.hunger <= 0:
+                        entity.health = min(entity.max_health, entity.health + STARVATION_DAMAGE * _n)
+                    if not _opts.old_age_damage:
+                        if hasattr(entity, 'age') and hasattr(entity, 'max_age') and entity.age > entity.max_age:
+                            entity.health = max(entity.health, _pre_hp_decay)
 
                 # NPC item consumption: remove full stack of a random item
                 if random.random() < 0.25 and entity.inventory:
@@ -618,8 +640,9 @@ class ZonesMixin:
                         if (self.tick - getattr(entity, 'last_attacked_tick', 0)) > 60:
                             entity.health = min(entity.max_health, entity.health + 5 * min(count, 10))
 
-                # Skeletons burn in daylight
-                if entity.type == 'SKELETON' and not self.is_night:
+                # Skeletons burn in daylight (singles and doubles)
+                if (entity.type in ('SKELETON', 'SKELETON_double') and not self.is_night
+                        and (not _opts or _opts.skeleton_daylight_damage)):
                     entity.health -= SKELETON_DAYLIGHT_DAMAGE
                     if entity.health <= 0:
                         entity.health = 0
@@ -659,6 +682,13 @@ class ZonesMixin:
                     continue
 
                 self.update_entity_ai(entity_id, entity)
+
+                # Double entities trample grass to dirt as they pass (heavier footprint)
+                if entity.type.endswith('_double') and random.random() < 0.05:
+                    _dx, _dy = entity.x, entity.y
+                    if 0 <= _dx < GRID_WIDTH and 0 <= _dy < GRID_HEIGHT:
+                        if screen['grid'][_dy][_dx] == 'GRASS':
+                            screen['grid'][_dy][_dx] = 'DIRT'
 
                 # Butterfly grows flowers as it passes over grass/dirt
                 if entity.type == 'BUTTERFLY' and random.random() < 0.04:
@@ -959,9 +989,12 @@ class ZonesMixin:
                             guard.quest_target = None
 
             if self.tick % 600 == 0:
-                self.promote_to_commander(zone_key)
-                self.promote_to_king()
-                self.recruit_to_hostile_faction(zone_key)
+                _opts_z = getattr(self, 'game_opts', None)
+                if not _opts_z or _opts_z.npc_promotions:
+                    self.promote_to_commander(zone_key)
+                    self.promote_to_king()
+                if not _opts_z or _opts_z.faction_wars:
+                    self.recruit_to_hostile_faction(zone_key)
 
         # Prune empty distant zones: no alive entities, no structures, no items → delete.
         if _dist_from_player > 4:
@@ -1073,7 +1106,9 @@ class ZonesMixin:
         for entity_id in entities_to_remove:
             self.remove_entity(entity_id)
 
-        self.assign_zone_keepers(struct_zone_key)
+        _opts_sk = getattr(self, 'game_opts', None)
+        if not _opts_sk or _opts_sk.keeper_assignments:
+            self.assign_zone_keepers(struct_zone_key)
 
     # -------------------------------------------------------------------------
     # Catch-up system

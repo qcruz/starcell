@@ -759,7 +759,7 @@ class WorldGenerationMixin:
         for x, y in walkable:
             if spawned >= 4:
                 break
-            ntype = 'BAT' if random.random() < 0.6 else 'SPIDER'
+            ntype = 'BAT' if random.random() < 0.6 else 'BLACK_SPIDER'
             chance = 0.35 if ntype == 'BAT' else 0.25
             if random.random() < chance:
                 ent = Entity(ntype, x, y, 0, 0, 1)

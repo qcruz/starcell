@@ -12,6 +12,7 @@ from entity import *
 from debug.bug_catcher import BugCatcher
 from debug.watchdog import Watchdog
 from systems.sound_manager import SoundManager
+from systems.game_options import GameOptions
 
 _SETTINGS_PATH = 'settings.json'
 _REAL_STDOUT = sys.stdout  # saved before any redirect
@@ -138,6 +139,12 @@ class GameCoreMixin:
         self.debug_prints_enabled = True
         self.autosave_enabled = True
         self._load_settings()
+
+        # Game options (loaded from game_options.json — persists across new games)
+        self.game_opts = GameOptions.load()
+        self.showing_game_options = False
+        self._game_opts_scroll = 0
+        self._game_opts_toggle_rects = []
 
         # Load sprites
         self.load_sprites()
@@ -1164,12 +1171,23 @@ class GameCoreMixin:
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1 and self.state == 'menu':
                     self._handle_menu_click(event.pos)
+                elif event.button == 1 and self.state == 'paused' and self.showing_game_options:
+                    for flag_name, rect in getattr(self, '_game_opts_toggle_rects', []):
+                        if rect.collidepoint(event.pos):
+                            self.game_opts.toggle(flag_name)
+                            break
                 elif event.button == 1 and self.state == 'playing':
                     if self.handle_npc_trade_click(event.pos):
                         self.gain_xp(1)
                     else:
                         self.handle_inventory_click(event.pos)
                     self.handle_quest_ui_click(event.pos)
+
+            if event.type == pygame.MOUSEWHEEL and self.state == 'paused' and self.showing_game_options:
+                scroll_amount = -event.y * 24
+                max_s = max(0, getattr(self, '_game_opts_total_h', 0)
+                            - getattr(self, '_game_opts_content_h', 9999))
+                self._game_opts_scroll = min(max_s, max(0, self._game_opts_scroll + scroll_amount))
 
             if event.type == pygame.KEYUP:
                 if event.key in (pygame.K_LSHIFT, pygame.K_RSHIFT):
@@ -1400,45 +1418,59 @@ class GameCoreMixin:
                             self.select_inventory_slot(slot)
                 
                 elif self.state == 'paused':
-                    if event.key == pygame.K_ESCAPE or event.key == pygame.K_p:
-                        self.state = 'playing'
-                    elif event.key == pygame.K_s:
-                        self.save_game()
-                    elif event.key == pygame.K_m:
-                        self.state = 'menu'
-                    # Inventory panels accessible while paused (crafting execution blocked)
-                    elif event.key == pygame.K_i:
-                        self.inventory.toggle_menu('items')
-                    elif event.key == pygame.K_t:
-                        self.inventory.toggle_menu('tools')
-                    elif event.key == pygame.K_u:
-                        self.inventory.toggle_menu('actions')
-                    elif event.key == pygame.K_f:
-                        self.inventory.toggle_menu('followers')
-                    elif event.key == pygame.K_c:
-                        self.inventory.toggle_menu('crafting')
-                    elif event.key == pygame.K_q:
-                        self.quest_ui_open = not self.quest_ui_open
-                    elif event.key == pygame.K_LEFT and (pygame.key.get_mods() & pygame.KMOD_SHIFT):
-                        self.cycle_inventory_slot(-1)
-                    elif event.key == pygame.K_RIGHT and (pygame.key.get_mods() & pygame.KMOD_SHIFT):
-                        self.cycle_inventory_slot(1)
-                    elif event.key in [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4,
-                                       pygame.K_5, pygame.K_6, pygame.K_7, pygame.K_8,
-                                       pygame.K_9, pygame.K_0]:
-                        slot = (event.key - pygame.K_1) if event.key != pygame.K_0 else 9
-                        if 'tools' in self.inventory.open_menus:
-                            if self.inventory.selected_tool_slot_idx == slot:
-                                self.inventory.unequip_slot(slot)
-                                self.inventory.selected['tools'] = None
-                                self.inventory.pending_equip_slot = slot
-                                self.inventory.pending_equip_equipment_slot = None
+                    if self.showing_game_options:
+                        if event.key == pygame.K_ESCAPE or event.key == pygame.K_o:
+                            self.showing_game_options = False
+                        elif event.key == pygame.K_UP:
+                            self._game_opts_scroll = max(0, self._game_opts_scroll - 24)
+                        elif event.key == pygame.K_DOWN:
+                            max_s = max(0, getattr(self, '_game_opts_total_h', 0)
+                                        - getattr(self, '_game_opts_content_h', 9999))
+                            self._game_opts_scroll = min(max_s, self._game_opts_scroll + 24)
+                    else:
+                        if event.key == pygame.K_ESCAPE or event.key == pygame.K_p:
+                            self.state = 'playing'
+                            self.showing_game_options = False
+                        elif event.key == pygame.K_s:
+                            self.save_game()
+                        elif event.key == pygame.K_o:
+                            self.showing_game_options = True
+                            self._game_opts_scroll = 0
+                        elif event.key == pygame.K_m:
+                            self.state = 'menu'
+                        # Inventory panels accessible while paused (crafting execution blocked)
+                        elif event.key == pygame.K_i:
+                            self.inventory.toggle_menu('items')
+                        elif event.key == pygame.K_t:
+                            self.inventory.toggle_menu('tools')
+                        elif event.key == pygame.K_u:
+                            self.inventory.toggle_menu('actions')
+                        elif event.key == pygame.K_f:
+                            self.inventory.toggle_menu('followers')
+                        elif event.key == pygame.K_c:
+                            self.inventory.toggle_menu('crafting')
+                        elif event.key == pygame.K_q:
+                            self.quest_ui_open = not self.quest_ui_open
+                        elif event.key == pygame.K_LEFT and (pygame.key.get_mods() & pygame.KMOD_SHIFT):
+                            self.cycle_inventory_slot(-1)
+                        elif event.key == pygame.K_RIGHT and (pygame.key.get_mods() & pygame.KMOD_SHIFT):
+                            self.cycle_inventory_slot(1)
+                        elif event.key in [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4,
+                                           pygame.K_5, pygame.K_6, pygame.K_7, pygame.K_8,
+                                           pygame.K_9, pygame.K_0]:
+                            slot = (event.key - pygame.K_1) if event.key != pygame.K_0 else 9
+                            if 'tools' in self.inventory.open_menus:
+                                if self.inventory.selected_tool_slot_idx == slot:
+                                    self.inventory.unequip_slot(slot)
+                                    self.inventory.selected['tools'] = None
+                                    self.inventory.pending_equip_slot = slot
+                                    self.inventory.pending_equip_equipment_slot = None
+                                else:
+                                    self.inventory.selected_tool_slot_idx = slot
+                                    self.inventory.selected['tools'] = self.inventory.tool_slots[slot]
+                                    self.inventory.pending_equip_slot = None
                             else:
-                                self.inventory.selected_tool_slot_idx = slot
-                                self.inventory.selected['tools'] = self.inventory.tool_slots[slot]
-                                self.inventory.pending_equip_slot = None
-                        else:
-                            self.select_inventory_slot(slot)
+                                self.select_inventory_slot(slot)
         
         # Handle direction changes and close inventory on movement
         if self.state == 'playing':
@@ -2992,6 +3024,7 @@ class GameCoreMixin:
     def new_game(self):
         """Start a new game"""
         self.bug_catcher.clear()
+        self.watchdog.snapshot_on_start(self.tick, self)
         self.player = {
             'x': 12, 'y': 9, 
             'screen_x': 0, 'screen_y': 0,
@@ -3198,11 +3231,6 @@ class GameCoreMixin:
                 if self.autosave_enabled and self.tick > 0 and self.tick % (30 * FPS) == 0:
                     self.save_game()
 
-                # AUTO_DEBUG: hard-stop when wall-clock timer expires
-                if hasattr(self, '_auto_debug_end_time') and _time.time() >= self._auto_debug_end_time:
-                    self._auto_debug_shutdown()
-                    break
-
                 self.tick += 1
                 self.draw_game()
                 self.draw_dev_screen()
@@ -3213,8 +3241,17 @@ class GameCoreMixin:
                 self.sound.update(self.tick, 'menu', False, False, None)
                 self.draw_menu()
             elif self.state == 'paused':
-                self.draw_paused()
-            
+                if self.showing_game_options:
+                    self.draw_game_options()
+                else:
+                    self.draw_paused()
+
+            # AUTO_DEBUG: hard-stop when wall-clock timer expires — runs every loop
+            # iteration regardless of state so death/menu/paused don't trap the session.
+            if hasattr(self, '_auto_debug_end_time') and _time.time() >= self._auto_debug_end_time:
+                self._auto_debug_shutdown()
+                break
+
             pygame.display.flip()
             self.clock.tick(FPS)
         

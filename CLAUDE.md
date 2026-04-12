@@ -33,6 +33,12 @@ The project owner (@qcruz) handles creative direction: roadmap additions, system
 7. Review debug/bug_report.md → fix confirmed bugs → commit to dev-q-updates
 8. Periodic: code cleanup session (see Code Cleanup below)
 9. @qcruz tests dev → pushes to main when satisfied
+10. End of session: pick one project doc at random and ensure it is up-to-date with
+    current game features. This means: fix stale descriptions, add entries for new
+    features, expand details, add or remove to-do items, note art/audio/design needs
+    introduced by recent work, or connect the doc's topic to systems added since it
+    was last touched. Any doc in the repo qualifies — code docs (docs/), design docs,
+    roadmap, art_direction, sound_design, etc. Commit and push the update.
 ```
 
 ---
@@ -49,6 +55,13 @@ The project owner (@qcruz) handles creative direction: roadmap additions, system
 - New game loops or economy systems (fishing, crafting stations, bounties, etc.)
 
 Wait for a clear "go ahead" before writing any code on those. Do not infer approval from roadmap entries or previous conversations.
+
+**Bug fixes also require confirmation before implementing.** When a bug is identified:
+1. Post the diagnosed root cause in chat — clearly state what you believe is causing it and why.
+2. Post the proposed fix — describe the change and which files it touches.
+3. Wait for explicit approval before writing any code.
+
+Do not implement a bug fix speculatively even if the cause seems obvious. Diagnosis and implementation are two separate steps, and @qcruz approves both.
 
 **When adding new items:** add at the position @qcruz specifies, or at the bottom if unspecified. Far-future or speculative items belong in `roadmap.md` only — do not add them to `next_up.md` until prerequisite systems are in place.
 
@@ -79,16 +92,24 @@ Issues in `held_back.md` are **not abandoned** — they get a clear symptom, sus
 
 **Purpose:** Stress-test new features by running the autopilot headlessly for 2–3 min sessions and reviewing the Watchdog log.
 
+**Game launch path:** The game is launched via `~/StarCell/launcher/StarCell.app`. It runs from `~/StarCell` (NOT the local dev copy at `~/Desktop/porn/starcell`). The Watchdog log is at `~/StarCell/debug/bugcatcher.log` and the save file is at `~/StarCell/savegame.json`.
+
+**Log analysis protocol — mandatory before any analysis:**
+1. Read `~/StarCell/savegame.json` and note the `"tick"` value (e.g. `431010`).
+2. Read `~/StarCell/debug/bugcatcher.log` and note the tick range of the entries.
+3. If the log tick range does NOT overlap the save file tick, the log is stale — flag this immediately and do not analyze stale data.
+4. All log analysis must reference `~/StarCell/debug/bugcatcher.log`, not the dev-copy at `~/Desktop/porn/starcell/debug/`.
+
 **To run a session:**
 ```bash
-# Enable AUTO_DEBUG locally (git-ignored, never committed):
-echo "True" > debug/auto_debug.cfg
-cd /path/to/starcell
-python3 main.py
-# After the session, disable it:
-echo "False" > debug/auto_debug.cfg
+# The auto_debug.cfg flag controls console debug prints only.
+# Watchdog ALWAYS logs on dev-q-updates branch regardless of this flag.
+echo "True" > ~/StarCell/debug/auto_debug.cfg   # optional: enable verbose prints
+# User launches ~/StarCell/launcher/StarCell.app
+# After the session:
+echo "False" > ~/StarCell/debug/auto_debug.cfg
 ```
-Session ends automatically (2–3 min timer). Review `debug/bug_catcher.log` and update `debug/bug_report.md` with findings.
+Session ends automatically (2–3 min timer). Review `~/StarCell/debug/bugcatcher.log` and update `debug/bug_report.md` with findings.
 
 **REQUIRED after every single run — no exceptions:**
 - Add a `## Session N` entry to `debug/bug_report.md` immediately after the session ends
@@ -171,8 +192,11 @@ The goal is fewest code paths for the most behavior. When a special-case block h
 | `autopilot.py` | Possession-model autopilot. Also the proving ground for NPC AI before porting |
 | `game_core.py` | Legacy monolith: init, player, input handling, new_game |
 | `npc_ai.py` | Legacy monolith: entity state machine, combat, day/night shelter |
+| `docs/` | Contributor documentation: plain-language guides + pseudo-code references for each major file |
 
 **Dual-import rule:** When adding items, cell types, or recipes, update BOTH `constants.py` AND the relevant `data/` module.
+
+**Docs maintenance rule:** When a documented file changes significantly (new methods, renamed behavior, restructured logic), update the corresponding `docs/*_plain.md` and `docs/*_pseudo.md` files in the same commit. Files currently documented: `npc_ai.py`, `ai/movement.py`, `ai/actions.py`, `game_core.py`, `world/generation.py`, `world/zones.py`. Priority order for remaining files: `engine/entity.py` → `systems/` → `autopilot.py` → `ui/` → `data/`.
 
 ---
 

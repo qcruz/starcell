@@ -363,29 +363,32 @@ class NpcAiMovementMixin:
         return exit_x, exit_y
 
     def _try_targeting_zone_cross(self, entity, entity_id):
-        """If the entity is at a zone exit, attempt to transition to the next zone.
+        """If the entity is near a zone exit, attempt to transition to the next zone.
 
         Called after a targeting-mode move so entities naturally flow through
         zone boundaries when pursuing a cross-zone target.
         Uses the seamless crossing path (30-tick cooldown) so entities don't stall.
-        """
-        at_exit, direction = self.is_at_exit(entity.x, entity.y)
-        if at_exit:
-            # Map exit direction to one-step-out-of-bounds coordinate
-            if direction == 'top':
-                oob_x, oob_y = entity.x, -1
-            elif direction == 'bottom':
-                oob_x, oob_y = entity.x, GRID_HEIGHT
-            elif direction == 'left':
-                oob_x, oob_y = -1, entity.y
-            else:  # right
-                oob_x, oob_y = GRID_WIDTH, entity.y
 
-            old_zone = f"{entity.screen_x},{entity.screen_y}"
-            self.try_entity_screen_crossing(entity, oob_x, oob_y)
-            new_zone = f"{entity.screen_x},{entity.screen_y}"
-            if old_zone != new_zone:
-                entity.memory_lane = []  # Clear memory for fresh zone
+        Uses proximity checks (within 1 cell of boundary) rather than exact boundary
+        cells, because exact boundary cells are WALL cells unreachable by pathfinding.
+        """
+        x, y = entity.x, entity.y
+        if y <= 1:
+            oob_x, oob_y = x, -1
+        elif y >= GRID_HEIGHT - 2:
+            oob_x, oob_y = x, GRID_HEIGHT
+        elif x <= 1:
+            oob_x, oob_y = -1, y
+        elif x >= GRID_WIDTH - 2:
+            oob_x, oob_y = GRID_WIDTH, y
+        else:
+            return  # Not near any boundary
+
+        old_zone = f"{entity.screen_x},{entity.screen_y}"
+        self.try_entity_screen_crossing(entity, oob_x, oob_y)
+        new_zone = f"{entity.screen_x},{entity.screen_y}"
+        if old_zone != new_zone:
+            entity.memory_lane = []  # Clear memory for fresh zone
 
     def _find_valid_entrance_cell(self, target_screen, entry_x, entry_y, center_x, center_y):
         """Find the nearest walkable cell at a zone entrance when the computed spot is solid.
@@ -458,8 +461,7 @@ class NpcAiMovementMixin:
             entity.last_zone_change_tick = -999  # Initialize if missing
 
         ticks_since_travel = self.tick - entity.last_zone_change_tick
-        if ticks_since_travel < ZONE_CHANGE_COOLDOWN:
-            # Too soon since last travel - prevent zone change
+        if random.random() > min(1.0, ticks_since_travel / NPC_CROSS_RAMP_TICKS):
             return
 
         screen = self.screens[screen_key]
@@ -478,29 +480,38 @@ class NpcAiMovementMixin:
         new_position = None
         exit_cells = []  # Track exit cells to add to memory
 
-        # Top entrance — any x position along top edge
-        if exits['top'] and entity.y <= 1:
+        # Corridor geometry (must match world/generation.py):
+        # Top/Bottom exits: 2 tiles wide at x = center_x-1 and center_x
+        # Left/Right exits: 2 tiles tall at y = center_y-1 and center_y
+        # Allow ±1 buffer so NPCs don't need pixel-exact positioning.
+        _cx_lo = center_x - 2
+        _cx_hi = center_x + 1
+        _cy_lo = center_y - 2
+        _cy_hi = center_y + 1
+
+        # Top entrance — must be within corridor
+        if exits['top'] and entity.y <= 1 and _cx_lo <= entity.x <= _cx_hi:
             transition_target = (entity.screen_x, entity.screen_y - 1)
             new_position = (entity.x, GRID_HEIGHT - 3)
             exit_cells = [(entity.x + dx, 0) for dx in range(-2, 3)]
             exit_cells.extend([(entity.x + dx, 1) for dx in range(-2, 3)])
 
-        # Bottom entrance — any x position along bottom edge
-        elif exits['bottom'] and entity.y >= GRID_HEIGHT - 2:
+        # Bottom entrance — must be within corridor
+        elif exits['bottom'] and entity.y >= GRID_HEIGHT - 2 and _cx_lo <= entity.x <= _cx_hi:
             transition_target = (entity.screen_x, entity.screen_y + 1)
             new_position = (entity.x, 2)
             exit_cells = [(entity.x + dx, GRID_HEIGHT - 1) for dx in range(-2, 3)]
             exit_cells.extend([(entity.x + dx, GRID_HEIGHT - 2) for dx in range(-2, 3)])
 
-        # Left entrance — any y position along left edge
-        elif exits['left'] and entity.x <= 1:
+        # Left entrance — must be within corridor
+        elif exits['left'] and entity.x <= 1 and _cy_lo <= entity.y <= _cy_hi:
             transition_target = (entity.screen_x - 1, entity.screen_y)
             new_position = (GRID_WIDTH - 3, entity.y)
             exit_cells = [(0, entity.y + dy) for dy in range(-2, 3)]
             exit_cells.extend([(1, entity.y + dy) for dy in range(-2, 3)])
 
-        # Right entrance — any y position along right edge
-        elif exits['right'] and entity.x >= GRID_WIDTH - 2:
+        # Right entrance — must be within corridor
+        elif exits['right'] and entity.x >= GRID_WIDTH - 2 and _cy_lo <= entity.y <= _cy_hi:
             transition_target = (entity.screen_x + 1, entity.screen_y)
             new_position = (2, entity.y)
             exit_cells = [(GRID_WIDTH - 1, entity.y + dy) for dy in range(-2, 3)]
@@ -530,6 +541,23 @@ class NpcAiMovementMixin:
                         target_cell = target_screen['grid'][new_y][new_x]
 
                 if new_x is not None and not CELL_TYPES.get(target_cell, {}).get('solid', False):
+                    # Diagnostic: log when entity leaves player's zone
+                    _player_zone = f"{self.player['screen_x']},{self.player['screen_y']}"
+                    if screen_key == _player_zone:
+                        self.bug_catcher.log({
+                            'tick': self.tick,
+                            'category': 'zone_exit_event',
+                            'event': 'zone_transition',
+                            'entity_id': entity_id,
+                            'entity_type': entity.type,
+                            'from_zone': screen_key,
+                            'to_zone': new_screen_key,
+                            'entity_x': entity.x,
+                            'entity_y': entity.y,
+                            'ai_state': getattr(entity, 'ai_state', None),
+                            'target_type': getattr(entity, 'target_type', None),
+                        })
+
                     # Remove from old screen
                     if screen_key in self.screen_entities:
                         if entity_id in self.screen_entities[screen_key]:
@@ -563,6 +591,13 @@ class NpcAiMovementMixin:
                         entity.target_type = None
                         entity.current_target = None
                         entity.ai_state = 'wandering'
+
+                    # TRADER gold replenishment on zone crossing
+                    if entity.type == 'TRADER':
+                        _cap  = int(200 * max(1.0, getattr(entity, 'level', 1.0)))
+                        _gold = entity.inventory.get('gold', 0)
+                        if _gold < _cap:
+                            entity.inventory['gold'] = min(_cap, _gold + TRADER_GOLD_REPLENISH)
 
     def try_entity_screen_crossing(self, entity, new_x, new_y):
         """Seamlessly transition entity to adjacent zone when they walk through an exit corridor.
@@ -617,8 +652,9 @@ class NpcAiMovementMixin:
                 else:
                     return  # Cell/item/no target — stay in zone
 
-        # Anti-bounce: prevent an immediate return trip
-        if self.tick - getattr(entity, 'last_zone_change_tick', -9999) < NPC_SEAMLESS_CROSS_COOLDOWN:
+        # Ramp-up: probability of crossing increases over time since last zone change
+        _ticks_since_cross = self.tick - getattr(entity, 'last_zone_change_tick', -9999)
+        if random.random() > min(1.0, _ticks_since_cross / NPC_CROSS_RAMP_TICKS):
             return
 
         screen_key = f"{entity.screen_x},{entity.screen_y}"
@@ -637,10 +673,19 @@ class NpcAiMovementMixin:
         new_screen_y = entity.screen_y
         facing_after = entity.facing
 
-        # Verify entity is in the exit corridor for the direction they're stepping.
-        # Corridor geometry mirrors is_at_exit(): 2-tile span at each edge center.
+        # Corridor geometry (must match world/generation.py):
+        # Top/Bottom: 2 tiles wide at x = center_x-1, center_x; allow ±1 buffer.
+        # Left/Right: 2 tiles tall at y = center_y-1, center_y; allow ±1 buffer.
+        _cx_lo = center_x - 2
+        _cx_hi = center_x + 1
+        _cy_lo = center_y - 2
+        _cy_hi = center_y + 1
+
+        # Verify entity is stepping through the actual exit corridor.
         if new_y < 0:
             if not screen['exits']['top']:
+                return
+            if not (_cx_lo <= entity.x <= _cx_hi):
                 return
             new_screen_y -= 1
             new_y = GRID_HEIGHT - 2
@@ -648,17 +693,23 @@ class NpcAiMovementMixin:
         elif new_y >= GRID_HEIGHT:
             if not screen['exits']['bottom']:
                 return
+            if not (_cx_lo <= entity.x <= _cx_hi):
+                return
             new_screen_y += 1
             new_y = 1
             facing_after = 'down'
         elif new_x < 0:
             if not screen['exits']['left']:
                 return
+            if not (_cy_lo <= entity.y <= _cy_hi):
+                return
             new_screen_x -= 1
             new_x = GRID_WIDTH - 2
             facing_after = 'left'
         elif new_x >= GRID_WIDTH:
             if not screen['exits']['right']:
+                return
+            if not (_cy_lo <= entity.y <= _cy_hi):
                 return
             new_screen_x += 1
             new_x = 1
@@ -695,6 +746,22 @@ class NpcAiMovementMixin:
 
         # Transfer between screen entity lists
         old_sk = f"{entity.screen_x},{entity.screen_y}"
+        # Diagnostic: log when entity leaves player's zone via screen crossing
+        _player_zone = f"{self.player['screen_x']},{self.player['screen_y']}"
+        if old_sk == _player_zone:
+            self.bug_catcher.log({
+                'tick': self.tick,
+                'category': 'zone_exit_event',
+                'event': 'screen_crossing',
+                'entity_id': entity_id,
+                'entity_type': entity.type,
+                'from_zone': old_sk,
+                'to_zone': new_screen_key,
+                'entity_x': entity.x,
+                'entity_y': entity.y,
+                'ai_state': getattr(entity, 'ai_state', None),
+                'target_type': getattr(entity, 'target_type', None),
+            })
         if old_sk in self.screen_entities and entity_id in self.screen_entities[old_sk]:
             self.screen_entities[old_sk].remove(entity_id)
         self.screen_entities[new_screen_key].append(entity_id)
@@ -900,7 +967,17 @@ class NpcAiMovementMixin:
                 entity.stuck_counter += 1
 
     def seek_zone_exit(self, entity, entity_id=None):
-        """Make entity move towards nearest zone exit"""
+        """Make entity move towards nearest zone exit.
+
+        Structures are treated as zones — if the entity is inside a structure,
+        the exit is the structure staircase, not an overworld edge.
+        """
+        # Structure exit: same mechanic as overworld zone exit
+        if getattr(entity, 'in_structure', False):
+            self.move_npc_toward_structure_exit(entity)
+            self.try_npc_exit_structure(entity)
+            return
+
         screen_key = f"{entity.screen_x},{entity.screen_y}"
 
         # Warriors with factions: check for coordinated expansion
@@ -974,7 +1051,7 @@ class NpcAiMovementMixin:
             entity.last_structure_change_tick = -999
 
         ticks_since_travel = self.tick - entity.last_structure_change_tick
-        if ticks_since_travel < ZONE_CHANGE_COOLDOWN:  # Reuse same cooldown
+        if random.random() > min(1.0, ticks_since_travel / NPC_CROSS_RAMP_TICKS):
             return
 
         # Get or create structure
@@ -1019,6 +1096,23 @@ class NpcAiMovementMixin:
             self.screen_entities[structure_key] = []
         if entity_id not in self.screen_entities[structure_key]:
             self.screen_entities[structure_key].append(entity_id)
+
+        # Diagnostic: log when entity leaves player's zone into a structure
+        _player_zone = f"{self.player['screen_x']},{self.player['screen_y']}"
+        if screen_key == _player_zone:
+            self.bug_catcher.log({
+                'tick': self.tick,
+                'category': 'zone_exit_event',
+                'event': 'enter_structure',
+                'entity_id': entity_id,
+                'entity_type': entity.type,
+                'from_zone': screen_key,
+                'to_structure': structure_key,
+                'entity_x': entity.x,
+                'entity_y': entity.y,
+                'ai_state': getattr(entity, 'ai_state', None),
+                'target_type': getattr(entity, 'target_type', None),
+            })
 
         # Update entity location to the structure zone's virtual coordinates
         vx, vy = map(int, structure_key.split(','))
@@ -1074,7 +1168,7 @@ class NpcAiMovementMixin:
             entity.last_structure_change_tick = -999
 
         ticks_since_travel = self.tick - entity.last_structure_change_tick
-        if ticks_since_travel < ZONE_CHANGE_COOLDOWN:  # Reuse same cooldown
+        if random.random() > min(1.0, ticks_since_travel / NPC_CROSS_RAMP_TICKS):
             return
 
         structure_key = entity.structure_key
@@ -1129,6 +1223,21 @@ class NpcAiMovementMixin:
         if entity_id not in self.screen_entities[parent_key]:
             self.screen_entities[parent_key].append(entity_id)
 
+        # Diagnostic: log when entity returns to player's zone from a structure
+        _player_zone = f"{self.player['screen_x']},{self.player['screen_y']}"
+        if parent_key == _player_zone:
+            self.bug_catcher.log({
+                'tick': self.tick,
+                'category': 'zone_exit_event',
+                'event': 'exit_structure',
+                'entity_id': entity_id,
+                'entity_type': entity.type,
+                'from_structure': structure_key,
+                'to_zone': parent_key,
+                'ai_state': getattr(entity, 'ai_state', None),
+                'target_type': getattr(entity, 'target_type', None),
+            })
+
         # Restore entity location to parent overworld zone
         entity.screen_x = parent_screen[0]
         entity.screen_y = parent_screen[1]
@@ -1136,32 +1245,37 @@ class NpcAiMovementMixin:
         entity.structure_key = None
         entity.last_structure_change_tick = self.tick
 
-        # Position near the door cell in the parent zone
+        # Position near the door cell in the parent zone.
+        # Search by Manhattan distance (closest first) so entity appears right at the door,
+        # not arbitrarily far away which causes visible pop-in several cells from the entrance.
         door_x, door_y = parent_cell
         if parent_key in self.screens:
             screen = self.screens[parent_key]
-            for dy in range(-2, 3):
-                for dx in range(-2, 3):
-                    check_x = door_x + dx
-                    check_y = door_y + dy
-                    if 0 <= check_x < GRID_WIDTH and 0 <= check_y < GRID_HEIGHT:
-                        cell = screen['grid'][check_y][check_x]
-                        if cell in ['GRASS', 'DIRT', 'SAND', 'STONE'] and not CELL_TYPES[cell].get('solid', False):
-                            entity.x = check_x
-                            entity.y = check_y
-                            entity.world_x = float(check_x)
-                            entity.world_y = float(check_y)
+            for search_dist in range(3):
+                for dy in range(-search_dist, search_dist + 1):
+                    for dx in range(-search_dist, search_dist + 1):
+                        if abs(dy) + abs(dx) != search_dist:
+                            continue
+                        check_x = door_x + dx
+                        check_y = door_y + dy
+                        if 0 <= check_x < GRID_WIDTH and 0 <= check_y < GRID_HEIGHT:
+                            cell = screen['grid'][check_y][check_x]
+                            if cell in ['GRASS', 'DIRT', 'SAND', 'STONE'] and not CELL_TYPES[cell].get('solid', False):
+                                entity.x = check_x
+                                entity.y = check_y
+                                entity.world_x = float(check_x)
+                                entity.world_y = float(check_y)
 
-                            # Add exit area to memory lane to prevent immediate re-entry
-                            if not hasattr(entity, 'memory_lane'):
-                                entity.memory_lane = []
-                            for mdx in range(-1, 2):
-                                for mdy in range(-1, 2):
-                                    mem_cell = (check_x + mdx, check_y + mdy)
-                                    if len(entity.memory_lane) < entity.max_memory_length:
-                                        entity.memory_lane.append(mem_cell)
+                                # Add exit area to memory lane to prevent immediate re-entry
+                                if not hasattr(entity, 'memory_lane'):
+                                    entity.memory_lane = []
+                                for mdx in range(-1, 2):
+                                    for mdy in range(-1, 2):
+                                        mem_cell = (check_x + mdx, check_y + mdy)
+                                        if len(entity.memory_lane) < entity.max_memory_length:
+                                            entity.memory_lane.append(mem_cell)
 
-                            return
+                                return
 
         entity.world_x = float(entity.x)
         entity.world_y = float(entity.y)
@@ -1188,15 +1302,21 @@ class NpcAiMovementMixin:
                         entity.hunger = min(entity.max_hunger, entity.hunger + 20)
                         entity.inventory['carrot'] = max(0, entity.inventory['carrot'] - 1)
 
-            # Check if fully recovered and should exit
-            health_full = entity.health >= entity.max_health * 0.95
-            hunger_ok = entity.hunger >= entity.max_hunger * 0.7
-            thirst_ok = entity.thirst >= entity.max_thirst * 0.7
+            # Visit exit: NPC came for a casual timed visit — leave when duration expires
+            visit_end = getattr(entity, 'visit_end_tick', None)
+            if visit_end is not None and self.tick >= visit_end:
+                entity.visit_end_tick = None
+                self.npc_exit_structure(entity)
+                return
 
-            if health_full and hunger_ok and thirst_ok:
-                # NPC is healthy, time to leave and get back to work
-                if random.random() < NPC_STRUCTURE_EXIT_CHANCE:
-                    self.npc_exit_structure(entity)
+            # Shelter exit: leave when fully recovered (only for non-visit stays)
+            if visit_end is None:
+                health_full = entity.health >= entity.max_health * 0.95
+                hunger_ok = entity.hunger >= entity.max_hunger * 0.7
+                thirst_ok = entity.thirst >= entity.max_thirst * 0.7
+                if health_full and hunger_ok and thirst_ok:
+                    if random.random() < NPC_STRUCTURE_EXIT_CHANCE:
+                        self.npc_exit_structure(entity)
 
         # CAVE LOGIC (dangerous, no healing)
         elif structure_type == 'CAVE':
@@ -1331,9 +1451,9 @@ class NpcAiMovementMixin:
                         # Animals (non-humanoid) don't enter houses
                         if not entity.props.get('humanoid', False):
                             continue
-                        # Shelter-targeting NPCs enter with certainty; others opportunistically
-                        chance = 1.0 if getattr(entity, 'target_type', None) == 'shelter' else 0.1
-                        if random.random() < chance:
+                        # Only enter when explicitly targeting shelter or visit — no opportunistic
+                        # entry for wandering NPCs passing by. Random entry causes visible pop-in/pop-out.
+                        if getattr(entity, 'target_type', None) in ('shelter', 'visit'):
                             self.npc_enter_structure(entity, screen_key, check_x, check_y, cell)
                             return
 
@@ -2117,14 +2237,22 @@ class NpcAiMovementMixin:
             if target_list:
                 return self.find_closest_eligible_target(entity, screen_key, target_list)
             return None
+        elif target_type == 'travel':
+            # Structure exit: return the exit cell so targeting state navigates there
+            if getattr(entity, 'in_structure', False) and getattr(entity, 'structure_key', None):
+                structure = (self.structures.get(entity.structure_key)
+                             or self.screens.get(entity.structure_key))
+                if structure:
+                    exit_pos = structure.get('exit', (GRID_WIDTH // 2, GRID_HEIGHT // 2))
+                    return ('cell', exit_pos[0], exit_pos[1], 'EXIT')
+            return None
         elif target_type == 'quest_target':
             # Direct passthrough — entity.quest_target is already the resolved target
             return getattr(entity, 'quest_target', None)
         elif target_type == 'clearing_action':
             return self._find_clearing_target(entity, screen_key)
         elif target_type == 'trade':
-            # Stub — NPC trader trade system not yet built; always returns None
-            return None
+            return self._find_trade_partner(entity, screen_key)
         return None
 
     def find_closest_eligible_target(self, entity, screen_key, target_list):
@@ -2302,98 +2430,6 @@ class NpcAiMovementMixin:
         # No shelter nearby - not idle
         entity.is_idle = False
         return False  # No shelter found or too far
-
-    def handle_in_structure_npc(self, entity, entity_id):
-        """Handle all AI logic for an entity that is currently inside a structure.
-
-        Decides whether to exit (day/night rules, overcrowding, combat urgency) and
-        dispatches in-structure behavior (mine, wander, rest).  Returns True so the
-        caller can `return` immediately after — execution must not fall through to
-        overworld AI with stale screen_key.
-        """
-        # Daytime: non-nocturnal NPCs should actively try to exit structures
-        # Nighttime: nocturnal entities should actively try to exit
-        wants_to_exit = False
-
-        if not self.is_night and not entity.props.get('nocturnal', False):
-            # Daytime + not nocturnal = want to be outside working
-            wants_to_exit = True
-        elif self.is_night and entity.props.get('nocturnal', False):
-            # Nighttime + nocturnal = want to be outside hunting
-            wants_to_exit = True
-
-        # Overcrowding: keepers never leave; everyone else may be pushed out
-        # when the structure is too full. Chance = local_pop * 10% per update.
-        if not getattr(entity, 'keeper', False):
-            zone_key = f"{entity.screen_x},{entity.screen_y}"
-            local_pop = len([
-                eid for eid in self.screen_entities.get(zone_key, [])
-                if eid in self.entities and self.entities[eid].is_alive()
-            ])
-            if local_pop > 3 and random.random() < local_pop * 0.10:
-                wants_to_exit = True
-
-        # Hostile entities: emerge from caves at night, shelter during day
-        if entity.props.get('hostile', False):
-            zone_biome = self.screens.get(f"{entity.screen_x},{entity.screen_y}", {}).get('biome', '')
-            if zone_biome == 'CAVE':
-                wants_to_exit = self.is_night   # night → ascend/exit; day → stay
-            else:
-                wants_to_exit = False           # non-cave structures: stay regardless
-
-        # MINERs in caves: invert day/night — mine during the day, exit at night
-        if entity.type == 'MINER':
-            _miner_biome = self.screens.get(f"{entity.screen_x},{entity.screen_y}", {}).get('biome', '')
-            if _miner_biome == 'CAVE':
-                wants_to_exit = self.is_night   # day → stay and mine; night → ascend
-
-        # Combat-capable NPCs (guards/warriors) detect nearby hostiles outside and rush to defend
-        if not wants_to_exit and entity.type in ('GUARD', 'WARRIOR') \
-                and entity.structure_key in self.structures:
-            sub = self.structures[entity.structure_key]
-            parent_screen = sub.get('parent_screen')
-            parent_cell = sub.get('parent_cell', (GRID_WIDTH // 2, GRID_HEIGHT // 2))
-            entrance_x, entrance_y = parent_cell
-            overworld_key = (f"{parent_screen[0]},{parent_screen[1]}"
-                             if parent_screen else f"{entity.screen_x},{entity.screen_y}")
-            for oid in self.screen_entities.get(overworld_key, []):
-                if oid in self.entities:
-                    other = self.entities[oid]
-                    # Skip player followers — they are friendly regardless of hostile prop
-                    if oid in getattr(self, 'followers', []):
-                        continue
-                    if other.props.get('hostile', False):
-                        if abs(other.x - entrance_x) + abs(other.y - entrance_y) <= 8:
-                            wants_to_exit = True
-                            break
-
-        if wants_to_exit:
-            # Actively move toward exit — track position to avoid double-move
-            _pre_x, _pre_y = entity.x, entity.y
-            self.try_npc_exit_structure(entity)
-            if entity.in_structure and entity.x == _pre_x and entity.y == _pre_y:
-                self.move_npc_toward_structure_exit(entity)
-            # Exit was handled — block state machine this tick
-            return True
-
-        # Low chance to exit anyway (restless NPCs)
-        if random.random() < 0.05:
-            _rx, _ry = entity.x, entity.y
-            self.try_npc_exit_structure(entity)
-            if entity.x != _rx or entity.y != _ry:
-                return True  # Restless exit moved entity — skip state machine
-
-        # MINER in cave: fully handled by behavior_config, not the state machine
-        if entity.in_structure:
-            zone_biome = self.screens.get(f"{entity.screen_x},{entity.screen_y}", {}).get('biome', '')
-            if entity.type == 'MINER' and zone_biome == 'CAVE':
-                behavior_config = entity.props.get('behavior_config')
-                if behavior_config:
-                    self.execute_entity_behavior(entity, behavior_config)
-                return True
-
-        # Entity stays in structure — let state machine run normally for food/water/behavior
-        return False
 
     def _find_closest_any_entity(self, entity, screen_key):
         """Closest entity of any kind (combat_all quest) — never returns self."""

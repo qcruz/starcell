@@ -136,4 +136,9 @@ if __name__ == '__main__':
         game._auto_debug_state_file = _STATE_FILE
         print(f"[AutoDebug] Run {_run + 1} — {_mode} | duration={_dur}s (cap={_cap}s)")
 
+        # Mute all audio during automated sessions
+        game.sound.music_volume = 0.0
+        game.sound.sfx_volume   = 0.0
+        game.sound.stop_music(fade_ms=0)
+
     game.run()

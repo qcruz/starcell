@@ -156,6 +156,20 @@ class SpawningMixin:
 
         spawn_list = spawn_tables.get(biome_name, [])
 
+        # Filter per-type spawn toggles from game_opts
+        _opts = getattr(self, 'game_opts', None)
+        if _opts:
+            _blocked = set()
+            if not _opts.spawn_wolves:
+                _blocked.add('WOLF')
+            if not _opts.spawn_bats:
+                _blocked.add('BAT')
+            if not _opts.spawn_goblins:
+                _blocked.update({'GOBLIN', 'BANDIT'})
+            if _blocked:
+                spawn_list = [(t, c, mn, mx) for t, c, mn, mx in spawn_list
+                              if t not in _blocked]
+
         # Distance-based spawn rate reduction: -3% per zone of distance, floor 15%
         _dist = abs(screen_x - self.player['screen_x']) + abs(screen_y - self.player['screen_y'])
         _spawn_factor = max(0.0, 1.0 - _dist * 0.03)
@@ -342,6 +356,9 @@ class SpawningMixin:
 
     def check_raid_event(self, screen_key):
         """Flat percent chance per zone update for a raid to trigger."""
+        _opts = getattr(self, 'game_opts', None)
+        if _opts and not _opts.raids_enabled:
+            return
         if screen_key not in self.screen_entities:
             return
 
@@ -556,6 +573,9 @@ class SpawningMixin:
 
     def check_cave_spawn_hostile(self, screen_key):
         """Check each cave in zone for chance to spawn hostile — bats favored in empty caves"""
+        _opts = getattr(self, 'game_opts', None)
+        if _opts and not _opts.spawn_cave_hostiles:
+            return
         if screen_key not in self.screens:
             return
 
@@ -619,7 +639,7 @@ class SpawningMixin:
         elif roll < 0.60:
             hostile_type = 'GOBLIN'
         elif roll < 0.80:
-            hostile_type = 'WOLF'
+            hostile_type = 'SKELETON'
         else:
             hostile_type = 'BANDIT'
 
@@ -670,6 +690,9 @@ class SpawningMixin:
 
     def check_night_skeleton_spawn(self, screen_key):
         """Check if skeleton should spawn at night (more likely near dropped items)"""
+        _opts = getattr(self, 'game_opts', None)
+        if _opts and not _opts.spawn_skeletons_night:
+            return
         if not self.is_night:
             return
 
@@ -759,6 +782,9 @@ class SpawningMixin:
 
     def check_termite_spawn(self, screen_key):
         """Check if termite should spawn near trees (prefer FOREST/PLAINS biomes)"""
+        _opts = getattr(self, 'game_opts', None)
+        if _opts and not _opts.spawn_termites:
+            return
         if screen_key not in self.screens:
             return
 

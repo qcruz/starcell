@@ -309,6 +309,28 @@ class HudMixin:
                     # been fully reconciled. Still run movement/animation for coherence.
                     entity_zone = f"{entity.screen_x},{entity.screen_y}"
                     if entity_zone != screen_key:
+                        # Diagnostic: log first frame an entity transitions from
+                        # rendered → skipped.  Only fires when the entity WAS
+                        # rendered last frame (last_render_tick == tick-1 or tick)
+                        # so we catch the disappearance event, not every skipped frame.
+                        _last_rt = getattr(entity, '_last_render_tick', -9999)
+                        if self.tick - _last_rt <= 1:
+                            self.bug_catcher.log({
+                                'tick': self.tick,
+                                'category': 'render_skip_transition',
+                                'entity_id': entity_id,
+                                'entity_type': entity.type,
+                                'entity_zone': entity_zone,
+                                'player_zone': screen_key,
+                                'in_structure': getattr(entity, 'in_structure', False),
+                                'structure_key': getattr(entity, 'structure_key', None),
+                                'ai_state': getattr(entity, 'ai_state', None),
+                                'target_type': getattr(entity, 'target_type', None),
+                                'x': entity.x,
+                                'y': entity.y,
+                                'last_zone_change_tick': getattr(entity, 'last_zone_change_tick', None),
+                                'last_structure_change_tick': getattr(entity, 'last_structure_change_tick', None),
+                            })
                         entity.update_smooth_movement()
                         entity.update_animation()
                         continue
@@ -975,4 +997,13 @@ class HudMixin:
 
             # Draw cell/item inspect panel (Shift or inspect tool, no NPC at target)
             self.draw_inspect_target()
+
+            # AUTO_DEBUG countdown overlay — top-right corner
+            import time as _time
+            _end = getattr(self, '_auto_debug_end_time', None)
+            if _end is not None:
+                _secs_left = max(0, int(_end - _time.time()))
+                _cd_text = self.tiny_font.render(
+                    f"AUTO {_secs_left}s", True, (255, 220, 60))
+                self.screen.blit(_cd_text, (SCREEN_WIDTH - 70, 4))
 

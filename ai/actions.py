@@ -635,7 +635,7 @@ class NpcAiActionsMixin:
                             if _cur_depth < 3:
                                 _vx, _vy = entity.screen_x, entity.screen_y
                                 _deeper = self.generate_structure_zone(
-                                    _vx, _vy, 'CAVE', check_x, check_y, _cur_depth + 1)
+                                    _vx, _vy, check_x, check_y, 'CAVE', _cur_depth + 1)
                                 if _deeper:
                                     # Clear 3x3 around entry point for walkability
                                     for _cdy in range(-1, 2):

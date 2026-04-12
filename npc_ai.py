@@ -226,14 +226,20 @@ class NpcAiMixin:
                 entity.in_structure = True
                 entity.structure_key = screen_key
         elif getattr(entity, 'in_structure', False):
+            old_structure_key = entity.structure_key
             entity.in_structure = False
             entity.structure_key = None
-
-        # Structure exit logic — returns True if exit was handled (skip state machine),
-        # False if entity stays inside and state machine should run normally.
-        if entity.in_structure:
-            if self.handle_in_structure_npc(entity, entity_id):
-                return
+            # Clean up screen_entities: entity's screen_x/y already points to overworld
+            # but it may still be listed under the old structure key — remove it and
+            # ensure it's registered in the correct overworld bucket.
+            if old_structure_key and old_structure_key in self.screen_entities:
+                if entity_id in self.screen_entities[old_structure_key]:
+                    self.screen_entities[old_structure_key].remove(entity_id)
+                overworld_key = screen_key  # screen_key is already the overworld zone
+                if overworld_key not in self.screen_entities:
+                    self.screen_entities[overworld_key] = []
+                if entity_id not in self.screen_entities[overworld_key]:
+                    self.screen_entities[overworld_key].append(entity_id)
 
         # EXECUTE BEHAVIOR BASED ON STATE
         if hasattr(entity, 'ai_state'):
@@ -472,29 +478,40 @@ class NpcAiMixin:
                             dist = abs(entity.x - tx) + abs(entity.y - ty)
                             if dist == 0:
                                 cell_type = entity.current_target[3] if len(entity.current_target) >= 4 else ''
-                                _is_enterable = (
-                                    entity.target_type == 'shelter'
-                                    or (entity.target_type == 'role'
-                                        and cell_type == 'MINESHAFT'
-                                        and getattr(entity, 'quest_focus', None) == 'MINE')
-                                )
-                                if _is_enterable:
-                                    if not cell_type:
-                                        cell_type = 'HOUSE'
-                                    self.npc_enter_structure(entity, screen_key, tx, ty, cell_type)
-                                    if entity.in_structure:
-                                        entity.current_target = None
-                                        entity.target_type = None
-                                else:
-                                    # Walked onto a non-enterable target — clear and wander
-                                    entity.quest_target = None
+                                if cell_type == 'EXIT':
+                                    # At structure exit — trigger actual exit via unified seek_zone_exit
+                                    self.seek_zone_exit(entity, entity_id)
                                     entity.current_target = None
-                                    entity.ai_state = 'wandering'
-                                    entity.ai_state_timer = 2
+                                    entity.target_type = None
+                                else:
+                                    _is_enterable = (
+                                        entity.target_type in ('shelter', 'visit')
+                                        or (entity.target_type == 'role'
+                                            and cell_type == 'MINESHAFT'
+                                            and getattr(entity, 'quest_focus', None) == 'MINE')
+                                    )
+                                    if _is_enterable:
+                                        if not cell_type:
+                                            cell_type = 'HOUSE'
+                                        self.npc_enter_structure(entity, screen_key, tx, ty, cell_type)
+                                        if entity.in_structure:
+                                            entity.current_target = None
+                                            entity.target_type = None
+                                    else:
+                                        # Walked onto a non-enterable target — clear and wander
+                                        entity.quest_target = None
+                                        entity.current_target = None
+                                        entity.ai_state = 'wandering'
+                                        entity.ai_state_timer = 2
                             elif dist > 1:
                                 self.move_toward_position(entity, tx, ty, screen_key)
                                 # If at exit, try to cross
                                 self._try_targeting_zone_cross(entity, entity_id)
+                            elif dist == 1 and len(entity.current_target) >= 4 and entity.current_target[3] == 'EXIT':
+                                # Adjacent to structure exit — trigger exit
+                                self.seek_zone_exit(entity, entity_id)
+                                entity.current_target = None
+                                entity.target_type = None
                             elif dist == 1 and entity.target_type == 'stone' and len(entity.current_target) >= 4:
                                 # Verify the stone target cell still exists; clear if depleted
                                 _stone_cells = ('STONE', 'IRON_ORE', 'CAVE', 'MINESHAFT', 'CAVE_WALL')
@@ -511,8 +528,8 @@ class NpcAiMixin:
                                     if entity.in_structure:
                                         entity.current_target = None
                                         entity.target_type = None
-                            elif dist == 1 and entity.target_type == 'shelter':
-                                # Adjacent to shelter — enter at 100%, clear only after confirmed
+                            elif dist == 1 and entity.target_type in ('shelter', 'visit'):
+                                # Adjacent to shelter/visit target — enter, clear targeting state
                                 cell_type = entity.current_target[3] if len(entity.current_target) >= 4 else 'HOUSE'
                                 self.npc_enter_structure(entity, screen_key, tx, ty, cell_type)
                                 if entity.in_structure:
@@ -675,6 +692,17 @@ class NpcAiMixin:
                             entity._special_target_type = None
                             entity.ai_state = 'wandering'
                             entity.ai_state_timer = 2
+                        elif entity.target_type == 'special' and getattr(entity, '_special_target_type', None) == 'trade':
+                            # Adjacent to trade partner — execute exchange
+                            partner_id = entity.current_target if isinstance(entity.current_target, int) else None
+                            if partner_id and partner_id in self.entities:
+                                self._execute_npc_trade(entity, partner_id)
+                            else:
+                                entity.current_target       = None
+                                entity._special_target_lock = 0
+                                entity._special_target_type = None
+                                entity.ai_state             = 'wandering'
+                                entity.ai_state_timer       = 2
                         else:
                             # Generic target type — try behavior_config
                             behavior_config = entity.props.get('behavior_config')
@@ -1114,45 +1142,38 @@ class NpcAiMixin:
             at_exit, _ = self.is_at_exit(entity.x, entity.y)
             
             if at_exit:
-                # Check cooldown - prevent rapid zone hopping
+                # Ramp-up: probability of crossing scales up over time since last zone change
                 ticks_since_last_change = self.tick - entity.last_zone_change_tick
-                if ticks_since_last_change < ZONE_CHANGE_COOLDOWN:
-                    # Still on cooldown - can't change zones yet
-                    pass
-                else:
-                    # Cooldown expired - can travel
-                    can_travel = True
-                    
-                    # Transition rate: 30% for normal NPCs, 100% for autopilot proxy
-                    is_proxy_entity = entity.props.get('is_autopilot_proxy', False)
-                    travel_rate = 1.0 if is_proxy_entity else 0.3
+                ramp = min(1.0, ticks_since_last_change / NPC_CROSS_RAMP_TICKS)
 
-                    # Wolves are natural explorers — higher zone-crossing drive
-                    if entity.type in ('WOLF', 'WOLF_double'):
-                        travel_rate = max(travel_rate, 0.6)
+                # Transition rate: 30% for normal NPCs, 100% for autopilot proxy
+                is_proxy_entity = entity.props.get('is_autopilot_proxy', False)
+                travel_rate = 1.0 if is_proxy_entity else 0.3
 
-                    # Entities in targeting state with cross-zone target also always cross
-                    if entity.ai_state == 'targeting' and entity.current_target:
-                        travel_rate = 1.0
-                    
-                    if can_travel and random.random() < travel_rate:
-                        old_zone = f"{entity.screen_x},{entity.screen_y}"
-                        self.try_entity_zone_transition(entity_id, entity)
-                        new_zone = f"{entity.screen_x},{entity.screen_y}"
-                        
-                        # If successfully traveled
-                        if old_zone != new_zone:
-                            # Update cooldown timer
-                            entity.last_zone_change_tick = self.tick
-                            
-                            # Reset stuck target tracking on zone change
-                            entity.target_stuck_counter = 0
-                            entity.last_target_position = None
-                            
-                            # Chance to level up from traveling
-                            entity.level_up_from_activity('travel', self)
-                            
-                            # Entity traveled to new zone (silent)
+                # Wolves are natural explorers — higher zone-crossing drive
+                if entity.type in ('WOLF', 'WOLF_double'):
+                    travel_rate = max(travel_rate, 0.6)
+
+                # Entities in targeting state with cross-zone target also always cross
+                if entity.ai_state == 'targeting' and entity.current_target:
+                    travel_rate = 1.0
+
+                if random.random() < ramp * travel_rate:
+                    old_zone = f"{entity.screen_x},{entity.screen_y}"
+                    self.try_entity_zone_transition(entity_id, entity)
+                    new_zone = f"{entity.screen_x},{entity.screen_y}"
+
+                    # If successfully traveled
+                    if old_zone != new_zone:
+                        # Update cooldown timer
+                        entity.last_zone_change_tick = self.tick
+
+                        # Reset stuck target tracking on zone change
+                        entity.target_stuck_counter = 0
+                        entity.last_target_position = None
+
+                        # Chance to level up from traveling
+                        entity.level_up_from_activity('travel', self)
         
         # SAFETY CHECK: Validate entity position after all AI logic
         player_zone = f"{self.player['screen_x']},{self.player['screen_y']}"
@@ -1678,6 +1699,10 @@ class NpcAiMixin:
                     return self.find_closest_eligible_target(entity, screen_key, target_list)
                 return None
             if ttype == 'shelter':
+                return self._find_closest_shelter(entity, screen_key)
+            if ttype == 'visit':
+                # Set a timed duration so update_structure_npc_behavior knows when to exit
+                entity.visit_end_tick = self.tick + random.randint(VISIT_DURATION_MIN, VISIT_DURATION_MAX)
                 return self._find_closest_shelter(entity, screen_key)
             if ttype == 'special':
                 subtype = getattr(entity, '_special_target_type', None)
@@ -2351,11 +2376,17 @@ class NpcAiMixin:
                     # Target died — quest complete
                     entity.keeper_target = None
                     entity.keeper_target_pos = None
+                    if getattr(entity, 'keeper_type', 0) == 2:
+                        entity.keeper = False
+                        entity.keeper_type = 0
                     self._try_complete_assigned_quest(entity)
             else:
                 # Entity ID no longer in entities dict — treat as gone
                 entity.keeper_target = None
                 entity.keeper_target_pos = None
+                if getattr(entity, 'keeper_type', 0) == 2:
+                    entity.keeper = False
+                    entity.keeper_type = 0
                 self._try_complete_assigned_quest(entity)
 
         elif kt['type'] == 'item':
@@ -2698,6 +2729,16 @@ class NpcAiMixin:
                         _day_shelter = _max_urg * 10.0 * max(0.5, 2.0 - _hp_frac)
                         candidates['shelter'] = _day_shelter
 
+        # ── Tier 4c: Visit (casual house visit, peaceful humanoids, any time) ──
+        # Very low score (VISIT_BASE=8) — only wins when nothing urgent is queued.
+        # Separate from 'shelter' so exit logic differs (timed stay, not health-based).
+        if (not entity.props.get('hostile', False)
+                and entity.props.get('humanoid', False)
+                and not getattr(entity, 'in_structure', False)
+                and not self.is_night):
+            if self._find_closest_shelter(entity, screen_key):
+                candidates['visit'] = VISIT_BASE
+
         # ── Tier 5: Role (archetype work targets) ─────────────────────────────
         role_type = self._evaluate_role_tier(entity, screen_key)
         if role_type:
@@ -2734,9 +2775,11 @@ class NpcAiMixin:
                 if locked and locked in candidates:
                     return locked
 
-        # Weighted random roll — scores are used directly as weights
-        types = list(candidates.keys())
-        weights = list(candidates.values())
+        # Weighted random roll — filter zero-weight entries before choosing
+        types   = [t for t, w in candidates.items() if w > 0]
+        weights = [w for w in candidates.values() if w > 0]
+        if not types:
+            return None
         chosen = random.choices(types, weights=weights, k=1)[0]
 
         entity._target_type_chosen = chosen
@@ -2825,6 +2868,65 @@ class NpcAiMixin:
             return 'role'
         return None
 
+    def _should_travel_exit(self, entity, screen_key):
+        """Return True if entity currently in a structure should exit.
+
+        Evaluated once per special-tier roll; becomes the condition for the
+        'travel' special sub-type lock.
+        """
+        if not getattr(entity, 'in_structure', False):
+            return False
+        if getattr(entity, 'keeper', False):
+            return False
+
+        is_nocturnal = entity.props.get('nocturnal', False)
+        is_hostile   = entity.props.get('hostile', False)
+        biome = self.screens.get(screen_key, {}).get('biome', '')
+
+        # Day/night × nocturnal
+        if not is_nocturnal and not self.is_night:
+            # Non-nocturnal during day: wants to be outside — except miners in caves
+            if not (entity.type == 'MINER' and biome == 'CAVE'):
+                return True
+        if is_nocturnal and self.is_night:
+            return True
+
+        # Miners exit caves at night
+        if entity.type == 'MINER' and biome == 'CAVE' and self.is_night:
+            return True
+
+        # Hostile cave entities: exit at night
+        if is_hostile and biome == 'CAVE' and self.is_night:
+            return True
+
+        # Overcrowding
+        local_pop = len([
+            eid for eid in self.screen_entities.get(screen_key, [])
+            if eid in self.entities and self.entities[eid].is_alive()
+        ])
+        if local_pop > 3 and random.random() < local_pop * 0.10:
+            return True
+
+        # Guards/warriors: rush out when hostiles are near the parent entrance
+        if entity.type in ('GUARD', 'WARRIOR') and getattr(entity, 'structure_key', None) in self.structures:
+            sub = self.structures[entity.structure_key]
+            parent_screen = sub.get('parent_screen')
+            parent_cell   = sub.get('parent_cell', (GRID_WIDTH // 2, GRID_HEIGHT // 2))
+            entrance_x, entrance_y = parent_cell
+            ow_key = (f"{parent_screen[0]},{parent_screen[1]}"
+                      if parent_screen else screen_key)
+            for oid in self.screen_entities.get(ow_key, []):
+                if oid not in self.entities:
+                    continue
+                if oid in getattr(self, 'followers', []):
+                    continue
+                other = self.entities[oid]
+                if other.props.get('hostile', False):
+                    if abs(other.x - entrance_x) + abs(other.y - entrance_y) <= 8:
+                        return True
+
+        return False
+
     def _evaluate_special_tier(self, entity, screen_key):
         """Sticky special-pool evaluation. Returns (type_string, SPECIAL_BASE) or None.
 
@@ -2858,14 +2960,22 @@ class NpcAiMixin:
             if self._find_chest_in_zone(entity, screen_key):
                 candidates.append('chest_dump')
 
-        # trade: stub — NPC trader system not yet built
-        # if inv_count >= 20:
-        #     if self._find_trade_target(entity, screen_key):
-        #         candidates.append('trade')
+        # trade: peaceful humanoid with a nearby partner that has items
+        if (not entity.props.get('hostile', False)
+                and entity.props.get('humanoid', False)):
+            _partner = self._find_trade_partner(entity, screen_key)
+            if _partner is not None:
+                # TRADERs get 3× weight so they trade far more often
+                _trade_weight = 3 if entity.type == 'TRADER' else 1
+                candidates.extend(['trade'] * _trade_weight)
 
         # clearing_action: adjacent solid non-structure cell exists
         if self._find_clearing_target(entity, screen_key):
             candidates.append('clearing_action')
+
+        # travel: entity in structure should exit based on day/night/overcrowd/defense
+        if self._should_travel_exit(entity, screen_key):
+            candidates.append('travel')
 
         # shelter: at night, peaceful humanoids seek the nearest house to enter
         if (self.is_night and not entity.props.get('hostile', False)
@@ -2894,9 +3004,115 @@ class NpcAiMixin:
                     and not entity.props.get('hostile', False)
                     and not getattr(entity, 'in_structure', False)
                     and bool(self._find_nearest_shelter(entity, screen_key)))
+        if stype == 'travel':
+            return self._should_travel_exit(entity, screen_key)
         if stype == 'trade':
-            return False  # stub
+            return (not entity.props.get('hostile', False)
+                    and bool(self._find_trade_partner(entity, screen_key)))
         return False
+
+    def _find_trade_partner(self, entity, screen_key):
+        """Return entity ID of a nearby tradeable partner, or None.
+
+        Alignment rules:
+          - Peaceful humanoids trade only with other peaceful humanoids.
+          - Goblins trade only with other goblins.
+          - Bandits trade only with other bandits.
+        At least one side must have inventory items.
+        """
+        if entity.props.get('hostile', False):
+            return None
+        _is_goblin = entity.type == 'GOBLIN'
+        _is_bandit = entity.type == 'BANDIT'
+        best_id, best_dist = None, float('inf')
+        for oid in self.screen_entities.get(screen_key, []):
+            if oid not in self.entities:
+                continue
+            other = self.entities[oid]
+            if not other.is_alive() or other is entity:
+                continue
+            if not other.props.get('humanoid', False):
+                continue
+            # Alignment grouping
+            other_is_goblin = other.type == 'GOBLIN'
+            other_is_bandit = other.type == 'BANDIT'
+            other_hostile   = other.props.get('hostile', False)
+            if _is_goblin and not other_is_goblin:
+                continue
+            if _is_bandit and not other_is_bandit:
+                continue
+            if not _is_goblin and not _is_bandit and other_hostile:
+                continue
+            # At least one side must have something to give
+            e_items  = sum(entity.inventory.values()) if entity.inventory else 0
+            o_items  = sum(other.inventory.values())  if other.inventory  else 0
+            if not (e_items > 0 or o_items > 0):
+                continue
+            dist = abs(other.x - entity.x) + abs(other.y - entity.y)
+            if dist <= NPC_TRADE_SEARCH_RADIUS and dist < best_dist:
+                best_dist = dist
+                best_id   = oid
+        return best_id
+
+    def _execute_npc_trade(self, entity, partner_id):
+        """Execute a one-step item exchange between entity and partner.
+
+        Gold is preferred as currency (gives 1 coin).  If neither side has gold,
+        each gives half a random stack (min 1).  The '+' animation fires at both
+        positions so the player can observe trades happening nearby.
+        """
+        if partner_id not in self.entities:
+            return
+        partner = self.entities[partner_id]
+        if not partner.is_alive():
+            return
+
+        def _pick_give(inv):
+            """Return (item_name, count) to give, or None."""
+            if inv.get('gold', 0) > 0:
+                return ('gold', 1)
+            options = [(k, v) for k, v in inv.items() if v > 0]
+            if not options:
+                return None
+            item, count = random.choice(options)
+            return (item, max(1, count // 2))
+
+        entity_gives  = _pick_give(entity.inventory  if entity.inventory  else {})
+        partner_gives = _pick_give(partner.inventory if partner.inventory else {})
+
+        if not entity_gives and not partner_gives:
+            # Nothing to trade — bail and clear lock
+            entity.current_target       = None
+            entity._special_target_lock = 0
+            entity._special_target_type = None
+            entity.ai_state             = 'wandering'
+            entity.ai_state_timer       = 2
+            return
+
+        if entity_gives:
+            item, count = entity_gives
+            entity.inventory[item]  = max(0, entity.inventory.get(item, 0) - count)
+            if entity.inventory[item] == 0:
+                del entity.inventory[item]
+            partner.inventory[item] = partner.inventory.get(item, 0) + count
+            self.show_attack_animation(partner.x, partner.y, entity=entity, magic_type='trade')
+
+        if partner_gives:
+            item, count = partner_gives
+            partner.inventory[item] = max(0, partner.inventory.get(item, 0) - count)
+            if partner.inventory[item] == 0:
+                del partner.inventory[item]
+            entity.inventory[item]  = entity.inventory.get(item, 0) + count
+            self.show_attack_animation(entity.x, entity.y, entity=partner, magic_type='trade')
+
+        self.trades_completed = getattr(self, 'trades_completed', 0) + 1
+
+        # Clear trade state so entity re-evaluates on next idle cycle
+        entity.current_target       = None
+        entity._special_target_lock = 0
+        entity._special_target_type = None
+        entity.ai_state             = 'wandering'
+        entity.ai_state_timer       = 3
 
     def _find_chest_in_zone(self, entity, screen_key):
         """Return True if any CHEST or EMPTY_CRATE cell exists within 8 cells of entity."""

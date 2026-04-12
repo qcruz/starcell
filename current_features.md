@@ -36,13 +36,14 @@ Game ← HudMixin, InventoryUIMixin, MenusMixin, DevScreenMixin
 | `systems/factions.py` | FactionsMixin — faction registration, zone control, triggers faction domain rebuild |
 | `world/zones.py` | ZonesMixin — probabilistic_zone_updates, cell CA, entity AI dispatch, chest logic, biome/faction domain management |
 | `world/generation.py` | WorldGenerationMixin — screen + cave generation |
-| `ai/actions.py` | NpcAiActionsMixin — harvest, build, plant, mine, footstep sounds |
+| `ai/actions.py` | NpcAiActionsMixin — harvest, build, plant, mine, trade, footstep sounds |
 | `ai/movement.py` | NpcAiMovementMixin — wander_entity, move_toward_position, zone crossing |
 | `npc_ai.py` | NpcAiMixin — update_entity_ai, state machine, combat, sheltering |
-| `game_core.py` | GameCoreMixin — init, run loop, player input, new_game |
+| `game_core.py` | GameCoreMixin — init, run loop, player input, new_game, NPC trade window |
 | `autopilot.py` | AutopilotMixin — possession-model autopilot |
 | `lore/engine.py` | LoreEngineMixin — keeper assignment, world events, zone history |
 | `ui/hud.py` | HudMixin — draw_game, entity rendering, HUD overlay |
+| `monolith_extraction_recon.md` | Tracks what has/hasn't been extracted from `game_core.py` and `npc_ai.py`; extraction targets and priority order |
 
 **NPC AI Dispatch**: `probabilistic_zone_updates()` (every 30 ticks) → `update_zone_with_coverage()` → `update_entity_ai()` per entity. `game_core.py`'s `update_entities()` is dead code — all NPC AI runs through zones.py.
 
@@ -100,6 +101,7 @@ Game ← HudMixin, InventoryUIMixin, MenusMixin, DevScreenMixin
 | B | Toggle blocking (90% damage reduction) |
 | V | Toggle friendly fire |
 | J | Release selected follower |
+| N | Open NPC trade interaction — drops gold near adjacent NPC to trigger a trade; if trade panel already open, executes first available recipe |
 
 **Magic & Spells**
 
@@ -123,7 +125,7 @@ Game ← HudMixin, InventoryUIMixin, MenusMixin, DevScreenMixin
 | Shift+Q | Get / turn in quest from inspected NPC |
 | Shift+A | Autopilot toggle OR assign quest to NPC (context-sensitive) |
 | Shift+G | Gift item to inspected NPC — offers selected item; NPC gains +favor |
-| Shift+T | Open trade window with inspected NPC |
+| Shift+T | Open inventory trade window with inspected NPC — shows NPC's items with random gold prices (5–10 each); click to buy |
 | Shift+F | Attempt to recruit inspected NPC as follower (50% chance) |
 | Shift+I | Dev info overlay (zones, entities, followers, domains) |
 | 1–9, 0 | Select inventory slot |
@@ -302,6 +304,7 @@ Game ← HudMixin, InventoryUIMixin, MenusMixin, DevScreenMixin
 | Age | 65–100 year lifespan; old-age damage 2 HP/zone-update above threshold |
 | XP | Gained from every non-walking action (eat, drink, attack, harvest, pickup, deposit); chance = 1/level per roll; 100 XP = L2, 200 XP = L3, etc. |
 | Level | `1.0 + xp / 100.0` (continuous float); integer crossings trigger level-up effects |
+| tasks_completed | Integer counter incremented each time the entity completes an archetype action (`action_harvest_cell`, `action_transform_cell`, `action_place_cell`) or a quest target arrival; saved/loaded; visible in dev overlay (Shift+I) |
 
 **Level-Up Effects** (`level_up_from_activity`)
 - Full health, hunger, and thirst restore
@@ -675,6 +678,33 @@ Zones are grouped into two overlapping types of domains: **biome domains** and *
 
 ---
 
+## NPC Trade System
+
+**NPC-to-NPC Passive Barter** (`ai/actions.py:try_npc_trade`)
+- All peaceful NPCs have a 2% chance per update tick to swap one random non-spell item with a nearby peaceful NPC (within 3 cells)
+- Exchange is symmetric — each entity gives one item, each receives one
+- Background economy: redistributes resources between zones over time as traders travel
+
+**Gold-Drop Trade** (`ai/actions.py:process_npc_trade`)
+- Fires when an NPC picks up gold the player has dropped while adjacent
+- Per-type exchange rates: FARMER→2 carrots/gold, LUMBERJACK→3 wood/gold, MINER→3 stone/gold
+- GUARD/GOBLIN accumulate gold until threshold then offer to become followers
+- TRADER opens a UI recipe panel showing fixed trade recipes
+
+**Player Inventory Trade Window** (`game_core.py:open_npc_trade_window`)
+- Trigger: Shift+T while inspecting an NPC
+- Opens a grid UI above the NPC showing all their current inventory items with randomized gold prices (5–10 per item, set fresh on open)
+- Click a slot to buy: player pays gold, item moves to player inventory
+- Window closes when NPC's inventory is depleted or player moves away
+- Backed by `trader_display` dict; click handled by `handle_npc_trade_click`
+
+**N-Key Trade Interaction** (`ai/actions.py:npc_trade_interaction`)
+- Trigger: N key while adjacent to a TRADER NPC
+- Opens a fixed-recipe panel (leather/leather_armor/planks for gold); executes the first affordable recipe on repeat press
+- Older system distinct from the Shift+T inventory window
+
+---
+
 ## Structure System
 
 **House Interior**
@@ -776,6 +806,9 @@ Zones are grouped into two overlapping types of domains: **biome domains** and *
 **Watchdog** (`debug/watchdog.py`)
 - Rotates across 9 sample categories per 300-tick cycle: entities, cells, zones, player, structures, followers, npc_actions, keepers, npc_quests
 - Integrity checks for anomalies (frozen entities, ghost IDs, etc.)
+  - Check 6: entity orphaned from screen_entities (in entities dict but missing from any bucket)
+  - Check 7: entity stuck targeting EXIT or structure entrance cell for extended period
+  - Check 8: entity with in_subscreen=True still in overworld screen_entities bucket
 - Rolling 60s/120s backup auto-saves
 
 **AUTO_DEBUG Mode** (`main.py`, `debug/auto_debug.cfg`)

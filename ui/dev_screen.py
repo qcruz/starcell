@@ -191,6 +191,8 @@ class DevScreenMixin:
         total_deaths   = sum(death_counts.values())
         entities_spawned_total = getattr(self, 'entities_spawned_total', 0)
 
+        trades_completed = getattr(self, 'trades_completed', 0)
+
         return {
             'total_domains':     len(getattr(self, 'domains', {})),
             'biome_counts':      dict(sorted(biome_counts.items())),
@@ -222,6 +224,7 @@ class DevScreenMixin:
             'death_counts':              death_counts,
             'total_deaths':              total_deaths,
             'entities_spawned_total':    entities_spawned_total,
+            'trades_completed':          trades_completed,
         }
 
     # ── Renderer ───────────────────────────────────────────────────────────────
@@ -374,6 +377,10 @@ class DevScreenMixin:
                 cy = _t(f"  {qt:<22} {count}", cx, cy)
         else:
             cy = _t("  (none yet)", cx, cy)
+
+        cy += 8
+        cy = _h("TRADES (session)", cx, cy)
+        cy = _t(f"  completed     {stats['trades_completed']:>5}", cx, cy, GRN)
 
         cy += 8
         dc = stats['death_counts']

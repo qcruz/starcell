@@ -228,6 +228,7 @@ MINER_MINE_SUCCESS = 0.5        # 50% mine success (increased for aggression)
 PEACEFUL_NPC_MIGRATE_RATE = 0.05 # Chance to migrate if duplicate type in zone (update_entity_ai)
 ZONE_CHANGE_COOLDOWN = 1800  # Ticks (30 seconds at 60 FPS) before entity can change zones again (seek_zone_exit path)
 NPC_SEAMLESS_CROSS_COOLDOWN = 30   # Ticks (0.5 s) anti-bounce cooldown for seamless zone crossing
+NPC_CROSS_RAMP_TICKS = 300         # Ticks over which crossing probability ramps from 0% to 100% after a zone change
 NPC_PEACEFUL_WANDER_CHANCE = 0.60  # Probability a peaceful NPC actually wanders when idle (was implicit 1.0)
 TARGET_STUCK_THRESHOLD = 180  # Ticks (3 seconds) before target is considered stuck and added to memory_lane
 NPC_TREE_CLEAR_RATE = 0.05  # Non-lumberjack NPCs can clear trees (no wood collected)
@@ -303,7 +304,13 @@ SPECIAL_BASE         = 35    # flat score per eligible special-pool candidate
 SPECIAL_LOCK_TICKS   = 60    # ticks a chosen special type stays locked within the special pool
 TARGET_LOCK_TICKS    = 300   # ticks a chosen target type is held before re-rolling
 RESOURCE_BASE        = 20    # base resource score — kept low; hp_mult provides the real urgency
+VISIT_BASE           = 8     # flat score for casual daytime house visits (peaceful humanoids only)
+VISIT_DURATION_MIN   = 300   # minimum ticks a visiting NPC stays inside
+VISIT_DURATION_MAX   = 600   # maximum ticks a visiting NPC stays inside
 MIN_RESOURCE_URGENCY = 0.30  # stat must be below 70% full before food/water enters candidates
+TRADE_BASE           = 12    # flat score for NPC-to-NPC trade (special pool candidate)
+TRADER_GOLD_REPLENISH = 50   # gold TRADERs gain per zone crossing (capped at 200 * level)
+NPC_TRADE_SEARCH_RADIUS = 8  # max Manhattan dist to find a trade partner
 
 # Maps quest focus type → list of eligible target cell/entity/item strings.
 # Used by _evaluate_role_tier and find_closest_eligible_target.
