@@ -2481,7 +2481,6 @@ class NpcAiMixin:
 
         # Award player XP
         self.gain_xp(1)
-        print(f"{npc_name} completed [{q_name}]! Player +1 XP.")
 
     def _assign_specific_quest_target(self, entity, screen_key):
         """Pick a specific quest target cell/entity for a 'specific' quest cycle.
@@ -3448,11 +3447,8 @@ class NpcAiMixin:
                         entity.trigger_action_animation()
                         self.show_attack_animation(check_x, check_y, entity=entity)
                         screen['grid'][check_y][check_x] = 'GRASS'
-                        if random.random() < 0.2:
-                            name_str = entity.name if entity.name else entity.type
-                            print(f"{name_str} destroyed a camp at [{screen_key}]")
                         return
-                    
+
                     # Attack houses - very low chance
                     elif cell == 'HOUSE' and random.random() < 0.01:  # 1% chance
                         entity.update_facing_toward(check_x, check_y)
@@ -3462,8 +3458,6 @@ class NpcAiMixin:
                         # Scatter wood debris so destruction looks visible
                         for _ in range(random.randint(1, 3)):
                             self.drop_item('wood', check_x, check_y)
-                        name_str = entity.name if entity.name else entity.type
-                        print(f"{name_str} destroyed a house at [{screen_key}]!")
                         return
 
                     # Attack stone houses - very rare (goblins chip at stone slowly)
@@ -3472,8 +3466,6 @@ class NpcAiMixin:
                         entity.trigger_action_animation()
                         self.show_attack_animation(check_x, check_y, entity=entity)
                         screen['grid'][check_y][check_x] = 'GRASS'
-                        name_str = entity.name if entity.name else entity.type
-                        print(f"{name_str} destroyed a stone house at [{screen_key}]!")
                         return
 
         # PRIORITY 4: Move toward nearest structure if found
@@ -3528,31 +3520,19 @@ class NpcAiMixin:
                             # Chance to level up from harvesting
                             entity.level_up_from_activity('harvest', self)
                             
-                            # 5% chance to log action
-                            if random.random() < 0.05:
-                                name_str = entity.name if entity.name else "Farmer"
-                                print(f"{name_str} harvested {amount} {item}(s) at [{screen_key}]")
                             return
-                    
+
                     # Till grass or dirt to soil
                     if cell in ['GRASS', 'DIRT'] and random.random() < FARMER_TILL_RATE:
                         screen['grid'][check_y][check_x] = 'SOIL'
-                        
-                        # 5% chance to log action
-                        if random.random() < 0.05:
-                            print(f"Farmer tilled soil at [{screen_key}]")
                         return
-                    
+
                     # Plant crops on soil
                     if cell == 'SOIL' and random.random() < FARMER_PLANT_RATE:
                         # Check if has carrot in inventory
                         if entity.inventory.get('carrot', 0) > 0:
                             entity.inventory['carrot'] -= 1
                             screen['grid'][check_y][check_x] = 'CARROT1'
-                            
-                            # 5% chance to log action
-                            if random.random() < 0.05:
-                                print(f"Farmer planted crops at [{screen_key}]")
                             return
     
     def lumberjack_behavior(self, entity):
@@ -3639,26 +3619,20 @@ class NpcAiMixin:
                     
                     # Chance to level up from building
                     entity.level_up_from_activity('build', self)
-                    
-                    name_str = entity.name if entity.name else "Lumberjack"
-                    print(f"{name_str} built a house at [{screen_key}] ({build_x}, {build_y})")
                     return
-            
+
             # Otherwise, build anywhere suitable
             for _ in range(20):
                 build_x = random.randint(2, GRID_WIDTH - 3)
                 build_y = random.randint(2, GRID_HEIGHT - 3)
-                
+
                 cell = screen['grid'][build_y][build_x]
                 if cell in ['GRASS', 'DIRT']:
                     entity.inventory['wood'] -= 10
                     screen['grid'][build_y][build_x] = 'HOUSE'
-                    
+
                     # Chance to level up from building
                     entity.level_up_from_activity('build', self)
-                    
-                    name_str = entity.name if entity.name else "Lumberjack"
-                    print(f"{name_str} built a house at [{screen_key}] ({build_x}, {build_y})")
                     return
     
     def guard_behavior(self, entity):
@@ -3708,11 +3682,6 @@ class NpcAiMixin:
             
             # If hostile found, move to attack
             if hostile_found:
-                # 5% chance to log engagement
-                if min_dist <= 10 and random.random() < 0.05:
-                    name_str = entity.name if entity.name else "Guard"
-                    print(f"{name_str} engaging {hostile_found.type} at [{screen_key}]")
-                
                 self.move_entity_towards(entity, hostile_found.x, hostile_found.y)
                 return  # Don't patrol while in combat
         
@@ -3914,7 +3883,6 @@ class NpcAiMixin:
             entity.idleness = ai_params.get('idleness', 0.15)
             entity.target_types = ai_params.get('target_types', ['water', 'food'])
             
-            print(f"{old_name} has settled as a {new_type} in [{screen_key}]!")
             return True
         
         # Add other logic types here as needed (e.g., 'promotion', 'corruption', etc.)

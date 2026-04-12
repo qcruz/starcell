@@ -90,7 +90,7 @@ class EnchantmentMixin:
             entity_id, entity = entity_at_target
             current_enchant = self.enchanted_entities.get(entity_id, 0)
             self.enchanted_entities[entity_id] = current_enchant + 1
-            self.player['max_energy'] = max(1, self.player.get('max_energy', 100) - 1)
+            self.player['max_energy'] = max(1, self.player.get('max_energy', 100) - 30)
 
             # Add to followers list if not already a follower
             if entity_id not in self.followers:
@@ -157,8 +157,8 @@ class EnchantmentMixin:
             else:
                 print(f"Decreased entity {entity_at_target} enchant to level {self.enchanted_entities[entity_at_target]}")
 
-            # Restore 1 max_energy (permanent) and 3 energy (temp)
-            self.player['max_energy'] = self.player.get('max_energy', 100) + 1
+            # Restore 30 max_energy per enchant level released (matches the 30-per-cast cost)
+            self.player['max_energy'] = self.player.get('max_energy', 100) + 30
             self.player['energy'] = min(
                 self.player.get('energy', 0) + 3,
                 self.player['max_energy']
@@ -224,9 +224,9 @@ class EnchantmentMixin:
         # Remove from follower inventory
         self.inventory.remove_item(selected_follower, 1)
 
-        # Remove enchantment
+        # Remove enchantment and restore 30 max_energy per enchant level
         if entity_id in self.enchanted_entities:
-            energy_restored = self.enchanted_entities[entity_id]
+            energy_restored = self.enchanted_entities[entity_id] * 30
             del self.enchanted_entities[entity_id]
 
             # Restore max_energy permanently
@@ -234,6 +234,8 @@ class EnchantmentMixin:
 
             print(f"Released {entity.type} follower! Restored {energy_restored} max energy.")
         else:
+            # Follower recruited via Shift+F (no enchant entry) — restore flat 30
+            self.player['max_energy'] = self.player.get('max_energy', 100) + 30
             print(f"Released {entity.type} follower!")
 
     # -------------------------------------------------------------------------

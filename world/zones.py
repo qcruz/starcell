@@ -63,9 +63,9 @@ class ZonesMixin:
                    if k[0] == zone_key or self.door_map[k][0] == zone_key]:
             self.door_map.pop(dk, None)
 
-        # --- Enchanted cells (keyed {zone_key: {(x,y): level}}) ---
-        if hasattr(self, 'enchanted_cells'):
-            self.enchanted_cells.pop(zone_key, None)
+        # --- Enchanted cells: preserved on zone unload so they survive zone cycling ---
+        # Do NOT pop enchanted_cells[zone_key] here; enchantments must persist
+        # even when a zone is evicted from memory and later reloaded.
 
         # --- Zone world data ---
         self.screens.pop(zone_key, None)

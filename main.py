@@ -63,7 +63,7 @@ from entity import *
 from systems import (SaveLoadMixin, CraftingMixin, CombatMixin,
                      EnchantmentMixin, FactionsMixin, SpawningMixin)
 from world import WorldGenerationMixin, ZonesMixin, CellsMixin
-from ui import HudMixin, InventoryUIMixin, MenusMixin, DevScreenMixin
+from ui import HudMixin, InventoryUIMixin, MenusMixin
 from ai import NpcAiActionsMixin, NpcAiMovementMixin
 from lore import LoreEngineMixin
 
@@ -75,7 +75,7 @@ from autopilot import AutopilotMixin
 
 class Game(
     # New modular mixins take precedence over legacy duplicates via MRO
-    HudMixin, InventoryUIMixin, MenusMixin, DevScreenMixin,  # ui/
+    HudMixin, InventoryUIMixin, MenusMixin,                  # ui/
     WorldGenerationMixin, ZonesMixin, CellsMixin,     # world/
     SaveLoadMixin, CraftingMixin, CombatMixin,        # systems/
     EnchantmentMixin, FactionsMixin, SpawningMixin,   # systems/
@@ -108,6 +108,13 @@ if __name__ == '__main__':
     game = Game()
 
     if AUTO_DEBUG:
+        # Enable debug systems for this session
+        import constants as _const
+        _const.DEBUG_MODE = True
+        game.bug_catcher = __import__('debug.bug_catcher', fromlist=['BugCatcher']).BugCatcher()
+        from debug.watchdog import Watchdog as _WD
+        game.watchdog = _WD(game.bug_catcher)
+
         # Load run counter
         try:
             with open(_STATE_FILE) as _f:

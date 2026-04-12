@@ -83,6 +83,10 @@ class NpcAiActionsMixin:
             if cell not in cell_types:
                 continue
 
+            # Skip enchanted cells — NPCs cannot harvest them
+            if self.is_cell_enchanted(cx, cy, screen_key):
+                continue
+
             # Face target + animate
             if not is_player and hasattr(actor, 'update_facing_toward'):
                 actor.update_facing_toward(cx, cy)

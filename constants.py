@@ -35,6 +35,9 @@ import os
 pygame.mixer.pre_init(44100, -16, 2, 512)
 pygame.init()
 
+# Debug mode — off by default on main branch; AUTO_DEBUG path enables it at runtime
+DEBUG_MODE = False
+
 # Constants
 CELL_SIZE = 40
 GRID_WIDTH = 24
@@ -250,10 +253,7 @@ OLD_AGE_DAMAGE = 2.0                # Health loss per zone-update tick when age 
 
 # Entity Spawning
 SPAWN_CHANCE_MULTIPLIER = 1.0   # Global spawn rate multiplier (1.0 = normal) (spawn_entities_for_screen)
-FOREST_BIOME_CHANCE = 0.60      # 60% of zones are forest (generate_screen)
-PLAINS_BIOME_CHANCE = 0.20      # 20% of zones are plains (generate_screen)
-MOUNTAINS_BIOME_CHANCE = 0.15   # 15% of zones are mountains (generate_screen)
-DESERT_BIOME_CHANCE = 0.05      # 5% of zones are desert (generate_screen)
+# Note: biome distribution is equal (random.choice) — no per-biome chance constants needed
 
 # Raid Event System
 RAID_CHANCE_BASE = 0.025        # 2.5% base raid chance (halved; structures lower it further)

@@ -68,7 +68,7 @@ class MenusMixin:
             "Controls:",
             "WASD / Arrows - Move",
             "Space - Interact",
-            "E - Pick up   D - Drop   P - Place",
+            "D - Drop   P - Place",
             "N - Trade   B - Block   V - Friendly fire",
             "L - Cast spell   K - Reverse spell",
             "Shift+A - Toggle autopilot",
@@ -152,7 +152,7 @@ class MenusMixin:
 
         controls = [
             "WASD / Arrows - Move",
-            "Space - Interact   E - Pick up   D - Drop   P - Place",
+            "Space - Interact / Pick up dropped items   D - Drop   P - Place",
             "L - Cast spell   K - Reverse spell",
             "Shift+A - Toggle autopilot",
             "N - Trade   B - Block   V - Friendly fire   J - Release follower",
