@@ -14,40 +14,15 @@
 
 ---
 
-## 1. Player Starting Inventory
+## 1. Player Starting Inventory ✅ DONE
 
-**Location:** `game_core.py:2842–2844`
-
-**Current dev behavior:** `new_game()` adds every item in `ITEMS` to the player inventory. This is a dev convenience — the player starts with all tools, weapons, spells, and items unlocked.
-
-**Policy for main:** Replace the "give all items" loop with an explicit starter set:
-- `star_spell` (1x) — in magic tab
-- `attack`, `block`, `inspect`, `dig`, `sneak`, `talk` (1x each) — in actions tab
-- Nothing else — no tools, weapons, consumables, or crafting materials
-
-```python
-# REPLACE THE DEV LOOP WITH:
-self.inventory.add_item('star_spell', 1)
-for _action in ['attack', 'block', 'inspect', 'dig', 'sneak', 'talk']:
-    self.inventory.add_item(_action, 1)
-```
+**Applied in dev:** `new_game()` now gives only `star_spell` + action items. Dev all-items loop removed.
 
 ---
 
-## 2. Starting Follower
+## 2. Starting Follower ✅ DONE
 
-**Location:** `game_core.py:2869`
-
-**Current dev behavior:** A random follower type (SHEEP, DEER, WOLF, BAT, GOBLIN, SKELETON, TERMITE) is selected on new_game and spawned after time passage.
-
-**Policy for main:** Player starts with one random peaceful animal follower. Restrict the pool to: `SHEEP`, `DEER`, `RED_BIRD`, `BUTTERFLY`, `CHICKEN`. This introduces the follower system without implying combat NPCs are easy to tame.
-
-```python
-# REPLACE the current line in new_game():
-self._pending_follower_type = random.choice(['SHEEP', 'DEER', 'WOLF', 'BAT', 'GOBLIN', 'SKELETON', 'TERMITE'])
-# WITH:
-self._pending_follower_type = random.choice(['SHEEP', 'DEER', 'RED_BIRD', 'BUTTERFLY', 'CHICKEN'])
-```
+**Applied in dev:** Pool restricted to `SHEEP`, `DEER`, `RED_BIRD`, `BUTTERFLY`, `CHICKEN`.
 
 ---
 
@@ -59,17 +34,9 @@ self._pending_follower_type = random.choice(['SHEEP', 'DEER', 'RED_BIRD', 'BUTTE
 
 ---
 
-## 4. Dev Screen (Shift+I)
+## 4. Dev Screen (Shift+I) ✅ DONE
 
-**Location:** `game_core.py:1184–1186`, `game_core.py:206`, `game_core.py:3021`, `ui/dev_screen.py`
-
-**Current dev behavior:** Shift+I opens the dev info overlay showing internal state, entity counts, tick info, etc.
-
-**Policy for main:** Remove entirely. Delete:
-- The `elif event.key == pygame.K_i and Shift: self.show_dev_screen = not self.show_dev_screen` branch in `game_core.py:1184–1186` (Shift+I will fall through to normal inventory open)
-- The `self.show_dev_screen = False` init line in `game_core.py:206`
-- The `self.draw_dev_screen()` call in `game_core.py:3021`
-- `ui/dev_screen.py` — delete the file
+**Applied in dev:** `DevScreenMixin` removed from MRO and `ui/__init__.py`. `ui/dev_screen.py` deleted. All `show_dev_screen` refs removed from `game_core.py`.
 
 ---
 
@@ -91,24 +58,18 @@ Enchanted cells must be immutable: no NPC action or world system may alter them.
 | NPC harvest (`ai/actions.py:action_harvest_cell`) | **No** | Missing check — NPCs can chop/mine enchanted cells |
 | Zone unload (`world/zones.py:68`) | **No** | `enchanted_cells.pop(zone_key)` purges enchantments from unloaded zones mid-session |
 
-**Required code fixes:**
-1. `ai/actions.py:action_harvest_cell` — add `if self.is_cell_enchanted(cx, cy, screen_key): continue` before the harvest executes (inside the `for dx, dy` loop, after cell type check)
-2. `world/zones.py` zone unload — do not pop from `enchanted_cells` on zone unload; enchantments must survive zone cycling. Remove or guard the `self.enchanted_cells.pop(zone_key, None)` line.
+**Code fixes — ✅ DONE:**
+1. `ai/actions.py:action_harvest_cell` — `is_cell_enchanted` guard added; NPCs cannot harvest enchanted cells.
+2. `world/zones.py` zone unload — `enchanted_cells.pop` removed; enchantments survive zone cycling.
 
-**Visual clarity — required for main:**
-Current marker is a small golden rect in the top-left corner of the cell (`ui/hud.py:199–203`). Must be replaced with a clearly visible enchantment icon (star/sparkle sprite or distinct overlay) so players can reliably identify enchanted cells at a glance. Exact visual TBD with @qcruz — flag when ready to implement.
+**Visual clarity — ⏳ PENDING @qcruz:**
+Current marker is a small golden rect in the top-left corner of the cell (`ui/hud.py:199–203`). Must be replaced with a clearly visible enchantment icon (star/sparkle sprite or distinct overlay). Exact visual TBD with @qcruz — flag when ready to implement.
 
 ---
 
-## 6. Follower Energy Cost (Max Energy Reduction)
+## 6. Follower Energy Cost (Max Energy Reduction) ✅ DONE
 
-**Location:** `systems/enchantment.py:93`
-
-**Current dev behavior:** Each follower added permanently reduces player max_energy by 1 (`max_energy - 1`).
-
-**Policy for main:** Each follower costs 30 max energy while they are a follower. When a follower is released or dies, those 30 points are restored. This is a meaningful resource commitment — a player with 100 max energy can sustain a maximum of 3 followers before being nearly immobilized.
-
-**Required code change:** `systems/enchantment.py:93` — change the reduction from `- 1` to `- 30`. Confirm the release path in the same file restores the matching amount (currently `energy_restored` is computed dynamically — verify it restores the correct 30 per follower level).
+**Applied in dev:** Cost is 30 per follower. Release, death, and Shift+F paths all correctly restore 30 per enchant level. Follower table in §15 updated accordingly.
 
 ---
 
@@ -126,9 +87,7 @@ Current marker is a small golden rect in the top-left corner of the cell (`ui/hu
 
 **Location:** `world/generation.py:85`, `constants.py:214–217`
 
-**Current state:** Generation already uses `random.choice(list(BIOMES.keys()))` — all biomes spawn at equal probability. The `FOREST_BIOME_CHANCE` / `PLAINS_BIOME_CHANCE` / `MOUNTAINS_BIOME_CHANCE` / `DESERT_BIOME_CHANCE` constants in `constants.py` are stale and unused.
-
-**Policy for main:** Equal biome distribution is correct. No change to generation logic needed. Remove the four stale `*_BIOME_CHANCE` constants from `constants.py` as part of the cleanup pass (section 13).
+**Current state:** Generation already uses `random.choice(list(BIOMES.keys()))` — all biomes spawn at equal probability. The four stale `*_BIOME_CHANCE` constants have been removed from `constants.py`. ✅ DONE
 
 ---
 
@@ -138,23 +97,13 @@ Current marker is a small golden rect in the top-left corner of the cell (`ui/hu
 
 **Current dev behavior:** E key calls `pickup_cell_or_items()` — picks up dropped item piles AND raw cells directly into inventory (creative/admin mode).
 
-**Policy for main:**
-- **Remove the E key binding entirely** — `pickup_cell_or_items()` is a dev catch-all and has no place in main.
-- **Dropped item pickup via Spacebar** — `interact()` (`game_core.py:2207`) should check for dropped items at the target cell as its first step (before attack, before entity targeting). If items are present, pick them up and return.
-- **Raw cell pickup requires proper tool** — cells are only obtainable through tool use (axe → wood, pickaxe → stone/iron ore, etc.). No direct cell-to-inventory shortcut exists for the player on main.
-
-**Required code changes:**
-1. `game_core.py:1226–1228` — remove the `elif event.key == pygame.K_e:` block entirely.
-2. `game_core.py:interact()` — add dropped item pickup as the first check after facing snap, before `player_attack()`: if dropped items exist at the target cell, pick them up and return.
-3. `ui/menus.py:116` — update controls text: replace `"E - Pick up"` with the correct spacebar pickup description.
+**✅ DONE:** E-key block removed from `game_core.py`. Dropped item pickup already handled in `interact()` (Space). Controls text updated in `ui/menus.py`.
 
 ---
 
-## 10. Controls Help Text
+## 10. Controls Help Text ✅ DONE
 
-**Location:** `ui/menus.py:34–38`, `ui/menus.py:116–120`
-
-**Required for main:** After resolving items 3 and 9 above, update the controls text in both help screens to reflect final key bindings. Remove any dev-only bindings.
+**Applied in dev:** E-key references removed from both help screens in `ui/menus.py`. Space described as the pickup key.
 
 ---
 
@@ -189,29 +138,13 @@ Files explaining the roadmap, bounties, and what's needed next.
 
 **Policy for main:** Debug system is off by default. Gate all BugCatcher and Watchdog calls behind a `DEBUG_MODE` flag so they are completely inert during normal play.
 
-**Required code changes:**
-1. Add `DEBUG_MODE = False` to `constants.py` (and the `data/` equivalent if needed).
-2. `game_core.py:204–205` — wrap instantiation:
-   ```python
-   self.bug_catcher = BugCatcher() if DEBUG_MODE else None
-   self.watchdog = Watchdog(self.bug_catcher) if DEBUG_MODE else None
-   ```
-3. Guard every `self.bug_catcher.*` and `self.watchdog.*` call site with `if self.bug_catcher:` / `if self.watchdog:`.
-4. The `AUTO_DEBUG` path in `main.py` and `game_core.py` can enable `DEBUG_MODE` at runtime — that path already requires the external `debug/auto_debug.cfg` file which won't exist on player machines.
-
-The `debug/` directory and all its modules stay in the codebase — they are simply dormant unless explicitly enabled.
+**✅ DONE:** `DEBUG_MODE = False` added to `constants.py`. BugCatcher/Watchdog init and all 8 call sites gated behind `DEBUG_MODE`. `AUTO_DEBUG` runtime enable path in `main.py` sets `DEBUG_MODE = True` when `debug/auto_debug.cfg` exists with a truthy value. `debug/` stays in codebase, dormant by default.
 
 ---
 
-## 13. Print Statements in Game Code
+## 13. Print Statements in Game Code ✅ DONE
 
-**Required for main:** Run a grep pass to remove or silence all `print()` statements outside of `autopilot.py` and `debug/` before merging to main. These show up in terminal but not in-game, so they're low urgency — but they're messy for release.
-
-```bash
-grep -rn "print(" --include="*.py" --exclude-dir=debug . | grep -v autopilot.py
-```
-
-Review each result: keep intentional game messages (if any use a proper log channel), remove raw debug prints.
+**Applied in dev:** All `print()` statements in `game_core.py` and `npc_ai.py` removed or gated behind `DEBUG_MODE`. Sprite load error prints gated; [AutoDebug] and [FREEZE-DETECT] session management prints kept. WARRIOR `if debug:` prints in `npc_ai.py` kept (already gated).
 
 ---
 
@@ -248,7 +181,7 @@ Review each result: keep intentional game messages (if any use a proper log chan
 ### Follower Cost (`systems/enchantment.py:93`)
 | Item | Current | Target for main |
 |---|---|---|
-| Max energy reduction per follower | 1 | **30** (change required — see item 6) |
+| Max energy reduction per follower | **30** | ✅ Applied in dev |
 
 ---
 
