@@ -101,6 +101,7 @@ The player exists inside this simulation — exploring, fighting, crafting, gath
 - Day/night cycle with skeleton spawning at night and daylight damage on undead
 - Hunger and thirst survival mechanics
 - Enchantment system: star spells freeze cells or slow entities
+- **NPC trading** — inspect any NPC and press Shift+T to open their inventory and buy items for gold; drop gold near an NPC to trigger resource-for-gold exchanges; peaceful NPCs also barter with each other passively
 - Autopilot (Shift+A): an AI proxy plays for you based on your active quest
 - Save/load: full game state including world cells, entities, quests, followers, and weather
 
@@ -138,6 +139,9 @@ The player exists inside this simulation — exploring, fighting, crafting, gath
 | X | Attempt craft with selected items |
 | Q | Toggle quest panel |
 | Shift+Q | Get / turn in quest from inspected NPC |
+| Shift+T | Open inventory trade window with inspected NPC |
+| Shift+G | Gift selected item to inspected NPC |
+| Shift+F | Attempt to recruit inspected NPC as follower |
 | 1–9, 0 | Select inventory slot |
 | J | Release selected follower |
 | Shift+A | Toggle autopilot |
