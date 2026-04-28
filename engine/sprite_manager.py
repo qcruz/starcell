@@ -248,6 +248,7 @@ class SpriteManager:
         _individual_sprites = {
             'IRON_ORE':   'ironore.png',
             'WELL':       'well.png',
+            'BUSH':       'bush.png',
             'iron_sword': 'sword.png',
         }
         sprite_dir = os.path.join(os.path.dirname(__file__), '..', 'sprites')
