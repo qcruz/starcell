@@ -314,7 +314,7 @@ class HudMixin:
                         # rendered last frame (last_render_tick == tick-1 or tick)
                         # so we catch the disappearance event, not every skipped frame.
                         _last_rt = getattr(entity, '_last_render_tick', -9999)
-                        if self.tick - _last_rt <= 1:
+                        if self.tick - _last_rt <= 1 and self.bug_catcher:
                             self.bug_catcher.log({
                                 'tick': self.tick,
                                 'category': 'render_skip_transition',
@@ -338,7 +338,7 @@ class HudMixin:
                     # BugCatcher: log every frame for tracked entity types + autopilot proxy
                     _STUTTER_TRACKED = ('BAT', 'BAT_double', 'WOLF', 'WOLF_double', 'BLACK_SPIDER')
                     is_proxy = (entity_id == getattr(self, 'autopilot_proxy_id', None))
-                    if entity.type in _STUTTER_TRACKED or is_proxy:
+                    if (entity.type in _STUTTER_TRACKED or is_proxy) and self.bug_catcher:
                         self.bug_catcher.log_bat_state(self.tick, entity_id, entity, screen_key)
 
                     # Snap stale world position if entity wasn't rendered last frame.

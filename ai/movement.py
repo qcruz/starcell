@@ -543,7 +543,7 @@ class NpcAiMovementMixin:
                 if new_x is not None and not CELL_TYPES.get(target_cell, {}).get('solid', False):
                     # Diagnostic: log when entity leaves player's zone
                     _player_zone = f"{self.player['screen_x']},{self.player['screen_y']}"
-                    if screen_key == _player_zone:
+                    if screen_key == _player_zone and self.bug_catcher:
                         self.bug_catcher.log({
                             'tick': self.tick,
                             'category': 'zone_exit_event',
@@ -748,7 +748,7 @@ class NpcAiMovementMixin:
         old_sk = f"{entity.screen_x},{entity.screen_y}"
         # Diagnostic: log when entity leaves player's zone via screen crossing
         _player_zone = f"{self.player['screen_x']},{self.player['screen_y']}"
-        if old_sk == _player_zone:
+        if old_sk == _player_zone and self.bug_catcher:
             self.bug_catcher.log({
                 'tick': self.tick,
                 'category': 'zone_exit_event',
@@ -1099,7 +1099,7 @@ class NpcAiMovementMixin:
 
         # Diagnostic: log when entity leaves player's zone into a structure
         _player_zone = f"{self.player['screen_x']},{self.player['screen_y']}"
-        if screen_key == _player_zone:
+        if screen_key == _player_zone and self.bug_catcher:
             self.bug_catcher.log({
                 'tick': self.tick,
                 'category': 'zone_exit_event',
@@ -1225,7 +1225,7 @@ class NpcAiMovementMixin:
 
         # Diagnostic: log when entity returns to player's zone from a structure
         _player_zone = f"{self.player['screen_x']},{self.player['screen_y']}"
-        if parent_key == _player_zone:
+        if parent_key == _player_zone and self.bug_catcher:
             self.bug_catcher.log({
                 'tick': self.tick,
                 'category': 'zone_exit_event',

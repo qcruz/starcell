@@ -539,9 +539,10 @@ class CellsMixin:
 
                 # Player zone cell tracer: log every CA rule firing in the player's current zone
                 if _is_player_zone and _ca_rule and new_grid[y][x] != cell:
-                    self.bug_catcher.log_ca_mutation(
-                        self.tick, key, x, y, cell, new_grid[y][x], _ca_rule, biome
-                    )
+                    if self.bug_catcher:
+                        self.bug_catcher.log_ca_mutation(
+                            self.tick, key, x, y, cell, new_grid[y][x], _ca_rule, biome
+                        )
 
                 # Flower pattern growth: rare overlay on eligible unchanged cells
                 # [biome-specific: desert gets 1/5 rate] [cross-biome: water formation edge]

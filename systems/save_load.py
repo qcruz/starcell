@@ -577,7 +577,8 @@ class SaveLoadMixin:
 
             # Autopilot grace period: don't engage for 15 seconds after loading
             self.last_input_tick = self.tick + 900
-            self.bug_catcher.clear()
+            if self.bug_catcher:
+                self.bug_catcher.clear()
             self.watchdog.snapshot_on_start(self.tick, self)
             print("Game loaded!")
         else:
