@@ -86,7 +86,7 @@ Any entity walking over a dropped item picks it up. Gold near the player trigger
 Warriors track which zone they spawned in. Every `WARRIOR_HOME_RETURN_INTERVAL` ticks, if they're not in their home zone, they set a target toward the nearest exit in the direction of home. This creates the behavior of war parties eventually returning to their base zone.
 
 **Follower formation (lines 824–841)**
-Skeleton followers and similar companions maintain close distance to the player. If more than 2 cells away, they close the gap immediately. If on a different screen entirely, they teleport. This is handled late in the function so followers still benefit from all the earlier logic (combat, item pickup, etc.).
+Followers (peaceful animals, skeleton, or any recruited NPC) maintain close distance to the player. If more than 2 cells away, they close the gap immediately. If on a different screen entirely, they teleport. This is handled late in the function so followers still benefit from all the earlier logic (combat, item pickup, etc.).
 
 **Legacy `target_priority` system (lines 936–1123)**
 This large block is **disabled** (wrapped in a triple-quoted string that isn't executed). It was the original priority-based AI system before the state machine was built. It's kept for reference during the transition period. It will eventually be deleted.
@@ -160,7 +160,7 @@ Flying entities occasionally drop a random inventory item onto the ground below 
 ## Section 5 — Combat (lines 2024–2325)
 
 ### `find_and_attack_enemy`
-Called when a hostile entity is adjacent to a valid target. It selects the best adjacent target (prioritizing the player, then nearby hostile entities based on threat level), calculates damage from strength plus weapon and magic bonuses, and applies it. XP is awarded on each successful hit. The function handles the case where the entity is a follower (followers don't attack other followers) and the case where the target is the player (triggers `player_take_damage`).
+Called when a hostile entity is adjacent to a valid target. It selects the best adjacent target (prioritizing the player, then nearby hostile entities based on threat level), calculates damage from strength plus weapon and magic bonuses, and applies it. Entity XP is awarded on each successful hit. If the attacker has a weapon equipped, that weapon also gains item XP (tracked in `entity.item_xp`) and loses durability (`entity.item_durability`); accumulated durability damage adds a bonus to attack damage as the weapon becomes battle-worn. The function handles the case where the entity is a follower (followers don't attack other followers) and the case where the target is the player (triggers `player_take_damage`).
 
 ---
 
