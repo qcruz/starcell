@@ -67,7 +67,7 @@ The player exists inside this simulation — exploring, fighting, crafting, gath
 ## Current Features
 
 ### World & Biomes
-- Infinite procedurally generated overworld with 5 biome types: Forest, Plains, Mountains, Desert, Lake
+- Infinite procedurally generated overworld with 6 biome types: Forest, Plains, Mountains, Desert, Lake, Swamp
 - All biomes have equal generation chance — no biome dominates by default
 - Cellular automata drives terrain evolution every tick: trees spread and thin, sand reclaims desert borders, water floods during rain, grasslands shift to plains or forest based on tree density
 - **Drought system** — growth rates decrease and decay rates increase with every tick without rain; extended dry periods reshape biomes over time
@@ -97,13 +97,16 @@ The player exists inside this simulation — exploring, fighting, crafting, gath
 
 ### Other Systems
 - Quest system with 11 quest types and a quest arrow pointing to your active target
-- Faction system: warriors form colored factions with leaders; goblins/bandits form raiding clans
+- Faction system: warriors form colored factions with leaders; goblins/bandits form raiding clans; contiguous faction zones form named domains
+- Biome domains: contiguous same-biome zones share a generated name (e.g. "Iron Hills", "Thornwood")
 - Day/night cycle with skeleton spawning at night and daylight damage on undead
 - Hunger and thirst survival mechanics
-- Enchantment system: star spells freeze cells or slow entities
+- Enchantment system: star spells freeze cells or slow entities; reverse all enchantments with K
 - **NPC trading** — inspect any NPC and press Shift+T to open their inventory and buy items for gold; drop gold near an NPC to trigger resource-for-gold exchanges; peaceful NPCs also barter with each other passively
+- Item XP and durability: NPC weapons gain XP on each attack; durability decays and adds a damage bonus; items level up and reset durability
+- Keeper system: assign an NPC as a zone keeper (keeper_spell); keepers anchor to a position and never leave their domain
 - Autopilot (Shift+A): an AI proxy plays for you based on your active quest
-- Save/load: full game state including world cells, entities, quests, followers, and weather
+- Save/load: full game state including world cells, entities, quests, followers, factions, domains, and weather
 
 ---
 
@@ -121,11 +124,12 @@ The player exists inside this simulation — exploring, fighting, crafting, gath
 | Key | Action |
 |---|---|
 | Space | Interact — attack, talk, enter structure, open chest, pick up items |
+| D | Drop selected item |
 | P | Place selected item as a cell |
 | N | Open NPC trade |
 | B | Toggle blocking (90% damage reduction) |
 | V | Toggle friendly fire |
-| L | Cast star spell — enchants targeted cell or entity |
+| L | Cast selected spell — star spell enchants cells/entities; rain, day, keeper, summon, and transform spells also cast here |
 | K | Release / reverse spell |
 
 ### Inventory & UI

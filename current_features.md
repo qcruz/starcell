@@ -28,7 +28,7 @@ Game ← HudMixin, InventoryUIMixin, MenusMixin, DevScreenMixin
 | `data/entities.py` | ENTITY_TYPES, NPC_BEHAVIORS, NPC_TRANSFORMATION_CONFIG |
 | `data/factions.py` | Faction color/symbol pools |
 | `data/quests.py` | Quest type definitions |
-| `engine/entity.py` | Entity class, Inventory class, SpriteManager (the live one — game_core.py does `from entity import *`) |
+| `entity.py` | Entity class, Inventory class, SpriteManager — root-level file; game_core.py imports via `from entity import *` |
 | `systems/crafting.py` | CraftingMixin — pickup, place, craft, follower spawn |
 | `systems/combat.py` | CombatMixin — attack, death, reconcile_screen_entities |
 | `systems/enchantment.py` | EnchantmentMixin — star spell, dev spells, follower release |
@@ -73,11 +73,8 @@ Game ← HudMixin, InventoryUIMixin, MenusMixin, DevScreenMixin
 | Energy | 100 | Drains 2/step; regens 1/tick stationary, 2/tick idle |
 
 **Starting Inventory (new_game)**
-- Tools: axe, hoe, shovel, pickaxe, bucket
-- Weapons: bone_sword
-- Magic: star_spell, rain_spell, day_spell, keeper_spell
-- Actions: shove
-- Dev spells: summon_X + transform_X for all 22 NPC types (not dropped on death)
+- One of every item in the ITEMS registry (including all dev spells), except `is_follower` items
+- Includes: all tools, weapons, magic spells, actions, summon/transform spells for all 22 NPC types
 - Starting position: (12, 9), starting quest: FARM
 
 ---
@@ -217,7 +214,12 @@ Game ← HudMixin, InventoryUIMixin, MenusMixin, DevScreenMixin
 | Interior | CAVE_FLOOR | No | Cave interior floor |
 | Interior | CAVE_WALL | Yes | Cave interior wall |
 | Interior | CHEST | Yes | Interactable; swaps to EMPTY_CRATE when contents empty; NPC-placed only if no chest within 5 cells |
+| Interior | OPEN_CHEST | Yes | Visual variant for an opened chest |
+| Interior | LOCKED_CHEST | Yes | Interactable; requires a key item |
 | Interior | EMPTY_CRATE | Yes | Interactable; visual state for empty CHEST; swaps back to CHEST if contents added; E-key returns chest item |
+| Interior | APPLE_CRATE | Yes | Infinite food source (food_value=30); interactable; placed in house interiors; humanoid NPCs use as food source |
+| Interior | WATER_TROUGH | Yes | Solid; water source for NPCs; placed in structures |
+| Interior | DESERT_WELL | Yes | Well variant for desert zones; NPCs seek for thirst |
 | Interior | STAIRS_UP | Yes | Structure entry/exit |
 | Interior | STAIRS_DOWN | Yes | Structure entry/exit |
 | Decorative | BARREL | Yes | Contains random loot; interactable |
