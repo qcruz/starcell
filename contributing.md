@@ -26,3 +26,117 @@ See **[BOUNTIES.md](BOUNTIES.md)** for a prioritized list of the most-wanted fea
 
 ## 5. Dispute Resolution
 Any disputes arising from participation in the project or the contributor reward program shall be resolved through binding arbitration conducted in the State of Texas, United States, under the rules of the American Arbitration Association (AAA). Each party shall bear its own legal costs.
+
+---
+
+# Technical Contributor Guide
+
+Everything below is practical — how to set up, how to submit, and what to watch out for.
+
+---
+
+## Dev Setup
+
+**Requirements:** Python 3.9+ and pygame 2.x. No other dependencies.
+
+```bash
+# 1. Fork the repo on GitHub, then clone your fork
+git clone https://github.com/YOUR_USERNAME/starcell.git
+cd starcell
+
+# 2. Install pygame
+pip install pygame        # or: pip3 install pygame
+
+# 3. Run the game
+python main.py            # or: python3 main.py
+```
+
+The game launches directly from `main.py`. No build step, no virtual environment required.
+
+---
+
+## Branch Workflow
+
+```
+main          — stable release; players download this
+dev           — integrated work; tested before going to main
+your-branch   — your personal feature branch
+```
+
+**How to submit a contribution:**
+
+1. Fork the repository on GitHub
+2. Create a feature branch off `dev`: `git checkout -b my-feature dev`
+3. Make your changes and commit
+4. Open a Pull Request targeting the **`dev` branch** (not `main`)
+5. Describe what you changed and link to the bounty item if applicable
+
+Your work lands in `dev` first, gets tested, then the project owner promotes it to `main`.
+
+**Before starting a large feature**, open a GitHub issue to confirm it is not already in progress and to discuss your approach. This is especially important for bounty items — it prevents two people building the same thing simultaneously.
+
+---
+
+## Claiming a Bounty
+
+1. Check [BOUNTIES.md](BOUNTIES.md) for open items
+2. Open a GitHub issue: "Claiming bounty #N — [Feature Name]"
+3. Wait for acknowledgment from the project owner before starting
+4. Submit your work as a PR to `dev` with a link to the bounty item
+
+Partial contributions count — a single spell, a single new NPC type, or three new item definitions all earn partial credit.
+
+---
+
+## The Dual-Import Pattern (Critical)
+
+This is the most common first-time contributor mistake. When you add a new **cell type**, **item**, or **recipe**, you must update **two separate places**:
+
+| File | Used by |
+|---|---|
+| `data/cells.py` | All modular systems (`ai/`, `world/`, `systems/`) |
+| `constants.py` | Legacy monolith files (`npc_ai.py`, `game_core.py`) |
+
+These files are **not linked** — editing one does not update the other. If you only update `data/cells.py`, the NPC AI in `npc_ai.py` will not see your new cell type. If you only update `constants.py`, the modular systems won't see it.
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the full checklist for each data type.
+
+---
+
+## Code Conventions
+
+**No debug prints in main source files.** Debug output belongs in `autopilot.py` or the `debug/` directory only. Use the Watchdog (`debug/watchdog.py`) for persistent logging. Player-facing feedback can use print() as a short-term placeholder but should move to the HUD notification system.
+
+**Docs update rule.** If you change behavior in a file that has a corresponding `docs/*_plain.md` guide, update the guide in the same PR. Documented files: `npc_ai.py`, `ai/movement.py`, `ai/actions.py`, `game_core.py`, `world/generation.py`, `world/zones.py`.
+
+**Actor pattern.** Action primitives in `ai/actions.py` support `actor='player'` or an entity object. Use these shared primitives rather than duplicating harvest/drop/XP logic in player-specific code.
+
+**State machine first.** New NPC behavior goes into the state machine (`npc_ai.py:update_entity_ai_state`) and behavior config (`data/entities.py:NPC_BEHAVIORS`). Avoid adding new dispatch branches to `update_entity_ai`.
+
+**Minimum viable change.** Only modify what the feature requires. Don't clean up surrounding code, add comments to unchanged functions, or refactor things adjacent to your work — those belong in separate PRs.
+
+---
+
+## PR Checklist
+
+Before opening a pull request:
+
+- [ ] Tested by running `python main.py` and exercising the feature in-game
+- [ ] Both `constants.py` AND the relevant `data/` module updated (if adding cell/item/recipe)
+- [ ] Sprite file added to `sprites/` and registered in `game_core.py:load_sprites` (if adding a visual)
+- [ ] Corresponding `docs/*_plain.md` updated (if modifying a documented file)
+- [ ] No debug `print()` statements left in non-autopilot, non-debug files
+- [ ] PR targets the `dev` branch, not `main`
+
+---
+
+## Understanding the Codebase
+
+Read [ARCHITECTURE.md](ARCHITECTURE.md) for:
+- The full MRO chain and what each module handles
+- How a game tick flows from input to NPC AI
+- Key data structures (`self.entities`, `self.screens`, `self.screen_entities`)
+- The dual-import pattern with full checklists
+- A "where to start" table by task type
+
+The `docs/` directory has plain-language guides for every major source file. Start with the guide for whichever file your contribution touches.

@@ -944,197 +944,6 @@ class NpcAiMixin:
         if entity.props.get('flying', False):
             self._try_flying_item_drop(entity, screen_key)
 
-        # ========================================================================
-        # OLD TARGET_PRIORITY AI SYSTEM - DISABLED
-        # This entire section has been replaced by the state machine above
-        # Keeping commented for reference but should NOT execute
-        # ========================================================================
-        """
-        # Find and move towards target
-        # Execute behavior based on target priority
-        if entity.target_priority == 'counterattack':
-            # FARMERS/LUMBERJACKS: Flee instead of counterattacking
-            if entity.type in ['FARMER', 'LUMBERJACK']:
-                # Enter fleeing state
-                entity.ai_state = 'fleeing'
-                entity.is_fleeing = True
-                entity.ai_state_timer = AI_TIMER_BASE * 12
-                
-                # Move away from attacker
-                if hasattr(entity, 'counterattack_target'):
-                    target = entity.counterattack_target
-                    if target == 'player':
-                        if entity.screen_x == self.player['screen_x'] and entity.screen_y == self.player['screen_y']:
-                            avoid_x = entity.x + (entity.x - self.player['x'])
-                            avoid_y = entity.y + (entity.y - self.player['y'])
-                            self.move_entity_towards(entity, avoid_x, avoid_y)
-                    elif target in self.entities:
-                        attacker = self.entities[target]
-                        if entity.screen_x == attacker.screen_x and entity.screen_y == attacker.screen_y:
-                            avoid_x = entity.x + (entity.x - attacker.x)
-                            avoid_y = entity.y + (entity.y - attacker.y)
-                            self.move_entity_towards(entity, avoid_x, avoid_y)
-                    
-                    # Clear counterattack
-                    entity.counterattack_target = None
-                    entity.target_priority = None
-            # OTHER NPCs: Normal counterattack behavior
-            else:
-                # Entity wants to counterattack - try to hit back at attacker
-                if hasattr(entity, 'counterattack_target'):
-                    target = entity.counterattack_target
-                    if target == 'player':
-                        # Counterattack player
-                        if entity.screen_x == self.player['screen_x'] and entity.screen_y == self.player['screen_y']:
-                            dist = abs(self.player['x'] - entity.x) + abs(self.player['y'] - entity.y)
-                            if dist <= 1:
-                                # Adjacent - hit back!
-                                damage = max(1, entity.strength // 5)
-
-                                # Add weapon bonus from inventory
-                                damage += self.calculate_weapon_bonus(entity.inventory)
-
-                                # Add magic damage from runestones
-                                magic_damage, magic_type = self.calculate_magic_damage(entity.inventory)
-                                damage += magic_damage
-
-                                # Peaceful NPCs do minimal damage (25%)
-                                if not entity.props.get('hostile', False):
-                                    damage *= 0.25
-                                # Hostile entities do slightly more damage (1.2x)
-                                elif entity.props.get('hostile', True):
-                                    damage *= 1.2
-
-                                self.player_take_damage(damage)
-                                if entity.props.get('hostile', False):
-                                    entity.hunger = min(entity.max_hunger, entity.hunger + random.randint(1, 2))
-                                    entity.thirst = min(entity.max_thirst, entity.thirst + random.randint(1, 2))
-                                self.show_attack_animation(self.player['x'], self.player['y'], entity=entity, magic_type=magic_type)
-                            else:
-                                # Move toward player
-                                self.move_entity_towards(entity, self.player['x'], self.player['y'])
-                    elif target in self.entities:
-                        # Counterattack another entity
-                        attacker = self.entities[target]
-                        if entity.screen_x == attacker.screen_x and entity.screen_y == attacker.screen_y:
-                            dist = abs(attacker.x - entity.x) + abs(attacker.y - entity.y)
-                            if dist <= 1:
-                                # Adjacent - hit back!
-                                damage = entity.strength
-                                
-                                # Add weapon bonus from inventory
-                                damage += self.calculate_weapon_bonus(entity.inventory)
-                                
-                                # Add magic damage from runestones
-                                magic_damage, magic_type = self.calculate_magic_damage(entity.inventory)
-                                damage += magic_damage
-                                
-                                # Peaceful NPCs do minimal damage (25%)
-                                if not entity.props.get('hostile', False):
-                                    damage *= 0.25
-                                # Hostile entities do slightly more damage (1.2x)
-                                elif entity.props.get('hostile', True):
-                                    damage *= 1.2
-                                
-                                if attacker.combat_state == 'blocking':
-                                    damage *= (1 - attacker.block_reduction)
-                                attacker.take_damage(damage, entity_id)
-                                if entity.props.get('hostile', False):
-                                    entity.hunger = min(entity.max_hunger, entity.hunger + random.randint(1, 2))
-                                    entity.thirst = min(entity.max_thirst, entity.thirst + random.randint(1, 2))
-                                self.show_attack_animation(attacker.x, attacker.y, entity=entity, target_entity=attacker, magic_type=magic_type)
-                            else:
-                                # Move toward attacker
-                                self.move_entity_towards(entity, attacker.x, attacker.y)
-                    # Clear counterattack after one attempt
-                    entity.counterattack_target = None
-                    entity.target_priority = 'wander'
-        elif entity.target_priority == 'loot':
-            # Goblin looting behavior - handled in hostile_structure_behavior
-            self.hostile_structure_behavior(entity)
-        elif entity.target_priority == 'structure':
-            # Goblin structure attacking - handled in hostile_structure_behavior
-            self.hostile_structure_behavior(entity)
-        elif entity.target_priority == 'attack':
-            # Attack specific target
-            if entity.target:
-                if isinstance(entity.target, int):
-                    # Attack entity
-                    self.find_and_attack_enemy(entity_id, entity)
-                elif isinstance(entity.target, tuple) and len(entity.target) == 3:
-                    # Attack structure
-                    self.hostile_structure_behavior(entity)
-            else:
-                # No specific target, search for enemies
-                self.find_and_attack_enemy(entity_id, entity)
-        elif entity.target_priority == 'food':
-            self.find_and_move_to_food(entity)
-        elif entity.target_priority == 'water':
-            self.find_and_move_to_water(entity)
-        elif entity.target_priority == 'explore':
-            # ALL entities head toward zone exits when exploring
-            # Traders and Guards do this most of the time, others rarely
-            if entity.type == 'GUARD':
-                # Guards patrol center lanes while heading to exits
-                self.try_patrol_behavior(entity, f"{entity.screen_x},{entity.screen_y}")
-            else:
-                # All others (including Traders) use travel behavior
-                self.try_travel_behavior(entity, f"{entity.screen_x},{entity.screen_y}")
-        elif entity.target_priority == 'enemy':
-            # Try to find and attack enemies
-            self.find_and_attack_enemy(entity_id, entity)
-            
-            # If still in targeting mode and no enemy found, Warriors should explore
-            # (find_and_attack_enemy doesn't move them if no enemy, so handle movement here)
-            if (hasattr(entity, 'ai_state') and entity.ai_state == 'targeting' and 
-                entity.type in ['WARRIOR', 'COMMANDER', 'KING', 'GUARD'] and
-                not entity.in_combat):
-                # No enemy in current zone - move toward zone exit to search other zones
-                self.seek_zone_exit(entity, entity_id)
-        elif entity.target_priority == 'defend':
-            # Move to target and patrol/guard
-            if entity.target:
-                # entity.target can be either (x, y) tuple or entity_id
-                if isinstance(entity.target, tuple) and len(entity.target) == 2:
-                    target_x, target_y = entity.target
-                    dist = abs(entity.x - target_x) + abs(entity.y - target_y)
-                    if dist > 1:
-                        self.move_entity_towards(entity, target_x, target_y)
-                    else:
-                        # At target - patrol around it
-                        self.wander_entity(entity)
-                elif isinstance(entity.target, (int, str)):
-                    # Target is an entity - get its position
-                    if entity.target in self.entities:
-                        target_entity = self.entities[entity.target]
-                        dist = abs(entity.x - target_entity.x) + abs(entity.y - target_entity.y)
-                        if dist > 1:
-                            self.move_entity_towards(entity, target_entity.x, target_entity.y)
-                        else:
-                            # At target - patrol around it
-                            self.wander_entity(entity)
-                    else:
-                        # Target entity doesn't exist - wander
-                        entity.target = None
-                        self.wander_entity(entity)
-                else:
-                    # Invalid target format
-                    entity.target = None
-                    self.wander_entity(entity)
-            else:
-                self.wander_entity(entity)
-        else:
-            # Wander or special behaviors
-            if entity.type == 'TRADER':
-                self.try_travel_behavior(entity, f"{entity.screen_x},{entity.screen_y}")
-            elif entity.type == 'GUARD':
-                self.try_patrol_behavior(entity, f"{entity.screen_x},{entity.screen_y}")
-            else:
-                self.wander_entity(entity)
-        """
-        # ========================================================================
-        # END OF DISABLED OLD AI SYSTEM
-        # ========================================================================
         
         # Check for zone transition AFTER movement/priority execution
         # Only trigger if entity is actually at an exit
@@ -1474,11 +1283,7 @@ class NpcAiMixin:
                 target = self.find_closest_target_by_type(entity, entity.target_type, screen_key)
                 if target:
                     entity.current_target = target
-                    if debug and entity.type == 'WARRIOR':
-                        print(f"  -> [{entity.type}] Found target: {target}")
                 else:
-                    if debug and entity.type == 'WARRIOR':
-                        print(f"  -> [{entity.type}] NO target found for type={entity.target_type}, switching to wandering")
                     # Critical survival: if food/water can't be found here, exit zone
                     _ttype = entity.target_type
                     if _ttype in ('food', 'water'):
@@ -1501,9 +1306,6 @@ class NpcAiMixin:
                 # Check if target is a hostile/enemy entity
                 target_is_hostile = self._is_hostile_target(entity, entity.current_target)
                 
-                if debug and target_is_hostile and entity.type == 'WARRIOR':
-                    print(f"  -> [{entity.type}] Targeting hostile entity, dist={dist}")
-                
                 # Adjacent to hostile → enter combat
                 if target_is_hostile and dist <= 1:
                     if entity.current_target == 'player':
@@ -1515,8 +1317,6 @@ class NpcAiMixin:
                         if target_entity.is_alive():
                             entity.ai_state = 'combat'
                             entity.ai_state_timer = 3
-                            if debug and entity.type == 'WARRIOR':
-                                print(f"  -> [{entity.type}] ENTERING COMBAT with {target_entity.type}!")
                             return
                         else:
                             entity.current_target = None
@@ -3448,11 +3248,8 @@ class NpcAiMixin:
                         entity.trigger_action_animation()
                         self.show_attack_animation(check_x, check_y, entity=entity)
                         screen['grid'][check_y][check_x] = 'GRASS'
-                        if random.random() < 0.2:
-                            name_str = entity.name if entity.name else entity.type
-                            print(f"{name_str} destroyed a camp at [{screen_key}]")
                         return
-                    
+
                     # Attack houses - very low chance
                     elif cell == 'HOUSE' and random.random() < 0.01:  # 1% chance
                         entity.update_facing_toward(check_x, check_y)
@@ -3462,8 +3259,6 @@ class NpcAiMixin:
                         # Scatter wood debris so destruction looks visible
                         for _ in range(random.randint(1, 3)):
                             self.drop_item('wood', check_x, check_y)
-                        name_str = entity.name if entity.name else entity.type
-                        print(f"{name_str} destroyed a house at [{screen_key}]!")
                         return
 
                     # Attack stone houses - very rare (goblins chip at stone slowly)
@@ -3472,8 +3267,6 @@ class NpcAiMixin:
                         entity.trigger_action_animation()
                         self.show_attack_animation(check_x, check_y, entity=entity)
                         screen['grid'][check_y][check_x] = 'GRASS'
-                        name_str = entity.name if entity.name else entity.type
-                        print(f"{name_str} destroyed a stone house at [{screen_key}]!")
                         return
 
         # PRIORITY 4: Move toward nearest structure if found
@@ -3528,31 +3321,20 @@ class NpcAiMixin:
                             # Chance to level up from harvesting
                             entity.level_up_from_activity('harvest', self)
                             
-                            # 5% chance to log action
-                            if random.random() < 0.05:
-                                name_str = entity.name if entity.name else "Farmer"
-                                print(f"{name_str} harvested {amount} {item}(s) at [{screen_key}]")
+                            entity.level_up_from_activity('harvest', self)
                             return
-                    
+
                     # Till grass or dirt to soil
                     if cell in ['GRASS', 'DIRT'] and random.random() < FARMER_TILL_RATE:
                         screen['grid'][check_y][check_x] = 'SOIL'
-                        
-                        # 5% chance to log action
-                        if random.random() < 0.05:
-                            print(f"Farmer tilled soil at [{screen_key}]")
                         return
-                    
+
                     # Plant crops on soil
                     if cell == 'SOIL' and random.random() < FARMER_PLANT_RATE:
                         # Check if has carrot in inventory
                         if entity.inventory.get('carrot', 0) > 0:
                             entity.inventory['carrot'] -= 1
                             screen['grid'][check_y][check_x] = 'CARROT1'
-                            
-                            # 5% chance to log action
-                            if random.random() < 0.05:
-                                print(f"Farmer planted crops at [{screen_key}]")
                             return
     
     def lumberjack_behavior(self, entity):
@@ -3636,29 +3418,19 @@ class NpcAiMixin:
                 if screen['grid'][build_y][build_x] in ['GRASS', 'DIRT']:
                     entity.inventory['wood'] -= 10
                     screen['grid'][build_y][build_x] = 'HOUSE'
-                    
-                    # Chance to level up from building
                     entity.level_up_from_activity('build', self)
-                    
-                    name_str = entity.name if entity.name else "Lumberjack"
-                    print(f"{name_str} built a house at [{screen_key}] ({build_x}, {build_y})")
                     return
-            
+
             # Otherwise, build anywhere suitable
             for _ in range(20):
                 build_x = random.randint(2, GRID_WIDTH - 3)
                 build_y = random.randint(2, GRID_HEIGHT - 3)
-                
+
                 cell = screen['grid'][build_y][build_x]
                 if cell in ['GRASS', 'DIRT']:
                     entity.inventory['wood'] -= 10
                     screen['grid'][build_y][build_x] = 'HOUSE'
-                    
-                    # Chance to level up from building
                     entity.level_up_from_activity('build', self)
-                    
-                    name_str = entity.name if entity.name else "Lumberjack"
-                    print(f"{name_str} built a house at [{screen_key}] ({build_x}, {build_y})")
                     return
     
     def guard_behavior(self, entity):
@@ -3914,7 +3686,6 @@ class NpcAiMixin:
             entity.idleness = ai_params.get('idleness', 0.15)
             entity.target_types = ai_params.get('target_types', ['water', 'food'])
             
-            print(f"{old_name} has settled as a {new_type} in [{screen_key}]!")
             return True
         
         # Add other logic types here as needed (e.g., 'promotion', 'corruption', etc.)

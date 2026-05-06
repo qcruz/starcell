@@ -103,8 +103,6 @@ class FactionsMixin:
 
                 if warrior_id not in self.factions[majority_faction]['warriors']:
                     self.factions[majority_faction]['warriors'].append(warrior_id)
-
-                print(f"{warrior.name} joined {majority_faction} faction!")
                 return
             else:
                 # Check if this warrior is higher level than lowest member
@@ -124,7 +122,6 @@ class FactionsMixin:
 
                     self.factions[majority_faction]['warriors'].append(warrior_id)
                     self.enforce_faction_max_size(majority_faction)
-                    print(f"{warrior.name} joined {majority_faction} faction!")
                     return
                 else:
                     # Lower level than lowest - try to start own faction
@@ -132,7 +129,6 @@ class FactionsMixin:
                         new_faction = self.generate_faction_name()
                         warrior.faction = new_faction
                         self.factions[new_faction] = {'warriors': [warrior_id], 'zones': set()}
-                        print(f"{warrior.name} founded the {new_faction} faction!")
                     else:
                         # Become factionless
                         warrior.faction = None
@@ -151,21 +147,17 @@ class FactionsMixin:
                 if warrior_id not in self.factions[largest_faction]['warriors']:
                     self.factions[largest_faction]['warriors'].append(warrior_id)
                     self.enforce_faction_max_size(largest_faction)
-
-                print(f"{warrior.name} joined {largest_faction} faction (global recruitment)!")
             else:
                 # Create new faction
                 new_faction = self.generate_faction_name()
                 warrior.faction = new_faction
                 self.factions[new_faction] = {'warriors': [warrior_id], 'zones': set()}
-                print(f"{warrior.name} founded the {new_faction} faction!")
 
         # If no factions exist at all, create first faction
         else:
             new_faction = self.generate_faction_name()
             warrior.faction = new_faction
             self.factions[new_faction] = {'warriors': [warrior_id], 'zones': set()}
-            print(f"{warrior.name} founded the {new_faction} faction!")
 
     def recruit_to_hostile_faction(self, zone_key):
         """Non-humanoid hostiles can join factions (small chance)"""
@@ -196,7 +188,6 @@ class FactionsMixin:
                         faction = max(hostile_factions, key=lambda f: len(hostile_factions[f]))
                         entity.faction = faction
                         self.factions[faction]['warriors'].append(entity_id)
-                        print(f"{entity.type} joined {faction}!")
 
     # -------------------------------------------------------------------------
     # Zone control & membership queries
@@ -340,12 +331,9 @@ class FactionsMixin:
             screen_key = f"{lowest_member.screen_x},{lowest_member.screen_y}"
             self.try_join_nearest_faction(lowest_member, lowest_member_id, screen_key, exclude_faction=old_faction)
 
-            if lowest_member.faction != old_faction:
-                print(f"{lowest_member.name} was expelled from {old_faction} and joined {lowest_member.faction}!")
-            else:
+            if lowest_member.faction == old_faction:
                 # Failed to join another faction
                 lowest_member.faction = None
-                print(f"{lowest_member.name} was expelled from {old_faction} and became factionless!")
 
     def try_join_nearest_faction(self, entity, entity_id, screen_key, exclude_faction=None):
         """Try to join nearest faction, create new faction on failure"""
@@ -410,7 +398,6 @@ class FactionsMixin:
             new_faction = self.generate_faction_name()
             entity.faction = new_faction
             self.factions[new_faction] = {'warriors': [entity_id], 'zones': set()}
-            print(f"{entity.name} founded the {new_faction} faction!")
             return True
 
         return False
@@ -503,7 +490,6 @@ class FactionsMixin:
                     best_warrior.quest_focus = None
                     best_warrior.quest_target = None
 
-                    print(f"{old_name} promoted to COMMANDER of {faction} in [{screen_key}]!")
 
     def promote_to_king(self):
         """Promote highest level commander to king if faction controls 4+ zones"""
@@ -550,4 +536,3 @@ class FactionsMixin:
                     best_commander.hunger = best_commander.max_hunger
                     best_commander.thirst = best_commander.max_thirst
 
-                    print(f"{old_name} crowned KING of {faction}! ({controlled_zones} zones controlled)")

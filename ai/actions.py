@@ -389,8 +389,6 @@ class NpcAiActionsMixin:
                     pass
             if build_params.get('activity'):
                 entity.level_up_from_activity(build_params['activity'], self)
-            name = entity.name if entity.name else entity.type
-            print(f"{name} built {structure} at [{screen_key}] ({bx},{by})")
             return True
         return False
 
