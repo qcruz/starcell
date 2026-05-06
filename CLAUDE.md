@@ -200,6 +200,55 @@ The goal is fewest code paths for the most behavior. When a special-case block h
 
 ---
 
+## Review Sessions
+
+A review session is a periodic housekeeping pass over the project — not feature work, not bug fixing. The goal is to keep documentation, design docs, and code files accurate and legible as the project grows.
+
+**When to run:** On request from @qcruz, or proactively after a major merge or branch sync.
+
+**Session structure:**
+
+```
+1. Project status scan
+   - Read next_up.md, roadmap.md, current_features.md
+   - Note what has shipped, what is in progress, what is stale or missing
+   - Summarize findings to @qcruz in chat before proceeding
+
+2. Select 2–3 files to review in depth
+   - @qcruz picks from the summary, or Claude selects if @qcruz defers
+   - All project files are eligible: docs/, design docs, roadmap, code files,
+     art_direction, sound_design, CLAUDE.md, README.md, etc.
+   - Priority: files most likely to mislead a new contributor or collaborator
+
+3. Review each selected file
+   - Read the full file
+   - Fix stale descriptions, outdated function names, wrong file paths
+   - Add entries for systems or features that exist but aren't documented
+   - Clarify confusing sections — plain language, concrete examples
+   - Remove or archive content that no longer applies
+   - Do NOT add speculative content (roadmap items belong in roadmap.md only)
+
+4. Update README.md
+   - After all file reviews are complete, update README.md to reflect
+     current project state: features shipped, systems in place, any
+     notable architectural changes since last update
+   - Keep it accurate for players, coders, and potential contributors
+
+5. Commit and push to dev-q-updates
+   - One commit per reviewed file, or a single grouped commit if changes
+     are minor
+   - Commit message format: "Review: update <filename> — <what changed>"
+```
+
+**What counts as out of date:**
+- Function or method names that no longer match the code
+- File paths that have moved or been renamed
+- Feature descriptions that describe planned behavior, not actual behavior
+- Missing entries for systems added since the doc was last touched
+- Anything that would confuse a new collaborator reading it cold
+
+---
+
 ## Autopilot → NPC AI Process
 
 New NPC behaviors are **prototyped in `autopilot.py` first**. Once confirmed stable across 2+ observation sessions, the behavior is ported to the appropriate NPC AI mixin (`ai/actions.py`, `ai/movement.py`, or `npc_ai.py`).
