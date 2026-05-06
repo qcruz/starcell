@@ -47,14 +47,14 @@ Calls `update_screen_cells` for zones near the player at different frequencies:
 This throttling is the core performance strategy for cell simulation. Cells in zones the player can't see don't need to tick every frame — they just need to tick often enough that the world doesn't feel static when the player arrives.
 
 ### `update_entities`
-Removes dead entities first (cleaning their registry entries), then calls `update_entity_ai` for each entity in a distance-tiered schedule:
-- **Same zone as player** (`screen_distance == 0`): every tick.
+**Legacy function — entity AI no longer runs here.** All NPC AI updates now run through `probabilistic_zone_updates` in `world/zones.py`, which ticks entities per-zone at distance-scaled intervals. `update_entities` still exists but is not called in the main loop; entity removal and heal_boost application have been absorbed into the zone update path.
+
+The original design (documented here for reference) called `update_entity_ai` for each entity at:
+- **Same zone** (`screen_distance == 0`): every tick.
 - **Adjacent zone** (`screen_distance == 1`): every 60 ticks.
 - **Two zones out** (`screen_distance == 2`): every 90 ticks.
 
-Before calling AI, it applies a `heal_boost` multiplier based on the entity's current cell: standing on or near a CAMP doubles healing rate, near a HOUSE triples it. This is why sleeping in a house restores health faster — the boost is applied at the update level, not inside entity.heal().
-
-Dead entities are collected into a removal list before the loop so the loop doesn't modify the dict it's iterating. Removal is deferred to after the loop completes.
+If you are tracing an AI bug and don't find the entry point in `update_entities`, look in `world/zones.py:probabilistic_zone_updates`.
 
 ### `remove_entity`
 The central death handler. It:
@@ -119,24 +119,26 @@ Key bindings:
 |---|---|
 | Arrow keys / WASD | `move_player` |
 | SPACE | `interact` (context-sensitive: attack → pick up → use cell) |
-| L | Cast equipped spell |
-| K | Release all enchantments |
-| J | Release a follower (sacrifice back to world) |
-| Shift | Block (hold) or toggle block-lock (double-tap) |
+| L | Cast selected spell (star spell, rain, day, keeper, summon, transform) |
+| K | Release / reverse all enchantments |
+| J | Release selected follower |
+| B | Toggle blocking (90% damage reduction) |
 | V | Toggle friendly fire |
-| C | Open crafting panel |
-| I | Open inventory / dev screen |
-| T | Open tools panel / NPC trade |
-| M | Open magic panel |
-| U | Open actions panel |
-| G | Debug: show memory lane / gift item to adjacent NPC |
-| F | Toggle following for adjacent NPC / list followers |
-| E | Pick up item at player's cell |
-| N | NPC trade interaction |
-| P | Place item |
-| Q | Open quest log |
-| D | Drop item from inventory |
-| 1–9 | Select tool slot |
+| C | Open crafting tab |
+| I | Open items tab |
+| T | Open tools tab |
+| M | Open magic tab |
+| F | Open followers tab |
+| Shift+F | Attempt to recruit inspected NPC as follower |
+| Shift+G | Gift selected item to inspected NPC |
+| Shift+T | Open inventory trade window with inspected NPC |
+| Shift+Q | Get / turn in quest from inspected NPC |
+| Shift+A | Toggle autopilot |
+| N | NPC trade interaction (N key, adjacent trader) |
+| P | Place selected item as a cell |
+| Q | Toggle quest panel |
+| D | Drop selected item |
+| 1–9, 0 | Select inventory slot |
 
 The autopilot overrides this function entirely when active — it drains its own input queue (`self.autopilot_input_queue`) instead of reading from pygame events.
 
@@ -152,9 +154,9 @@ Volume sliders, keybinding overrides, and display options live in a settings dic
 
 ### Spell casting (`cast_spell`, `player_cast_spell`)
 Player spell flow:
-1. `player_cast_spell` checks mana cost, cooldown, and equipped spell.
+1. `player_cast_spell` checks energy cost, cooldown, and equipped spell.
 2. Calls `cast_spell` with the spell name and target.
-3. `cast_spell` applies the spell effect (damage, freeze, teleport, area-of-effect) and deducts mana.
+3. `cast_spell` applies the spell effect (damage, freeze, teleport, area-of-effect) and deducts energy.
 4. Spell XP is awarded regardless of whether the target died.
 
 Wizard NPCs share `cast_wizard_spell` (in `npc_ai.py`) — the player and NPC paths diverge only at step 1 (the player has a UI gate; NPCs don't).
@@ -264,7 +266,7 @@ Chests store items in `self.chest_contents` keyed by `(x, y, zone_key)`. Opening
 ### `new_game`
 Resets all game state to defaults and sets up a fresh world. Two details separate this from `__init__`:
 
-1. **Follower spawn deferral**: the skeleton follower that accompanies the player is not spawned in `new_game`. Instead, `self._pending_follower_type` is set to the follower type. The actual spawn happens in the run loop after time-pass simulation completes. This prevents the follower from being killed during the 150-250 year world-aging simulation that runs before the player starts.
+1. **Follower spawn deferral**: the starting follower is not spawned in `new_game`. Instead, `self._pending_follower_type` is set to a randomly selected peaceful animal type (chosen from SHEEP, DEER, RED_BIRD, BUTTERFLY, CHICKEN). The actual spawn happens in the run loop after time-pass simulation completes. This prevents the follower from being killed during the 150-250 year world-aging simulation that runs before the player starts.
 
 2. **Stale follower item purge**: `follower_items` may contain entries from a previous game session (save-load edge cases). `new_game` explicitly clears this dict before populating it.
 

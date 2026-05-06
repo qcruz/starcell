@@ -18,11 +18,11 @@ Plays a footstep sound for an entity based on the cell it just stepped on. The v
 ## Section 2 — Wandering (line 41)
 
 ### `wander_entity`
-Moves an entity one cell in a random direction, subject to a rate limiter and a memory lane that prevents immediately revisiting the last 6 positions. The rate limiter computes a tick interval based on the entity's speed — faster entities move more frequently, but no entity can move every single tick. When the entity steps out of the grid boundary, it hands off to `try_entity_screen_crossing` for overworld entities, or clamps the step for structure-bound entities.
+Moves an entity one cell in a random direction, subject to a rate limiter and a memory lane that prevents immediately revisiting recently-visited positions (typically 8–25 cells of history, scaled by entity type). The rate limiter computes a tick interval based on the entity's speed — faster entities move more frequently, but no entity can move every single tick. When the entity steps out of the grid boundary, it hands off to `try_entity_screen_crossing` for overworld entities, or clamps the step for structure-bound entities.
 
-**Why the rate limiter formula:** `interval ≈ 1/(0.034 * speed)` gives a natural linear relationship between speed stat and movement frequency without requiring fractional-tick math. The constant 0.034 was calibrated so a speed of 5 (average) produces roughly one step every 6 ticks.
+**Why the rate limiter formula:** `interval ≈ 1/(0.034 * speed)` gives a natural linear relationship between speed stat and movement frequency without requiring fractional-tick math. The constant 0.034 was calibrated so a speed of 1 (average) produces roughly one step every 30 ticks.
 
-**Why memory lane:** Without it, entities get trapped in corners, oscillating between two cells. The last-6-positions blacklist gives enough history to escape local minima without the overhead of true flood-fill pathfinding.
+**Why memory lane:** Without it, entities get trapped in corners, oscillating between two cells. The recent-position blacklist gives enough history to escape local minima without the overhead of true flood-fill pathfinding.
 
 ---
 
@@ -195,7 +195,7 @@ Utility range-scanners that iterate the global entity dict (not zone-bucketed `s
 ## Section 14 — Target Router (line 2104)
 
 ### `find_closest_target_by_type`
-The single entry point for resolving a `target_type` string to an actual target. Maps type strings (`'hostile'`, `'food'`, `'water'`, `'shelter'`, `'resource'`, `'role'`, `'travel'`, `'quest_target'`, `'clearing_action'`, `'trade'`, `'any_entity'`) to their respective finder functions. The `'role'` type uses `ROLE_CELL_PRIORITY` and `ROLE_CELL_TARGETS` from constants to determine what cells a miner, blacksmith, or farmer should seek. The `'travel'` type returns the structure's exit position when the entity is inside one. `'trade'` is a stub — the trader-to-trader commerce system is not yet implemented.
+The single entry point for resolving a `target_type` string to an actual target. Maps type strings (`'hostile'`, `'food'`, `'water'`, `'shelter'`, `'resource'`, `'role'`, `'travel'`, `'quest_target'`, `'clearing_action'`, `'trade'`, `'any_entity'`) to their respective finder functions. The `'role'` type uses `ROLE_CELL_PRIORITY` and `ROLE_CELL_TARGETS` from constants to determine what cells a miner, blacksmith, or farmer should seek. The `'travel'` type returns the structure's exit position when the entity is inside one. The `'trade'` type routes traders toward other NPCs for item exchange — the trader-to-trader passive barter system is live; player-facing NPC trade is handled separately via `open_npc_trade_window` and `npc_trade_interaction` in `game_core.py`.
 
 ### `find_closest_eligible_target`
 A flexible multi-type scanner: given a list of target cell types or entity types, finds the nearest match in the current zone. Structure-aware: if the entity is inside a cave and the target only exists in the parent overworld zone, it returns the cave's exit position so the entity navigates out first.
@@ -223,4 +223,4 @@ Finds the nearest entity of any kind in the current zone, excluding self. Used b
 
 **`screen_entities` is the ground truth** for what entities are in which zone. Any code that moves an entity between zones must update both `entity.screen_x/screen_y` and the `screen_entities` registry. Failure to do both causes the subscreen-flag desync bug documented in `debug/held_back.md`.
 
-**Memory lane** is a per-entity list of recent positions (last 6 by default). It's checked during movement to avoid oscillation. It's also used to blacklist zone exit cells temporarily after a crossing, preventing bounce-back.
+**Memory lane** is a per-entity list of recent positions (8–25 cells depending on entity type). It's checked during movement to avoid oscillation. It's also used to blacklist zone exit cells temporarily after a crossing, preventing bounce-back.
