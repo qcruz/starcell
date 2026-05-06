@@ -193,6 +193,8 @@ class LoreEngineMixin:
                 info = f"{target_cell_type} at zone ({target_loc[0]},{target_loc[1]})"
                 quest.set_target('cell', target_loc, info)
                 quest.target_zone = f"{target_loc[0]},{target_loc[1]}"
+                # Set original cell so completion check can detect the harvest
+                quest._original_cell = search_types[0]
                 return True
 
         # For RESCUE quests - find friendly NPC
@@ -309,11 +311,28 @@ class LoreEngineMixin:
                         break
 
             if has_local and random.random() < 0.90:
-                quest.target_info = "Chopping trees nearby"
-                quest.target_zone = pz_key
-                quest.target_cell = (player_sx, player_sy, GRID_WIDTH // 2, GRID_HEIGHT // 2)
-                quest.status = 'active'
-                return True
+                # Find the nearest tree to the player so the proxy doesn't have to
+                # cross the whole zone to reach the quest target.
+                screen = self.screens[pz_key]
+                player_x = self.player.get('x', GRID_WIDTH // 2)
+                player_y = self.player.get('y', GRID_HEIGHT // 2)
+                best = None
+                best_dist = 9999
+                for fy, frow in enumerate(screen['grid']):
+                    for fx, fcell in enumerate(frow):
+                        if fcell in search_types:
+                            d = abs(fx - player_x) + abs(fy - player_y)
+                            if d < best_dist:
+                                best_dist = d
+                                best = (fx, fy, fcell)
+                if best:
+                    fx, fy, fcell = best
+                    quest.target_info = "Chopping trees nearby"
+                    quest.target_zone = pz_key
+                    quest.target_cell = (player_sx, player_sy, fx, fy)
+                    quest._original_cell = fcell
+                    quest.status = 'active'
+                    return True
 
             for screen_key, screen_data in self.screens.items():
                 if not self.is_overworld_zone(screen_key):
@@ -332,11 +351,16 @@ class LoreEngineMixin:
                             quest.target_zone = screen_key
                             return True
             if has_local:
-                quest.target_info = "Chopping trees nearby"
-                quest.target_zone = pz_key
-                quest.target_cell = (player_sx, player_sy, GRID_WIDTH // 2, GRID_HEIGHT // 2)
-                quest.status = 'active'
-                return True
+                screen = self.screens[pz_key]
+                for fy, frow in enumerate(screen['grid']):
+                    for fx, fcell in enumerate(frow):
+                        if fcell in search_types:
+                            quest.target_info = "Chopping trees nearby"
+                            quest.target_zone = pz_key
+                            quest.target_cell = (player_sx, player_sy, fx, fy)
+                            quest._original_cell = fcell
+                            quest.status = 'active'
+                            return True
             quest.target_info = "Looking for trees..."
             return False
 
@@ -355,11 +379,27 @@ class LoreEngineMixin:
                         break
 
             if has_local and random.random() < 0.90:
-                quest.target_info = "Mining stone nearby"
-                quest.target_zone = pz_key
-                quest.target_cell = (player_sx, player_sy, GRID_WIDTH // 2, GRID_HEIGHT // 2)
-                quest.status = 'active'
-                return True
+                # Find the nearest stone to the player so proxy doesn't cross the zone.
+                screen = self.screens[pz_key]
+                player_x = self.player.get('x', GRID_WIDTH // 2)
+                player_y = self.player.get('y', GRID_HEIGHT // 2)
+                best = None
+                best_dist = 9999
+                for fy, frow in enumerate(screen['grid']):
+                    for fx, fcell in enumerate(frow):
+                        if fcell == 'STONE':
+                            d = abs(fx - player_x) + abs(fy - player_y)
+                            if d < best_dist:
+                                best_dist = d
+                                best = (fx, fy)
+                if best:
+                    fx, fy = best
+                    quest.target_info = "Mining stone nearby"
+                    quest.target_zone = pz_key
+                    quest.target_cell = (player_sx, player_sy, fx, fy)
+                    quest._original_cell = 'STONE'
+                    quest.status = 'active'
+                    return True
 
             for screen_key, screen_data in self.screens.items():
                 if not self.is_overworld_zone(screen_key):
@@ -506,14 +546,28 @@ class LoreEngineMixin:
         # Check entity-based quests
         if quest.target_entity_id:
             entity = self.entities.get(quest.target_entity_id)
-            if entity is None or entity.is_dead:
-                # Entity killed or removed from world — credit as completed
-                completed = True
-                xp_reward = 1
+            player_zone = f"{self.player['screen_x']},{self.player['screen_y']}"
+            if entity is None:
+                # Entity removed from world — can't verify zone, reassign target
+                quest.clear_target()
+                quest.status = 'inactive'
+                return
+            elif entity.is_dead:
+                entity_zone = f"{entity.screen_x},{entity.screen_y}"
+                proxy_hit = getattr(quest, '_proxy_damaged_target', False)
+                if entity_zone == player_zone and proxy_hit:
+                    # Killed in same zone AND proxy dealt damage — credit completion
+                    completed = True
+                    xp_reward = 1
+                else:
+                    # Died off-screen, or died without proxy involvement — reassign
+                    quest.clear_target()
+                    quest._proxy_damaged_target = False
+                    quest.status = 'inactive'
+                    return
             else:
-                # Still alive — track progress as missing health %
-                if entity.max_health > 0:
-                    quest.progress = (entity.max_health - entity.health) / entity.max_health
+                # Still alive — progress is tracked in update_autopilot when proxy attacks
+                pass
 
         # Check cell-based quests (explore/gather/farm/search)
         elif quest.target_cell:
@@ -694,7 +748,10 @@ class LoreEngineMixin:
                 quest.target_info = f"Return to {giver_name}"
                 qt_name = QUEST_TYPES.get(quest.quest_type, {}).get('name', quest.quest_type)
                 print(f"NPC quest [{qt_name}] complete! Return to {giver_name} for XP.")
-                self.sound.on_quest_complete()
+                # Tally completions by quest type (no sound — NPC completions are background events)
+                _cbt = getattr(self, 'quests_completed_by_type', {})
+                _cbt[quest.quest_type] = _cbt.get(quest.quest_type, 0) + 1
+                self.quests_completed_by_type = _cbt
 
     def _npc_quest_zone(self, quest):
         """Return the target zone key for a quest, trying all possible sources."""

@@ -23,15 +23,17 @@ class InventoryUIMixin:
         start_y = SCREEN_HEIGHT - 90  # Above UI bar
 
         # Stack categories vertically from bottom
-        categories = ['tools', 'items', 'magic', 'actions', 'followers', 'crafting']
+        categories = ['tools', 'equipment', 'items', 'magic', 'actions', 'followers', 'crafting']
         category_colors = {
             'tools': (100, 100, 120),
+            'equipment': (180, 140, 80),
             'items': (80, 120, 80),
             'magic': (120, 80, 120),
             'actions': (220, 120, 60),
             'followers': (120, 100, 80),
             'crafting': (180, 140, 60)  # Gold color for crafting
         }
+        EQUIP_LABELS = ['W', 'OH', 'A', 'R1', 'R2', 'Am']
         # Highlight color for ingredient slots when a recipe is selected
         INGREDIENT_COLOR = (80, 220, 200)  # Cyan
 
@@ -94,6 +96,10 @@ class InventoryUIMixin:
                     is_selected = (i == self.inventory.selected_tool_slot_idx)
                     is_pending = (i == self.inventory.pending_equip_slot and
                                   self.inventory.pending_equip_slot is not None)
+                elif category == 'equipment':
+                    slot_name = self.inventory.EQUIPMENT_SLOT_NAMES[i]
+                    is_selected = (slot_name == self.inventory.pending_equip_equipment_slot)
+                    is_pending = is_selected
                 else:
                     is_selected = (self.inventory.selected[category] == item_name
                                    and item_name is not None)
@@ -115,11 +121,15 @@ class InventoryUIMixin:
                     pygame.draw.rect(self.screen, COLORS['INV_BORDER'],
                                    (slot_x, slot_y, slot_size, slot_size), 1)
 
-                # Slot number (always shown, even for empty slots)
-                num_text = self.tiny_font.render(str((i + 1) % 10), True, COLORS['GRAY'])
+                # Slot number / label
+                if category == 'equipment':
+                    label = EQUIP_LABELS[i] if i < len(EQUIP_LABELS) else str(i)
+                    num_text = self.tiny_font.render(label, True, (180, 140, 80))
+                else:
+                    num_text = self.tiny_font.render(str((i + 1) % 10), True, COLORS['GRAY'])
                 self.screen.blit(num_text, (slot_x + 2, slot_y + 2))
 
-                # Skip content rendering for empty tool slots
+                # Skip content rendering for empty slots
                 if item_name is None:
                     continue
 

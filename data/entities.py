@@ -89,9 +89,10 @@ ENTITY_TYPES = {
         'max_thirst': 100,
         'strength': 13,
         'speed': 1.0,
-        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3'],
-        'water_sources': ['WATER', 'WELL'],
+        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3', 'APPLE_CRATE', 'BLUE_MUSHROOM'],
+        'water_sources': ['WATER', 'WELL', 'WATER_TROUGH'],
         'hostile': False,
+        'humanoid': True,
         'edible': False,
         'can_trade': True,
         'inventory': {'carrot': 5, 'wood': 3},
@@ -104,9 +105,9 @@ ENTITY_TYPES = {
             'wander_when_idle': True
         },
         'ai_params': {
-            'aggressiveness': 0.05,  # Very low - farmers flee from danger
-            'passiveness': 0.40,     # Somewhat passive - focus on work
-            'idleness': 0.15,        # Moderately idle - take breaks
+            'aggressiveness': 0.85,  # High — farmers actively seek crops/soil to work
+            'passiveness': 0.10,     # Rarely drops task to wander
+            'idleness': 0.05,        # Takes occasional breaks
             'flee_chance': 0.70,
             'combat_chance': 0.30,
             'target_types': ['food', 'water', 'resource']
@@ -120,9 +121,10 @@ ENTITY_TYPES = {
         'max_thirst': 100,
         'strength': 31,
         'speed': 1.2,
-        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3'],
-        'water_sources': ['WATER', 'WELL'],
+        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3', 'APPLE_CRATE', 'BLUE_MUSHROOM'],
+        'water_sources': ['WATER', 'WELL', 'WATER_TROUGH'],
         'hostile': False,
+        'humanoid': True,
         'edible': False,
         'attacks_hostile': True,
         'drops': [
@@ -151,9 +153,10 @@ ENTITY_TYPES = {
         'max_thirst': 100,
         'strength': 26,
         'speed': 1.2,
-        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3'],
-        'water_sources': ['WATER', 'WELL'],
+        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3', 'APPLE_CRATE', 'BLUE_MUSHROOM'],
+        'water_sources': ['WATER', 'WELL', 'WATER_TROUGH'],
         'hostile': False,
+        'humanoid': True,
         'edible': False,
         'attacks_hostile': True,
         'drops': [
@@ -182,9 +185,10 @@ ENTITY_TYPES = {
         'max_thirst': 100,
         'strength': 31,
         'speed': 1.2,
-        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3'],
-        'water_sources': ['WATER', 'WELL'],
+        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3', 'APPLE_CRATE', 'BLUE_MUSHROOM'],
+        'water_sources': ['WATER', 'WELL', 'WATER_TROUGH'],
         'hostile': False,
+        'humanoid': True,
         'edible': False,
         'attacks_hostile': True,
         'drops': [
@@ -214,9 +218,10 @@ ENTITY_TYPES = {
         'max_thirst': 100,
         'strength': 41,
         'speed': 1.0,
-        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3'],
-        'water_sources': ['WATER', 'WELL'],
+        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3', 'APPLE_CRATE', 'BLUE_MUSHROOM'],
+        'water_sources': ['WATER', 'WELL', 'WATER_TROUGH'],
         'hostile': False,
+        'humanoid': True,
         'edible': False,
         'attacks_hostile': True,
         'drops': [
@@ -246,9 +251,10 @@ ENTITY_TYPES = {
         'max_thirst': 100,
         'strength': 11,
         'speed': 0.8,
-        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3'],
-        'water_sources': ['WATER', 'WELL'],
+        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3', 'APPLE_CRATE', 'BLUE_MUSHROOM'],
+        'water_sources': ['WATER', 'WELL', 'WATER_TROUGH'],
         'hostile': False,
+        'humanoid': True,
         'edible': False,
         'can_trade': True,
         'inventory': {'wood': 10, 'planks': 5, 'axe': 1},
@@ -277,9 +283,10 @@ ENTITY_TYPES = {
         'max_thirst': 100,
         'strength': 25,
         'speed': 0.7,
-        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3'],
-        'water_sources': ['WATER', 'WELL'],
+        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3', 'APPLE_CRATE', 'BLUE_MUSHROOM'],
+        'water_sources': ['WATER', 'WELL', 'WATER_TROUGH'],
         'hostile': False,
+        'humanoid': True,
         'edible': False,
         'can_trade': True,
         'is_blacksmith': True,
@@ -296,7 +303,7 @@ ENTITY_TYPES = {
             'aggressiveness': 0.25,  # 25% - focused on crafting
             'passiveness': 0.25,     # 25% - takes breaks
             'idleness': 0.30,        # 30% - often at forge/idle
-            'target_types': ['food', 'water', 'structure']
+            'target_types': ['food', 'water', 'structure', 'resource']
         }
     },
     'WIZARD': {
@@ -307,9 +314,10 @@ ENTITY_TYPES = {
         'max_thirst': 100,
         'strength': 13,
         'speed': 1.0,
-        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3'],
-        'water_sources': ['WATER', 'WELL'],
+        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3', 'APPLE_CRATE', 'BLUE_MUSHROOM'],
+        'water_sources': ['WATER', 'WELL', 'WATER_TROUGH'],
         'hostile': False,
+        'humanoid': True,
         'edible': False,
         'attacks_hostile': True,
         'can_trade': True,
@@ -339,9 +347,10 @@ ENTITY_TYPES = {
         'max_thirst': 100,
         'strength': 19,
         'speed': 0.9,
-        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3'],
-        'water_sources': ['WATER', 'WELL'],
+        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3', 'APPLE_CRATE', 'BLUE_MUSHROOM'],
+        'water_sources': ['WATER', 'WELL', 'WATER_TROUGH'],
         'hostile': False,
+        'humanoid': True,
         'edible': False,
         'can_trade': False,
         'inventory': {'wood': 5, 'axe': 1},
@@ -370,10 +379,11 @@ ENTITY_TYPES = {
         'max_hunger': 100,
         'max_thirst': 100,
         'strength': 21,
-        'speed': 0.8,
-        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3'],
-        'water_sources': ['WATER', 'WELL'],
+        'speed': 1.0,
+        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3', 'APPLE_CRATE', 'BLUE_MUSHROOM'],
+        'water_sources': ['WATER', 'WELL', 'WATER_TROUGH'],
         'hostile': False,
+        'humanoid': True,
         'edible': False,
         'can_trade': True,
         'inventory': {'stone': 5, 'pickaxe': 1},
@@ -387,12 +397,12 @@ ENTITY_TYPES = {
             'wander_when_idle': True  # Wander between mining
         },
         'ai_params': {
-            'aggressiveness': 0.10,  # Low but not fleeing
-            'passiveness': 0.35,     # Focused on mining
-            'idleness': 0.20,        # Take breaks between mining
+            'aggressiveness': 0.88,  # High — miners consistently seek rocks/ore/caves
+            'passiveness': 0.07,     # Rarely drops task
+            'idleness': 0.05,        # Rarely idles
             'flee_chance': 0.65,
             'combat_chance': 0.35,
-            'target_types': ['food', 'water', 'resource']
+            'target_types': ['food', 'water', 'stone', 'resource']
         }
     },
     # Enemies
@@ -404,9 +414,10 @@ ENTITY_TYPES = {
         'max_thirst': 100,
         'strength': 22,
         'speed': 1.3,
-        'food_sources': [],
+        'food_sources': ['BLUE_MUSHROOM'],
         'water_sources': ['WATER'],
         'hostile': True,
+        'humanoid': True,
         'edible': False,
         'attacks_structures': True,
         'drops': [
@@ -431,9 +442,10 @@ ENTITY_TYPES = {
         'max_thirst': 100,
         'strength': 13,
         'speed': 1.1,
-        'food_sources': [],
+        'food_sources': ['BLUE_MUSHROOM'],
         'water_sources': ['WATER'],
         'hostile': True,
+        'humanoid': True,
         'edible': False,
         'attacks_structures': True,
         'drops': [
@@ -462,6 +474,7 @@ ENTITY_TYPES = {
         'food_sources': [],
         'water_sources': [],
         'hostile': True,
+        'humanoid': True,
         'edible': False,
         'drops': [
             {'item': 'meat', 'amount': 1, 'chance': 0.5},  # Drop meat (rotten but edible)

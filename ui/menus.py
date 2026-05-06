@@ -6,6 +6,44 @@ from constants import (
     GRID_WIDTH, GRID_HEIGHT,
 )
 
+# ── Game Options screen layout ────────────────────────────────────────────────
+# Each section is (header_label, [(flag_name, display_label), ...])
+_GAME_OPTIONS_SECTIONS = [
+    ('CELLULAR AUTOMATA', [
+        ('ca_enabled',      'Master CA Toggle'),
+        ('ca_tree_spread',  'Tree Spread'),
+        ('ca_sand_spread',  'Sand / Desert Spread'),
+        ('ca_water_spread', 'Water Flooding'),
+        ('ca_grass_growth', 'Grass Growth'),
+        ('ca_drought',      'Drought Effects'),
+    ]),
+    ('ENTITY SPAWNING', [
+        ('spawn_goblins',         'Goblins & Bandits'),
+        ('spawn_wolves',          'Wolves'),
+        ('spawn_bats',            'Bats'),
+        ('spawn_skeletons_night', 'Night Skeletons'),
+        ('spawn_cave_hostiles',   'Cave Hostiles'),
+        ('spawn_termites',        'Termites'),
+    ]),
+    ('GAME DIFFICULTY', [
+        ('hunger_decay',             'Hunger Decay'),
+        ('thirst_decay',             'Thirst Decay'),
+        ('starvation_damage',        'Starvation Damage'),
+        ('old_age_damage',           'Old Age Damage'),
+        ('skeleton_daylight_damage', 'Skeleton Daylight Damage'),
+    ]),
+    ('WORLD EVENTS', [
+        ('raids_enabled',   'Raid Events'),
+        ('weather_enabled', 'Weather / Rain'),
+    ]),
+    ('FACTIONS & SOCIETY', [
+        ('keeper_assignments', 'Keeper Assignments'),
+        ('npc_aging',          'NPC Aging'),
+        ('npc_promotions',     'NPC Promotions (Commander/King)'),
+        ('faction_wars',       'Faction Wars'),
+    ]),
+]
+
 
 class MenusMixin:
     """Main menu, pause screen, trader UI, NPC inspection, item tooltip,
@@ -30,7 +68,7 @@ class MenusMixin:
             "Controls:",
             "WASD / Arrows - Move",
             "Space - Interact",
-            "E - Pick up   D - Drop   P - Place",
+            "D - Drop   P - Place",
             "N - Trade   B - Block   V - Friendly fire",
             "L - Cast spell   K - Reverse spell",
             "Shift+A - Toggle autopilot",
@@ -63,12 +101,14 @@ class MenusMixin:
             # Return clickable rect (box + label)
             return pygame.Rect(cb_x, cy, 20 + lbl.get_width(), 16)
 
-        music_rect  = draw_checkbox("Ambient Music", getattr(self, 'ambient_music_enabled', True), y)
-        debug_rect  = draw_checkbox("Debug Prints",  getattr(self, 'debug_prints_enabled',  True), y + 22)
+        music_rect    = draw_checkbox("Ambient Music",  getattr(self, 'ambient_music_enabled', True), y)
+        debug_rect    = draw_checkbox("Debug Prints",   getattr(self, 'debug_prints_enabled',  True), y + 22)
+        autosave_rect = draw_checkbox("Autosave (30s)", getattr(self, 'autosave_enabled',      True), y + 44)
 
         # Store rects for click detection in handle_input
-        self._menu_cb_music_rect = music_rect
-        self._menu_cb_debug_rect = debug_rect
+        self._menu_cb_music_rect    = music_rect
+        self._menu_cb_debug_rect    = debug_rect
+        self._menu_cb_autosave_rect = autosave_rect
 
     # -------------------------------------------------------------------------
     # Pause screen
@@ -95,6 +135,7 @@ class MenusMixin:
         pause_opts = [
             "P / ESC - Resume",
             "S - Save Game",
+            "O - Game Options",
             "M - Main Menu",
         ]
         y = 240
@@ -111,7 +152,7 @@ class MenusMixin:
 
         controls = [
             "WASD / Arrows - Move",
-            "Space - Interact   E - Pick up   D - Drop   P - Place",
+            "Space - Interact / Pick up dropped items   D - Drop   P - Place",
             "L - Cast spell   K - Reverse spell",
             "Shift+A - Toggle autopilot",
             "N - Trade   B - Block   V - Friendly fire   J - Release follower",
@@ -127,6 +168,110 @@ class MenusMixin:
         push_time = getattr(self, 'last_push_time', 'Unknown')
         push_text = self.tiny_font.render(f"Last push: {push_time}", True, COLORS['GRAY'])
         self.screen.blit(push_text, (SCREEN_WIDTH // 2 - push_text.get_width() // 2, y + 10))
+
+    # -------------------------------------------------------------------------
+    # Game Options screen
+    # -------------------------------------------------------------------------
+
+    def draw_game_options(self):
+        """Draw the Game Options subscreen (opened from pause menu via O)."""
+        opts = getattr(self, 'game_opts', None)
+        if opts is None:
+            return
+
+        # Base: draw the paused game world + overlay
+        self.draw_game()
+        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+        overlay.set_alpha(180)
+        overlay.fill(COLORS['BLACK'])
+        self.screen.blit(overlay, (0, 0))
+
+        # Panel geometry
+        panel_w = 520
+        panel_h = SCREEN_HEIGHT - 100
+        panel_x = SCREEN_WIDTH // 2 - panel_w // 2
+        panel_y = 50
+        pygame.draw.rect(self.screen, (30, 30, 40), (panel_x, panel_y, panel_w, panel_h))
+        pygame.draw.rect(self.screen, COLORS['YELLOW'], (panel_x, panel_y, panel_w, panel_h), 2)
+
+        # Title
+        title = self.font.render("GAME OPTIONS", True, COLORS['YELLOW'])
+        self.screen.blit(title, (SCREEN_WIDTH // 2 - title.get_width() // 2, panel_y + 10))
+
+        hint = self.tiny_font.render("↑↓ / Scroll to navigate  •  Click to toggle  •  O / ESC to close",
+                                     True, COLORS['GRAY'])
+        self.screen.blit(hint, (SCREEN_WIDTH // 2 - hint.get_width() // 2, panel_y + 36))
+
+        # Scrollable content area
+        content_top = panel_y + 58
+        content_h = panel_h - 62
+        scroll = getattr(self, '_game_opts_scroll', 0)
+
+        # Clip drawing to the content area
+        clip_rect = pygame.Rect(panel_x, content_top, panel_w, content_h)
+        self.screen.set_clip(clip_rect)
+
+        # Build rows and compute total height so we can clamp scroll
+        ROW_H = 24
+        HEADER_H = 30
+        INDENT = 30
+        CB_SIZE = 14
+        col_x = panel_x + INDENT
+        y = content_top - scroll
+
+        # Collect clickable rects for click handling (screen coords, pre-clip)
+        toggle_rects = []
+
+        for header, toggles in _GAME_OPTIONS_SECTIONS:
+            # Section header
+            hdr = self.small_font.render(header, True, COLORS['CYAN'])
+            self.screen.blit(hdr, (col_x, y + 6))
+            y += HEADER_H
+
+            for flag_name, label in toggles:
+                checked = getattr(opts, flag_name, True)
+                row_y = y
+
+                # Checkbox
+                box_rect = pygame.Rect(col_x, row_y + (ROW_H - CB_SIZE) // 2, CB_SIZE, CB_SIZE)
+                pygame.draw.rect(self.screen, COLORS['WHITE'], box_rect, 2)
+                if checked:
+                    pygame.draw.line(self.screen, COLORS['WHITE'],
+                                     (col_x + 2, row_y + ROW_H // 2 + 1),
+                                     (col_x + 5, row_y + ROW_H // 2 + 5), 2)
+                    pygame.draw.line(self.screen, COLORS['WHITE'],
+                                     (col_x + 5, row_y + ROW_H // 2 + 5),
+                                     (col_x + CB_SIZE - 2, row_y + (ROW_H - CB_SIZE) // 2 + 2), 2)
+
+                # Label (dimmed when off)
+                lbl_color = COLORS['WHITE'] if checked else COLORS['GRAY']
+                lbl = self.small_font.render(label, True, lbl_color)
+                self.screen.blit(lbl, (col_x + CB_SIZE + 8, row_y + (ROW_H - lbl.get_height()) // 2))
+
+                # Store full-row clickable rect (unclipped screen coords, adjusted for scroll)
+                click_rect = pygame.Rect(col_x, row_y, panel_w - INDENT - 10, ROW_H)
+                toggle_rects.append((flag_name, click_rect))
+
+                y += ROW_H
+
+            y += 6  # gap after section
+
+        self.screen.set_clip(None)
+
+        # Draw scroll indicator if content overflows
+        total_h = y + scroll - (content_top)
+        if total_h > content_h:
+            bar_h = max(20, int(content_h * content_h / total_h))
+            bar_y = content_top + int(scroll / (total_h - content_h) * (content_h - bar_h))
+            pygame.draw.rect(self.screen, COLORS['GRAY'],
+                             (panel_x + panel_w - 8, bar_y, 6, bar_h))
+
+        # Clamp and store scroll
+        max_scroll = max(0, total_h - content_h)
+        self._game_opts_scroll = min(max(0, scroll), max_scroll)
+        self._game_opts_total_h = total_h
+        self._game_opts_content_h = content_h
+        self._game_opts_toggle_rects = toggle_rects
 
     # -------------------------------------------------------------------------
     # Trader UI
@@ -313,6 +458,16 @@ class MenusMixin:
 
     def draw_inspected_npc(self):
         """Draw inspection info to the right of targeted NPC"""
+        keys = pygame.key.get_pressed()
+        shift_held = keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]
+        _ts_idx = self.inventory.selected_tool_slot_idx
+        inspect_tool_active = (
+            _ts_idx is not None and
+            _ts_idx < len(self.inventory.tool_slots) and
+            self.inventory.tool_slots[_ts_idx] == 'inspect'
+        )
+        if not (shift_held or inspect_tool_active):
+            return
         if not self.inspected_npc or self.inspected_npc not in self.entities:
             return
 
@@ -411,6 +566,12 @@ class MenusMixin:
             prefix = "Quest*" if assigned else "Quest"
             info_lines.append(f"{prefix}: {q_label}")
 
+        # Favor score
+        if hasattr(entity, 'favor'):
+            favor_val = entity.favor
+            favor_label = "Hostile" if favor_val <= -75 else ("Wary" if favor_val < 0 else ("Neutral" if favor_val == 0 else ("Friendly" if favor_val < 60 else "Allied")))
+            info_lines.append(f"Favor:{favor_val:+d} ({favor_label})")
+
         # Faction (if entity has faction)
         if hasattr(entity, 'faction') and entity.faction:
             info_lines.append(f"{entity.faction}")
@@ -422,28 +583,122 @@ class MenusMixin:
             if hasattr(entity, 'alignment'):
                 info_lines.append(f"({entity.alignment})")
 
-        # Quest hint
+        # Quest hint (info, not prompt)
         nq = next((n for n in getattr(self, 'npc_quests', [])
                    if n.npc_id == self.inspected_npc), None)
         if nq:
             if nq.quest.status == 'completed':
-                info_lines.append("Quest done! (Shift+Q)")
+                info_lines.append("Quest: done!")
             else:
                 q_name = QUEST_TYPES.get(nq.quest.quest_type, {}).get('name', nq.quest.quest_type)
                 info_lines.append(f"Quest: {q_name}")
-        else:
-            if len(getattr(self, 'npc_quests', [])) < 3:
-                info_lines.append("Shift+Q: Get quest")
-        if self.active_quest or getattr(self, 'active_npc_quest_npc_id', None):
-            info_lines.append("Shift+A: Assign quest")
-        # Show trade hint if NPC has items
-        if entity.inventory:
-            info_lines.append("Shift+T: Trade")
 
-        # Draw each line (no background box)
+        # Draw info lines
         for i, line in enumerate(info_lines):
             text = self.tiny_font.render(line, True, (255, 255, 255))
             self.screen.blit(text, (info_x, info_y + i * line_height))
+
+        # Contextual prompts — shown as a horizontal bar below the info block
+        prompts = []
+        if nq and nq.quest.status == 'completed':
+            prompts.append("Shift+Q:Turn in")
+        elif len(getattr(self, 'npc_quests', [])) < 3:
+            prompts.append("Shift+Q:Quest")
+        if self.active_quest or getattr(self, 'active_npc_quest_npc_id', None):
+            prompts.append("Shift+A:Assign")
+        if entity.inventory:
+            prompts.append("Shift+T:Trade")
+        if self.inventory.items:
+            prompts.append("Shift+G:Gift")
+        prompts.append("Shift+F:Follow")
+
+        if prompts:
+            prompt_y = info_y + len(info_lines) * line_height + 4
+            px = info_x
+            for prompt in prompts:
+                surf = self.tiny_font.render(prompt, True, (200, 200, 100))
+                self.screen.blit(surf, (px, prompt_y))
+                px += surf.get_width() + 8
+
+    # -------------------------------------------------------------------------
+    # Cell / item inspect (triggered when Shift held or inspect tool active,
+    # no NPC at target)
+    # -------------------------------------------------------------------------
+
+    def draw_inspect_target(self):
+        """Show cell name, items, and contextual prompts when inspecting a non-NPC cell."""
+        # Only draw when player is actively holding Shift or has inspect tool selected
+        keys = pygame.key.get_pressed()
+        shift_held = keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]
+        _ts_idx = self.inventory.selected_tool_slot_idx
+        inspect_tool_active = (
+            _ts_idx is not None and
+            _ts_idx < len(self.inventory.tool_slots) and
+            self.inventory.tool_slots[_ts_idx] == 'inspect'
+        )
+        if not (shift_held or inspect_tool_active):
+            return
+        target = getattr(self, 'inspect_cell_target', None)
+        if not target:
+            return
+        check_x, check_y = target
+        screen_key = f"{self.player['screen_x']},{self.player['screen_y']}"
+        grid = (self.current_screen or {}).get('grid')
+        if not grid:
+            return
+
+        cell = grid[check_y][check_x]
+        info_lines = [cell.replace('_', ' ').title()]
+        prompts = []
+
+        # Items on the cell
+        items_here = {}
+        if screen_key in self.dropped_items:
+            items_here = self.dropped_items[screen_key].get((check_x, check_y), {})
+        if items_here:
+            for item_name, count in items_here.items():
+                name = ITEMS.get(item_name, {}).get('name', item_name)
+                info_lines.append(f"  {name}{f' x{count}' if count > 1 else ''}")
+            prompts.append("E:Pickup")
+
+        # Gravestone inscriptions
+        if cell == 'GRAVESTONE':
+            gs_names = getattr(self, 'gravestone_names', {}).get(screen_key, {}).get((check_x, check_y), [])
+            for n in gs_names:
+                info_lines.append(f"  {n}")
+
+        # Chest contents
+        if cell == 'CHEST':
+            chest_key = f"{screen_key}:{check_x},{check_y}"
+            contents = (self.chest_contents or {}).get(chest_key, {})
+            if contents:
+                for item_name, count in contents.items():
+                    name = ITEMS.get(item_name, {}).get('name', item_name)
+                    info_lines.append(f"  {name}{f' x{count}' if count > 1 else ''}")
+            prompts.append("E:Open chest")
+
+        # Enchantable cells
+        enchantable = {'STONE', 'TREE', 'IRON_ORE', 'CAVE_WALL', 'WALL'}
+        if cell in enchantable:
+            prompts.append("L:Enchant")
+
+        # Position panel near the target cell, but clamp to screen
+        from constants import CELL_SIZE, SCREEN_WIDTH, SCREEN_HEIGHT
+        px = min(check_x * CELL_SIZE + CELL_SIZE + 4, SCREEN_WIDTH - 120)
+        py = max(check_y * CELL_SIZE, 4)
+        line_height = 16
+
+        for i, line in enumerate(info_lines):
+            surf = self.tiny_font.render(line, True, (220, 220, 220))
+            self.screen.blit(surf, (px, py + i * line_height))
+
+        if prompts:
+            prompt_y = py + len(info_lines) * line_height + 4
+            ppx = px
+            for p in prompts:
+                surf = self.tiny_font.render(p, True, (200, 200, 100))
+                self.screen.blit(surf, (ppx, prompt_y))
+                ppx += surf.get_width() + 8
 
     # -------------------------------------------------------------------------
     # Dropped item / chest tooltip

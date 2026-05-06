@@ -48,6 +48,14 @@ Module layout:
     autopilot.py   — AutopilotMixin
 """
 
+import subprocess, os
+_repo_dir = os.path.dirname(os.path.abspath(__file__))
+try:
+    subprocess.run(['git', 'pull', '--ff-only'], cwd=_repo_dir,
+                   capture_output=True, timeout=10)
+except Exception:
+    pass
+
 from constants import *
 from entity import *
 
@@ -55,7 +63,7 @@ from entity import *
 from systems import (SaveLoadMixin, CraftingMixin, CombatMixin,
                      EnchantmentMixin, FactionsMixin, SpawningMixin)
 from world import WorldGenerationMixin, ZonesMixin, CellsMixin
-from ui import HudMixin, InventoryUIMixin, MenusMixin, DevScreenMixin
+from ui import HudMixin, InventoryUIMixin, MenusMixin
 from ai import NpcAiActionsMixin, NpcAiMovementMixin
 from lore import LoreEngineMixin
 
@@ -67,7 +75,7 @@ from autopilot import AutopilotMixin
 
 class Game(
     # New modular mixins take precedence over legacy duplicates via MRO
-    HudMixin, InventoryUIMixin, MenusMixin, DevScreenMixin,  # ui/
+    HudMixin, InventoryUIMixin, MenusMixin,                  # ui/
     WorldGenerationMixin, ZonesMixin, CellsMixin,     # world/
     SaveLoadMixin, CraftingMixin, CombatMixin,        # systems/
     EnchantmentMixin, FactionsMixin, SpawningMixin,   # systems/
@@ -100,6 +108,13 @@ if __name__ == '__main__':
     game = Game()
 
     if AUTO_DEBUG:
+        # Enable debug systems for this session
+        import constants as _const
+        _const.DEBUG_MODE = True
+        game.bug_catcher = __import__('debug.bug_catcher', fromlist=['BugCatcher']).BugCatcher()
+        from debug.watchdog import Watchdog as _WD
+        game.watchdog = _WD(game.bug_catcher)
+
         # Load run counter
         try:
             with open(_STATE_FILE) as _f:
@@ -112,9 +127,9 @@ if __name__ == '__main__':
         _cap = min(_MIN_SECS * (2 ** _run), _MAX_CAP)
         _dur = random.randint(_MIN_SECS, _cap)
 
-        # New game or continue (50/50 if save exists)
+        # Always continue from savegame.json if it exists (balance observation phase)
         _save_exists = os.path.exists('savegame.json')
-        if _save_exists and random.random() < 0.5:
+        if _save_exists:
             game.load_game()
             game.toggle_autopilot()
             _mode = 'CONTINUE'
@@ -127,5 +142,10 @@ if __name__ == '__main__':
         game._auto_debug_run_num  = _run
         game._auto_debug_state_file = _STATE_FILE
         print(f"[AutoDebug] Run {_run + 1} — {_mode} | duration={_dur}s (cap={_cap}s)")
+
+        # Mute all audio during automated sessions
+        game.sound.music_volume = 0.0
+        game.sound.sfx_volume   = 0.0
+        game.sound.stop_music(fade_ms=0)
 
     game.run()

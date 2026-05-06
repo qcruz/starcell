@@ -170,7 +170,19 @@ if __name__ == "__main__":
         input("Press Enter to close…")
         sys.exit(1)
 
-    branch = choose_branch()
+    # Auto-select dev-q-updates when auto_debug.cfg is active — skip dialog
+    _auto_cfg = GAME_DIR / "debug" / "auto_debug.cfg"
+    _auto_active = False
+    try:
+        _auto_active = _auto_cfg.read_text().strip().lower() in ('true', '1', 'yes')
+    except Exception:
+        pass
+
+    if _auto_active:
+        branch = "dev-q-updates"
+        info("auto_debug.cfg active — skipping branch dialog, using dev-q-updates")
+    else:
+        branch = choose_branch()
     info(f"Branch: {branch}")
 
     if not update_or_clone(branch):

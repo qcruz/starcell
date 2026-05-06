@@ -22,7 +22,7 @@ These files are fully extracted and in production via the `Game` MRO in `main.py
 | HudMixin | `ui/hud.py` | HUD rendering, entity rendering, attack animations |
 | InventoryUIMixin | `ui/inventory_ui.py` | Inventory panel rendering and interaction |
 | MenusMixin | `ui/menus.py` | Main menu, pause screen, settings |
-| NpcAiActionsMixin | `ai/actions.py` | Primitive NPC actions: chop, mine, plant, till, build, trade |
+| NpcAiActionsMixin | `ai/actions.py` | Primitive NPC actions: chop, mine, plant, till, build, trade (NPC-to-NPC barter, gold-drop trade, N-key recipe panel) |
 | NpcAiMovementMixin | `ai/movement.py` | NPC movement: wander, pathfinding, zone cross, merge/split |
 | LoreEngineMixin | `lore/engine.py` | Quest text gen, quest completion checks, NPC quest assignment, lore events |
 
@@ -59,8 +59,8 @@ These files are fully extracted and in production via the `Game` MRO in `main.py
 | `handle_inventory_click` | 1182–1250 | `ui/inventory_ui.py` | UI click logic; natural home already exists |
 | `handle_quest_ui_click` | 1251–1301 | `ui/inventory_ui.py` or `lore/engine.py` | Quest panel click |
 | `_handle_menu_click` | 1342–1358 | `ui/menus.py` | Already a natural fit |
-| `open_npc_trade_window` | 1632–1658 | `ui/inventory_ui.py` | Trade window setup |
-| `handle_npc_trade_click` | 1659–1709 | `ui/inventory_ui.py` | Trade window click handling |
+| `open_npc_trade_window` | ~2039 | `ui/inventory_ui.py` | Trade window setup — Shift+T on inspected NPC; shows NPC inventory with gold prices |
+| `handle_npc_trade_click` | ~2066 | `ui/inventory_ui.py` | Trade window click — buys item from NPC for gold |
 
 ### Spells
 | Method | Lines (approx) | Extraction Target | Notes |
@@ -103,7 +103,7 @@ These files are fully extracted and in production via the `Game` MRO in `main.py
 | Method | Lines (approx) | Extraction Target | Notes |
 |---|---|---|---|
 | `update_cells` | 528–573 | Thin wrapper; keep or inline | Calls zone update pipeline |
-| `update_entities` | 574–650 | Keep in game_core.py | Core orchestrator loop |
+| `update_entities` | 574–650 | **Dead code** — defined but never called; all NPC AI runs through `zones.py:probabilistic_zone_updates()`. Remove in next cleanup pass. |
 | `remove_entity` | 651–773 | `engine/entity.py` or `systems/combat.py` | Cleanup on death; overlaps CombatMixin |
 | `check_follower_integrity` | 774–800 | `systems/combat.py` | Follower health enforcement |
 | `check_npc_inspection` | 801–855 | `ui/hud.py` | Inspection panel timeout |
@@ -215,4 +215,4 @@ Known areas where logic exists in both the monolith and the extracted mixin:
 
 ---
 
-*Last updated: 2026-03-15*
+*Last updated: 2026-04-12*

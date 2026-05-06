@@ -33,8 +33,8 @@ from debug.fixes import fix_entity_subscreen_flag
 
 
 class Watchdog:
-    CATEGORIES = ['entities', 'cells', 'zones', 'player', 'structures', 'followers', 'npc_actions', 'keepers', 'npc_quests']
-    SAMPLE_INTERVAL   = 300    # ticks between cycles (~5 s at 60 fps)
+    CATEGORIES = ['entities', 'cells', 'zones', 'player', 'structures', 'caves', 'followers', 'npc_actions', 'keepers', 'npc_quests', 'inventory_state', 'favor', 'food_behavior', 'ai_state_cycling', 'trade_events']
+    SAMPLE_INTERVAL   = 120    # ticks between cycles (~2 s at 60 fps)
     MAX_ENTRIES_PER_SAMPLE = 200  # max JSON entries per category per cycle
     BACKUP1_INTERVAL  = 3600   # ~60 s at 60 fps
     BACKUP2_INTERVAL  = 7200   # ~120 s at 60 fps
@@ -61,19 +61,26 @@ class Watchdog:
         self._category_index += 1
 
         _SAMPLERS = {
-            'entities':   self._sample_entities,
-            'cells':      self._sample_cells,
-            'zones':      self._sample_zones,
-            'player':     self._sample_player,
-            'structures': self._sample_structures,
-            'followers':  self._sample_followers,
-            'npc_actions': self._sample_npc_actions,
-            'keepers':    self._sample_keepers,
-            'npc_quests': self._sample_npc_quests,
+            'entities':         self._sample_entities,
+            'cells':            self._sample_cells,
+            'zones':            self._sample_zones,
+            'player':           self._sample_player,
+            'structures':       self._sample_structures,
+            'caves':            self._sample_caves,
+            'followers':        self._sample_followers,
+            'npc_actions':      self._sample_npc_actions,
+            'keepers':          self._sample_keepers,
+            'npc_quests':       self._sample_npc_quests,
+            'inventory_state':  self._sample_inventory_state,
+            'favor':            self._sample_favor,
+            'food_behavior':    self._sample_food_behavior,
+            'ai_state_cycling': self._sample_ai_state_cycling,
+            'trade_events':     self._sample_trade_events,
         }
         _SAMPLERS[category](tick, game)
 
         self._sample_spiders(tick, game)
+        self._sample_hostiles_in_caves(tick, game)
         self._check_integrity(tick, game)
         self._maybe_backup(tick, game)
         self.bug_catcher.flush()
@@ -143,6 +150,9 @@ class Watchdog:
                 'keeper_type': getattr(entity, 'keeper_type', None),
                 'keeper_target_type': getattr(entity, 'keeper_target', {}).get('type') if getattr(entity, 'keeper_target', None) else None,
                 'keeper_target_ref': getattr(entity, 'keeper_target', {}).get('ref') if getattr(entity, 'keeper_target', None) else None,
+                'in_subscreen': getattr(entity, 'in_subscreen', False),
+                'subscreen_key': getattr(entity, 'subscreen_key', None),
+                'ai_state_timer': getattr(entity, 'ai_state_timer', None),
             })
 
     def _sample_cells(self, tick: int, game) -> None:
@@ -195,6 +205,7 @@ class Watchdog:
                 'exits': zone_data.get('exits'),
                 'has_chests': bool(zone_data.get('chests')),
                 'chest_count': len(zone_data.get('chests', {})),
+                'entity_count': len(entity_ids),
                 'entity_ids': entity_ids,
                 'entity_types': entity_types,
             })
@@ -256,6 +267,9 @@ class Watchdog:
             'trader_display': bool(getattr(game, 'trader_display', None)),
             'inspected_npc': getattr(game, 'inspected_npc', None),
             'ap_input_queue_len': len(getattr(game, '_ap_input_queue', [])),
+            'death_counts': dict(getattr(game, 'death_counts', {})),
+            'entities_spawned_total': getattr(game, 'entities_spawned_total', 0),
+            'entities_alive': len(game.entities),
         })
         # Stagnation check: flag if proxy grid hasn't changed since last player sample
         if proxy_pos and getattr(game, 'autopilot', False):
@@ -275,7 +289,7 @@ class Watchdog:
             self._last_proxy_tick = None
 
     def _sample_structures(self, tick: int, game) -> None:
-        """Log full state for ALL structures (type, cells, entities)."""
+        """Log full state for ALL structures (type, cells, entities, movement/AI health)."""
         if not game.structures:
             self.bug_catcher.log({
                 'tick': tick,
@@ -292,13 +306,25 @@ class Watchdog:
             for eid in entity_ids:
                 if eid in game.entities:
                     e = game.entities[eid]
+                    timer = getattr(e, 'ai_state_timer', 0) or 0
                     entity_details.append({
                         'id': eid,
                         'type': e.type,
                         'grid': [e.x, e.y],
+                        'world': [round(getattr(e, 'world_x', e.x), 2),
+                                  round(getattr(e, 'world_y', e.y), 2)],
                         'health': e.health,
+                        'hunger': getattr(e, 'hunger', None),
+                        'thirst': getattr(e, 'thirst', None),
                         'ai_state': getattr(e, 'ai_state', None),
+                        'ai_state_timer': timer,
+                        'frozen_flag': timer > 600,   # stuck in one state >10 s
                         'in_structure': getattr(e, 'in_structure', False),
+                        'in_subscreen': getattr(e, 'in_subscreen', False),
+                        'current_target': getattr(e, 'current_target', None),
+                        'in_combat': getattr(e, 'in_combat', False),
+                        'facing': getattr(e, 'facing', None),
+                        'anim_frame': getattr(e, 'anim_frame', None),
                     })
             grid = sub_data.get('grid', [])
             cell_counts: dict = {}
@@ -315,6 +341,7 @@ class Watchdog:
                 'parent_cell': str(sub_data.get('parent_cell')),
                 'entity_count': len(entity_ids),
                 'entities': entity_details,
+                'frozen_count': sum(1 for e in entity_details if e.get('frozen_flag')),
                 'cell_counts': cell_counts,
             })
 
@@ -451,12 +478,15 @@ class Watchdog:
             })
 
             # Integrity: flag keepers with no target reference
-            if not kt:
+            # Type 3 = zone wanderer; naturally has no target — skip false positive
+            _ktype = getattr(entity, 'keeper_type', None)
+            if not kt and _ktype in (1, 2):
                 self.bug_catcher.log({
                     'tick': tick, 'category': 'watchdog_integrity',
                     'check': 'keeper_no_target',
                     'id': eid, 'type': entity.type,
-                    'note': 'keeper=True but keeper_target is None — still searching or bug',
+                    'keeper_type': _ktype,
+                    'note': 'keeper=True (type 1/2) but keeper_target is None — still searching or bug',
                 })
 
     def _sample_npc_quests(self, tick: int, game) -> None:
@@ -499,10 +529,324 @@ class Watchdog:
                 'quest_focus': getattr(entity, 'quest_focus', None),
                 'quest_queue': [{'type': e.get('type'), 'base': e.get('base')} for e in queue] if queue else None,
                 'quest_target': target_desc,
+                'tasks_completed': getattr(entity, 'tasks_completed', 0),
                 'ai_state': getattr(entity, 'ai_state', None),
                 'keeper': getattr(entity, 'keeper', False),
                 'keeper_type': getattr(entity, 'keeper_type', None),
             })
+
+    def _sample_inventory_state(self, tick: int, game) -> None:
+        """Log full inventory state: tool_slots, equipment, actions, selection."""
+        inv = game.inventory
+        self.bug_catcher.log({
+            'tick': tick,
+            'category': 'watchdog_inventory_state',
+            'tool_slots': list(inv.tool_slots),
+            'tool_slot_filled': sum(1 for s in inv.tool_slots if s is not None),
+            'equipment_slots': dict(inv.equipment_slots),
+            'any_equipment': any(v is not None for v in inv.equipment_slots.values()),
+            'actions': dict(inv.actions),
+            'items_count': sum(inv.items.values()) if inv.items else 0,
+            'magic_count': sum(inv.magic.values()) if inv.magic else 0,
+            'selected_tool_slot_idx': inv.selected_tool_slot_idx,
+            'selected_tools': inv.selected.get('tools'),
+            'selected_items': inv.selected.get('items'),
+            'selected_actions': inv.selected.get('actions'),
+            'pending_equip_slot': inv.pending_equip_slot,
+            'pending_equip_equipment_slot': inv.pending_equip_equipment_slot,
+            'open_menus': sorted(inv.open_menus),
+            'items_top5': sorted(inv.items.items(), key=lambda x: -x[1])[:5] if inv.items else [],
+        })
+
+    def _sample_favor(self, tick: int, game) -> None:
+        """Log favor scores for all NPCs on the player's current screen."""
+        player_zone = f"{game.player.get('screen_x', 0)},{game.player.get('screen_y', 0)}"
+        eids = game.screen_entities.get(player_zone, [])
+        entries = []
+        for eid in eids:
+            e = game.entities.get(eid)
+            if e is None:
+                continue
+            favor = getattr(e, 'favor', None)
+            if favor is not None:
+                entries.append({
+                    'id': eid,
+                    'type': e.type,
+                    'name': getattr(e, 'name', None),
+                    'favor': favor,
+                    'hostile': e.props.get('hostile', False),
+                    'grid': [e.x, e.y],
+                    'level': e.level,
+                })
+        self.bug_catcher.log({
+            'tick': tick,
+            'category': 'watchdog_favor',
+            'zone': player_zone,
+            'npc_count': len(entries),
+            'npcs': entries,
+            'inspected_npc': getattr(game, 'inspected_npc', None),
+        })
+
+    def _sample_food_behavior(self, tick: int, game) -> None:
+        """Track hungry NPCs and their food-targeting state across all loaded zones.
+
+        Flags the farmer idle/targeting toggle bug: a FARMER adjacent to a carrot
+        cell that keeps flipping between 'targeting' (food) and 'idle' without eating.
+        """
+        _CARROT_CELLS = {'CARROT1', 'CARROT2', 'CARROT3'}
+        entries = []
+        for eid, entity in game.entities.items():
+            if entity.health <= 0:
+                continue
+            hunger_pct = entity.hunger / max(1, entity.max_hunger)
+            if hunger_pct > 0.6:
+                continue  # Only watch hungry entities
+            screen_key = f"{entity.screen_x},{entity.screen_y}"
+            screen = game.screens.get(screen_key)
+            if not screen:
+                continue
+            grid = screen.get('grid', [])
+            # Find nearest carrot and its distance
+            nearest_carrot = None
+            nearest_dist = float('inf')
+            for dy in range(-3, 4):
+                for dx in range(-3, 4):
+                    nx, ny = entity.x + dx, entity.y + dy
+                    if 0 <= nx < 24 and 0 <= ny < 18:
+                        try:
+                            if grid[ny][nx] in _CARROT_CELLS:
+                                d = abs(dx) + abs(dy)
+                                if d < nearest_dist:
+                                    nearest_dist = d
+                                    nearest_carrot = (nx, ny, grid[ny][nx])
+                        except IndexError:
+                            pass
+            entries.append({
+                'id': eid,
+                'type': entity.type,
+                'zone': screen_key,
+                'grid': [entity.x, entity.y],
+                'hunger': round(entity.hunger, 1),
+                'max_hunger': entity.max_hunger,
+                'hunger_pct': round(hunger_pct, 2),
+                'ai_state': getattr(entity, 'ai_state', None),
+                'target_type': getattr(entity, 'target_type', None),
+                'current_target': getattr(entity, 'current_target', None),
+                'nearest_carrot': nearest_carrot,
+                'nearest_carrot_dist': nearest_dist if nearest_carrot else None,
+                'adjacent_to_food': nearest_dist <= 1 if nearest_carrot else False,
+            })
+        self.bug_catcher.log({
+            'tick': tick,
+            'category': 'watchdog_food_behavior',
+            'hungry_npc_count': len(entries),
+            'npcs': self._trim(tick, 'food_behavior', entries),
+        })
+
+    def _sample_ai_state_cycling(self, tick: int, game) -> None:
+        """Snapshot the full AI priority state for every loaded entity.
+
+        Designed to catch target-type cycling bugs: quest → keeper → special →
+        role → resource.  Logs each entity's current position in the priority
+        stack so bad state (e.g. repeatedly flipping food↔idle, or keeper winning
+        when in range, or quest never firing) shows up across consecutive cycles.
+
+        Also tallies a summary histogram of ai_state × target_type combinations
+        so the session review can spot population-level imbalances at a glance.
+        """
+        entries = []
+        state_hist = {}   # {(ai_state, target_type): count}
+        for eid, entity in game.entities.items():
+            if entity.health <= 0:
+                continue
+            ai_state    = getattr(entity, 'ai_state', None)
+            target_type = getattr(entity, 'target_type', None)
+            key = (ai_state or 'none', target_type or 'none')
+            state_hist[key] = state_hist.get(key, 0) + 1
+
+            h_pct = round(entity.hunger / max(1, entity.max_hunger), 2)
+            t_pct = round(entity.thirst / max(1, entity.max_thirst), 2)
+            entries.append({
+                'id':            eid,
+                'type':          entity.type,
+                'zone':          f"{entity.screen_x},{entity.screen_y}",
+                'level':         round(entity.level, 1),
+                'ai_state':      ai_state,
+                'target_type':   target_type,
+                'current_target':str(getattr(entity, 'current_target', None)),
+                'target_priority': getattr(entity, 'target_priority', None),
+                'hunger_pct':    h_pct,
+                'thirst_pct':    t_pct,
+                'in_combat':     getattr(entity, 'in_combat', False),
+                'quest_focus':   getattr(entity, 'quest_focus', None),
+                'keeper':        getattr(entity, 'keeper', False),
+                'keeper_type':   getattr(entity, 'keeper_type', None),
+                'keeper_in_range': (
+                    getattr(entity, 'keeper', False) and
+                    getattr(entity, 'keeper_target_pos', None) is not None and
+                    (abs(entity.x - entity.keeper_target_pos[0]) +
+                     abs(entity.y - entity.keeper_target_pos[1])) <=
+                    (getattr(entity, 'keeper_type', 3) and 4)
+                ),
+            })
+
+        # Serialise histogram with string keys for JSON
+        hist_serialised = {f"{s}|{t}": c for (s, t), c in
+                           sorted(state_hist.items(), key=lambda x: -x[1])}
+
+        # Health / resource / level summary stats
+        hp_pcts   = [round(e['hunger_pct'], 2) for e in entries]  # reuse entries field names
+        alive     = len(entries)
+        hp_full   = sum(1 for e in entries
+                        if e['hunger_pct'] >= 0.8 and e['thirst_pct'] >= 0.8)
+        level_hist = {}
+        for e in entries:
+            lv = int(e['level'])
+            level_hist[lv] = level_hist.get(lv, 0) + 1
+        health_80_plus = sum(
+            1 for eid, entity in game.entities.items()
+            if entity.health > 0 and entity.health / max(1, entity.max_health) >= 0.8
+        )
+
+        self.bug_catcher.log({
+            'tick':              tick,
+            'category':          'watchdog_ai_state_cycling',
+            'total_alive':       alive,
+            'state_histogram':   hist_serialised,
+            'level_histogram':   {str(k): v for k, v in sorted(level_hist.items())},
+            'both_bars_80pct':   hp_full,
+            'health_80pct_count': health_80_plus,
+            'npcs':              self._trim(tick, 'ai_state_cycling', entries),
+        })
+
+    def snapshot_on_start(self, tick: int, game) -> None:
+        """Fire an immediate full snapshot on new game or load — bypasses interval gate.
+
+        Captures player state, all caves, hostile-in-cave state, and a zone/entity
+        summary so there is always at least one data point regardless of session length.
+        """
+        self._last_run_tick = tick  # Prevent double-fire on the next normal update cycle
+        self._sample_player(tick, game)
+        self._sample_zones(tick, game)
+        self._sample_structures(tick, game)
+        self._sample_caves(tick, game)
+        self._sample_hostiles_in_caves(tick, game)
+        self._sample_spiders(tick, game)
+        self._check_integrity(tick, game)
+        self.bug_catcher.log({
+            'tick': tick,
+            'category': 'session_start_snapshot',
+            'total_entities': len(game.entities),
+            'total_zones': len(game.screens),
+            'total_structures': len(game.structures),
+            'cave_count': sum(
+                1 for v in game.structures.values()
+                if v.get('type') == 'CAVE'
+            ),
+        })
+        self.bug_catcher.flush()
+
+    def _sample_caves(self, tick: int, game) -> None:
+        """Sample all cave structures: entity state, cell composition, AI health."""
+        structures = getattr(game, 'structures', {})
+        screen_entities = getattr(game, 'screen_entities', {})
+        cave_items = [(k, v) for k, v in structures.items() if v.get('type') == 'CAVE']
+
+        if not cave_items:
+            self.bug_catcher.log({
+                'tick': tick,
+                'category': 'watchdog_cave_sample',
+                'note': 'no cave structures exist',
+            })
+            return
+
+        for cave_key, cave_data in cave_items:
+            entity_ids = screen_entities.get(cave_key, [])
+            entity_details = []
+            for eid in entity_ids:
+                if eid not in game.entities:
+                    continue
+                e = game.entities[eid]
+                timer = getattr(e, 'ai_state_timer', 0) or 0
+                entity_details.append({
+                    'id': eid,
+                    'type': e.type,
+                    'grid': [e.x, e.y],
+                    'world': [round(getattr(e, 'world_x', e.x), 2),
+                              round(getattr(e, 'world_y', e.y), 2)],
+                    'health': e.health,
+                    'ai_state': getattr(e, 'ai_state', None),
+                    'ai_state_timer': timer,
+                    'frozen_flag': timer > 600,
+                    'in_structure': getattr(e, 'in_structure', False),
+                    'structure_key': getattr(e, 'structure_key', None),
+                    'in_combat': getattr(e, 'in_combat', False),
+                    'current_target': getattr(e, 'current_target', None),
+                    'is_moving': getattr(e, 'is_moving', None),
+                    'anim_frame': getattr(e, 'anim_frame', None),
+                    'anim_timer': getattr(e, 'anim_timer', None),
+                    'facing': getattr(e, 'facing', None),
+                })
+            grid = cave_data.get('grid', [])
+            cell_counts: dict = {}
+            for row in grid:
+                for cell in row:
+                    cell_counts[cell] = cell_counts.get(cell, 0) + 1
+            self.bug_catcher.log({
+                'tick': tick,
+                'category': 'watchdog_cave_sample',
+                'key': cave_key,
+                'depth': cave_data.get('depth'),
+                'parent_screen': str(cave_data.get('parent_screen')),
+                'parent_cell': str(cave_data.get('parent_cell')),
+                'entity_count': len(entity_ids),
+                'entities': entity_details,
+                'frozen_count': sum(1 for e in entity_details if e.get('frozen_flag')),
+                'cell_counts': cell_counts,
+            })
+
+    def _sample_hostiles_in_caves(self, tick: int, game) -> None:
+        """Every cycle: log every hostile entity inside any cave structure.
+
+        Captures full movement + AI state so frozen/stuck hostiles are visible
+        without waiting for the 'caves' category cycle.
+        """
+        structures = getattr(game, 'structures', {})
+        screen_entities = getattr(game, 'screen_entities', {})
+        cave_keys = {k for k, v in structures.items() if v.get('type') == 'CAVE'}
+        if not cave_keys:
+            return
+
+        player_zone = f"{game.player.get('screen_x', 0)},{game.player.get('screen_y', 0)}"
+
+        for cave_key in cave_keys:
+            for eid in screen_entities.get(cave_key, []):
+                if eid not in game.entities:
+                    continue
+                e = game.entities[eid]
+                if not e.props.get('hostile', False):
+                    continue
+                self.bug_catcher.log({
+                    'tick': tick,
+                    'category': 'cave_hostile_sample',
+                    'cave_key': cave_key,
+                    'player_in_cave': player_zone == cave_key,
+                    'id': eid,
+                    'type': e.type,
+                    'grid': [e.x, e.y],
+                    'world': [round(getattr(e, 'world_x', e.x), 2),
+                              round(getattr(e, 'world_y', e.y), 2)],
+                    'ai_state': getattr(e, 'ai_state', None),
+                    'ai_state_timer': getattr(e, 'ai_state_timer', 0),
+                    'in_combat': getattr(e, 'in_combat', False),
+                    'current_target': getattr(e, 'current_target', None),
+                    'is_moving': getattr(e, 'is_moving', None),
+                    'anim_frame': getattr(e, 'anim_frame', None),
+                    'anim_timer': getattr(e, 'anim_timer', None),
+                    'in_structure': getattr(e, 'in_structure', False),
+                    'structure_key': getattr(e, 'structure_key', None),
+                    'health': e.health,
+                })
 
     def _sample_spiders(self, tick: int, game) -> None:
         """Log full animation + AI state for every BLACK_SPIDER every cycle — no trimming."""
@@ -532,6 +876,68 @@ class Watchdog:
                 'current_target': getattr(entity, 'current_target', None),
                 'health': entity.health,
                 'is_alive': entity.is_alive(),
+            })
+
+    def _sample_trade_events(self, tick: int, game) -> None:
+        """Snapshot trade-related state: trades_completed counter, TRADER inventories,
+        and any NPCs whose _special_target_type is 'trade' right now.
+        """
+        # Session-level counter
+        trades_done = getattr(game, 'trades_completed', 0)
+        self.bug_catcher.log({
+            'tick':            tick,
+            'category':        'watchdog_trade_events',
+            'trades_completed': trades_done,
+        })
+
+        # Snapshot all TRADERs: gold balance + inventory
+        traders = [
+            (eid, e) for eid, e in game.entities.items()
+            if e.type == 'TRADER' and e.health > 0
+        ]
+        for eid, entity in traders:
+            inv = dict(getattr(entity, 'inventory', {}) or {})
+            self.bug_catcher.log({
+                'tick':       tick,
+                'category':   'watchdog_trade_events',
+                'event':      'trader_snapshot',
+                'id':         eid,
+                'zone':       f"{entity.screen_x},{entity.screen_y}",
+                'grid':       [entity.x, entity.y],
+                'gold':       inv.get('gold', 0),
+                'inv_total':  sum(inv.values()),
+                'level':      round(getattr(entity, 'level', 1.0), 2),
+                'ai_state':   getattr(entity, 'ai_state', None),
+                'target_type': getattr(entity, 'target_type', None),
+                '_special_target_type': getattr(entity, '_special_target_type', None),
+            })
+
+        # Snapshot any NPC currently executing a trade
+        trading_now = [
+            (eid, e) for eid, e in game.entities.items()
+            if getattr(e, '_special_target_type', None) == 'trade' and e.health > 0
+        ]
+        for eid, entity in trading_now:
+            partner_id  = entity.current_target if isinstance(entity.current_target, int) else None
+            partner_zone = None
+            partner_type = None
+            if partner_id and partner_id in game.entities:
+                p = game.entities[partner_id]
+                partner_zone = f"{p.screen_x},{p.screen_y}"
+                partner_type = p.type
+            self.bug_catcher.log({
+                'tick':          tick,
+                'category':      'watchdog_trade_events',
+                'event':         'trade_in_progress',
+                'id':            eid,
+                'type':          entity.type,
+                'zone':          f"{entity.screen_x},{entity.screen_y}",
+                'partner_id':    partner_id,
+                'partner_type':  partner_type,
+                'partner_zone':  partner_zone,
+                'ai_state':      getattr(entity, 'ai_state', None),
+                'inv_total':     sum((getattr(entity, 'inventory', {}) or {}).values()),
+                'gold':          (getattr(entity, 'inventory', {}) or {}).get('gold', 0),
             })
 
     # ------------------------------------------------------------------
@@ -568,8 +974,9 @@ class Watchdog:
                         apply=True,
                     )
 
-            # Check 2: in_structure=False but found in a true structure zone
+            # Check 2: in_structure=False but found in a true structure zone — log and fix.
             if not entity_in_structure_flag and eid in entity_in_structures:
+                correct_key = entity_in_structures[eid][0]
                 self.bug_catcher.log({
                     'tick': tick,
                     'category': 'integrity_anomaly',
@@ -578,9 +985,37 @@ class Watchdog:
                     'entity_type': entity.type,
                     'zone': zone_key,
                     'found_in_structures': entity_in_structures[eid],
+                    'fix_applied': True,
+                    'corrected_structure_key': correct_key,
                 })
+                entity.in_structure = True
+                entity.structure_key = correct_key
 
-        # Check 3: follower integrity
+        # Check 3: frozen entities inside structures (ai_state_timer stuck >600 ticks)
+        for sub_key in structure_keys:
+            for eid in screen_entities.get(sub_key, []):
+                if eid not in game.entities:
+                    continue
+                e = game.entities[eid]
+                timer = getattr(e, 'ai_state_timer', 0) or 0
+                if timer > 600:
+                    self.bug_catcher.log({
+                        'tick': tick,
+                        'category': 'integrity_anomaly',
+                        'check': 'entity_frozen_in_structure',
+                        'entity_id': eid,
+                        'entity_type': e.type,
+                        'structure_key': sub_key,
+                        'interior_type': game.structures.get(sub_key, {}).get('interior_type'),
+                        'ai_state': getattr(e, 'ai_state', None),
+                        'ai_state_timer': timer,
+                        'grid': [e.x, e.y],
+                        'health': e.health,
+                        'in_structure': getattr(e, 'in_structure', False),
+                        'in_subscreen': getattr(e, 'in_subscreen', False),
+                    })
+
+        # Check 4: follower integrity
         followers = getattr(game, 'followers', [])
         for fid in followers:
             if fid not in game.entities:
@@ -609,6 +1044,109 @@ class Watchdog:
                     'entity_type': fe.type,
                     'ai_state': getattr(fe, 'ai_state', None),
                 })
+
+        # Check 5: resource values exceeding max (glitch detector)
+        _RESOURCE_HARD_CAP = 9999
+        for eid, entity in game.entities.items():
+            if entity.health <= 0:
+                continue
+            mh = getattr(entity, 'max_hunger', None)
+            mt = getattr(entity, 'max_thirst', None)
+            h  = getattr(entity, 'hunger', 0)
+            t  = getattr(entity, 'thirst', 0)
+            if mh and h > mh + 1:
+                self.bug_catcher.log({
+                    'tick': tick, 'category': 'integrity_anomaly',
+                    'check': 'hunger_exceeds_max',
+                    'entity_id': eid, 'entity_type': entity.type,
+                    'hunger': h, 'max_hunger': mh,
+                    'is_hard_cap': h >= _RESOURCE_HARD_CAP,
+                })
+            if mt and t > mt + 1:
+                self.bug_catcher.log({
+                    'tick': tick, 'category': 'integrity_anomaly',
+                    'check': 'thirst_exceeds_max',
+                    'entity_id': eid, 'entity_type': entity.type,
+                    'thirst': t, 'max_thirst': mt,
+                    'is_hard_cap': t >= _RESOURCE_HARD_CAP,
+                })
+
+        # Check 6: entities alive but absent from every screen_entities bucket (HB-02).
+        # These entities receive no AI updates — hunger/thirst/health freeze.
+        all_tracked_eids: set = set()
+        for bucket_eids in screen_entities.values():
+            all_tracked_eids.update(bucket_eids)
+        for eid, entity in game.entities.items():
+            if entity.health <= 0:
+                continue
+            if eid not in all_tracked_eids:
+                self.bug_catcher.log({
+                    'tick': tick,
+                    'category': 'integrity_anomaly',
+                    'check': 'entity_orphaned_from_screen_entities',
+                    'entity_id': eid,
+                    'entity_type': entity.type,
+                    'zone': f"{entity.screen_x},{entity.screen_y}",
+                    'grid': [entity.x, entity.y],
+                    'ai_state': getattr(entity, 'ai_state', None),
+                    'hunger': getattr(entity, 'hunger', None),
+                    'thirst': getattr(entity, 'thirst', None),
+                    'note': 'alive entity not in any screen_entities bucket — AI updates skipped',
+                })
+
+        # Check 7: entities stuck targeting EXIT or structure cells in overworld zones (HB-01/HB-03).
+        # The structure freeze check (check 3) only covers structure-internal zones — this covers overworld.
+        overworld_keys = set(game.screens.keys()) - structure_keys
+        for zone_key in overworld_keys:
+            for eid in screen_entities.get(zone_key, []):
+                if eid not in game.entities:
+                    continue
+                e = game.entities[eid]
+                timer = getattr(e, 'ai_state_timer', 0) or 0
+                if timer <= 600:
+                    continue
+                target = getattr(e, 'current_target', None)
+                if not isinstance(target, list) or len(target) < 4:
+                    continue
+                target_kind = target[3]
+                if target_kind in ('EXIT', 'structure'):
+                    self.bug_catcher.log({
+                        'tick': tick,
+                        'category': 'integrity_anomaly',
+                        'check': 'entity_stuck_targeting_exit_or_structure',
+                        'entity_id': eid,
+                        'entity_type': e.type,
+                        'zone': zone_key,
+                        'grid': [e.x, e.y],
+                        'ai_state': getattr(e, 'ai_state', None),
+                        'ai_state_timer': timer,
+                        'current_target': target,
+                        'target_kind': target_kind,
+                        'stuck_counter': getattr(e, 'stuck_counter', 0),
+                        'note': f'overworld entity stuck {timer} ticks targeting {target_kind} cell',
+                    })
+
+        # Check 8: in_subscreen=True but entity present in overworld screen_entities (render bug).
+        # HUD skips rendering these, but they stay in the overworld render bucket — animation freezes.
+        for zone_key in overworld_keys:
+            for eid in screen_entities.get(zone_key, []):
+                if eid not in game.entities:
+                    continue
+                e = game.entities[eid]
+                if getattr(e, 'in_subscreen', False):
+                    self.bug_catcher.log({
+                        'tick': tick,
+                        'category': 'integrity_anomaly',
+                        'check': 'entity_in_subscreen_but_in_overworld_screen_entities',
+                        'entity_id': eid,
+                        'entity_type': e.type,
+                        'zone': zone_key,
+                        'subscreen_key': getattr(e, 'subscreen_key', None),
+                        'grid': [e.x, e.y],
+                        'ai_state': getattr(e, 'ai_state', None),
+                        'anim_frame': getattr(e, 'anim_frame', None),
+                        'note': 'in_subscreen=True but in overworld screen_entities — will not render correctly',
+                    })
 
     # ------------------------------------------------------------------
     # Rolling backup saves

@@ -59,6 +59,9 @@ class SaveLoadMixin:
                 'movement_pattern': getattr(entity, 'movement_pattern', None),
                 'item_levels': getattr(entity, 'item_levels', {}),
                 'item_names': getattr(entity, 'item_names', {}),
+                'item_xp': getattr(entity, 'item_xp', {}),
+                'item_durability': getattr(entity, 'item_durability', {}),
+                'tasks_completed': getattr(entity, 'tasks_completed', 0),
                 'keeper': getattr(entity, 'keeper', False),
                 'keeper_type': getattr(entity, 'keeper_type', None),
                 'keeper_target': _serialize_keeper_target(getattr(entity, 'keeper_target', None)),
@@ -157,6 +160,7 @@ class SaveLoadMixin:
             'inventory_followers': self.inventory.followers,
             'inventory_actions': self.inventory.actions,
             'inventory_selected': self.inventory.selected,
+            'inventory_equipment_slots': self.inventory.equipment_slots,
             'dropped_items': dropped_items_serializable,
             'screen_last_update': self.screen_last_update,
             'target_direction': self.target_direction,
@@ -275,29 +279,46 @@ class SaveLoadMixin:
             self.inventory.actions = save_data.get('inventory_actions', {})
             # Restore tool slots — with backward compat for old saves using tools dict
             if 'inventory_tool_slots' in save_data:
-                self.inventory.tool_slots = save_data['inventory_tool_slots']
+                loaded_slots = save_data['inventory_tool_slots']
+                # Pad/trim to current slot count (9)
+                slot_count = len(self.inventory.tool_slots)
+                self.inventory.tool_slots = (loaded_slots + [None] * slot_count)[:slot_count]
             elif 'inventory_tools' in save_data:
                 # Migrate old tools dict → slots
                 old_tools = save_data['inventory_tools']
-                self.inventory.tool_slots = [None] * 8
+                slot_count = len(self.inventory.tool_slots)
+                self.inventory.tool_slots = [None] * slot_count
                 slot_idx = 0
                 for iname, cnt in old_tools.items():
                     for _ in range(cnt):
-                        if slot_idx < 8:
+                        if slot_idx < slot_count:
                             self.inventory.tool_slots[slot_idx] = iname
                             slot_idx += 1
             self.inventory.selected_tool_slot_idx = save_data.get('inventory_selected_tool_slot')
             # Sync selected['tools'] from active slot
             idx = self.inventory.selected_tool_slot_idx
-            slot_item = self.inventory.tool_slots[idx] if idx is not None and 0 <= idx < 8 else None
+            slot_count = len(self.inventory.tool_slots)
+            slot_item = self.inventory.tool_slots[idx] if idx is not None and 0 <= idx < slot_count else None
             self.inventory.selected = save_data.get('inventory_selected', {
                 'items': None, 'tools': None, 'magic': None, 'followers': None,
-                'actions': None, 'crafting': None,
+                'actions': None, 'crafting': None, 'equipment': None,
             })
             # Ensure new keys exist in loaded selected dict
             self.inventory.selected.setdefault('actions', None)
+            self.inventory.selected.setdefault('equipment', None)
+            # Restore equipment slots
+            saved_equip = save_data.get('inventory_equipment_slots', {})
+            for slot_name in self.inventory.EQUIPMENT_SLOT_NAMES:
+                self.inventory.equipment_slots[slot_name] = saved_equip.get(slot_name)
             self.inventory.selected.setdefault('crafting', None)
             self.inventory.selected['tools'] = slot_item
+            # Migration: ensure any tool_slot items also exist in items dict
+            # (old saves stored tools only in tool_slots, new architecture requires items dict)
+            for slot_item_name in self.inventory.tool_slots:
+                if slot_item_name is not None:
+                    item_def = ITEMS.get(slot_item_name, {})
+                    if item_def.get('is_tool') and slot_item_name not in self.inventory.items:
+                        self.inventory.items[slot_item_name] = self.inventory.items.get(slot_item_name, 0) + 1
 
             # Convert dropped_items string keys back to tuples
             dropped_items_loaded = save_data.get('dropped_items', {})
@@ -347,10 +368,13 @@ class SaveLoadMixin:
                     entity_data['level']
                 )
                 entity.health = min(entity_data['health'], entity.max_health)
-                entity.hunger = entity_data['hunger']
-                entity.thirst = entity_data['thirst']
+                entity.hunger = min(entity.max_hunger, max(0, entity_data['hunger']))
+                entity.thirst = min(entity.max_thirst, max(0, entity_data['thirst']))
                 entity.inventory = entity_data.get('inventory', {})
                 entity.xp = entity_data.get('xp', 0)
+                entity.level = 1.0 + entity.xp / 100.0
+                entity.max_health = entity.props['max_health'] * entity.level + int(3 ** entity.level)
+                entity.strength = entity.props['strength'] * entity.level
 
                 # Restore new attributes (with backward compatibility)
                 entity.faction = entity_data.get('faction', None)
@@ -362,6 +386,9 @@ class SaveLoadMixin:
                 entity.movement_pattern = entity_data.get('movement_pattern', None)
                 entity.item_levels = entity_data.get('item_levels', {})
                 entity.item_names = entity_data.get('item_names', {})
+                entity.item_xp = entity_data.get('item_xp', {})
+                entity.item_durability = entity_data.get('item_durability', {})
+                entity.tasks_completed = entity_data.get('tasks_completed', 0)
                 entity.keeper = entity_data.get('keeper', False)
                 entity.keeper_type = entity_data.get('keeper_type', None)
                 entity.keeper_target = _deserialize_keeper_target(entity_data.get('keeper_target'))
@@ -550,7 +577,9 @@ class SaveLoadMixin:
 
             # Autopilot grace period: don't engage for 15 seconds after loading
             self.last_input_tick = self.tick + 900
-            self.bug_catcher.clear()
+            if self.bug_catcher:
+                self.bug_catcher.clear()
+            self.watchdog.snapshot_on_start(self.tick, self)
             print("Game loaded!")
         else:
             print("No save file found!")

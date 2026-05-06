@@ -2,10 +2,11 @@
 StarCell Autopilot System — NPC Possession Model
 -------------------------------------------------
 When the player goes idle, autopilot spawns a "proxy NPC" at the player's
-position.  The proxy is a real Entity of the appropriate role type (FARMER,
-WARRIOR, MINER, etc.) and is driven by the existing NPC AI with zero extra
-movement code.  The wizard sprites are used instead of the NPC sprites so the
-player character looks the same on screen.
+position.  The proxy is a real Entity of a randomly selected role type (FARMER,
+WARRIOR, MINER, etc.) and is driven by the existing NPC AI.  A new random type
+is picked on each quest advance so we can observe how every NPC type handles
+every quest type.  The wizard sprite is used so the player character looks the
+same on screen.
 
 Inventory changes made by the proxy (harvested items, consumed tools) are
 mirrored to the real player inventory.  When the player resumes control, the
@@ -39,24 +40,21 @@ INVENTORY_SYNC_INTERVAL = 60  # every 1 second
 # How often (ticks) to perform a random inventory / spell / NPC action
 ACTION_INTERVAL = 300   # every 5 seconds
 
-# Force a quest type rotation even when the current quest is still active
-FORCE_QUEST_SWITCH_INTERVAL = 1800  # every 30 seconds
+# Ordered cycle of quest types the autopilot works through in sequence
+AUTOPILOT_QUEST_ORDER = [
+    'GATHER', 'FARM', 'LUMBER', 'MINE',
+    'HUNT', 'SLAY', 'COMBAT_HOSTILE',
+    'EXPLORE', 'RESCUE', 'SEARCH',
+]
 
-# Quest type → NPC role mapping
-QUEST_NPC_TYPE = {
-    'FARM':           'FARMER',
-    'GATHER':         'LUMBERJACK',
-    'LUMBER':         'LUMBERJACK',
-    'MINE':           'MINER',
-    'HUNT':           'WARRIOR',
-    'SLAY':           'WARRIOR',
-    'EXPLORE':        'TRADER',
-    'SEARCH':         'WIZARD',
-    'RESCUE':         'WIZARD',
-    'COMBAT_HOSTILE': 'WARRIOR',
-    'COMBAT_ALL':     'WARRIOR',
-}
-DEFAULT_NPC_TYPE = 'FARMER'
+# Pool of humanoid NPC types the autopilot may use as proxy.
+# A random type is picked fresh on each quest so we can observe how different
+# NPC types perform across all quest types — a BLACKSMITH on LUMBER, a FARMER
+# on HUNT, etc.  Hostile types are excluded (they would attack the player).
+AUTOPILOT_PROXY_TYPES = [
+    'FARMER', 'LUMBERJACK', 'MINER', 'BLACKSMITH',
+    'WIZARD', 'GUARD', 'WARRIOR', 'TRADER', 'COMMANDER',
+]
 
 
 class AutopilotMixin:
@@ -78,6 +76,8 @@ class AutopilotMixin:
         self._autopilot_wander_cooldown = 0       # ticks of forced wandering after stuck
         self._autopilot_proxy_last_pos = None     # (x, y) at last tick for stuck detection
         self._autopilot_pos_stuck_ticks = 0       # ticks at same position while targeting
+        self._autopilot_flee_ticks = 0            # consecutive ticks proxy has been fleeing
+        self._autopilot_quest_ticks = 0           # ticks spent on current quest (fallback timer)
         self._autopilot_harvest_timer = 0         # opportunistic harvest every ~30 ticks
         # Simulated input queue — autopilot posts real pygame events with human delays
         self._ap_input_queue = []      # [(fire_at_tick, event_or_callable, log_label)]
@@ -111,8 +111,15 @@ class AutopilotMixin:
 
     def update_autopilot(self):
         """Top-level autopilot tick.  Spawns proxy on first call, then maintains it."""
-        if not self.autopilot or self.state != 'playing':
+        if self.state != 'playing':
             return
+        # In locked mode (Shift+A), re-enable autopilot flag if it was cleared by a
+        # proxy death or persistent-flee disengage — the proxy will be respawned below.
+        if not self.autopilot:
+            if self.autopilot_locked:
+                self.autopilot = True
+            else:
+                return
 
         # Drain any queued synthetic button presses first
         self._ap_flush_input_queue()
@@ -135,8 +142,14 @@ class AutopilotMixin:
 
         proxy = self.entities.get(self.autopilot_proxy_id)
         if proxy is None:
-            # Proxy was externally removed — disengage
+            # Proxy was killed — trigger full death/respawn sequence then re-engage.
+            print("[Autopilot] Proxy killed — triggering death/respawn")
             self._autopilot_disengage()
+            self.death_years = random.randint(3, 10)
+            self.death_start_tick = self.tick
+            self.death_ticks_simulated = 0
+            self._time_pass_spawned = False
+            self.state = 'death'
             return
 
         # Keep proxy position in sync so the player's logical position tracks it
@@ -144,14 +157,39 @@ class AutopilotMixin:
 
         # ── Obstacle clearing: detect stuck position and chop/mine blocking cells ─
         cur_pos = (proxy.x, proxy.y)
-        if proxy.ai_state in ('targeting', 'wandering') and cur_pos == self._autopilot_proxy_last_pos:
+        if proxy.ai_state in ('targeting', 'wandering', 'flee') and cur_pos == self._autopilot_proxy_last_pos:
             self._autopilot_pos_stuck_ticks += 1
             # Try to clear obstacle every 60 ticks of being stuck (once per NPC AI cycle)
             if self._autopilot_pos_stuck_ticks % 60 == 0:
                 self._autopilot_try_clear_obstacle(proxy)
+            # If stuck in flee for 300+ ticks (cornered), force wandering so it can move again
+            if proxy.ai_state == 'flee' and self._autopilot_pos_stuck_ticks >= 300:
+                proxy.ai_state = 'wandering'
+                proxy.current_target = None
+                self._autopilot_pos_stuck_ticks = 0
         else:
             self._autopilot_proxy_last_pos = cur_pos
             self._autopilot_pos_stuck_ticks = 0
+
+        # ── Persistent flee detection: if proxy flees for 1800+ ticks, respawn as WARRIOR ─
+        if proxy.ai_state == 'flee':
+            self._autopilot_flee_ticks += 1
+            if self._autopilot_flee_ticks >= 1800:
+                self._autopilot_flee_ticks = 0
+                # Force-advance to a combat quest in the cycle so re-engage is WARRIOR
+                cycle = [q for q in AUTOPILOT_QUEST_ORDER if q in self.quests]
+                combat_idx = next((cycle.index(q) for q in ('HUNT', 'SLAY', 'COMBAT_HOSTILE')
+                                   if q in cycle), None)
+                if combat_idx is not None:
+                    old = self.active_quest
+                    self.active_quest = cycle[combat_idx]
+                    self._autopilot_quest_ticks = 0
+                    if old and old in self.quests:
+                        self.quests[old].clear_target()
+                    print(f"[Autopilot] Persistent flee — advancing to {self.active_quest}, respawning as WARRIOR")
+                self._autopilot_disengage()
+        else:
+            self._autopilot_flee_ticks = 0
 
         # ── Opportunistic harvesting: attempt chop/mine every ~30 ticks while moving ─
         if proxy.ai_state in ('targeting', 'wandering'):
@@ -173,31 +211,34 @@ class AutopilotMixin:
                 proxy.health = proxy.max_health
                 print(f"[Autopilot] Proxy HP restored to {proxy.max_health:.0f}")
 
-        # ── Quest completion check: 80% chance to switch quest type ────────
+        # ── Quest progression: advance to next quest when complete ──────────
+        # Only advance on natural completion — no timeout fallback.
+        self._autopilot_quest_ticks += 1
         if self.active_quest and self.active_quest in self.quests:
             quest = self.quests[self.active_quest]
-            if quest.status == 'completed' or quest.status == 'cooldown':
-                if random.random() < 0.80:
-                    self._autopilot_switch_quest()
+            if quest.status in ('completed', 'cooldown'):
+                self._autopilot_advance_quest()
 
-        # ── Forced periodic quest rotation (even when quest is still active)
-        self._autopilot_force_switch_timer += 1
-        if self._autopilot_force_switch_timer >= FORCE_QUEST_SWITCH_INTERVAL:
-            self._autopilot_force_switch_timer = 0
-            self._autopilot_switch_quest()
+        # ── Combat quest: track proxy damage to target ───────────────────
+        # Progress and completion only credit when the proxy dealt damage,
+        # not when the target dies from dehydration or other causes.
+        combat_quests = ('HUNT', 'SLAY', 'COMBAT_HOSTILE', 'COMBAT_ALL')
+        if self.active_quest in combat_quests and self.active_quest in self.quests:
+            cq = self.quests[self.active_quest]
+            if cq.status == 'active' and cq.target_entity_id:
+                target = self.entities.get(cq.target_entity_id)
+                if target and not target.is_dead:
+                    # Proxy is actively attacking the quest target this tick
+                    if proxy.combat_target == cq.target_entity_id:
+                        if target.max_health > 0:
+                            cq.progress = (target.max_health - target.health) / target.max_health
+                        cq._proxy_damaged_target = True
 
         # Periodically nudge proxy toward quest target
         self._autopilot_nudge_timer += 1
         if self._autopilot_nudge_timer >= QUEST_NUDGE_INTERVAL:
             self._autopilot_nudge_timer = 0
             self._autopilot_nudge_quest_target(proxy)
-
-            # Small chance (2%) per nudge to abandon current quest if stuck
-            # This prevents the autopilot from endlessly chasing an
-            # unreachable target (e.g. entity that crossed zones, cell that
-            # was consumed by another NPC, etc.)
-            if random.random() < 0.02:
-                self._autopilot_switch_quest()
 
         # ── Periodic inventory / spell / NPC action ──────────────────────
         self._autopilot_action_timer += 1
@@ -215,8 +256,29 @@ class AutopilotMixin:
         psy = self.player['screen_y']
         screen_key = f"{psx},{psy}"
 
-        # Choose NPC type from active quest
-        npc_type = QUEST_NPC_TYPE.get(self.active_quest, DEFAULT_NPC_TYPE)
+        # Pick a random NPC type from the proxy pool.
+        # Random selection (not quest-matched) lets us observe how every NPC type
+        # handles every quest type — a BLACKSMITH on LUMBER, a FARMER on HUNT, etc.
+        npc_type = random.choice(AUTOPILOT_PROXY_TYPES)
+
+        # Find nearest walkable (non-solid) cell — player may be near water/walls
+        if screen_key in self.screens:
+            grid = self.screens[screen_key]['grid']
+            if CELL_TYPES.get(grid[py][px], {}).get('solid', False):
+                found = False
+                for radius in range(1, 6):
+                    for dy in range(-radius, radius + 1):
+                        for dx in range(-radius, radius + 1):
+                            cx, cy = px + dx, py + dy
+                            if (0 <= cx < GRID_WIDTH and 0 <= cy < GRID_HEIGHT
+                                    and not CELL_TYPES.get(grid[cy][cx], {}).get('solid', False)):
+                                px, py = cx, cy
+                                found = True
+                                break
+                        if found:
+                            break
+                    if found:
+                        break
 
         # Create the entity
         proxy = Entity(npc_type, px, py, psx, psy, level=self.player.get('level', 1))
@@ -228,11 +290,19 @@ class AutopilotMixin:
         proxy.props['drops'] = []            # dropping nothing on death/despawn
         proxy.props['edible'] = False        # wolves won't flag it as food
         proxy.props['is_autopilot_proxy'] = True  # invisible to inspection/idle/tree-clearing
-        # Neutralise attack AI but allow fleeing from threats
+        # Combat params depend on quest type.
+        # For combat quests: use warrior-level aggression so the proxy actually fights.
+        # For non-combat quests: passive — flee threats, focus on resource work.
         proxy.props['ai_params'] = dict(proxy.props.get('ai_params', {}))
-        proxy.props['ai_params']['aggressiveness'] = 0.0
-        proxy.props['ai_params']['combat_chance']  = 0.0
-        proxy.props['ai_params']['flee_chance']    = 0.95  # Almost always flee from hostiles
+        _combat_quests = ('HUNT', 'SLAY', 'COMBAT_HOSTILE', 'COMBAT_ALL')
+        if self.active_quest in _combat_quests:
+            proxy.props['ai_params']['aggressiveness'] = 0.6
+            proxy.props['ai_params']['combat_chance']  = 0.5
+            proxy.props['ai_params']['flee_chance']    = 0.05
+        else:
+            proxy.props['ai_params']['aggressiveness'] = 0.1
+            proxy.props['ai_params']['combat_chance']  = 0.0
+            proxy.props['ai_params']['flee_chance']    = 0.85
 
         # ── Real stats so damage is visible; hunger/thirst kept high to
         #    avoid those systems limiting the session.  HP is restored
@@ -247,11 +317,19 @@ class AutopilotMixin:
         proxy.facing = self.player.get('facing', 'down')
 
         # ── Seed proxy inventory from player ──────────────────────────────
+        # Only seed resource/consumable items — not tools, spells, or actions.
+        # Seeding tools causes the NPC AI to "consume" them during proxy actions,
+        # which the sync then removes from the player's real inventory.
         proxy.inventory = {}
-        for cat in ('items', 'tools'):
-            src = getattr(self.inventory, cat, {})
-            for item_name, count in src.items():
-                proxy.inventory[item_name] = proxy.inventory.get(item_name, 0) + count
+        for item_name, count in self.inventory.items.items():
+            item_def = ITEMS.get(item_name, {})
+            if item_def.get('is_tool') or item_def.get('is_spell') or item_def.get('is_action'):
+                continue
+            proxy.inventory[item_name] = count
+        # Baseline snapshot: sync compares proxy-current vs proxy-last-sync,
+        # not proxy vs player — prevents crafted/bought items from being reversed.
+        proxy._sync_baseline = dict(proxy.inventory)
+        proxy.quest_nav_target = None   # cleared; set by nudge once quest is active
 
         # ── Register entity ───────────────────────────────────────────────
         entity_id = self.next_entity_id
@@ -275,7 +353,7 @@ class AutopilotMixin:
         # Initial quest nudge
         self._autopilot_nudge_quest_target(proxy)
 
-        print(f"[Autopilot] Proxy {npc_type} spawned (id={entity_id}) at ({px},{py})")
+        print(f"[Autopilot] Proxy {npc_type} spawned (id={entity_id}) for {self.active_quest} at ({px},{py})")
 
     def _autopilot_disengage(self):
         """Despawn proxy NPC and restore player position from its last location."""
@@ -410,43 +488,42 @@ class AutopilotMixin:
 
     def _sync_inventory_to_player(self, proxy):
         """Copy proxy entity inventory → player Inventory object.
-        Handles both plain item dicts (proxy) and the Inventory class (player).
-        Only syncs items/tools; magic stays on player."""
+
+        Uses a BASELINE snapshot so that items the player acquired directly
+        (crafting, buying, spells) are never reversed by the sync.
+
+        Only syncs items dict; magic/actions/followers stay on player.
+        Tools live in self.inventory.items now — no separate tools sync needed.
+        """
         if not hasattr(proxy, 'inventory'):
             return
 
-        # Build a combined flat dict from player items + tools
-        player_flat = {}
-        for cat in ('items', 'tools'):
-            for item_name, count in getattr(self.inventory, cat, {}).items():
-                player_flat[item_name] = count
+        proxy_current  = dict(proxy.inventory)
+        proxy_baseline = getattr(proxy, '_sync_baseline', {})
 
-        proxy_flat = dict(proxy.inventory)
-
-        # Find differences and apply them
-        all_keys = set(player_flat) | set(proxy_flat)
+        # Apply only the deltas the PROXY itself caused (resource gain/loss).
+        # Items added directly to player inventory (crafting, loot) are untouched.
+        all_keys = set(proxy_current) | set(proxy_baseline)
         for key in all_keys:
-            old_count = player_flat.get(key, 0)
-            new_count = proxy_flat.get(key, 0)
-            delta = new_count - old_count
+            old = proxy_baseline.get(key, 0)
+            new = proxy_current.get(key, 0)
+            delta = new - old
             if delta == 0:
                 continue
             if delta > 0:
                 self.inventory.add_item(key, delta)
             else:
-                # Remove items (best-effort)
-                item_info = ITEMS.get(key, {})
-                if item_info.get('is_tool'):
-                    cat_dict = self.inventory.tools
-                else:
-                    cat_dict = self.inventory.items
-                if key in cat_dict:
-                    cat_dict[key] = max(0, cat_dict[key] + delta)
-                    if cat_dict[key] == 0:
-                        del cat_dict[key]
+                # Proxy lost the item — mirror removal in player inventory
+                if key in self.inventory.items:
+                    self.inventory.items[key] = max(0, self.inventory.items[key] + delta)
+                    if self.inventory.items[key] == 0:
+                        del self.inventory.items[key]
+                        for i, slot in enumerate(self.inventory.tool_slots):
+                            if slot == key:
+                                self.inventory.tool_slots[i] = None
 
-        # Keep proxy in sync so next diff is relative to current state
-        proxy.inventory = dict(proxy_flat)
+        # Advance baseline to current proxy state for next sync
+        proxy._sync_baseline = proxy_current
 
     # ── Quest target steering ─────────────────────────────────────────────────
 
@@ -489,69 +566,69 @@ class AutopilotMixin:
         if quest.status != 'active':
             self.loreEngine(quest)
         if quest.status != 'active':
+            # No target found in loaded zones — explore adjacent zones to load them.
+            # Once an adjacent zone is entered and generated, loreEngine will find
+            # targets there on the next nudge cycle.
+            self._autopilot_explore_for_target(proxy)
             return
 
         screen_key = f"{proxy.screen_x},{proxy.screen_y}"
 
         # ── Combat quests always target entities ───────────────────────
         combat_quests = ('HUNT', 'SLAY', 'COMBAT_HOSTILE', 'COMBAT_ALL')
+        # Combat quests: the proxy's NPC AI handles combat naturally via quest_target.
+        # Just ensure it's in the right zone; zone-crossing is handled below.
         if self.active_quest in combat_quests:
             if quest.target_entity_id and quest.target_entity_id in self.entities:
                 target_entity = self.entities[quest.target_entity_id]
                 target_sk = f"{target_entity.screen_x},{target_entity.screen_y}"
-                if target_sk == screen_key:
-                    proxy.current_target = quest.target_entity_id
-                    proxy.target_type = 'hostile'
-                    proxy.ai_state = 'targeting'
-                    proxy.ai_state_timer = 3
-                else:
+                proxy.quest_target = quest.target_entity_id
+                if target_sk != screen_key:
                     self._nudge_toward_zone(proxy, target_entity.screen_x,
                                             target_entity.screen_y, screen_key)
             return
 
-        # ── Non-combat quests (FARM, LUMBER, MINE, GATHER, EXPLORE, etc.)
-        # 90% of the time: let the proxy wander and execute natural NPC
-        # behavior (farming, chopping, mining).  The behavior_config from
-        # the entity type handles the actual work.
-        # 10% of the time: set a cross-zone travel target to encourage
-        # the proxy to explore new areas.
-        # Exception: SEARCH and RESCUE always travel toward target zone.
-        
-        travel_quests = ('SEARCH', 'RESCUE', 'EXPLORE')
-        force_travel = self.active_quest in travel_quests
-        
-        if not force_travel and random.random() < 0.65:
-            # Natural behavior mode — just make sure proxy is wandering
-            # so its behavior_config fires on the next tick % 60 cycle.
-            if proxy.ai_state == 'targeting':
-                # Only clear targeting if it was a quest-assigned target,
-                # not a reactive one (hostile, etc.)
-                if proxy.target_type in ('resource', 'entity', None):
-                    proxy.ai_state = 'wandering'
-                    proxy.current_target = None
-                    proxy.ai_state_timer = 2
-            return
-
-        # ── 10% travel nudge: pick a target from a nearby zone ─────────
+        # ── Cell quests: set quest_nav_target (highest-priority nav in npc_ai.py) ─
         if quest.target_cell:
             tsx, tsy, tx, ty = quest.target_cell
-            target_sk = f"{tsx},{tsy}"
-            if target_sk == screen_key:
-                # Already in the target zone — let natural behavior handle it
-                proxy.ai_state = 'wandering'
-                proxy.current_target = None
-                proxy.ai_state_timer = 2
-            else:
-                self._nudge_toward_zone(proxy, tsx, tsy, screen_key)
+            # Set quest_nav_target — this is the highest-priority keeper target in
+            # npc_ai.py and is immune to resets from _try_complete_assigned_quest.
+            proxy.quest_nav_target = (tsx, tsy, tx, ty)
+
+        # ── Combat quests: set quest_target so NPC combat AI handles fighting ─
         elif quest.target_entity_id and quest.target_entity_id in self.entities:
             target_entity = self.entities[quest.target_entity_id]
             target_sk = f"{target_entity.screen_x},{target_entity.screen_y}"
+            # Point the proxy at the target entity via its native quest_target field.
+            proxy.quest_target = quest.target_entity_id
             if target_sk != screen_key:
                 self._nudge_toward_zone(proxy, target_entity.screen_x,
                                         target_entity.screen_y, screen_key)
-        else:
-            # No target — let it wander naturally
-            proxy.ai_state = 'wandering'
+
+    def _autopilot_explore_for_target(self, proxy):
+        """When loreEngine can't find a target, explore to load new zones.
+
+        Pushes proxy toward the nearest unloaded adjacent zone.  Once the proxy
+        crosses the zone boundary, the new zone is generated and loreEngine will
+        find targets there on the next nudge.  If all adjacent zones are already
+        loaded, nudge toward a random cardinal direction to keep the proxy moving.
+        """
+        screen_key = f"{proxy.screen_x},{proxy.screen_y}"
+        candidates = [
+            (proxy.screen_x + 1, proxy.screen_y),
+            (proxy.screen_x - 1, proxy.screen_y),
+            (proxy.screen_x,     proxy.screen_y + 1),
+            (proxy.screen_x,     proxy.screen_y - 1),
+        ]
+        random.shuffle(candidates)
+        # Prefer unloaded zones (they will be generated on entry)
+        for asx, asy in candidates:
+            if f"{asx},{asy}" not in self.screens:
+                self._nudge_toward_zone(proxy, asx, asy, screen_key)
+                return
+        # All adjacent zones loaded; nudge toward the first cardinal direction anyway
+        asx, asy = candidates[0]
+        self._nudge_toward_zone(proxy, asx, asy, screen_key)
 
     def _nudge_toward_zone(self, proxy, target_sx, target_sy, screen_key):
         """Set proxy target toward the center-corridor exit that leads to (target_sx, target_sy).
@@ -601,34 +678,61 @@ class AutopilotMixin:
         proxy.ai_state = 'targeting'
         proxy.ai_state_timer = 3
 
-    def _autopilot_switch_quest(self):
-        """Switch the autopilot to a random different quest type.
+    def _autopilot_advance_quest(self):
+        """Advance to the next quest type in the ordered cycle.
 
-        Picks from all available quest types (excluding COMBAT_ALL unless
-        friendly fire is on), skipping the current quest so it always
-        actually changes.
+        Cycles through AUTOPILOT_QUEST_ORDER sequentially so the autopilot
+        works through all quest types in a predictable order. Never skips
+        mid-quest — only called on completion or timeout.
         """
-        available = []
-        for qt in self.quests:
-            if qt == self.active_quest:
-                continue
-            # Skip COMBAT_ALL when friendly fire is off
-            if qt == 'COMBAT_ALL' and not self.player.get('friendly_fire', False):
-                continue
-            available.append(qt)
-
-        if not available:
+        # Build valid cycle: only quests that exist and aren't COMBAT_ALL without FF
+        cycle = [q for q in AUTOPILOT_QUEST_ORDER
+                 if q in self.quests
+                 and not (q == 'COMBAT_ALL' and not self.player.get('friendly_fire', False))]
+        if not cycle:
             return
 
         old = self.active_quest
-        self.active_quest = random.choice(available)
+        # Find current position and step forward one
+        try:
+            cur_idx = cycle.index(self.active_quest) if self.active_quest in cycle else -1
+        except ValueError:
+            cur_idx = -1
+        next_idx = (cur_idx + 1) % len(cycle)
+        self.active_quest = cycle[next_idx]
+        self._autopilot_quest_ticks = 0
 
-        # Clear stale target from the previous quest so the next nudge
-        # picks a fresh target for the new quest type.
+        # Clear stale target from the previous quest (also resets damage tracking)
         if old and old in self.quests:
-            self.quests[old].clear_target()
+            old_q = self.quests[old]
+            old_q.clear_target()
+            old_q._proxy_damaged_target = False
 
-        print(f"[Autopilot] Quest switch: {old} → {self.active_quest}")
+        # Clear quest nav target on the old proxy before despawning
+        if self.autopilot_proxy_id is not None:
+            old_proxy = self.entities.get(self.autopilot_proxy_id)
+            if old_proxy:
+                old_proxy.quest_nav_target = None
+
+        # Clear the new quest's stale game-start target so loreEngine re-assigns
+        # it near the proxy's current position on the first nudge cycle.
+        new_quest = self.quests.get(self.active_quest)
+        if new_quest:
+            new_quest.clear_target()
+
+        # Always respawn with a fresh random proxy type on quest advance.
+        # This lets each quest run with a different NPC role so we can observe
+        # how different types handle each quest (e.g. BLACKSMITH on LUMBER).
+        if self.autopilot_proxy_id is not None:
+            self._autopilot_disengage()
+            # _autopilot_disengage sets autopilot=False (designed for player takeover),
+            # but here we're just swapping proxy types — keep autopilot running.
+            self.autopilot = True
+        print(f"[Autopilot] Quest advance: {old} → {self.active_quest}")
+
+    # Keep old name as alias so any remaining call sites don't break
+    def _autopilot_switch_quest(self):
+        self._autopilot_advance_quest()
 
     # ── Simulated input helpers ───────────────────────────────────────────────
 
@@ -708,23 +812,36 @@ class AutopilotMixin:
     # ── Periodic random actions ────────────────────────────────────────────────
 
     def _autopilot_do_action(self, proxy):
-        """Randomly perform one of: craft available recipe, change selected tool,
-        use a spell, drop an item, or inspect a nearby NPC."""
+        """Randomly perform one inventory/action/NPC action to exercise new systems."""
         # Don't start a new action while a queued input sequence is in flight
         if self._ap_input_queue:
             return
         # Prioritize crafting whenever a recipe is available
         if self._autopilot_try_craft():
             return
-        action = random.choice(['change_tool', 'use_spell', 'drop_item', 'npc_interact'])
+        action = random.choice([
+            'change_tool', 'use_spell', 'drop_item', 'npc_interact',
+            'use_action', 'hotbar_number', 'assign_tool_slot', 'equip_gear',
+            'gift_npc',
+        ])
         if action == 'change_tool':
             self._autopilot_change_tool()
         elif action == 'use_spell':
             self._autopilot_use_spell()
         elif action == 'drop_item':
             self._autopilot_drop_item(proxy)
-        else:
+        elif action == 'npc_interact':
             self._autopilot_try_npc_interact(proxy)
+        elif action == 'use_action':
+            self._autopilot_use_action()
+        elif action == 'hotbar_number':
+            self._autopilot_use_hotbar_number()
+        elif action == 'assign_tool_slot':
+            self._autopilot_assign_tool_slot()
+        elif action == 'equip_gear':
+            self._autopilot_equip_gear()
+        elif action == 'gift_npc':
+            self._autopilot_try_gift_npc(proxy)
 
     def _autopilot_try_craft(self):
         """Queue a crafting sequence: C → click slot → Space (with human delays).
@@ -765,13 +882,14 @@ class AutopilotMixin:
 
 
     def _autopilot_change_tool(self):
-        """Select a random available tool from the player's tool inventory."""
-        tools = list(self.inventory.tools.keys())
-        if not tools:
+        """Select a random filled tool slot by pressing its number key."""
+        filled = [(i, item) for i, item in enumerate(self.inventory.tool_slots) if item is not None]
+        if not filled:
             return
-        chosen = random.choice(tools)
-        self.inventory.selected['tools'] = chosen
-        print(f"[Autopilot] Tool → {chosen}")
+        slot_idx, item_name = random.choice(filled)
+        self.inventory.selected_tool_slot_idx = slot_idx
+        self.inventory.selected['tools'] = item_name
+        print(f"[Autopilot] Tool slot {slot_idx+1} → {item_name}")
 
     def _autopilot_use_spell(self):
         """Select a spell and queue an L key press to cast it."""
@@ -840,6 +958,205 @@ class AutopilotMixin:
                 self._ap_queue(self.handle_npc_quest_assign, d1,
                                f"Shift+A assign {self.active_quest} → {e.type}(id={eid})")
 
+    def _ap_inventory_slot_pixel(self, target_category, item_name):
+        """Return screen pixel centre (x, y) of item_name in target_category panel.
+        Mirrors the layout from draw_inventory_panels / handle_inventory_click.
+        Returns None if not visible."""
+        slot_size = CELL_SIZE
+        start_x = 10
+        start_y = SCREEN_HEIGHT - 90
+        categories = ['tools', 'equipment', 'items', 'magic', 'actions', 'followers', 'crafting']
+        y_offset = 0
+        slots_per_row = max(1, (SCREEN_WIDTH - 20) // (slot_size + 2))
+        for cat in categories:
+            if cat not in self.inventory.open_menus:
+                continue
+            items = (self.inventory.get_craftable_recipes() if cat == 'crafting'
+                     else self.inventory.get_item_list(cat))
+            if not items:
+                continue
+            if cat == target_category:
+                for i, (iname, _) in enumerate(items):
+                    if iname == item_name:
+                        row = i // slots_per_row
+                        col = i % slots_per_row
+                        sx = start_x + col * (slot_size + 2) + slot_size // 2
+                        sy = (start_y - y_offset) - row * (slot_size + 15) + slot_size // 2
+                        return (sx, sy)
+                return None
+            y_offset += slot_size + 15
+        return None
+
+    def _ap_click_inventory_item(self, category, item_name):
+        """Callable: compute pixel pos for item_name in category and post a click."""
+        pos = self._ap_inventory_slot_pixel(category, item_name)
+        if pos:
+            pygame.event.post(self._ap_click(pos[0], pos[1]))
+        else:
+            print(f"[AP] inventory slot '{item_name}' in '{category}' not visible — skipping")
+
+    def _autopilot_use_action(self):
+        """Select a random action from the actions panel and execute it via Space."""
+        actions = list(self.inventory.actions.keys())
+        if not actions:
+            return
+        # Prefer non-combat actions to avoid disrupting world state
+        safe = [a for a in actions if a not in ('attack', 'shove')]
+        chosen = random.choice(safe) if safe else random.choice(actions)
+        d1 = random.randint(5, 12)
+        d2 = random.randint(5, 10)
+        d3 = random.randint(5, 10)
+
+        def _select_action():
+            self.inventory.selected['actions'] = chosen
+            self.inventory.open_menus.add('actions')
+
+        self._ap_queue(_select_action,                    d1,        f"select action '{chosen}'")
+        self._ap_queue(self._ap_key(pygame.K_SPACE),     d1 + d2,   f"execute action '{chosen}' via Space")
+        self._ap_queue(self.inventory.close_all_menus,   d1+d2+d3,  "close menus post-action")
+
+    def _autopilot_use_hotbar_number(self):
+        """Press a number key (no menus open) to activate a filled tool slot."""
+        filled = [(i, item) for i, item in enumerate(self.inventory.tool_slots)
+                  if item is not None]
+        if not filled:
+            return
+        slot_idx, item_name = random.choice(filled)
+        num_keys = [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4, pygame.K_5,
+                    pygame.K_6, pygame.K_7, pygame.K_8, pygame.K_9]
+        if slot_idx >= len(num_keys):
+            return
+        key = num_keys[slot_idx]
+        d1 = random.randint(5, 15)
+        # Menus should already be closed by autopilot cleanup before this fires
+        self._ap_queue(self._ap_key(key), d1,
+                       f"hotkey {slot_idx+1} → activate '{item_name}'")
+
+    def _autopilot_assign_tool_slot(self):
+        """Reassign a tool slot: open T+I, press number to clear+pending, click item."""
+        # Only run if we have assignable items beyond basic resources
+        assignable = [
+            n for n, v in self.inventory.items.items()
+            if v > 0 and n not in ('gold',)
+        ]
+        if not assignable:
+            return
+        item_name = random.choice(assignable)
+        # Pick first empty slot, else a random one
+        empty = [i for i, s in enumerate(self.inventory.tool_slots) if s is None]
+        slot_idx = empty[0] if empty else random.randint(0, 8)
+        num_keys = [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4, pygame.K_5,
+                    pygame.K_6, pygame.K_7, pygame.K_8, pygame.K_9]
+        if slot_idx >= len(num_keys):
+            slot_idx = 0
+        key = num_keys[slot_idx]
+
+        d1 = random.randint(5, 10)
+        d2 = random.randint(5, 10)
+        d3 = random.randint(8, 15)
+        d4 = random.randint(8, 15)
+        d5 = random.randint(5, 10)
+
+        self._ap_queue(self._ap_key(pygame.K_t), d1,
+                       "open T panel for slot reassign")
+        self._ap_queue(self._ap_key(pygame.K_i), d1 + d2,
+                       "open I panel for slot reassign")
+        # Number key while T is open: clear slot + mark pending
+        self._ap_queue(self._ap_key(key),        d1+d2+d3,
+                       f"press {slot_idx+1} to clear+pending slot {slot_idx}")
+        # Click the item in I panel to assign it
+        self._ap_queue(
+            lambda n=item_name: self._ap_click_inventory_item('items', n),
+            d1+d2+d3+d4,
+            f"click '{item_name}' to assign to slot {slot_idx}"
+        )
+        self._ap_queue(self.inventory.close_all_menus, d1+d2+d3+d4+d5, "close menus")
+
+    def _autopilot_equip_gear(self):
+        """Equip an item with an equipment_slot property to its named gear slot."""
+        equippable = [
+            n for n, v in self.inventory.items.items()
+            if v > 0 and ITEMS.get(n, {}).get('equipment_slot')
+        ]
+        if not equippable:
+            return
+        item_name  = random.choice(equippable)
+        slot_name  = ITEMS[item_name]['equipment_slot']
+        current    = self.inventory.equipment_slots.get(slot_name)
+        if current == item_name:
+            return  # Already equipped — skip
+        d1 = random.randint(5, 15)
+
+        def _do_equip():
+            self.inventory.equip_to_equipment_slot(slot_name, item_name, 'items')
+            print(f"[Autopilot] Equip {item_name} → {slot_name}")
+
+        self._ap_queue(_do_equip, d1, f"equip '{item_name}' to '{slot_name}'")
+
+    def _autopilot_try_gift_npc(self, proxy):
+        """If an NPC is inspected and we have surplus items, offer a gift (Shift+G)."""
+        if not self.inspected_npc:
+            return
+        # Need at least one non-essential item to give
+        giveable = [n for n, v in self.inventory.items.items()
+                    if v > 0 and not ITEMS.get(n, {}).get('is_tool')
+                    and not ITEMS.get(n, {}).get('is_spell')
+                    and not ITEMS.get(n, {}).get('is_action')
+                    and n not in ('gold',)]
+        if not giveable:
+            return
+        d1 = random.randint(8, 18)
+        self._ap_queue(
+            self._ap_key(pygame.K_g, pygame.KMOD_LSHIFT),
+            d1,
+            f"Shift+G gift to NPC id={self.inspected_npc}"
+        )
+
+    # Cell types the proxy can harvest/clear (excludes structures like HOUSE, CAMP, CAVE)
+    _CHOPPABLE = frozenset(['TREE1', 'TREE2', 'CACTUS', 'BUSH'])
+    _MINABLE   = frozenset(['STONE', 'IRON_ORE'])
+    _PLANTABLE = frozenset(['SOIL'])
+    _TILLABLE  = frozenset(['DIRT', 'GRASS', 'SAND'])
+    _CROPPABLE = frozenset(['CARROT1', 'CARROT2', 'CARROT3'])
+
+    def _autopilot_try_harvest_cell(self, proxy, tx, ty):
+        """Harvest the specific quest target cell at (tx, ty).
+
+        Full-stop behavior: proxy stops in place, faces the target cell,
+        executes the harvest action. No position movement is applied.
+        (tx, ty) must be directly adjacent to the proxy (dist == 1).
+        """
+        # Hard adjacency guard — only act on cells immediately adjacent
+        dist = abs(tx - int(proxy.x)) + abs(ty - int(proxy.y))
+        if dist != 1:
+            return
+
+        screen_key = f"{proxy.screen_x},{proxy.screen_y}"
+        if screen_key not in self.screens:
+            return
+        grid = self.screens[screen_key]['grid']
+        if not (0 <= ty < len(grid) and 0 <= tx < len(grid[0])):
+            return
+
+        # Face the target cell
+        proxy.update_facing_toward(tx, ty)
+
+        cell = grid[ty][tx]
+        print(f"[AP] harvest_cell: {cell} at ({tx},{ty}) proxy=({int(proxy.x)},{int(proxy.y)})")
+
+        if cell in self._CHOPPABLE:
+            self.try_chop_tree(proxy, screen_key)
+        elif cell in self._MINABLE:
+            self.try_mine_rock(proxy, screen_key)
+        elif cell in self._CROPPABLE:
+            if hasattr(self, 'try_harvest_crop'):
+                self.try_harvest_crop(proxy, screen_key)
+        elif cell in self._PLANTABLE:
+            self.try_plant_seed(proxy, screen_key)
+        elif cell in self._TILLABLE:
+            if hasattr(self, 'try_till_soil'):
+                self.try_till_soil(proxy, screen_key)
+
     def _autopilot_try_clear_obstacle(self, proxy):
         """When the proxy is stuck in 'targeting' state, scan adjacent cells for
         harvestable solid obstacles (trees, stone, iron ore) and clear them.
@@ -856,34 +1173,42 @@ class AutopilotMixin:
         screen = self.screens[screen_key]
         grid = screen['grid']
 
-        tree_adjacent = False
-        rock_adjacent = False
+        chop_target = None
+        mine_target = None
         for dx, dy in [(0, -1), (0, 1), (-1, 0), (1, 0)]:
             cx, cy = int(proxy.x) + dx, int(proxy.y) + dy
             if not (0 <= cx < GRID_WIDTH and 0 <= cy < GRID_HEIGHT):
                 continue
             cell = grid[cy][cx]
-            if cell in ('TREE1', 'TREE2'):
-                tree_adjacent = True
-            elif cell in ('STONE', 'IRON_ORE'):
-                rock_adjacent = True
+            if cell in self._CHOPPABLE and chop_target is None:
+                chop_target = (cx, cy, cell)
+            elif cell in self._MINABLE and mine_target is None:
+                mine_target = (cx, cy, cell)
 
-        if tree_adjacent:
+        if chop_target:
+            cx, cy, cell = chop_target
+            proxy.update_facing_toward(cx, cy)
             self.try_chop_tree(proxy, screen_key)
-            print(f"[Autopilot] Obstacle-clear: chopping tree adjacent to proxy "
-                  f"({int(proxy.x)},{int(proxy.y)}) stuck={self._autopilot_pos_stuck_ticks}t")
-        elif rock_adjacent:
+            print(f"[Autopilot] Obstacle-clear: chopping {cell} at ({cx},{cy}) "
+                  f"proxy=({int(proxy.x)},{int(proxy.y)}) stuck={self._autopilot_pos_stuck_ticks}t")
+        elif mine_target:
+            cx, cy, cell = mine_target
+            proxy.update_facing_toward(cx, cy)
             self.try_mine_rock(proxy, screen_key)
-            print(f"[Autopilot] Obstacle-clear: mining rock adjacent to proxy "
-                  f"({int(proxy.x)},{int(proxy.y)}) stuck={self._autopilot_pos_stuck_ticks}t")
+            print(f"[Autopilot] Obstacle-clear: mining {cell} at ({cx},{cy}) "
+                  f"proxy=({int(proxy.x)},{int(proxy.y)}) stuck={self._autopilot_pos_stuck_ticks}t")
 
     def _autopilot_opportunistic_harvest(self, proxy):
-        """Scan the 3×3 area around the proxy for harvestable cells and collect them.
+        """Scan adjacent cells for harvestable resources and collect them.
 
-        Fires every ~30 ticks regardless of movement/ai_state so the proxy
-        accumulates resources while traversing the world.  Trees take priority
+        Fires every ~30 ticks while proxy is stationary.  Trees take priority
         over rocks (lumberjacking yields more varied drops).
         """
+        # Skip if proxy is mid-interpolation — changing facing during movement
+        # causes the smooth movement system to snap the perpendicular axis.
+        if abs(proxy.world_x - proxy.x) + abs(proxy.world_y - proxy.y) > 0.3:
+            return
+
         screen_key = f"{proxy.screen_x},{proxy.screen_y}"
         if screen_key not in self.screens:
             return

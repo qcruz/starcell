@@ -66,74 +66,109 @@ class SpawningMixin:
         # Biome-based spawning probabilities
         spawn_tables = {
             'FOREST': [
-                ('DEER', 0.5, 1, 2),
-                ('WOLF', 0.3, 0, 2),
-                ('SHEEP', 0.2, 0, 1),
+                ('DEER', 0.90, 1, 3),
+                ('WOLF', 0.45, 0, 3),
+                ('SHEEP', 0.55, 0, 2),
+                ('CHICKEN', 0.45, 0, 2),
+                ('BUTTERFLY', 0.90, 1, 4),
+                ('BAT', 0.60, 1, 3),
                 ('FARMER', 0.5, 0, 2),
                 ('LUMBERJACK', 0.6, 1, 2),
                 ('WIZARD', 0.25, 1, 2),
                 ('TRADER', 0.5, 1, 2),
                 ('BLACKSMITH', 0.5, 0, 1),
-                ('GUARD', 0.5, 1, 2),
-                ('BANDIT', 0.1, 0, 1),
-                ('GOBLIN', 0.15, 0, 2),
-                ('TERMITE', 0.4, 0, 2),   # Termites love forests (trees)
-                ('RED_BIRD', 0.6, 1, 3),
-                ('BUTTERFLY', 0.5, 0, 2),
-                ('BLACK_SPIDER', 0.3, 0, 2),
+                ('GUARD', 0.7, 1, 2),
+                ('WARRIOR', 0.35, 0, 1),
+                ('BANDIT', 0.03, 0, 1),
+                ('GOBLIN', 0.07, 0, 1),
+                ('TERMITE', 0.3, 0, 2),
+                ('RED_BIRD', 0.75, 1, 3),
+                ('BLACK_SPIDER', 0.15, 0, 1),
             ],
             'PLAINS': [
-                ('SHEEP', 0.6, 1, 3),
-                ('DEER', 0.4, 0, 2),
-                ('WOLF', 0.2, 0, 1),
+                ('SHEEP', 0.90, 1, 4),
+                ('DEER', 0.75, 0, 3),
+                ('WOLF', 0.3, 0, 2),
+                ('CHICKEN', 0.85, 1, 3),
+                ('BUTTERFLY', 0.90, 1, 4),
+                ('BAT', 0.50, 1, 2),
                 ('FARMER', 0.7, 1, 3),
                 ('LUMBERJACK', 0.3, 0, 1),
                 ('WIZARD', 0.25, 1, 2),
                 ('TRADER', 0.5, 1, 2),
                 ('BLACKSMITH', 0.5, 0, 1),
-                ('GUARD', 0.5, 1, 2),
-                ('BANDIT', 0.1, 0, 1),
-                ('GOBLIN', 0.1, 0, 1),
-                ('TERMITE', 0.2, 0, 1),   # Some termites in plains
-                ('CHICKEN', 0.7, 1, 3),
-                ('RED_BIRD', 0.5, 0, 2),
-                ('BUTTERFLY', 0.6, 1, 3),
+                ('GUARD', 0.7, 1, 2),
+                ('WARRIOR', 0.35, 0, 1),
+                ('BANDIT', 0.03, 0, 1),
+                ('GOBLIN', 0.05, 0, 1),
+                ('TERMITE', 0.15, 0, 1),
+                ('RED_BIRD', 0.65, 0, 2),
             ],
             'DESERT': [
-                ('SHEEP', 0.2, 0, 1),
-                ('DEER', 0.2, 0, 1),
-                ('WOLF', 0.2, 0, 1),
-                ('GOBLIN', 0.35, 0, 2),
-                ('BANDIT', 0.25, 0, 2),
+                ('SHEEP', 0.65, 0, 2),
+                ('DEER', 0.65, 0, 2),
+                ('WOLF', 0.40, 0, 2),
+                ('CHICKEN', 0.45, 0, 1),
+                ('BUTTERFLY', 0.70, 1, 3),
+                ('BAT', 0.60, 1, 3),
+                ('GOBLIN', 0.18, 0, 2),
+                ('BANDIT', 0.07, 0, 1),
                 ('WIZARD', 0.25, 1, 2),
                 ('FARMER', 0.3, 0, 1),
                 ('LUMBERJACK', 0.2, 0, 1),
                 ('MINER', 0.5, 0, 2),
                 ('TRADER', 0.5, 1, 2),
                 ('BLACKSMITH', 0.4, 0, 1),
-                ('GUARD', 0.5, 1, 2),
-                ('BLACK_SPIDER', 0.4, 0, 2),
+                ('GUARD', 0.7, 1, 2),
+                ('WARRIOR', 0.35, 0, 1),
+                ('BLACK_SPIDER', 0.18, 0, 1),
             ],
             'MOUNTAINS': [
-                ('WOLF', 0.6, 1, 3),
-                ('DEER', 0.3, 0, 2),
-                ('SHEEP', 0.2, 0, 1),
-                ('GOBLIN', 0.3, 0, 2),
-                ('BANDIT', 0.15, 0, 2),
+                ('WOLF', 0.9, 1, 4),
+                ('DEER', 0.70, 0, 3),
+                ('SHEEP', 0.55, 0, 2),
+                ('CHICKEN', 0.35, 0, 1),
+                ('BUTTERFLY', 0.80, 1, 3),
+                ('BAT', 0.80, 1, 4),
+                ('GOBLIN', 0.15, 0, 2),
+                ('BANDIT', 0.04, 0, 1),
                 ('WIZARD', 0.25, 1, 2),
                 ('FARMER', 0.2, 0, 1),
                 ('LUMBERJACK', 0.4, 0, 2),
                 ('MINER', 0.7, 1, 3),
                 ('TRADER', 0.5, 1, 2),
                 ('BLACKSMITH', 0.6, 0, 1),
-                ('GUARD', 0.5, 1, 2),
-                ('BLACK_SPIDER', 0.5, 0, 2),
-                ('RED_BIRD', 0.3, 0, 1),
+                ('GUARD', 0.7, 1, 2),
+                ('WARRIOR', 0.40, 0, 2),
+                ('BLACK_SPIDER', 0.22, 0, 1),
+                ('RED_BIRD', 0.55, 0, 2),
             ],
-            'LAKE': []                    # No spawns in lake zones
+            'LAKE': [
+                ('DEER', 0.75, 1, 2),
+                ('SHEEP', 0.55, 0, 2),
+                ('CHICKEN', 0.65, 1, 2),
+                ('BUTTERFLY', 0.90, 1, 4),
+                ('BAT', 0.50, 0, 2),
+                ('RED_BIRD', 0.85, 1, 3),
+                ('WOLF', 0.20, 0, 1),
+            ],
         }
 
         spawn_list = spawn_tables.get(biome_name, [])
+
+        # Filter per-type spawn toggles from game_opts
+        _opts = getattr(self, 'game_opts', None)
+        if _opts:
+            _blocked = set()
+            if not _opts.spawn_wolves:
+                _blocked.add('WOLF')
+            if not _opts.spawn_bats:
+                _blocked.add('BAT')
+            if not _opts.spawn_goblins:
+                _blocked.update({'GOBLIN', 'BANDIT'})
+            if _blocked:
+                spawn_list = [(t, c, mn, mx) for t, c, mn, mx in spawn_list
+                              if t not in _blocked]
 
         # Distance-based spawn rate reduction: -3% per zone of distance, floor 15%
         _dist = abs(screen_x - self.player['screen_x']) + abs(screen_y - self.player['screen_y'])
@@ -197,6 +232,7 @@ class SpawningMixin:
                             self._give_random_starting_inventory(entity)
                         self.entities[entity_id] = entity
                         self.screen_entities[screen_key].append(entity_id)
+                        self.entities_spawned_total = getattr(self, 'entities_spawned_total', 0) + 1
 
                         break
                 attempts += 1
@@ -223,6 +259,7 @@ class SpawningMixin:
                             entity_id = self.next_entity_id
                             self.next_entity_id += 1
                             self.entities[entity_id] = skeleton
+                            self.entities_spawned_total = getattr(self, 'entities_spawned_total', 0) + 1
 
                             if screen_key not in self.screen_entities:
                                 self.screen_entities[screen_key] = []
@@ -269,6 +306,7 @@ class SpawningMixin:
         entity_id = self.next_entity_id
         self.next_entity_id += 1
         self.entities[entity_id] = entity
+        self.entities_spawned_total = getattr(self, 'entities_spawned_total', 0) + 1
 
         if screen_key not in self.screen_entities:
             self.screen_entities[screen_key] = []
@@ -318,6 +356,9 @@ class SpawningMixin:
 
     def check_raid_event(self, screen_key):
         """Flat percent chance per zone update for a raid to trigger."""
+        _opts = getattr(self, 'game_opts', None)
+        if _opts and not _opts.raids_enabled:
+            return
         if screen_key not in self.screen_entities:
             return
 
@@ -334,6 +375,15 @@ class SpawningMixin:
 
         npcs_over_threshold = human_count - RAID_POPULATION_THRESHOLD
         raid_chance = min(RAID_CHANCE_BASE + npcs_over_threshold * 0.005, 0.10)
+
+        # Each house/stone_house/mineshaft in the zone reduces raid chance (established zones safer)
+        if screen_key in self.screens:
+            grid = self.screens[screen_key]['grid']
+            structure_count = sum(
+                1 for row in grid for cell in row
+                if cell in ('HOUSE', 'STONE_HOUSE', 'MINESHAFT')
+            )
+            raid_chance = max(0.0, raid_chance - structure_count * 0.01)
 
         if random.random() < raid_chance:
             self.trigger_raid(screen_key)
@@ -369,6 +419,20 @@ class SpawningMixin:
 
         screen = self.screens[screen_key]
         grid = screen['grid']
+
+        # Don't spawn in zones that have a miner — miners manage their own caves
+        if screen_key in self.screen_entities:
+            for eid in self.screen_entities[screen_key]:
+                if eid in self.entities and self.entities[eid].type == 'MINER':
+                    return None
+
+        # Enforce 2-cave cap per zone
+        cave_count = sum(
+            1 for row in grid for cell in row
+            if cell in ('CAVE', 'HIDDEN_CAVE')
+        )
+        if cave_count >= 2:
+            return None
 
         valid_positions = []
         for y in range(2, GRID_HEIGHT - 2):
@@ -445,6 +509,7 @@ class SpawningMixin:
             entity_id = self.next_entity_id
             self.next_entity_id += 1
             self.entities[entity_id] = entity
+            self.entities_spawned_total = getattr(self, 'entities_spawned_total', 0) + 1
 
             if screen_key not in self.screen_entities:
                 self.screen_entities[screen_key] = []
@@ -508,6 +573,9 @@ class SpawningMixin:
 
     def check_cave_spawn_hostile(self, screen_key):
         """Check each cave in zone for chance to spawn hostile — bats favored in empty caves"""
+        _opts = getattr(self, 'game_opts', None)
+        if _opts and not _opts.spawn_cave_hostiles:
+            return
         if screen_key not in self.screens:
             return
 
@@ -517,7 +585,7 @@ class SpawningMixin:
         caves = []
         for y in range(GRID_HEIGHT):
             for x in range(GRID_WIDTH):
-                if grid[y][x] in ['CAVE', 'HIDDEN_CAVE', 'MINESHAFT']:
+                if grid[y][x] in ['CAVE', 'HIDDEN_CAVE']:
                     caves.append((x, y))
 
         if not caves:
@@ -551,12 +619,19 @@ class SpawningMixin:
                 self.spawn_cave_hostile(screen_key, cave_x, cave_y)
 
     def spawn_cave_hostile(self, screen_key, cave_x, cave_y):
-        """Spawn a hostile entity from a cave — bats are most common"""
-        if screen_key not in self.screens:
-            return
+        """Spawn a hostile entity inside the cave subscreen (not on the overworld surface).
 
-        screen = self.screens[screen_key]
-        screen_x, screen_y = map(int, screen_key.split(','))
+        Requires the cave interior to already exist (zone_cave_systems populated when
+        a player or NPC first entered the cave).  Skips if no interior exists yet.
+        """
+        structure_key = getattr(self, 'zone_cave_systems', {}).get(screen_key)
+        if not structure_key or structure_key not in self.structures:
+            return  # cave interior not generated yet — nothing to spawn into
+
+        sub_data = self.structures[structure_key]
+        grid = sub_data.get('grid')
+        if not grid:
+            return
 
         roll = random.random()
         if roll < 0.40:
@@ -564,39 +639,50 @@ class SpawningMixin:
         elif roll < 0.60:
             hostile_type = 'GOBLIN'
         elif roll < 0.80:
-            hostile_type = 'WOLF'
+            hostile_type = 'SKELETON'
         else:
             hostile_type = 'BANDIT'
 
         is_flying = ENTITY_TYPES.get(hostile_type, {}).get('flying', False)
         fly_blocked = {'WALL', 'CAVE_WALL', 'DEEP_WATER'}
 
-        for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
-            spawn_x = cave_x + dx
-            spawn_y = cave_y + dy
-
-            if not (0 < spawn_x < GRID_WIDTH - 1 and 0 < spawn_y < GRID_HEIGHT - 1):
-                continue
-
-            cell = screen['grid'][spawn_y][spawn_x]
-            if CELL_TYPES[cell].get('solid', False):
-                if not is_flying or cell in fly_blocked:
+        # Collect walkable positions inside the cave, avoiding the entrance area
+        # (bottom-center rows where the player arrives).
+        entrance_y_min = GRID_HEIGHT - 4
+        entrance_x_mid = GRID_WIDTH // 2
+        candidates = []
+        for y in range(1, GRID_HEIGHT - 1):
+            for x in range(1, GRID_WIDTH - 1):
+                # Skip entrance zone
+                if y >= entrance_y_min and abs(x - entrance_x_mid) <= 3:
                     continue
+                cell = grid[y][x]
+                if CELL_TYPES[cell].get('solid', False):
+                    if not is_flying or cell in fly_blocked:
+                        continue
+                if not self.is_entity_at_position(x, y, structure_key):
+                    candidates.append((x, y))
 
-            if self.is_entity_at_position(spawn_x, spawn_y, screen_key):
-                continue
-
-            entity = Entity(hostile_type, spawn_x, spawn_y, screen_x, screen_y, level=1)
-            entity_id = self.next_entity_id
-            self.next_entity_id += 1
-            self.entities[entity_id] = entity
-
-            if screen_key not in self.screen_entities:
-                self.screen_entities[screen_key] = []
-            self.screen_entities[screen_key].append(entity_id)
-
-            self.zone_has_hostiles[screen_key] = True
+        if not candidates:
             return
+
+        spawn_x, spawn_y = random.choice(candidates)
+        vx, vy = map(int, structure_key.split(','))
+
+        entity = Entity(hostile_type, spawn_x, spawn_y, vx, vy, level=1)
+        entity.in_structure = True
+        entity.structure_key = structure_key
+
+        entity_id = self.next_entity_id
+        self.next_entity_id += 1
+        self.entities[entity_id] = entity
+        self.entities_spawned_total = getattr(self, 'entities_spawned_total', 0) + 1
+
+        if structure_key not in self.screen_entities:
+            self.screen_entities[structure_key] = []
+        self.screen_entities[structure_key].append(entity_id)
+
+        self.zone_has_hostiles[screen_key] = True
 
     # -------------------------------------------------------------------------
     # Night skeleton spawning
@@ -604,6 +690,9 @@ class SpawningMixin:
 
     def check_night_skeleton_spawn(self, screen_key):
         """Check if skeleton should spawn at night (more likely near dropped items)"""
+        _opts = getattr(self, 'game_opts', None)
+        if _opts and not _opts.spawn_skeletons_night:
+            return
         if not self.is_night:
             return
 
@@ -678,6 +767,7 @@ class SpawningMixin:
             entity_id = self.next_entity_id
             self.next_entity_id += 1
             self.entities[entity_id] = skeleton
+            self.entities_spawned_total = getattr(self, 'entities_spawned_total', 0) + 1
 
             if screen_key not in self.screen_entities:
                 self.screen_entities[screen_key] = []
@@ -692,6 +782,9 @@ class SpawningMixin:
 
     def check_termite_spawn(self, screen_key):
         """Check if termite should spawn near trees (prefer FOREST/PLAINS biomes)"""
+        _opts = getattr(self, 'game_opts', None)
+        if _opts and not _opts.spawn_termites:
+            return
         if screen_key not in self.screens:
             return
 
@@ -772,6 +865,7 @@ class SpawningMixin:
             entity_id = self.next_entity_id
             self.next_entity_id += 1
             self.entities[entity_id] = termite
+            self.entities_spawned_total = getattr(self, 'entities_spawned_total', 0) + 1
 
             if screen_key not in self.screen_entities:
                 self.screen_entities[screen_key] = []
@@ -892,32 +986,41 @@ class SpawningMixin:
 
         spawn_tables = {
             'FOREST': [
-                ('DEER', 0.18), ('WOLF', 0.10), ('SHEEP', 0.05),
+                ('DEER', 0.27), ('WOLF', 0.15), ('SHEEP', 0.12), ('CHICKEN', 0.08),
+                ('BUTTERFLY', 0.35), ('BAT', 0.22),
                 ('FARMER', 0.12), ('LUMBERJACK', 0.15),
                 ('TRADER', 0.075), ('GUARD', 0.075),
-                ('BANDIT', 0.025), ('GOBLIN', 0.025),
-                ('RED_BIRD', 0.12), ('BUTTERFLY', 0.10), ('BLACK_SPIDER', 0.06)
+                ('BANDIT', 0.018), ('GOBLIN', 0.018),
+                ('RED_BIRD', 0.12), ('BLACK_SPIDER', 0.04)
             ],
             'PLAINS': [
-                ('SHEEP', 0.20), ('DEER', 0.12), ('WOLF', 0.05),
+                ('SHEEP', 0.30), ('DEER', 0.18), ('WOLF', 0.08), ('CHICKEN', 0.18),
+                ('BUTTERFLY', 0.35), ('BAT', 0.18),
                 ('FARMER', 0.18), ('LUMBERJACK', 0.05),
                 ('TRADER', 0.075), ('GUARD', 0.075),
-                ('BANDIT', 0.025), ('GOBLIN', 0.025),
-                ('CHICKEN', 0.14), ('RED_BIRD', 0.10), ('BUTTERFLY', 0.12)
+                ('BANDIT', 0.018), ('GOBLIN', 0.018),
+                ('RED_BIRD', 0.10)
             ],
             'DESERT': [
-                ('GOBLIN', 0.10), ('BANDIT', 0.07), ('MINER', 0.10),
-                ('SHEEP', 0.05), ('DEER', 0.05), ('WOLF', 0.05),
+                ('SHEEP', 0.15), ('DEER', 0.15), ('WOLF', 0.12), ('CHICKEN', 0.08),
+                ('BUTTERFLY', 0.28), ('BAT', 0.22),
+                ('GOBLIN', 0.07), ('BANDIT', 0.05), ('MINER', 0.10),
                 ('FARMER', 0.07), ('LUMBERJACK', 0.04),
                 ('TRADER', 0.09), ('GUARD', 0.06),
-                ('BLACK_SPIDER', 0.08)
+                ('BLACK_SPIDER', 0.05)
             ],
             'MOUNTAINS': [
-                ('WOLF', 0.18), ('GOBLIN', 0.08), ('MINER', 0.14),
-                ('BANDIT', 0.045), ('DEER', 0.07), ('SHEEP', 0.04),
+                ('WOLF', 0.27), ('DEER', 0.15), ('SHEEP', 0.10), ('CHICKEN', 0.06),
+                ('BUTTERFLY', 0.30), ('BAT', 0.30),
+                ('GOBLIN', 0.06), ('BANDIT', 0.03), ('MINER', 0.14),
                 ('FARMER', 0.03), ('LUMBERJACK', 0.09),
                 ('TRADER', 0.06), ('GUARD', 0.04),
-                ('BLACK_SPIDER', 0.08), ('RED_BIRD', 0.06)
+                ('BLACK_SPIDER', 0.05), ('RED_BIRD', 0.08)
+            ],
+            'LAKE': [
+                ('DEER', 0.25), ('SHEEP', 0.18), ('CHICKEN', 0.20),
+                ('BUTTERFLY', 0.35), ('BAT', 0.18),
+                ('RED_BIRD', 0.28), ('WOLF', 0.08)
             ]
         }
 
@@ -966,6 +1069,7 @@ class SpawningMixin:
                 if entity_type in _HUMANOID_NPC_TYPES:
                     self._give_random_starting_inventory(entity)
                 self.entities[entity_id] = entity
+                self.entities_spawned_total = getattr(self, 'entities_spawned_total', 0) + 1
 
                 if screen_key not in self.screen_entities:
                     self.screen_entities[screen_key] = []

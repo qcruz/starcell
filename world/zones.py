@@ -6,7 +6,7 @@ from constants import (
     MAX_CATCHUP_PER_FRAME, MAX_CYCLES_TO_SIMULATE,
     UPDATE_FREQUENCY, MAX_ZONES_PER_UPDATE,
     NEW_ZONE_INSTANTIATE_CHANCE, ZONE_SOFT_CAP,
-    SKELETON_DAYLIGHT_DAMAGE,
+    SKELETON_DAYLIGHT_DAMAGE, STARVATION_DAMAGE,
     CAMP_HEALING_MULTIPLIER, HOUSE_HEALING_MULTIPLIER,
     NPC_CAMP_PLACE_RATE, ENHANCED_SETTLEMENT_RATE,
     KEEPER_ENTITY_TYPE, KEEPER_ASSIGNMENT_RATE,
@@ -63,9 +63,9 @@ class ZonesMixin:
                    if k[0] == zone_key or self.door_map[k][0] == zone_key]:
             self.door_map.pop(dk, None)
 
-        # --- Enchanted cells (keyed {zone_key: {(x,y): level}}) ---
-        if hasattr(self, 'enchanted_cells'):
-            self.enchanted_cells.pop(zone_key, None)
+        # --- Enchanted cells: preserved on zone unload so they survive zone cycling ---
+        # Do NOT pop enchanted_cells[zone_key] here; enchantments must persist
+        # even when a zone is evicted from memory and later reloaded.
 
         # --- Zone world data ---
         self.screens.pop(zone_key, None)
@@ -286,7 +286,9 @@ class ZonesMixin:
         self.decay_buried_items(zone_key, _decay_factor)
         self.consolidate_dropped_items(zone_key)
         self.consolidate_chests(zone_key)
-        self.assign_zone_keepers(zone_key)
+        _opts = getattr(self, 'game_opts', None)
+        if not _opts or _opts.keeper_assignments:
+            self.assign_zone_keepers(zone_key)
         # Wolf pack check: ~0.5% per update or on the 600-tick sweep
         if self.tick % 600 == 0 or random.random() < 0.005:
             self.assign_wolf_pack_keepers(zone_key)
@@ -302,14 +304,16 @@ class ZonesMixin:
                 'rain_timer': 0,
                 'rain_duration': 0,
             }
+        _opts = getattr(self, 'game_opts', None)
         _zr = self.zone_rain[zone_key]
-        _zr['weather_timer'] += 1
-        if _zr['weather_timer'] >= _zr['weather_cycle']:
-            _zr['weather_timer'] = 0
-            _zr['weather_cycle'] = random.randint(RAIN_FREQUENCY_MIN, RAIN_FREQUENCY_MAX)
-            _zr['is_raining'] = True
-            _zr['rain_duration'] = random.randint(RAIN_DURATION_MIN, RAIN_DURATION_MAX)
-            _zr['rain_timer'] = 0
+        if not _opts or _opts.weather_enabled:
+            _zr['weather_timer'] += 1
+            if _zr['weather_timer'] >= _zr['weather_cycle']:
+                _zr['weather_timer'] = 0
+                _zr['weather_cycle'] = random.randint(RAIN_FREQUENCY_MIN, RAIN_FREQUENCY_MAX)
+                _zr['is_raining'] = True
+                _zr['rain_duration'] = random.randint(RAIN_DURATION_MIN, RAIN_DURATION_MAX)
+                _zr['rain_timer'] = 0
         if _zr['is_raining']:
             _zr['rain_timer'] += 1
             if _zr['rain_timer'] >= _zr['rain_duration']:
@@ -351,14 +355,36 @@ class ZonesMixin:
                     screen['grid'][y][x] = base_cell
                     continue
 
-                # Empty chest decay: chests with no contents revert to base cell
+                # Chest lifecycle: decay with contents, restore background when empty
                 if cell == 'CHEST':
                     chest_key = f"{zone_key}:{x},{y}"
                     contents = self.chest_contents.get(chest_key, {})
-                    if not any(v > 0 for v in contents.values()):
-                        if random.random() < min(1.0, 0.003 * _tp):
-                            screen['grid'][y][x] = base_cell
+                    if any(v > 0 for v in contents.values()):
+                        if random.random() < 0.005 * _tp:
+                            # Dump all contents as dropped items at this position
+                            if zone_key not in self.dropped_items:
+                                self.dropped_items[zone_key] = {}
+                            pos = (x, y)
+                            if pos not in self.dropped_items[zone_key]:
+                                self.dropped_items[zone_key][pos] = {}
+                            for item_name, count in contents.items():
+                                if count > 0:
+                                    self.dropped_items[zone_key][pos][item_name] = (
+                                        self.dropped_items[zone_key][pos].get(item_name, 0) + count
+                                    )
                             self.chest_contents.pop(chest_key, None)
+                            bg = getattr(self, 'chest_backgrounds', {}).pop(chest_key, None)
+                            screen['grid'][y][x] = bg if bg else base_cell
+                    else:
+                        bg = getattr(self, 'chest_backgrounds', {}).pop(chest_key, None)
+                        screen['grid'][y][x] = bg if bg else base_cell
+                        self.chest_contents.pop(chest_key, None)
+                    continue
+                if cell == 'EMPTY_CRATE':
+                    chest_key = f"{zone_key}:{x},{y}"
+                    contents = self.chest_contents.get(chest_key, {})
+                    if any(v > 0 for v in contents.values()):
+                        screen['grid'][y][x] = 'CHEST'
                     continue
 
                 if cell in CELL_TYPES:
@@ -366,29 +392,49 @@ class ZonesMixin:
 
                     if 'grows_to' in cell_info and random.random() < min(1.0, cell_info.get('growth_rate', 0) * _tp):
                         self.set_grid_cell(screen, x, y, cell_info['grows_to'])
-                    elif 'degrades_to' in cell_info and random.random() < min(1.0, cell_info.get('degrade_rate', 0) * _tp * _decay_factor):
-                        if cell == 'COBBLESTONE':
-                            center_x = GRID_WIDTH // 2
-                            center_y = GRID_HEIGHT // 2
-                            on_horizontal_center = abs(y - center_y) <= 2
-                            on_vertical_center = abs(x - center_x) <= 2
-                            if on_horizontal_center or on_vertical_center:
-                                continue
-                            has_structure_neighbor = False
-                            for nx, ny in [(x-1, y), (x+1, y), (x, y-1), (x, y+1)]:
-                                if 0 <= nx < GRID_WIDTH and 0 <= ny < GRID_HEIGHT:
-                                    neighbor_cell = screen['grid'][ny][nx]
-                                    if neighbor_cell in ['HOUSE', 'CAMP', 'CAVE', 'MINESHAFT']:
-                                        has_structure_neighbor = True
-                                        break
-                            if has_structure_neighbor:
-                                continue
+                    elif cell == 'WELL' and _biome == 'DESERT' and random.random() < min(1.0, 0.00002 * _tp):
+                        self.set_grid_cell(screen, x, y, 'DESERT_WELL')
+                    elif 'degrades_to' in cell_info:
+                        _base_rate = cell_info.get('degrade_rate', 0)
+                        _decay_target = cell_info['degrades_to']
 
-                        old_cell = cell
-                        self.set_grid_cell(screen, x, y, cell_info['degrades_to'])
+                        # Carrots decay faster on hostile terrain (cobblestone/sand)
+                        if cell in ('CARROT1', 'CARROT2', 'CARROT3'):
+                            _has_cob = _has_sand = False
+                            for _nx, _ny in ((x-1,y),(x+1,y),(x,y-1),(x,y+1)):
+                                if 0 <= _nx < GRID_WIDTH and 0 <= _ny < GRID_HEIGHT:
+                                    _nc = screen['grid'][_ny][_nx]
+                                    if _nc == 'COBBLESTONE':
+                                        _has_cob = True
+                                    elif _nc == 'SAND':
+                                        _has_sand = True
+                            if _has_cob:
+                                _base_rate *= 50.0
+                            elif _has_sand:
+                                _base_rate *= 10.0
+                                if cell == 'CARROT1':
+                                    _decay_target = 'DIRT'
 
-                        if old_cell == 'HOUSE':
-                            self.process_house_destruction(x, y, zone_key)
+                        if random.random() < min(1.0, _base_rate * _tp * _decay_factor):
+                            if cell == 'COBBLESTONE':
+                                center_x = GRID_WIDTH // 2
+                                center_y = GRID_HEIGHT // 2
+                                if abs(y - center_y) <= 2 or abs(x - center_x) <= 2:
+                                    continue
+                                skip = False
+                                for nx, ny in [(x-1, y), (x+1, y), (x, y-1), (x, y+1)]:
+                                    if 0 <= nx < GRID_WIDTH and 0 <= ny < GRID_HEIGHT:
+                                        if screen['grid'][ny][nx] in ('HOUSE', 'CAMP', 'CAVE', 'MINESHAFT'):
+                                            skip = True
+                                            break
+                                if skip:
+                                    continue
+
+                            old_cell = cell
+                            self.set_grid_cell(screen, x, y, _decay_target)
+
+                            if old_cell == 'HOUSE':
+                                self.process_house_destruction(x, y, zone_key)
 
         # Desert rock/ore formation — SAND slowly solidifies into STONE;
         # existing STONE rarely yields IRON_ORE
@@ -409,9 +455,10 @@ class ZonesMixin:
         }
         base_cell = biome_base_map.get(biome, 'GRASS')
 
+        _flower_patterns = {'FLOWER_PATTERN1', 'FLOWER_PATTERN2', 'FLOWER_PATTERN3'}
         biome_native = {
-            'FOREST': {'GRASS', 'DIRT', 'TREE1', 'TREE2', 'FLOWER', 'BUSH'},
-            'PLAINS': {'GRASS', 'DIRT', 'FLOWER', 'BUSH'},
+            'FOREST': {'GRASS', 'DIRT', 'TREE1', 'TREE2', 'FLOWER', 'BUSH'} | _flower_patterns,
+            'PLAINS': {'GRASS', 'DIRT', 'FLOWER', 'BUSH'} | _flower_patterns,
             'DESERT': {'SAND', 'DIRT', 'BUSH'},
             'MOUNTAINS': {'DIRT', 'STONE', 'GRASS'},
             'TUNDRA': {'DIRT', 'STONE'},
@@ -419,14 +466,19 @@ class ZonesMixin:
         }
         native_cells = biome_native.get(biome, {'GRASS', 'DIRT'})
 
-        protected_cells = {'HOUSE', 'CAVE', 'MINESHAFT', 'CAMP', 'CHEST', 'WALL',
+        protected_cells = {'HOUSE', 'CAVE', 'MINESHAFT', 'CAMP', 'CHEST', 'EMPTY_CRATE', 'WALL',
                            'COBBLESTONE', 'WATER', 'DEEP_WATER',
                            'CAVE_FLOOR', 'CAVE_WALL', 'STAIRS_UP',
                            'STAIRS_DOWN', 'HIDDEN_CAVE', 'SOIL', 'CARROT1', 'CARROT2', 'CARROT3',
-                           'CLIFF', 'STONE_HOUSE', 'BUSH'}
+                           'CLIFF', 'STONE_HOUSE', 'BUSH', 'GRAVESTONE',
+                           # New permanent cells
+                           'BROKEN_GRAVESTONE', 'LOCKED_CHEST', 'OPEN_CHEST',
+                           'BOOKSHELF', 'WOOD_CHAIR', 'WOOD_TABLE', 'BED_WHITE',
+                           'WATER_TROUGH', 'SMALL_POTTED_PLANT', 'BLUE_MUSHROOM',
+                           'APPLE_CRATE'}
 
         foreign_revert = {
-            'DESERT': {'GRASS', 'TREE1', 'TREE2', 'FLOWER', 'DIRT'},
+            'DESERT': {'GRASS', 'TREE1', 'TREE2', 'FLOWER'},
             'FOREST': {'SAND'},
             'PLAINS': {'SAND'},
             'MOUNTAINS': {'SAND'},
@@ -445,8 +497,25 @@ class ZonesMixin:
                         screen['grid'][y][x] = base_cell
                     continue
 
-                if cell in revert_targets and random.random() < 0.003:
-                    screen['grid'][y][x] = base_cell
+                if cell in revert_targets:
+                    # Count how many cardinal neighbours are native to this biome.
+                    # More native neighbours → faster revert (cell is stranded/surrounded).
+                    _native_adj = sum(
+                        1 for ddx, ddy in ((0, -1), (0, 1), (-1, 0), (1, 0))
+                        if 0 <= x + ddx < GRID_WIDTH and 0 <= y + ddy < GRID_HEIGHT
+                        and screen['grid'][y + ddy][x + ddx] in native_cells
+                    )
+                    if _native_adj >= 3:
+                        _revert_r = 0.12   # Deep in foreign territory — revert quickly
+                    elif _native_adj == 2:
+                        _revert_r = 0.035
+                    else:
+                        _revert_r = 0.003  # Edge cell — slow revert (biome boundary)
+                    # Rain washes sand away quickly in non-desert biomes
+                    if cell == 'SAND' and biome != 'DESERT' and _zone_is_raining:
+                        _revert_r = max(_revert_r, 0.08)
+                    if random.random() < _revert_r:
+                        screen['grid'][y][x] = base_cell
                     continue
 
                 # Revert stray interior/placeable cells that shouldn't appear in overworld
@@ -474,6 +543,14 @@ class ZonesMixin:
                     if screen['grid'][y][x] == 'SAND' and random.random() < min(1.0, 0.0000008 * _tp):
                         self.set_grid_cell(screen, x, y, 'BUSH')
 
+        # Rare flower pattern growth from grass (forest/plains only)
+        if biome in ('FOREST', 'PLAINS'):
+            _fp_variants = ('FLOWER_PATTERN1', 'FLOWER_PATTERN2', 'FLOWER_PATTERN3')
+            for y in range(1, GRID_HEIGHT - 1):
+                for x in range(1, GRID_WIDTH - 1):
+                    if screen['grid'][y][x] == 'GRASS' and random.random() < min(1.0, 0.000008 * _tp):
+                        self.set_grid_cell(screen, x, y, random.choice(_fp_variants))
+
         # === ENTITY UPDATES ===
         if getattr(self, 'autopilot', False) and zone_key in self.screen_entities:
             for eid in self.screen_entities[zone_key]:
@@ -486,6 +563,13 @@ class ZonesMixin:
 
         # Extra decay passes for distant zones: 1 extra per 4 zones beyond dist 8, cap 4
         _extra_decay = max(0, min(4, (_dist_from_player - 8) // 4)) if _dist_from_player > 8 else 0
+
+        # Extra decay from zone overcrowding: 1 extra per 4 entities above 8, cap 3
+        _zone_pop = sum(
+            1 for eid in self.screen_entities.get(zone_key, [])
+            if eid in self.entities and self.entities[eid].is_alive()
+        )
+        _pop_extra = max(0, min(3, (_zone_pop - 8) // 4)) if _zone_pop > 8 else 0
 
         if zone_key in self.screen_entities:
             entities_to_remove = []
@@ -522,24 +606,43 @@ class ZonesMixin:
 
 
                 # Age entities every 600 ticks (accelerated during time pass)
+                _opts = getattr(self, 'game_opts', None)
                 age_interval = max(1, int(600 / _tp))
-                if self.tick % age_interval == 0 and entity.type != 'SKELETON':
-                    entity.age += 1
+                if (not _opts or _opts.npc_aging):
+                    if self.tick % age_interval == 0 and entity.type not in ('SKELETON', 'SKELETON_double'):
+                        entity.age += 1
+
+                # Pre-set disabled stats to max so decay_stats doesn't drain them
+                if _opts and not _opts.hunger_decay:
+                    entity.hunger = entity.max_hunger
+                if _opts and not _opts.thirst_decay:
+                    entity.thirst = entity.max_thirst
+                _pre_hp_decay = entity.health
 
                 entity.decay_stats()
-                for _ in range(_extra_decay):
+                for _ in range(_extra_decay + _pop_extra):
                     entity.decay_stats()
+
+                # Restore health lost to disabled damage sources
+                if _opts:
+                    _n = 1 + _extra_decay + _pop_extra
+                    if not _opts.starvation_damage and entity.hunger <= 0:
+                        entity.health = min(entity.max_health, entity.health + STARVATION_DAMAGE * _n)
+                    if not _opts.old_age_damage:
+                        if hasattr(entity, 'age') and hasattr(entity, 'max_age') and entity.age > entity.max_age:
+                            entity.health = max(entity.health, _pre_hp_decay)
 
                 # NPC item consumption: remove full stack of a random item
                 if random.random() < 0.25 and entity.inventory:
                     item = random.choice(list(entity.inventory.keys()))
                     count = entity.inventory.pop(item)
                     if item in ('meat', 'carrot', 'cooked_meat', 'stew', 'bones'):
-                        if (self.tick - getattr(entity, 'last_attacked_tick', 0)) > 120:
+                        if (self.tick - getattr(entity, 'last_attacked_tick', 0)) > 60:
                             entity.health = min(entity.max_health, entity.health + 5 * min(count, 10))
 
-                # Skeletons burn in daylight
-                if entity.type == 'SKELETON' and not self.is_night:
+                # Skeletons burn in daylight (singles and doubles)
+                if (entity.type in ('SKELETON', 'SKELETON_double') and not self.is_night
+                        and (not _opts or _opts.skeleton_daylight_damage)):
                     entity.health -= SKELETON_DAYLIGHT_DAMAGE
                     if entity.health <= 0:
                         entity.health = 0
@@ -564,7 +667,7 @@ class ZonesMixin:
                             break
 
                 # Regen health only if not recently attacked (120 ticks = ~2s)
-                if (self.tick - getattr(entity, 'last_attacked_tick', 0)) > 120:
+                if (self.tick - getattr(entity, 'last_attacked_tick', 0)) > 60:
                     entity.regenerate_health(heal_boost)
 
                 # Energy regen: idle = +2/tick, stationary = +1/tick, moving = no regen
@@ -579,6 +682,25 @@ class ZonesMixin:
                     continue
 
                 self.update_entity_ai(entity_id, entity)
+
+                # Double entities trample grass to dirt as they pass (heavier footprint)
+                if entity.type.endswith('_double') and random.random() < 0.05:
+                    _dx, _dy = entity.x, entity.y
+                    if 0 <= _dx < GRID_WIDTH and 0 <= _dy < GRID_HEIGHT:
+                        if screen['grid'][_dy][_dx] == 'GRASS':
+                            screen['grid'][_dy][_dx] = 'DIRT'
+
+                # Butterfly grows flowers as it passes over grass/dirt
+                if entity.type == 'BUTTERFLY' and random.random() < 0.04:
+                    bx, by = entity.x, entity.y
+                    if 0 <= bx < GRID_WIDTH and 0 <= by < GRID_HEIGHT:
+                        _btfly_cell = screen['grid'][by][bx]
+                        if _btfly_cell == 'GRASS':
+                            screen['grid'][by][bx] = random.choice(
+                                ('FLOWER', 'FLOWER_PATTERN1', 'FLOWER_PATTERN2', 'FLOWER_PATTERN3'))
+                        elif _btfly_cell == 'DIRT':
+                            screen['grid'][by][bx] = random.choice(
+                                ('GRASS', 'FLOWER', 'FLOWER_PATTERN1'))
 
             for entity_id in entities_to_remove:
                 self.remove_entity(entity_id)
@@ -605,19 +727,19 @@ class ZonesMixin:
                                     entity.inventory[item_name] = entity.inventory.get(item_name, 0) + count
                                 del self.dropped_items[zone_key][cell_key]
 
-                    # Pick up from adjacent chest
-                    for dx, dy in [(0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)]:
-                        cx, cy = ex + dx, ey + dy
-                        if 0 <= cx < GRID_WIDTH and 0 <= cy < GRID_HEIGHT:
-                            if grid[cy][cx] == 'CHEST':
-                                chest_key = f"{zone_key}:{cx},{cy}"
-                                if chest_key in self.chest_contents:
-                                    contents = self.chest_contents[chest_key]
-                                    for item_name, count in contents.items():
-                                        entity.inventory[item_name] = entity.inventory.get(item_name, 0) + count
-                                    self.chest_contents[chest_key] = {}
-                                    # Leave the chest cell — decay system will remove it quickly
-                                break
+                    # Pick up from adjacent chest — hostile entities only
+                    if entity.props.get('hostile', False):
+                        for dx, dy in [(0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)]:
+                            cx, cy = ex + dx, ey + dy
+                            if 0 <= cx < GRID_WIDTH and 0 <= cy < GRID_HEIGHT:
+                                if grid[cy][cx] == 'CHEST':
+                                    chest_key = f"{zone_key}:{cx},{cy}"
+                                    if chest_key in self.chest_contents:
+                                        contents = self.chest_contents[chest_key]
+                                        for item_name, count in contents.items():
+                                            entity.inventory[item_name] = entity.inventory.get(item_name, 0) + count
+                                        self.chest_contents[chest_key] = {}
+                                    break
 
                     # Fill a nearby existing chest when any item stack exceeds 100
                     _inv_overflow = any(c > 20 for c in entity.inventory.values())
@@ -790,6 +912,8 @@ class ZonesMixin:
                     spawned = self.spawn_single_entity_at_entrance(zone_x, zone_y, biome, force_type='TRADER')
                 elif 'GUARD' not in types_in_zone:
                     spawned = self.spawn_single_entity_at_entrance(zone_x, zone_y, biome, force_type='GUARD')
+                elif 'WARRIOR' not in types_in_zone and random.random() < 0.5:
+                    spawned = self.spawn_single_entity_at_entrance(zone_x, zone_y, biome, force_type='WARRIOR')
 
                 if not spawned:
                     spawned = self.spawn_single_entity_at_entrance(zone_x, zone_y, biome)
@@ -865,9 +989,12 @@ class ZonesMixin:
                             guard.quest_target = None
 
             if self.tick % 600 == 0:
-                self.promote_to_commander(zone_key)
-                self.promote_to_king()
-                self.recruit_to_hostile_faction(zone_key)
+                _opts_z = getattr(self, 'game_opts', None)
+                if not _opts_z or _opts_z.npc_promotions:
+                    self.promote_to_commander(zone_key)
+                    self.promote_to_king()
+                if not _opts_z or _opts_z.faction_wars:
+                    self.recruit_to_hostile_faction(zone_key)
 
         # Prune empty distant zones: no alive entities, no structures, no items → delete.
         if _dist_from_player > 4:
@@ -911,8 +1038,6 @@ class ZonesMixin:
         self.check_raid_event(struct_zone_key)
 
         entity_list = self.screen_entities.get(struct_zone_key, [])
-        if not entity_list:
-            entity_list = self.screen_entities.get(struct_zone_key, [])
 
         if getattr(self, 'autopilot', False):
             for eid in list(entity_list):
@@ -925,6 +1050,17 @@ class ZonesMixin:
         _tp = getattr(self, 'time_pass_speed', 1.0)
         _age_interval = max(1, int(600 / _tp))
 
+        # Overcrowding: compute once per cycle — extra decay passes if structure is packed
+        _live_pop = sum(
+            1 for eid in entity_list
+            if eid in self.entities and self.entities[eid].is_alive()
+        )
+        _overcrowd_extra = max(0, min(4, (_live_pop - 3) // 2)) if _live_pop > 3 else 0
+
+        # Healing multiplier depends on structure type
+        _structure_type = screen.get('type', '')
+        _heal_boost = HOUSE_HEALING_MULTIPLIER if _structure_type == 'HOUSE_INTERIOR' else 1.0
+
         entities_to_remove = []
         for entity_id in list(entity_list):
             if entity_id not in self.entities:
@@ -932,22 +1068,34 @@ class ZonesMixin:
 
             entity = self.entities[entity_id]
 
-            # Age increment (mirrors overworld logic so structure entities age too)
+            # Age increment (mirrors overworld logic)
             if self.tick % _age_interval == 0 and entity.type != 'SKELETON':
                 entity.age += 1
 
+            # Hunger/thirst decay — plus extra passes when structure is overcrowded
             entity.decay_stats()
+            for _ in range(_overcrowd_extra):
+                entity.decay_stats()
 
-            # Item consumption (same rate as overworld)
-            if random.random() < 0.10 and entity.inventory:
+            # Item consumption — same rate as overworld
+            if random.random() < 0.25 and entity.inventory:
                 _item = random.choice(list(entity.inventory.keys()))
                 _count = entity.inventory.pop(_item)
                 if _item in ('meat', 'carrot', 'cooked_meat', 'stew', 'bones'):
-                    if (self.tick - getattr(entity, 'last_attacked_tick', 0)) > 120:
+                    if (self.tick - getattr(entity, 'last_attacked_tick', 0)) > 60:
                         entity.health = min(entity.max_health, entity.health + 5 * min(_count, 10))
 
-            if (self.tick - getattr(entity, 'last_attacked_tick', 0)) > 120:
-                entity.regenerate_health(1.0)
+            # Health regen — only when not recently attacked; house boost for peaceful NPCs
+            if (self.tick - getattr(entity, 'last_attacked_tick', 0)) > 60:
+                _boost = _heal_boost if not entity.props.get('hostile', False) else 1.0
+                entity.regenerate_health(_boost)
+
+            # Energy regen — mirrors overworld
+            if hasattr(entity, 'energy') and entity.energy < entity.max_energy:
+                if entity.ai_state == 'idle':
+                    entity.energy = min(entity.max_energy, entity.energy + 2)
+                elif not entity.is_moving:
+                    entity.energy = min(entity.max_energy, entity.energy + 1)
 
             if not entity.is_alive():
                 entities_to_remove.append(entity_id)
@@ -958,7 +1106,9 @@ class ZonesMixin:
         for entity_id in entities_to_remove:
             self.remove_entity(entity_id)
 
-        self.assign_zone_keepers(struct_zone_key)
+        _opts_sk = getattr(self, 'game_opts', None)
+        if not _opts_sk or _opts_sk.keeper_assignments:
+            self.assign_zone_keepers(struct_zone_key)
 
     # -------------------------------------------------------------------------
     # Catch-up system
@@ -1006,7 +1156,7 @@ class ZonesMixin:
                     # Also allow spawning adjacent to cave/mineshaft entrances
                     for _gy in range(GRID_HEIGHT):
                         for _gx in range(GRID_WIDTH):
-                            if screen['grid'][_gy][_gx] in ('CAVE', 'HIDDEN_CAVE', 'MINESHAFT'):
+                            if screen['grid'][_gy][_gx] in ('CAVE', 'HIDDEN_CAVE'):
                                 for _dx, _dy in ((-1,0),(1,0),(0,-1),(0,1)):
                                     _nx, _ny = _gx + _dx, _gy + _dy
                                     if 0 < _nx < GRID_WIDTH - 1 and 0 < _ny < GRID_HEIGHT - 1:
@@ -1125,8 +1275,11 @@ class ZonesMixin:
                             self.npc_place_camp(entity)
 
                     if entity.type == 'MINER':
-                        if random.random() < NPC_CAMP_PLACE_RATE:
-                            self.miner_place_cave(entity)
+                        # Higher priority: mine existing caves into mineshafts
+                        if not self.miner_mine_cave(entity):
+                            # No cave to mine — excavate a new mineshaft
+                            if random.random() < NPC_CAMP_PLACE_RATE:
+                                self.miner_place_mineshaft(entity)
 
                 if entity.hunger < 80 and has_food:
                     if random.random() < 0.6:
@@ -1160,7 +1313,7 @@ class ZonesMixin:
                         if heal_boost > 1.0:
                             break
 
-                if (self.tick - getattr(entity, 'last_attacked_tick', 0)) > 120:
+                if (self.tick - getattr(entity, 'last_attacked_tick', 0)) > 60:
                     entity.regenerate_health(heal_boost)
 
                 if entity.hunger <= 0:
@@ -1218,6 +1371,9 @@ class ZonesMixin:
 
     def catch_up_screen(self, screen_x, screen_y, cycles_missed):
         """Apply catch-up updates efficiently"""
+        from world.cells import CA_RULES_ENABLED
+        if not CA_RULES_ENABLED:
+            return
         key = f"{screen_x},{screen_y}"
         if key not in self.screens:
             return
@@ -1233,6 +1389,7 @@ class ZonesMixin:
 
         # Tier 2 & 3: Use bulk updates
         screen = self.screens[key]
+        biome = screen.get('biome', 'FOREST')
 
         neighbor_cache = {}
         for y in range(1, GRID_HEIGHT - 1):
@@ -1270,7 +1427,7 @@ class ZonesMixin:
                 elif cell == 'GRASS' and 1 <= counts.get('tree', 0) <= 2 and total_water >= 1:
                     change_prob = min(cycles_missed * 0.01, 0.5)
                     new_cell = 'TREE1'
-                elif cell == 'DIRT' and total_water == 0 and counts.get('sand', 0) >= 2:
+                elif cell == 'DIRT' and total_water == 0 and counts.get('sand', 0) >= 2 and biome != 'DESERT':
                     change_prob = min(cycles_missed * 0.02, 0.7)
                     new_cell = 'SAND'
                 elif cell == 'WATER' and counts.get('water', 0) >= 4:
@@ -1827,11 +1984,11 @@ class ZonesMixin:
     def update_single_cell(self, screen_x, screen_y, x, y):
         """Apply cellular automata rules to a single cell"""
         from constants import (
-            DIRT_TO_GRASS_RATE, GRASS_TO_DIRT_RATE, DIRT_TO_SAND_RATE,
-            TREE_GROWTH_RATE, SAND_RECLAIM_RATE, DEEP_WATER_FORM_RATE,
-            DEEP_WATER_EVAPORATE_RATE, WATER_TO_DIRT_RATE, FLOODING_RATE,
-            FLOWER_SPREAD_RATE, FLOWER_DECAY_RATE, TREE_DECAY_RATE,
-            BIOME_SPREAD_RATE,
+            DIRT_TO_GRASS_RATE, GRASS_TO_DIRT_RATE, DIRT_TO_SAND_DROUGHT_RATE,
+            GRASS_TO_TREE_RATE, SAND_TO_DIRT_WATER_RATE, WATER_TO_DEEP_WATER_RATE,
+            DEEP_WATER_TO_WATER_RATE, WATER_TO_BASE_ISOLATED_RATE, DIRT_TO_WATER_RAIN_RATE,
+            GRASS_TO_FLOWER_RATE, FLOWER_TO_GRASS_RATE, TREE_TO_GRASS_RATE,
+            BIOME_BORDER_SPREAD_RATE,
         )
 
         key = f"{screen_x},{screen_y}"
@@ -1839,6 +1996,7 @@ class ZonesMixin:
             return
 
         screen = self.screens[key]
+        biome = screen.get('biome', 'FOREST')
         cell = screen['grid'][y][x]
 
         if cell in ['WALL', 'HOUSE', 'CAVE', 'CLIFF']:
@@ -1868,14 +2026,14 @@ class ZonesMixin:
         elif cell == 'GRASS' and total_water == 0:
             if random.random() < GRASS_TO_DIRT_RATE:
                 new_cell = 'DIRT'
-        elif cell == 'DIRT' and total_water == 0 and (sand_count >= 2 or grass_count == 0):
-            if random.random() < DIRT_TO_SAND_RATE:
+        elif cell == 'DIRT' and total_water == 0 and (sand_count >= 2 or grass_count == 0) and biome != 'DESERT':
+            if random.random() < DIRT_TO_SAND_DROUGHT_RATE:
                 new_cell = 'SAND'
         elif cell == 'GRASS' and 1 <= tree_count <= 2 and total_water >= 1:
-            if random.random() < TREE_GROWTH_RATE:
+            if random.random() < GRASS_TO_TREE_RATE:
                 new_cell = 'TREE1'
         elif cell == 'SAND' and total_water >= 2:
-            if random.random() < SAND_RECLAIM_RATE:
+            if random.random() < SAND_TO_DIRT_WATER_RATE:
                 new_cell = 'DIRT'
         elif cell == 'WATER':
             cardinal_water = sum(
@@ -1883,24 +2041,24 @@ class ZonesMixin:
                 if 0 <= x + cdx < GRID_WIDTH and 0 <= y + cdy < GRID_HEIGHT
                 and screen['grid'][y + cdy][x + cdx] in ('WATER', 'DEEP_WATER')
             )
-            if cardinal_water == 4 and random.random() < DEEP_WATER_FORM_RATE:
+            if cardinal_water == 4 and random.random() < WATER_TO_DEEP_WATER_RATE:
                 new_cell = 'DEEP_WATER'
-            elif total_water <= 1 and random.random() < WATER_TO_DIRT_RATE:
+            elif total_water <= 1 and random.random() < WATER_TO_BASE_ISOLATED_RATE:
                 new_cell = 'DIRT'
         elif cell == 'DEEP_WATER' and (water_count + deep_water_count) < 2:
-            if random.random() < DEEP_WATER_EVAPORATE_RATE:
+            if random.random() < DEEP_WATER_TO_WATER_RATE:
                 new_cell = 'WATER'
         elif cell == 'DIRT' and total_water >= 3:
-            if random.random() < FLOODING_RATE:
+            if random.random() < DIRT_TO_WATER_RAIN_RATE:
                 new_cell = 'WATER'
         elif cell == 'GRASS' and flower_count >= 1 and flower_count <= 2 and total_water >= 1:
-            if random.random() < FLOWER_SPREAD_RATE:
+            if random.random() < GRASS_TO_FLOWER_RATE:
                 new_cell = 'FLOWER'
         elif cell == 'FLOWER' and (flower_count >= 4 or total_water == 0):
-            if random.random() < FLOWER_DECAY_RATE:
+            if random.random() < FLOWER_TO_GRASS_RATE:
                 new_cell = 'GRASS'
         elif cell.startswith('TREE') and tree_count >= 4:
-            if random.random() < TREE_DECAY_RATE:
+            if random.random() < TREE_TO_GRASS_RATE:
                 new_cell = 'GRASS'
 
         # General neighbor-copy: base terrain may adopt a random NSEW neighbor's type
@@ -1909,7 +2067,7 @@ class ZonesMixin:
             if 0 <= nx < GRID_WIDTH and 0 <= ny < GRID_HEIGHT:
                 neighbor = screen['grid'][ny][nx]
                 if neighbor in ('GRASS', 'DIRT', 'SAND', 'WATER') and neighbor != cell:
-                    if random.random() < BIOME_SPREAD_RATE:
+                    if random.random() < BIOME_BORDER_SPREAD_RATE:
                         new_cell = neighbor
 
         if new_cell != cell:
@@ -1951,6 +2109,10 @@ class ZonesMixin:
 
             # Skip followers — they travel with the player
             if eid in self.followers:
+                continue
+
+            # Skip autopilot proxies — their keeper state is managed by the autopilot
+            if entity.props.get('is_autopilot_proxy', False):
                 continue
 
             ktype = KEEPER_ENTITY_TYPE.get(entity.type)

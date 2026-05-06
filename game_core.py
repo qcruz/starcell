@@ -12,6 +12,7 @@ from entity import *
 from debug.bug_catcher import BugCatcher
 from debug.watchdog import Watchdog
 from systems.sound_manager import SoundManager
+from systems.game_options import GameOptions
 
 _SETTINGS_PATH = 'settings.json'
 _REAL_STDOUT = sys.stdout  # saved before any redirect
@@ -41,6 +42,8 @@ class GameCoreMixin:
             'max_energy': 100,
             'base_damage': 5,
             'blocking': False,
+            'block_locked': False,
+            'last_shift_press_tick': 0,
             'friendly_fire': False,      # OFF = cannot damage peaceful entities (press V to toggle)
             'last_attack_tick': 0,
             'in_structure': False,
@@ -88,6 +91,8 @@ class GameCoreMixin:
         self.structure_zones = {}
         # Reverse lookup: {parent_zone_key: [structure_zone_key, ...]}
         self.zone_structures = {}
+        # Gravestone inscriptions: {screen_key: {(x,y): [name, ...]}}
+        self.gravestone_names = {}
         # Next structure zone ID (structure zones use coords like (10000+id, 0))
         self.next_structure_zone_id = 0
         
@@ -127,11 +132,19 @@ class GameCoreMixin:
         # Debug visualization
         self.debug_memory_lanes = False  # Shows trader memory lanes and targets
         self.debug_entity_ai = True  # Shows entity AI state and target info
+        self.debug_npc_targets = True   # Draws a coloured border on each NPC's current_target cell
 
         # Persistent settings (loaded from settings.json)
         self.ambient_music_enabled = True
         self.debug_prints_enabled = True
+        self.autosave_enabled = True
         self._load_settings()
+
+        # Game options (loaded from game_options.json — persists across new games)
+        self.game_opts = GameOptions.load()
+        self.showing_game_options = False
+        self._game_opts_scroll = 0
+        self._game_opts_toggle_rects = []
 
         # Load sprites
         self.load_sprites()
@@ -188,8 +201,9 @@ class GameCoreMixin:
         # Trading System
         self.trader_display = None  # {entity_id: {recipes: [...], position: (x,y)}}
         self.trader_display_tick = 0
-        self.inspected_npc = None  # Entity being inspected
-        self.inspected_npc_tick = 0  # When inspection started  # When to hide display
+        self.inspected_npc = None       # Entity being inspected
+        self.inspected_npc_tick = 0     # When inspection started
+        self.inspect_cell_target = None # (x, y) of cell being inspected (no NPC at target)
 
         # Item UID registry — tracks individually identified items (quest/keeper targets)
         self._item_uid_counter = 0
@@ -197,10 +211,10 @@ class GameCoreMixin:
         # {uid: {'name': str, 'location': 'world'|'inventory',
         #         'holder': entity_id or (sx,sy,x,y), 'pos': (x,y), 'screen': (sx,sy)}}
 
-        # Debug / bug-tracking
-        self.bug_catcher = BugCatcher()
-        self.watchdog = Watchdog(self.bug_catcher)
-        self.show_dev_screen = False  # Toggled by Shift+I
+        # Debug / bug-tracking — disabled by default on main; AUTO_DEBUG enables at runtime
+        self.bug_catcher = BugCatcher() if DEBUG_MODE else None
+        self.watchdog = Watchdog(self.bug_catcher) if DEBUG_MODE else None
+        # self.show_dev_screen removed — dev overlay disabled on main branch
 
         # Audio
         self.sound = SoundManager()
@@ -260,9 +274,10 @@ class GameCoreMixin:
                           'CARROT1', 'CARROT2', 'CARROT3',
                           'CAMP', 'HOUSE', 'STONE_HOUSE', 'WOOD', 'PLANKS',
                           'WALL', 'CAVE', 'MINESHAFT', 'SOIL', 'MEAT', 'FUR', 'BONES',
-                          'FLOOR_WOOD', 'CAVE_FLOOR', 'CAVE_WALL', 'CHEST',
+                          'FLOOR_WOOD', 'CAVE_FLOOR', 'CAVE_WALL',
                           'STAIRS_DOWN', 'STAIRS_UP',
-                          'CACTUS', 'BARREL', 'RUINED_SANDSTONE_COLUMN', 'BUSH']:
+                          'CACTUS', 'BARREL', 'RUINED_SANDSTONE_COLUMN', 'BUSH', 'EMPTY_CRATE',
+                          'FLOWER_PATTERN1', 'FLOWER_PATTERN2', 'FLOWER_PATTERN3']:
             
             # Skip if already loaded
             if cell_type in self.sprite_manager.sprites:
@@ -293,8 +308,9 @@ class GameCoreMixin:
                         sprite_files_loaded += 1
                         break  # Found it, stop searching paths for this cell type
                     except Exception as e:
-                        print(f"Failed to load {filename}: {e}")
-        
+                        if DEBUG_MODE:
+                            print(f"Failed to load {filename}: {e}")
+
         # Load cell variant sprites (grass1, grass2, etc.)
         variant_search_count = 0
         variant_loaded_count = 0
@@ -371,8 +387,9 @@ class GameCoreMixin:
                                     found = True
                                     break
                                 except Exception as e:
-                                    print(f"Failed to load {filename}: {e}")
-                        
+                                    if DEBUG_MODE:
+                                        print(f"Failed to load {filename}: {e}")
+
                         if found:
                             break  # Found with this format, stop trying other formats
                 
@@ -397,8 +414,9 @@ class GameCoreMixin:
                                 sprite_files_loaded += 1
                                 break
                             except Exception as e:
-                                print(f"Failed to load {filename}: {e}")
-        
+                                if DEBUG_MODE:
+                                    print(f"Failed to load {filename}: {e}")
+
         # Load biome-specific wall variants
         wall_variants = ['wall_forest', 'wall_desert', 'wall_plains', 
                         'wall_mountains', 'wall_tundra', 'wall_swamp']
@@ -417,8 +435,9 @@ class GameCoreMixin:
                         sprite_files_loaded += 1
                         break
                     except Exception as e:
-                        print(f"Failed to load {filename}: {e}")
-        
+                        if DEBUG_MODE:
+                            print(f"Failed to load {filename}: {e}")
+
         # Load item sprites (for dropped item overlays)
         # Collect unique sprite_name values from ITEMS definitions
         item_sprite_names = set()
@@ -445,7 +464,8 @@ class GameCoreMixin:
                         sprite_files_loaded += 1
                         break
                     except Exception as e:
-                        print(f"Failed to load item sprite {filename}: {e}")
+                        if DEBUG_MODE:
+                            print(f"Failed to load item sprite {filename}: {e}")
         
         # Load sprites whose filenames don't match the standard key.lower()+".png" pattern,
         # or that need guaranteed convert_alpha() regardless of alpha-detection result.
@@ -458,7 +478,75 @@ class GameCoreMixin:
             'CACTUS':                'cactus.png',
             'BARREL':                'barrel.png',
             'BUSH':                  'bush.png',
+            'EMPTY_CRATE':           'emptycrate.png',
+            'APPLE_CRATE':           'applecrate.png',
+            'FLOWER_PATTERN1':       'flowerpattern1.png',
+            'FLOWER_PATTERN2':       'flowerpattern2.png',
+            'FLOWER_PATTERN3':       'flowerpattern3.png',
+            # Chest variants: LOCKED_CHEST = old chest, CHEST = closeable, OPEN_CHEST = looted
+            'LOCKED_CHEST':          'chest.png',
+            'CHEST':                 'closed_chest.png',
+            'OPEN_CHEST':            'open_chest.png',
+            'GRAVESTONE':            'gravestone.png',
+            'BROKEN_GRAVESTONE':     'broken_gravestone.png',
+            'BED_BLUE':              'bed_blue.png',
+            'BED_WHITE':             'bed_white.png',
+            'DESERT_WELL':           'desert_well.png',
+            'CLIFF':                 'cliff_wall.png',
+            'STAIRS_DOWN':           'stairs_down.png',
+            'STAIRS_UP':             'stairs_up.png',
+            'BOOKSHELF':             'bookshelf.png',
+            'WOOD_CHAIR':            'wood_chair.png',
+            'WOOD_TABLE':            'wood_table.png',
+            'WATER_TROUGH':          'water_trough.png',
+            'SMALL_POTTED_PLANT':    'small_potted_plant.png',
+            'BLUE_MUSHROOM':         'blue_mushroom.png',
+            # Item sprites
+            'bottle':                'bottle.png',
+            'bottles':               'bottles.png',
+            'pickaxe':               'pickaxe.png',
+            # UI sprites (faction banners — not items, so not found by the ITEMS loop)
+            'blue_banner':           'blue_banner.png',
+            'red_banner':            'red_banner.png',
+            # Attack swipe animations — directional
+            'swipe_down':            'down_swipe.png',
+            'swipe_up':              'up_swipe.png',
+            'swipe_left':            'left_swipe.png',
+            'swipe_right':           'right_swipe.png',
         }
+
+        # Weapon / armour sprites — subdir has a space so they can't be found by the
+        # generic search loop above; load them explicitly with the full relative path.
+        _wa_dir = os.path.join(script_dir, 'sprites', 'weapons and armour')
+        _wa_sprites = {
+            'iron_sword':      'sword_red_handle.png',
+            'bone_sword':      'sword_red_handle.png',
+            'enchanted_sword': 'sword_gold.png',
+            'club':            'club_red.png',
+            'bow':             'bow.png',
+            'bow_metal':       'bow_metal.png',
+            'staff_red':       'staff_red.png',
+            'spear':           'spear_black.png',
+            'warhammer':       'warhammer_red_bronze.png',
+            'shield':          'shield_metal.png',
+            'shield_bronze':   'shield_red_bronze.png',
+            'armour_chest':    'armour_chest_metal.png',
+            'armour_helm':     'armour_helm_metal.png',
+            'armour_legs':     'armour_legs_metal.png',
+            'armour_shoes':    'armour_shoes_metal.png',
+        }
+        for sprite_key, fname in _wa_sprites.items():
+            if sprite_key in self.sprite_manager.sprites:
+                continue
+            path = os.path.join(_wa_dir, fname)
+            if os.path.exists(path):
+                try:
+                    img = pygame.image.load(path).convert_alpha()
+                    self.sprite_manager.sprites[sprite_key] = pygame.transform.scale(img, (CELL_SIZE, CELL_SIZE))
+                    sprite_files_loaded += 1
+                except Exception as e:
+                    if DEBUG_MODE:
+                        print(f"Failed to load weapon/armour sprite {fname}: {e}")
         for sprite_key, filename_base in _explicit_sprites.items():
             if sprite_key in self.sprite_manager.sprites:
                 continue
@@ -472,49 +560,22 @@ class GameCoreMixin:
                         sprite_files_loaded += 1
                         break
                     except Exception as e:
-                        print(f"Failed to load {filename}: {e}")
+                        if DEBUG_MODE:
+                            print(f"Failed to load {filename}: {e}")
 
         # If individual files were loaded, use them
         if sprite_files_loaded > 0:
-            print("\n" + "=" * 60)
-            print("LOADING SPRITE SYSTEM...")
-            print("=" * 60)
-            print(f"✓ Loaded {sprite_files_loaded} individual sprite files")
-            
-            # Debug: Show what was loaded
-            print("\nLoaded sprites:")
-            for sprite_name in sorted(self.sprite_manager.sprites.keys()):
-                sprite = self.sprite_manager.sprites[sprite_name]
-                has_alpha = sprite.get_flags() & pygame.SRCALPHA
-                print(f"  - {sprite_name}: {sprite.get_size()}, alpha={'YES' if has_alpha else 'NO'}")
-            
-            # Don't generate structure sprites - only use actual sprite files
-            # This ensures cells without sprites show as colored rectangles with labels
-            
+            if DEBUG_MODE:
+                print(f"[Sprites] Loaded {sprite_files_loaded} sprite files")
+                if variant_search_count > 0:
+                    print(f"[Sprites] Cell variants: {variant_loaded_count}/{variant_search_count} loaded")
+
             # Generate dev spell sprites (summon/transform for all NPC types)
             from data.entities import ENTITY_TYPES
             self.sprite_manager.create_dev_spell_sprites(ENTITY_TYPES)
 
-            loaded_sprites = self.sprite_manager.get_all_sprite_names()
-            print(f"✓ Total sprites available: {len(loaded_sprites)}")
-            
-            # Variant sprite report
-            if variant_search_count > 0:
-                print(f"\nCell variants: {variant_loaded_count}/{variant_search_count} loaded")
-                if variant_missing:
-                    for msg in variant_missing[:5]:  # Show first 5 missing
-                        print(f"  ✗ {msg}")
-            
-            print("=" * 60 + "\n")
             self.use_sprites = True
         else:
-            # No sprites found, use color fallback
-            print("\n" + "=" * 60)
-            print("No sprite files found - using colored rectangles")
-            print("=" * 60)
-            print("To use sprites, place PNG files in game directory:")
-            print("  Examples: grass.png, dirt.png, sand.png, water.png, etc.")
-            print("=" * 60 + "\n")
             self.use_sprites = False
         
         # Legacy: Load from starcell/sprites folder if it exists
@@ -530,7 +591,8 @@ class GameCoreMixin:
                         sprite_img = pygame.transform.scale(sprite_img, (CELL_SIZE, CELL_SIZE))
                         self.sprites[sprite_name] = sprite_img
                     except Exception as e:
-                        print(f"Failed to load sprite {filename}: {e}")
+                        if DEBUG_MODE:
+                            print(f"Failed to load sprite {filename}: {e}")
     
     def is_idle(self):
         """Check if player has been idle for catch-up window"""
@@ -546,7 +608,8 @@ class GameCoreMixin:
             screen_key = f"{screen_x},{screen_y}"
             
             if screen_key in self.screens:
-                self.bug_catcher.log_zone_cells(self.tick, screen_key, self.screens[screen_key]['grid'])
+                if self.bug_catcher:
+                    self.bug_catcher.log_zone_cells(self.tick, screen_key, self.screens[screen_key]['grid'])
                 self.apply_cellular_automata(screen_x, screen_y)
                 self.decay_dropped_items(screen_x, screen_y)
                 self.decay_overworld_chests(screen_key)
@@ -677,15 +740,20 @@ class GameCoreMixin:
         entity = self.entities[entity_id]
         screen_key = f"{entity.screen_x},{entity.screen_y}"
         
-        # Log death reason if not from combat
+        # Track and log death cause
         if entity.health <= 0:
+            _dc = getattr(self, 'death_counts', {})
             if hasattr(entity, 'age') and hasattr(entity, 'max_age') and entity.age > entity.max_age:
-                name_str = entity.name if entity.name else entity.type
-                print(f"{name_str} died of old age at {entity.age} years (max: {entity.max_age})")
+                _dc['old_age'] = _dc.get('old_age', 0) + 1
             elif entity.hunger <= 0:
-                print(f"{entity.type} died from starvation at ({entity.x}, {entity.y})")
+                _dc['starvation'] = _dc.get('starvation', 0) + 1
             elif entity.thirst <= 0:
-                print(f"{entity.type} died from dehydration at ({entity.x}, {entity.y})")
+                _dc['dehydration'] = _dc.get('dehydration', 0) + 1
+            elif getattr(entity, 'killed_by', None) is not None:
+                _dc['combat'] = _dc.get('combat', 0) + 1
+            else:
+                _dc['other'] = _dc.get('other', 0) + 1
+            self.death_counts = _dc
         
         # Free keeper slot if this entity was a keeper
         if getattr(entity, 'keeper', False):
@@ -714,7 +782,12 @@ class GameCoreMixin:
             item_name = self.follower_items.pop(entity_id, None)
             if item_name and self.inventory.has_item(item_name):
                 self.inventory.remove_item(item_name, 1)
-            print(f"{entity.type} follower has died!")
+            # Restore 30 max_energy per enchant level (or flat 30 for Shift+F recruits)
+            if entity_id in self.enchanted_entities:
+                _restored = self.enchanted_entities.pop(entity_id) * 30
+            else:
+                _restored = 30
+            self.player['max_energy'] = self.player.get('max_energy', 100) + _restored
 
         # Collect all item drops into a single dict before placing them
         all_item_drops = {}  # {item_name: count}
@@ -751,32 +824,15 @@ class GameCoreMixin:
             if screen_key not in self.dropped_items:
                 self.dropped_items[screen_key] = {}
 
-            # Scatter 1-2 individual items nearby so they display as item sprites
-            scatter_pool = [(k, v) for k, v in all_item_drops.items() if v >= 1]
-            n_scatter = min(random.randint(1, 2), len(scatter_pool))
-            scattered = random.sample(scatter_pool, n_scatter)
-            for item_name, _ in scattered:
-                all_item_drops[item_name] -= 1
-                if all_item_drops[item_name] <= 0:
-                    del all_item_drops[item_name]
-                sx = max(1, min(GRID_WIDTH - 2, entity.x + random.randint(-2, 2)))
-                sy = max(1, min(GRID_HEIGHT - 2, entity.y + random.randint(-2, 2)))
-                cell_key = (sx, sy)
-                if cell_key not in self.dropped_items[screen_key]:
-                    self.dropped_items[screen_key][cell_key] = {}
-                self.dropped_items[screen_key][cell_key][item_name] = \
-                    self.dropped_items[screen_key][cell_key].get(item_name, 0) + 1
-
-            # Consolidate remaining items into one pile at entity position → shows as itembag
-            if all_item_drops:
-                pile_x = max(1, min(GRID_WIDTH - 2, entity.x))
-                pile_y = max(1, min(GRID_HEIGHT - 2, entity.y))
-                pile_key = (pile_x, pile_y)
-                if pile_key not in self.dropped_items[screen_key]:
-                    self.dropped_items[screen_key][pile_key] = {}
-                for item_name, count in all_item_drops.items():
-                    self.dropped_items[screen_key][pile_key][item_name] = \
-                        self.dropped_items[screen_key][pile_key].get(item_name, 0) + count
+            # Drop everything at the exact cell where the entity died
+            pile_x = max(1, min(GRID_WIDTH - 2, entity.x))
+            pile_y = max(1, min(GRID_HEIGHT - 2, entity.y))
+            pile_key = (pile_x, pile_y)
+            if pile_key not in self.dropped_items[screen_key]:
+                self.dropped_items[screen_key][pile_key] = {}
+            for item_name, count in all_item_drops.items():
+                self.dropped_items[screen_key][pile_key][item_name] = \
+                    self.dropped_items[screen_key][pile_key].get(item_name, 0) + count
         
         # Remove from screen entities list
         if screen_key in self.screen_entities:
@@ -791,9 +847,71 @@ class GameCoreMixin:
         # Check if this was a hostile entity and zone is now clear
         if entity.props.get('hostile', False):
             self.check_zone_clear_hostiles(screen_key)
-        
+        else:
+            # Peaceful entity died — maybe place a gravestone
+            self._maybe_spawn_gravestone(entity, screen_key)
+
         # Remove from entities dict
         del self.entities[entity_id]
+
+    def _maybe_spawn_gravestone(self, entity, screen_key):
+        """Spawn or inscribe a gravestone when a named humanoid NPC dies."""
+        # Only peaceful, named humanoids — skip animals, hostile types, and unnamed entities
+        props = ENTITY_TYPES.get(entity.type, {})
+        if not props.get('humanoid') or props.get('hostile') or not entity.name:
+            return
+        name = entity.name
+
+        # If entity died inside a structure zone, resolve to the parent overworld zone
+        overworld_key = screen_key
+        if screen_key not in self.screens and screen_key in self.structures:
+            parent = self.structures[screen_key].get('parent_screen')
+            if parent:
+                overworld_key = f"{parent[0]},{parent[1]}"
+
+        grid = self.screens.get(overworld_key, {}).get('grid')
+
+        # Zone must have at least one house/stone_house cell in the actual grid
+        has_house = grid and any(
+            grid[y][x] in ('HOUSE', 'STONE_HOUSE')
+            for y in range(GRID_HEIGHT)
+            for x in range(GRID_WIDTH)
+        )
+        if not has_house:
+            return
+
+        level = getattr(entity, 'level', 1)
+        if level < 2 and random.random() >= 0.40:
+            return
+        if not grid:
+            return
+
+        # Count existing gravestones
+        existing = [
+            (x, y)
+            for y in range(GRID_HEIGHT)
+            for x in range(GRID_WIDTH)
+            if grid[y][x] == 'GRAVESTONE'
+        ]
+
+        zone_gs = self.gravestone_names.setdefault(overworld_key, {})
+
+        if len(existing) >= 5:
+            # Add name to an existing gravestone with room (max 10 names)
+            candidates = [pos for pos in existing if len(zone_gs.get(pos, [])) < 10]
+            if candidates:
+                chosen = random.choice(candidates)
+                zone_gs.setdefault(chosen, []).append(name)
+            return
+
+        # Only place near existing gravestones — no corner fallback
+        _open = {'GRASS', 'DIRT', 'SAND', 'COBBLESTONE', 'SOIL'}
+        cluster_pos = self.find_cluster_position(overworld_key, 'GRAVESTONE', radius=5)
+        if cluster_pos:
+            cx, cy = cluster_pos
+            if grid[cy][cx] in _open:
+                grid[cy][cx] = 'GRAVESTONE'
+                zone_gs[(cx, cy)] = [name]
 
     def check_follower_integrity(self):
         """Every-tick check: ensure followers are alive, non-hostile, not targeting player."""
@@ -823,59 +941,67 @@ class GameCoreMixin:
                 self.follower_items.pop(entity_id, None)
 
     def check_npc_inspection(self):
-        """Check if player is targeting any entity and Shift is held — set inspection"""
-        # During autopilot, the proxy's facing direction constantly sweeps over
-        # nearby NPCs.  The inspection system sets idle_timer=30 on each one and
-        # the inspected_npc guard skips their entire AI update, which freezes
-        # every NPC the proxy walks past.  Disable inspection while autopilot
-        # is active so the proxy doesn't paralyse the zone.
+        """Inspect whatever the player is facing when Shift is held or inspect tool is active."""
         if getattr(self, 'autopilot', False):
             self.inspected_npc = None
+            self.inspect_cell_target = None
             return
 
-        # Inspection only triggers while Shift is held
         keys = pygame.key.get_pressed()
-        if not (keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]):
+        shift_held = keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]
+        _ts_idx = self.inventory.selected_tool_slot_idx
+        inspect_tool_active = (
+            _ts_idx is not None and
+            _ts_idx < len(self.inventory.tool_slots) and
+            self.inventory.tool_slots[_ts_idx] == 'inspect'
+        )
+        if not (shift_held or inspect_tool_active):
             self.inspected_npc = None
+            self.inspect_cell_target = None
             return
 
+        # Hostile within 2 cells suppresses inspect entirely
+        screen_key = f"{self.player['screen_x']},{self.player['screen_y']}"
+        px, py = self.player['x'], self.player['y']
+        for eid in self.screen_entities.get(screen_key, []):
+            if eid in self.entities:
+                e = self.entities[eid]
+                if e.props.get('hostile', False) and abs(e.x - px) + abs(e.y - py) <= 2:
+                    self.inspected_npc = None
+                    self.inspect_cell_target = None
+                    return
+
+        target = self.get_target_cell()
         target = self.get_target_cell()
         if not target:
             self.inspected_npc = None
+            self.inspect_cell_target = None
             return
-        
-        check_x, check_y = target
 
-        # Unified zone system: player screen coords reflect current zone (incl. structure virtual coords)
-        screen_key = f"{self.player['screen_x']},{self.player['screen_y']}"
+        check_x, check_y = target
         candidates = self.screen_entities.get(screen_key, [])
 
-        # Find entity at target cell
+        # NPC at target cell?
         for entity_id in candidates:
             if entity_id in self.entities:
                 entity = self.entities[entity_id]
                 if entity.x == check_x and entity.y == check_y:
-                    # Never inspect the autopilot proxy — it renders as the player
                     if entity.props.get('is_autopilot_proxy', False):
                         self.inspected_npc = None
+                        self.inspect_cell_target = None
                         return
-                    if self.inspected_npc != entity_id:
-                        # New NPC targeted — open all inventory panels + quest UI
-                        for cat in ['items', 'tools', 'magic', 'followers']:
-                            self.inventory.open_menus.add(cat)
-                        self.quest_ui_open = True
                     self.inspected_npc = entity_id
+                    self.inspect_cell_target = None
                     self.inspected_npc_tick = self.tick
-
-                    # Make peaceful entities idle briefly during inspection
                     if not entity.props.get('hostile'):
                         entity.is_idle = True
-                        entity.idle_timer = 30  # 0.5 seconds
+                        entity.idle_timer = 30
                         entity.idle_duration = 30
                     return
 
-        # No entity at target
+        # No NPC — inspect the cell/items at target
         self.inspected_npc = None
+        self.inspect_cell_target = (check_x, check_y)
     
     def is_at_corner(self, x, y):
         """Check if position is near a zone corner"""
@@ -954,7 +1080,7 @@ class GameCoreMixin:
         
         # BugCatcher: snapshot HOUSE/STONE_HOUSE before cell updates (player zone only)
         player_zone = f"{self.player['screen_x']},{self.player['screen_y']}"
-        if key == player_zone:
+        if key == player_zone and self.bug_catcher:
             self.bug_catcher.log_zone_cells(self.tick, key, screen['grid'])
 
         # Apply cellular automata rules first
@@ -976,35 +1102,43 @@ class GameCoreMixin:
                         self.set_grid_cell(screen, x, y, cell_info['grows_to'])
                     
                     # Degradation (for crops and cobblestone)
-                    elif 'degrades_to' in cell_info and random.random() < cell_info.get('degrade_rate', 0):
-                        # Special handling for cobblestone - only decay outside center lanes
-                        if cell == 'COBBLESTONE':
-                            center_x = GRID_WIDTH // 2
-                            center_y = GRID_HEIGHT // 2
-                            
-                            # Check if in center lanes (±2 cells)
-                            on_horizontal_center = abs(y - center_y) <= 2
-                            on_vertical_center = abs(x - center_x) <= 2
-                            
-                            # Don't decay if on main roads
-                            if on_horizontal_center or on_vertical_center:
-                                continue
-                            
-                            # Check if touching structures (house, camp, cave)
-                            has_structure_neighbor = False
-                            for nx, ny in [(x-1, y), (x+1, y), (x, y-1), (x, y+1)]:
-                                if 0 <= nx < GRID_WIDTH and 0 <= ny < GRID_HEIGHT:
-                                    neighbor_cell = screen['grid'][ny][nx]
-                                    if neighbor_cell in ['HOUSE', 'CAMP', 'CAVE', 'MINESHAFT']:
-                                        has_structure_neighbor = True
-                                        break
-                            
-                            # Don't decay if near structures
-                            if has_structure_neighbor:
-                                continue
-                        
-                        # Apply decay
-                        self.set_grid_cell(screen, x, y, cell_info['degrades_to'])
+                    elif 'degrades_to' in cell_info:
+                        base_rate = cell_info.get('degrade_rate', 0)
+                        decay_target = cell_info['degrades_to']
+
+                        # Carrots decay faster on hostile terrain (cobblestone/sand)
+                        if cell in ('CARROT1', 'CARROT2', 'CARROT3'):
+                            _has_cob = _has_sand = False
+                            for _nx, _ny in ((x-1,y),(x+1,y),(x,y-1),(x,y+1)):
+                                if 0 <= _nx < GRID_WIDTH and 0 <= _ny < GRID_HEIGHT:
+                                    _nc = screen['grid'][_ny][_nx]
+                                    if _nc == 'COBBLESTONE':
+                                        _has_cob = True
+                                    elif _nc == 'SAND':
+                                        _has_sand = True
+                            if _has_cob:
+                                base_rate *= 50.0
+                            elif _has_sand:
+                                base_rate *= 10.0
+                                if cell == 'CARROT1':
+                                    decay_target = 'DIRT'
+
+                        if random.random() < base_rate:
+                            # Cobblestone: only decay outside center lanes and away from structures
+                            if cell == 'COBBLESTONE':
+                                center_x = GRID_WIDTH // 2
+                                center_y = GRID_HEIGHT // 2
+                                if abs(y - center_y) <= 2 or abs(x - center_x) <= 2:
+                                    continue
+                                skip = False
+                                for nx, ny in [(x-1, y), (x+1, y), (x, y-1), (x, y+1)]:
+                                    if 0 <= nx < GRID_WIDTH and 0 <= ny < GRID_HEIGHT:
+                                        if screen['grid'][ny][nx] in ('HOUSE', 'CAMP', 'CAVE', 'MINESHAFT'):
+                                            skip = True
+                                            break
+                                if skip:
+                                    continue
+                            self.set_grid_cell(screen, x, y, decay_target)
 
         # Track last update
         self.screen_last_update[key] = self.tick
@@ -1023,13 +1157,29 @@ class GameCoreMixin:
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1 and self.state == 'menu':
                     self._handle_menu_click(event.pos)
+                elif event.button == 1 and self.state == 'paused' and self.showing_game_options:
+                    for flag_name, rect in getattr(self, '_game_opts_toggle_rects', []):
+                        if rect.collidepoint(event.pos):
+                            self.game_opts.toggle(flag_name)
+                            break
                 elif event.button == 1 and self.state == 'playing':
                     if self.handle_npc_trade_click(event.pos):
                         self.gain_xp(1)
                     else:
                         self.handle_inventory_click(event.pos)
                     self.handle_quest_ui_click(event.pos)
-            
+
+            if event.type == pygame.MOUSEWHEEL and self.state == 'paused' and self.showing_game_options:
+                scroll_amount = -event.y * 24
+                max_s = max(0, getattr(self, '_game_opts_total_h', 0)
+                            - getattr(self, '_game_opts_content_h', 9999))
+                self._game_opts_scroll = min(max_s, max(0, self._game_opts_scroll + scroll_amount))
+
+            if event.type == pygame.KEYUP:
+                if event.key in (pygame.K_LSHIFT, pygame.K_RSHIFT):
+                    if self.state == 'playing' and not self.player.get('block_locked', False):
+                        self.player['blocking'] = False
+
             if event.type == pygame.KEYDOWN:
                 if self.state == 'menu':
                     if event.key == pygame.K_1:
@@ -1055,14 +1205,42 @@ class GameCoreMixin:
                                 self.execute_action(selected_action)
                                 self.gain_xp(1)
                                 continue
-                        self.interact()
-                        self.gain_xp(1)
+                        # Fire selected toolbar slot; do nothing if slot is empty
+                        _slot_item = None
+                        if self.inventory.selected_tool_slot_idx is not None:
+                            _slot_item = self.inventory.tool_slots[self.inventory.selected_tool_slot_idx]
+                        if _slot_item and _slot_item in self.inventory.magic:
+                            _prev_magic = self.inventory.selected.get('magic')
+                            self.inventory.selected['magic'] = _slot_item
+                            if _slot_item == 'rain_spell':
+                                self.cast_rain_spell()
+                            elif _slot_item == 'day_spell':
+                                self.cast_day_spell()
+                            elif _slot_item == 'keeper_spell':
+                                self.cast_keeper_spell()
+                            elif _slot_item.startswith('summon_'):
+                                self.cast_summon_spell()
+                            elif _slot_item.startswith('transform_'):
+                                self.cast_transform_spell()
+                            else:
+                                self.cast_star_spell()
+                            self.inventory.selected['magic'] = _prev_magic
+                            self.gain_xp(1)
+                        elif _slot_item and _slot_item in self.inventory.actions:
+                            self.execute_action(_slot_item)
+                            self.gain_xp(1)
+                        else:
+                            # No tool slot item (or item is a regular item) — default interact
+                            self.interact()
+                            self.gain_xp(1)
                     elif event.key == pygame.K_l:
                         selected = self.inventory.selected_magic
                         if selected == 'rain_spell':
                             self.cast_rain_spell()
                         elif selected == 'day_spell':
                             self.cast_day_spell()
+                        elif selected == 'keeper_spell':
+                            self.cast_keeper_spell()
                         elif selected and selected.startswith('summon_'):
                             self.cast_summon_spell()
                         elif selected and selected.startswith('transform_'):
@@ -1076,16 +1254,21 @@ class GameCoreMixin:
                     elif event.key == pygame.K_j:
                         self.release_follower()
                         self.gain_xp(1)
-                    elif event.key == pygame.K_b:
-                        # Toggle blocking
-                        self.player['blocking'] = not self.player['blocking']
-                        print(f"Blocking: {'ON' if self.player['blocking'] else 'OFF'}")
-                        self.gain_xp(1)
+                    elif event.key in (pygame.K_LSHIFT, pygame.K_RSHIFT):
+                        # Shift held = start blocking; double-tap within 18 ticks = toggle block lock
+                        now = self.tick
+                        last = self.player.get('last_shift_press_tick', 0)
+                        if now - last <= 18:
+                            locked = not self.player.get('block_locked', False)
+                            self.player['block_locked'] = locked
+                        self.player['last_shift_press_tick'] = now
+                        self.player['blocking'] = True
                     elif event.key == pygame.K_v:
                         # Toggle friendly fire (allow/deny damage to peaceful entities)
                         self.player['friendly_fire'] = not self.player.get('friendly_fire', False)
-                        state = 'ON — can attack anyone' if self.player['friendly_fire'] else 'OFF — peaceful entities protected'
-                        print(f"Friendly Fire: {state}")
+                        _state = 'ON — can attack anyone' if self.player['friendly_fire'] else 'OFF — peaceful entities protected'
+                        if DEBUG_MODE:
+                            print(f"Friendly Fire: {_state}")
                         self.gain_xp(1)
                     elif event.key == pygame.K_c:
                         # Toggle crafting screen (UI open/close — no XP)
@@ -1104,13 +1287,10 @@ class GameCoreMixin:
                         self.attempt_craft()
                         self.gain_xp(1)
                     elif event.key == pygame.K_i:
-                        if pygame.key.get_mods() & pygame.KMOD_SHIFT:
-                            self.show_dev_screen = not self.show_dev_screen
-                        else:
-                            _was_open = 'items' in self.inventory.open_menus
-                            self.inventory.toggle_menu('items')
-                            if not _was_open:
-                                self.sound.on_inventory_open()
+                        _was_open = 'items' in self.inventory.open_menus
+                        self.inventory.toggle_menu('items')
+                        if not _was_open:
+                            self.sound.on_inventory_open()
                     elif event.key == pygame.K_t:
                         if (pygame.key.get_mods() & pygame.KMOD_SHIFT) and self.inspected_npc:
                             self.open_npc_trade_window()
@@ -1124,11 +1304,18 @@ class GameCoreMixin:
                         self.inventory.toggle_menu('magic')
                         if not _was_open:
                             self.sound.on_inventory_open()
-                    elif event.key == pygame.K_r:
+                    elif event.key == pygame.K_u:
                         _was_open = 'actions' in self.inventory.open_menus
                         self.inventory.toggle_menu('actions')
                         if not _was_open:
                             self.sound.on_inventory_open()
+                    elif event.key == pygame.K_g:
+                        if (pygame.key.get_mods() & pygame.KMOD_SHIFT) and self.inspected_npc:
+                            self.give_gift_to_npc(self.inspected_npc)
+                        else:
+                            self.debug_memory_lanes = not self.debug_memory_lanes
+                            if DEBUG_MODE:
+                                print(f"Debug Memory Lanes: {'ON' if self.debug_memory_lanes else 'OFF'}")
                     elif event.key == pygame.K_f:
                         if pygame.key.get_mods() & pygame.KMOD_SHIFT:
                             if self.inspected_npc:
@@ -1139,9 +1326,6 @@ class GameCoreMixin:
                             self.inventory.toggle_menu('followers')
                             if not _was_open:
                                 self.sound.on_inventory_open()
-                    elif event.key == pygame.K_e:
-                        self.pickup_cell_or_items()
-                        self.gain_xp(1)
                     elif event.key == pygame.K_n:
                         self.npc_trade_interaction()
                         self.gain_xp(1)
@@ -1169,46 +1353,105 @@ class GameCoreMixin:
                             self.gain_xp(1)
                         else:
                             self.toggle_autopilot()
-                    elif event.key == pygame.K_g:
-                        # Toggle debug memory lanes visualization
-                        self.debug_memory_lanes = not self.debug_memory_lanes
-                        print(f"Debug Memory Lanes: {'ON' if self.debug_memory_lanes else 'OFF'}")
-                    # Number keys to select inventory slots (no XP)
+                    # Number keys: tool slot select/use when no menus open; assign when tools open
                     elif event.key in [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4,
                                       pygame.K_5, pygame.K_6, pygame.K_7, pygame.K_8,
                                       pygame.K_9, pygame.K_0]:
                         slot = (event.key - pygame.K_1) if event.key != pygame.K_0 else 9
-                        self.select_inventory_slot(slot)
+                        mods = pygame.key.get_mods()
+                        if 'tools' in self.inventory.open_menus:
+                            if self.inventory.selected_tool_slot_idx == slot:
+                                # Second press on same slot — unequip and mark pending
+                                self.inventory.unequip_slot(slot)
+                                self.inventory.selected['tools'] = None
+                                self.inventory.pending_equip_slot = slot
+                                self.inventory.pending_equip_equipment_slot = None
+                            else:
+                                # First press — just select the slot
+                                self.inventory.selected_tool_slot_idx = slot
+                                self.inventory.selected['tools'] = self.inventory.tool_slots[slot]
+                                self.inventory.pending_equip_slot = None
+                        elif not self.inventory.open_menus:
+                            # No menus open: hotkey activates the tool slot
+                            if slot < len(self.inventory.tool_slots):
+                                slot_item = self.inventory.tool_slots[slot]
+                                self.inventory.selected_tool_slot_idx = slot
+                                self.inventory.selected['tools'] = slot_item
+                                if slot_item:
+                                    if mods & pygame.KMOD_SHIFT:
+                                        self.place_selected_item(item_name=slot_item)
+                                    elif slot_item in self.inventory.magic:
+                                        _prev_magic = self.inventory.selected.get('magic')
+                                        self.inventory.selected['magic'] = slot_item
+                                        if slot_item == 'rain_spell': self.cast_rain_spell()
+                                        elif slot_item == 'day_spell': self.cast_day_spell()
+                                        elif slot_item == 'keeper_spell': self.cast_keeper_spell()
+                                        elif slot_item.startswith('summon_'): self.cast_summon_spell()
+                                        elif slot_item.startswith('transform_'): self.cast_transform_spell()
+                                        else: self.cast_star_spell()
+                                        self.inventory.selected['magic'] = _prev_magic
+                                    elif slot_item in self.inventory.actions:
+                                        self.execute_action(slot_item)
+                                    else:
+                                        self.interact()
+                                    self.gain_xp(1)
+                        else:
+                            self.select_inventory_slot(slot)
                 
                 elif self.state == 'paused':
-                    if event.key == pygame.K_ESCAPE or event.key == pygame.K_p:
-                        self.state = 'playing'
-                    elif event.key == pygame.K_s:
-                        self.save_game()
-                    elif event.key == pygame.K_m:
-                        self.state = 'menu'
-                    # Inventory panels accessible while paused (crafting execution blocked)
-                    elif event.key == pygame.K_i:
-                        self.inventory.toggle_menu('items')
-                    elif event.key == pygame.K_t:
-                        self.inventory.toggle_menu('tools')
-                    elif event.key == pygame.K_r:
-                        self.inventory.toggle_menu('actions')
-                    elif event.key == pygame.K_f:
-                        self.inventory.toggle_menu('followers')
-                    elif event.key == pygame.K_c:
-                        self.inventory.toggle_menu('crafting')
-                    elif event.key == pygame.K_q:
-                        self.quest_ui_open = not self.quest_ui_open
-                    elif event.key == pygame.K_LEFT and (pygame.key.get_mods() & pygame.KMOD_SHIFT):
-                        self.cycle_inventory_slot(-1)
-                    elif event.key == pygame.K_RIGHT and (pygame.key.get_mods() & pygame.KMOD_SHIFT):
-                        self.cycle_inventory_slot(1)
-                    elif event.key in [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4,
-                                       pygame.K_5, pygame.K_6, pygame.K_7, pygame.K_8,
-                                       pygame.K_9, pygame.K_0]:
-                        slot = (event.key - pygame.K_1) if event.key != pygame.K_0 else 9
-                        self.select_inventory_slot(slot)
+                    if self.showing_game_options:
+                        if event.key == pygame.K_ESCAPE or event.key == pygame.K_o:
+                            self.showing_game_options = False
+                        elif event.key == pygame.K_UP:
+                            self._game_opts_scroll = max(0, self._game_opts_scroll - 24)
+                        elif event.key == pygame.K_DOWN:
+                            max_s = max(0, getattr(self, '_game_opts_total_h', 0)
+                                        - getattr(self, '_game_opts_content_h', 9999))
+                            self._game_opts_scroll = min(max_s, self._game_opts_scroll + 24)
+                    else:
+                        if event.key == pygame.K_ESCAPE or event.key == pygame.K_p:
+                            self.state = 'playing'
+                            self.showing_game_options = False
+                        elif event.key == pygame.K_s:
+                            self.save_game()
+                        elif event.key == pygame.K_o:
+                            self.showing_game_options = True
+                            self._game_opts_scroll = 0
+                        elif event.key == pygame.K_m:
+                            self.state = 'menu'
+                        # Inventory panels accessible while paused (crafting execution blocked)
+                        elif event.key == pygame.K_i:
+                            self.inventory.toggle_menu('items')
+                        elif event.key == pygame.K_t:
+                            self.inventory.toggle_menu('tools')
+                        elif event.key == pygame.K_u:
+                            self.inventory.toggle_menu('actions')
+                        elif event.key == pygame.K_f:
+                            self.inventory.toggle_menu('followers')
+                        elif event.key == pygame.K_c:
+                            self.inventory.toggle_menu('crafting')
+                        elif event.key == pygame.K_q:
+                            self.quest_ui_open = not self.quest_ui_open
+                        elif event.key == pygame.K_LEFT and (pygame.key.get_mods() & pygame.KMOD_SHIFT):
+                            self.cycle_inventory_slot(-1)
+                        elif event.key == pygame.K_RIGHT and (pygame.key.get_mods() & pygame.KMOD_SHIFT):
+                            self.cycle_inventory_slot(1)
+                        elif event.key in [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4,
+                                           pygame.K_5, pygame.K_6, pygame.K_7, pygame.K_8,
+                                           pygame.K_9, pygame.K_0]:
+                            slot = (event.key - pygame.K_1) if event.key != pygame.K_0 else 9
+                            if 'tools' in self.inventory.open_menus:
+                                if self.inventory.selected_tool_slot_idx == slot:
+                                    self.inventory.unequip_slot(slot)
+                                    self.inventory.selected['tools'] = None
+                                    self.inventory.pending_equip_slot = slot
+                                    self.inventory.pending_equip_equipment_slot = None
+                                else:
+                                    self.inventory.selected_tool_slot_idx = slot
+                                    self.inventory.selected['tools'] = self.inventory.tool_slots[slot]
+                                    self.inventory.pending_equip_slot = None
+                            else:
+                                self.select_inventory_slot(slot)
         
         # Handle direction changes and close inventory on movement
         if self.state == 'playing':
@@ -1243,7 +1486,7 @@ class GameCoreMixin:
         start_y = SCREEN_HEIGHT - 90  # Above UI bar
         
         # Stack categories vertically from bottom
-        categories = ['tools', 'items', 'magic', 'actions', 'followers', 'crafting']
+        categories = ['tools', 'equipment', 'items', 'magic', 'actions', 'followers', 'crafting']
         y_offset = 0
 
         for category in categories:
@@ -1275,13 +1518,47 @@ class GameCoreMixin:
                         slot_y <= pos[1] <= slot_y + slot_size):
 
                     if category == 'tools':
-                        # --- Tool bar slot clicked: select and mark as pending ---
-                        # Never unequip on click — unequip only happens when a
-                        # different inventory item is then clicked (equip_to_slot)
-                        self.inventory.selected_tool_slot_idx = i
-                        self.inventory.selected['tools'] = item_name
-                        self.inventory.pending_equip_slot = i
+                        if self.inventory.selected_tool_slot_idx == i:
+                            # Second click on same slot — unequip and mark pending for reassignment
+                            self.inventory.unequip_slot(i)
+                            self.inventory.selected['tools'] = None
+                            self.inventory.pending_equip_slot = i
+                            self.inventory.pending_equip_equipment_slot = None
+                        else:
+                            # First click — just select the slot, keep its item
+                            self.inventory.selected_tool_slot_idx = i
+                            self.inventory.selected['tools'] = self.inventory.tool_slots[i]
+                            self.inventory.pending_equip_slot = None
                         self.sound.on_inventory_select()
+                        return
+
+                    elif category == 'equipment':
+                        # --- Equipment slot clicked: mark as pending for item assignment ---
+                        slot_name = self.inventory.EQUIPMENT_SLOT_NAMES[i]
+                        if self.inventory.pending_equip_equipment_slot == slot_name:
+                            # Clicking same slot again clears pending
+                            self.inventory.pending_equip_equipment_slot = None
+                        else:
+                            self.inventory.pending_equip_equipment_slot = slot_name
+                            self.inventory.pending_equip_slot = None
+                        self.sound.on_inventory_select()
+                        return
+
+                    elif (self.inventory.pending_equip_equipment_slot is not None and
+                          item_name is not None):
+                        # --- Item clicked while equipment slot is pending ---
+                        slot_name = self.inventory.pending_equip_equipment_slot
+                        # Enforce slot type: item must declare the matching equipment_slot
+                        item_equip_slot = ITEMS.get(item_name, {}).get('equipment_slot')
+                        _target = 'ring' if slot_name in ('ring1', 'ring2') else slot_name
+                        if item_equip_slot != _target and item_equip_slot != slot_name:
+                            # Wrong slot type — ignore click, keep pending
+                            return
+                        self.inventory.equip_to_equipment_slot(slot_name, item_name, category)
+                        if ITEMS.get(item_name, {}).get('damage'):
+                            self.sound.on_equip_sword()
+                        else:
+                            self.sound.on_inventory_select()
                         return
 
                     elif ('tools' in self.inventory.open_menus and
@@ -1337,7 +1614,6 @@ class GameCoreMixin:
                 slot_y <= pos[1] <= slot_y + slot_size):
                 self.active_quest = quest_type
                 self.active_npc_quest_npc_id = None  # deselect NPC quest when picking standard
-                print(f"Active quest: {QUEST_TYPES[quest_type]['name']}")
                 return
 
         # Check NPC quest slots (offset by 1 gap after standard slots)
@@ -1350,8 +1626,6 @@ class GameCoreMixin:
                 self.active_npc_quest_npc_id = nq.npc_id
                 giver = self.entities.get(nq.npc_id)
                 npc_name = (giver.name or giver.type) if giver else "NPC"
-                q_name = QUEST_TYPES.get(nq.quest.quest_type, {}).get('name', nq.quest.quest_type)
-                print(f"Tracking NPC quest [{q_name}] from {npc_name}")
                 return
 
     # -------------------------------------------------------------------------
@@ -1365,6 +1639,7 @@ class GameCoreMixin:
                 data = _json.load(f)
             self.ambient_music_enabled = bool(data.get('ambient_music', True))
             self.debug_prints_enabled  = bool(data.get('debug_prints',  True))
+            self.autosave_enabled      = bool(data.get('autosave',      True))
         except Exception:
             pass  # use defaults
 
@@ -1375,6 +1650,7 @@ class GameCoreMixin:
                 _json.dump({
                     'ambient_music': self.ambient_music_enabled,
                     'debug_prints':  self.debug_prints_enabled,
+                    'autosave':      self.autosave_enabled,
                 }, f)
         except Exception:
             pass
@@ -1402,6 +1678,7 @@ class GameCoreMixin:
         """Handle left-click on main menu (checkbox toggles)."""
         mr = getattr(self, '_menu_cb_music_rect', None)
         dr = getattr(self, '_menu_cb_debug_rect', None)
+        ar = getattr(self, '_menu_cb_autosave_rect', None)
         if mr and mr.collidepoint(pos):
             self.ambient_music_enabled = not self.ambient_music_enabled
             self._save_settings()
@@ -1410,6 +1687,9 @@ class GameCoreMixin:
             self.debug_prints_enabled = not self.debug_prints_enabled
             self._save_settings()
             self._apply_settings()
+        elif ar and ar.collidepoint(pos):
+            self.autosave_enabled = not self.autosave_enabled
+            self._save_settings()
 
     # -------------------------------------------------------------------------
     # Spells
@@ -1421,13 +1701,29 @@ class GameCoreMixin:
         if self.is_raining:
             return
         self.player['energy'] -= 90
+        # Set rain on the player's current zone through the zone_rain system
+        # (global self.is_raining is synced from zone_rain each update cycle)
+        _pzk = f"{self.player['screen_x']},{self.player['screen_y']}"
+        if not hasattr(self, 'zone_rain'):
+            self.zone_rain = {}
+        if _pzk not in self.zone_rain:
+            self.zone_rain[_pzk] = {
+                'is_raining': False,
+                'weather_timer': 0,
+                'weather_cycle': RAIN_FREQUENCY_MAX,
+                'rain_timer': 0,
+                'rain_duration': 0,
+            }
+        zr = self.zone_rain[_pzk]
+        zr['is_raining'] = True
+        zr['rain_timer'] = 0
+        zr['rain_duration'] = RAIN_DURATION_MIN
+        # Also reset weather_timer so the zone doesn't immediately trigger another cycle
+        zr['weather_timer'] = 0
         self.is_raining = True
-        self.rain_timer = 0
-        self.rain_duration = random.randint(RAIN_DURATION_MIN, RAIN_DURATION_MAX)
 
     def cast_day_spell(self):
         if self.player['energy'] < 90:
-            print("[Spell] Not enough energy!")
             return
         self.player['energy'] -= 90
         self.is_night = not self.is_night
@@ -1435,11 +1731,35 @@ class GameCoreMixin:
             self.day_night_timer = DAY_LENGTH + 1
         else:
             self.day_night_timer = 0
-        print(f"[Spell] Now {'night' if self.is_night else 'day'}.")
 
     def execute_action(self, action_name):
         if action_name == 'shove':
             self.do_shove()
+        elif action_name == 'attack':
+            self.interact()
+        elif action_name == 'block':
+            self.player['blocking'] = True
+        elif action_name == 'inspect':
+            pass  # Handled by check_npc_inspection via tool slot or Shift key
+        elif action_name in ('sneak', 'dig', 'talk'):
+            pass  # Placeholder — implementation in future sessions
+
+    def give_gift_to_npc(self, npc_id):
+        """Shift+G: offer selected item to inspected NPC to gain favor."""
+        if npc_id not in self.entities:
+            return
+        entity = self.entities[npc_id]
+        # Find best item to gift (selected item first, then first available)
+        item_name = (self.inventory.selected.get('items') or
+                     next(iter(self.inventory.items), None))
+        if not item_name or self.inventory.items.get(item_name, 0) <= 0:
+            return
+        item_data = ITEMS.get(item_name, {})
+        # Favor gain: base 10, +5 per damage value (weapons are better gifts)
+        favor_gain = 10 + item_data.get('damage', 0) // 2
+        favor_gain = min(favor_gain, 30)
+        self.inventory.remove_item(item_name, 1)
+        entity.favor = max(-100, min(100, entity.favor + favor_gain))
 
     def do_shove(self):
         px, py = self.player['x'], self.player['y']
@@ -1455,7 +1775,6 @@ class GameCoreMixin:
                     target_cell = self.current_screen['grid'][ny][nx]
                     if not CELL_TYPES.get(target_cell, {}).get('solid', True):
                         e.x, e.y = nx, ny
-                        print(f"[Shove] Pushed {e.type}!")
                 break
 
     def handle_npc_follow_interaction(self):
@@ -1466,7 +1785,6 @@ class GameCoreMixin:
         npc_name = entity.name if entity.name else entity.type
 
         if npc_id in self.followers:
-            print(f"{npc_name} is already following you.")
             return
 
         if random.random() < 0.5:
@@ -1484,6 +1802,8 @@ class GameCoreMixin:
             self.inventory.add_item(follower_name, 1)
             if hasattr(self, 'follower_items'):
                 self.follower_items[npc_id] = follower_name
+            # Deduct 30 max_energy per follower (matches star_spell follower cost)
+            self.player['max_energy'] = max(1, self.player.get('max_energy', 100) - 30)
             # Clear pathfinding state so follower moves cleanly from the start
             entity.memory_lane = []
             entity.last_move_tick = 0
@@ -1495,9 +1815,6 @@ class GameCoreMixin:
             entity.ai_state = 'idle'
             entity.idle_timer = 0
             entity.props['hostile'] = False
-            print(f"{npc_name} has decided to follow you!")
-        else:
-            print(f"{npc_name} declined to follow.")
 
     def handle_npc_quest_interaction(self):
         """Handle Shift+Q while inspecting an NPC: give, progress, or turn in quest."""
@@ -1519,16 +1836,12 @@ class GameCoreMixin:
             self.npc_quests.remove(existing)
             if self.active_npc_quest_npc_id == npc_id:
                 self.active_npc_quest_npc_id = None
-            level_msg = f" ({npc_name} leveled up to {entity.level}!)" if leveled else ""
-            print(f"Quest turned in! +{xp_reward} XP. {npc_name} +100 XP.{level_msg}")
             return
 
         if existing and existing.quest.status == 'active':
-            print(f"Quest from {npc_name} still in progress.")
             return
 
         if len(self.npc_quests) >= 3:
-            print("Quest log full (max 3 NPC quests).")
             return
 
         # RECEIVE: pick random quest type, generate target via loreEngine
@@ -1539,10 +1852,6 @@ class GameCoreMixin:
             self.npc_quests.append(NpcQuestSlot(npc_id, quest))
             self.active_npc_quest_npc_id = npc_id  # auto-select as active NPC quest
             self.sound.on_quest_received()
-            q_name = QUEST_TYPES[quest_type]['name']
-            print(f"Received quest [{q_name}] from {npc_name}!")
-        else:
-            print(f"No quest available from {npc_name} right now.")
 
     def handle_npc_quest_assign(self):
         """Shift+A while inspecting an NPC: assign the player's selected quest to the NPC.
@@ -1569,7 +1878,6 @@ class GameCoreMixin:
 
         qt = active_special.quest.quest_type if active_special else self.active_quest
         if not qt:
-            print("No quest selected to assign.")
             return
         q_name = QUEST_TYPES.get(qt, {}).get('name', qt)
 
@@ -1582,12 +1890,10 @@ class GameCoreMixin:
 
             # Reject if already at max capacity
             if len(entity.quest_queue) >= NPC_QUEST_QUEUE_MAX:
-                print(f"Quest queue full for {npc_name} (max {NPC_QUEST_QUEUE_MAX}).")
                 return
 
             # Reject duplicate quest types already in queue
             if any(e['type'] == qt for e in entity.quest_queue):
-                print(f"{npc_name} already has a [{q_name}] quest queued.")
                 return
 
             slot = active_special  # None for standing quests
@@ -1636,9 +1942,6 @@ class GameCoreMixin:
             if active_special:
                 self.npc_quests.remove(active_special)
                 self.active_npc_quest_npc_id = None
-                print(f"Assigned special quest [{q_name}] to {npc_name}. Quest transferred.")
-            else:
-                print(f"Assigned quest [{q_name}] to {npc_name}.")
             self.sound.on_quest_received()
             return
 
@@ -1651,13 +1954,11 @@ class GameCoreMixin:
             self.npc_quests.remove(active_special)
             self.active_npc_quest_npc_id = None
             self.sound.on_quest_received()
-            print(f"Assigned special quest [{q_name}] to {npc_name}. Quest transferred.")
         else:
             entity.quest_focus = qt
             entity.quest_target = None
             entity._quest_update_counter = 0
             self.sound.on_quest_received()
-            print(f"Assigned quest [{q_name}] to {npc_name}.")
 
     def _next_item_uid(self):
         """Return a new unique item ID for individually tracked items."""
@@ -1749,7 +2050,6 @@ class GameCoreMixin:
                 player_gold = self.inventory.items.get('gold', 0)
                 price = entry['price']
                 if player_gold < price:
-                    print(f"Not enough gold. Need {price}, have {player_gold}.")
                     return True
                 # Transfer gold
                 self.inventory.remove_item('gold', price)
@@ -1758,7 +2058,6 @@ class GameCoreMixin:
                 item_name = entry['item']
                 self.inventory.add_item(item_name, 1)
                 entity.inventory[item_name] = max(0, entity.inventory.get(item_name, 0) - 1)
-                print(f"Bought {item_name} for {price} gold.")
                 # Refresh display or close if empty
                 items[:] = [e for e in items if entity.inventory.get(e['item'], 0) > 0]
                 if not items:
@@ -1814,6 +2113,7 @@ class GameCoreMixin:
                     self.quest_ui_open = False
                     self.trader_display = None
                     self.inspected_npc = None
+                    self.inspect_cell_target = None
         if self.state != 'playing' or self.inventory.open_menus:
             return
         
@@ -1897,8 +2197,10 @@ class GameCoreMixin:
             # Exit when walking out the bottom (doorway area)
             # Only for houses or cave depth 1 (deeper caves use STAIRS_UP)
             if current_structure:
-                is_depth_1 = current_structure.get('depth', 1) == 1
-                if is_depth_1 and new_y >= GRID_HEIGHT - 1:
+                # Caves now have solid CAVE_WALL borders — exit only via STAIRS_UP.
+                # House interiors still use the bottom-edge walkout.
+                is_house = current_structure.get('type') != 'CAVE'
+                if is_house and new_y >= GRID_HEIGHT - 1:
                     self.exit_structure()
                     return
         
@@ -2029,17 +2331,6 @@ class GameCoreMixin:
             check_x, check_y = target
             screen_key = f"{self.player['screen_x']},{self.player['screen_y']}"
             
-            # Check if there's an entity at this position
-            if screen_key in self.screen_entities:
-                for entity_id in self.screen_entities[screen_key]:
-                    if entity_id in self.entities:
-                        entity = self.entities[entity_id]
-                        if entity.x == check_x and entity.y == check_y:
-                            # Target this entity
-                            self.inspected_npc = entity_id
-                            print(f"Targeting: {entity.name if entity.name else entity.type}")
-                            return  # Entity targeting takes priority
-        
         # Otherwise, normal interactions
         if not target:
             return
@@ -2049,11 +2340,20 @@ class GameCoreMixin:
         
         # Cannot interact with enchanted cells
         if self.is_cell_enchanted(check_x, check_y, screen_key):
-            print("Cannot interact with enchanted cell!")
             return
-        
+
+        # Pick up any dropped items on this cell first
+        if screen_key in self.dropped_items:
+            cell_key = (check_x, check_y)
+            if cell_key in self.dropped_items[screen_key]:
+                for item_name, count in self.dropped_items[screen_key][cell_key].items():
+                    self.inventory.add_item(item_name, count)
+                del self.dropped_items[screen_key][cell_key]
+                self.sound.on_pickup()
+                return
+
         cell = self.current_screen['grid'][check_y][check_x]
-        
+
         # Check for structure exit (STAIRS_UP)
         if cell == 'STAIRS_UP':
             # Check if in a deep cave level
@@ -2072,9 +2372,19 @@ class GameCoreMixin:
             self.descend_cave()
             return
         
-        # Check for chest interaction
-        if cell == 'CHEST':
+        # Check for chest/container interaction
+        if cell in ('CHEST', 'OPEN_CHEST', 'EMPTY_CRATE', 'BARREL'):
             self.interact_with_chest(check_x, check_y)
+            return
+
+        # LOCKED_CHEST — requires destruction to open
+        if cell == 'LOCKED_CHEST':
+            return
+
+        # WELL / DESERT_WELL / WATER_TROUGH — restore energy
+        if cell in ('WELL', 'DESERT_WELL', 'WATER_TROUGH'):
+            restore = min(40, self.player['max_energy'] - self.player.get('energy', 0))
+            self.player['energy'] = self.player.get('energy', 0) + restore
             return
         
         # Check for enterable structure (HOUSE, CAVE)
@@ -2135,10 +2445,6 @@ class GameCoreMixin:
 
             if random.random() < mineshaft_chance:
                 self.current_screen['grid'][check_y][check_x] = 'MINESHAFT'
-                if in_cave:
-                    print(f"You dug a mineshaft to depth {depth + 1}!")
-                else:
-                    print(f"You discovered an underground passage!")
             return
 
         # Till dirt — hoe must be selected tool
@@ -2159,8 +2465,10 @@ class GameCoreMixin:
             self.current_screen['grid'][check_y][check_x] = 'CARROT1'
             return
         
-        # Place bones as decoration on ground cells
-        if cell in ['GRASS', 'DIRT', 'SAND', 'STONE', 'FLOOR_WOOD', 'CAVE_FLOOR', 'COBBLESTONE'] and self.inventory.has_item('bones'):
+        # Place bones as decoration on ground cells (only when bones is the selected item)
+        if cell in ['GRASS', 'DIRT', 'SAND', 'STONE', 'FLOOR_WOOD', 'CAVE_FLOOR', 'COBBLESTONE'] \
+                and self.inventory.selected.get('items') == 'bones' \
+                and self.inventory.has_item('bones'):
             self.inventory.remove_item('bones', 1)
             
             # Add bones to dropped items (as overlay decoration)
@@ -2221,11 +2529,16 @@ class GameCoreMixin:
         if not existing_key and structure_type == 'CAVE':
             parent_key = f"{parent_screen_x},{parent_screen_y}"
             if parent_key in self.zone_cave_systems:
-                existing_key = self.zone_cave_systems[parent_key]
-                # Add this entrance to the cave system's entrance list
-                structure = self.structures.get(existing_key)
-                if structure and (cell_x, cell_y) not in structure.get('entrances', []):
-                    structure.setdefault('entrances', []).append((cell_x, cell_y))
+                candidate = self.zone_cave_systems[parent_key]
+                if candidate in self.structures:
+                    existing_key = candidate
+                    # Add this entrance to the cave system's entrance list
+                    structure = self.structures[existing_key]
+                    if (cell_x, cell_y) not in structure.get('entrances', []):
+                        structure.setdefault('entrances', []).append((cell_x, cell_y))
+                else:
+                    # Stale reference — purge so a fresh interior gets generated
+                    del self.zone_cave_systems[parent_key]
 
         # Generate or retrieve structure
         if existing_key:
@@ -2262,7 +2575,6 @@ class GameCoreMixin:
         self.player['world_x'] = float(entrance[0])
         self.player['world_y'] = float(entrance[1])
 
-        print(f"Entered {structure_type}!")
         self._teleport_followers_with_player()
 
     def _teleport_followers_with_player(self):
@@ -2349,7 +2661,6 @@ class GameCoreMixin:
             self.player['structure_key'] = None
             self.player['structure_parent'] = None
 
-        print("Exited to outside!")
         self._teleport_followers_with_player()
 
     def descend_cave(self):
@@ -2376,13 +2687,16 @@ class GameCoreMixin:
                 deeper_key = key
                 break
         
-        # If not found, generate new deeper level
+        # If not found, generate new deeper level aligned with current STAIRS_DOWN position
         if not deeper_key:
+            stairs_down = current_structure.get('stairs_down')
+            align_kwargs = {'align_x': stairs_down[0], 'align_y': stairs_down[1]} if stairs_down else {}
             deeper_key = self.generate_structure_zone(
                 parent_screen_x, parent_screen_y,
                 parent_cell_x, parent_cell_y,
                 'CAVE',
-                depth=new_depth
+                depth=new_depth,
+                **align_kwargs
             )
         
         # Update player to new structure zone
@@ -2400,7 +2714,6 @@ class GameCoreMixin:
         self.player['world_x'] = float(entrance[0])
         self.player['world_y'] = float(entrance[1])
 
-        print(f"Descended to cave level {new_depth}!")
         self._teleport_followers_with_player()
 
         # Spawn enemies for this depth
@@ -2464,7 +2777,6 @@ class GameCoreMixin:
         self.player['world_x'] = float(entrance[0])
         self.player['world_y'] = float(entrance[1])
 
-        print(f"Ascended to cave level {target_depth}!")
         self._teleport_followers_with_player()
 
     def _exit_secret_cave_entrance(self):
@@ -2508,7 +2820,6 @@ class GameCoreMixin:
             self.player['in_structure'] = False
             self.player['structure_key'] = None
             self.player['structure_parent'] = None
-            print("Exited secret cave — arrived at overworld cave entrance.")
             return
 
         # ── Option 2: return to house interior at the MINESHAFT tile ─────────
@@ -2529,7 +2840,6 @@ class GameCoreMixin:
             hp = house_sub.get('parent_screen', (psx, psy))
             hc = house_sub.get('parent_cell', (0, 0))
             self.player['structure_parent'] = (hp[0], hp[1], hc[0], hc[1])
-            print("Exited secret cave — returned to house interior.")
             return
 
         # Fallback: normal exit to overworld
@@ -2564,6 +2874,7 @@ class GameCoreMixin:
                 entity_id = self.next_entity_id
                 self.next_entity_id += 1
                 self.entities[entity_id] = entity
+                self.entities_spawned_total = getattr(self, 'entities_spawned_total', 0) + 1
 
                 if structure_key not in self.screen_entities:
                     self.screen_entities[structure_key] = []
@@ -2582,21 +2893,43 @@ class GameCoreMixin:
             screen_key = f"{self.player['screen_x']},{self.player['screen_y']}"
             chest_id = f"{screen_key}:{chest_x},{chest_y}"
         
-        # Check if already opened
-        if chest_id in self.opened_chests:
-            print("This chest is empty.")
+        # OPEN_CHEST cell is already looted — visual state only
+        current_cell = self.current_screen['grid'][chest_y][chest_x]
+        if current_cell == 'OPEN_CHEST':
             return
-        
-        # Get loot table type
+
+        # Check if already opened (fallback for older opened_chests set)
+        if chest_id in self.opened_chests:
+            return
+
+        items_found = []
+
+        # NPC-stashed chests: contents stored directly in chest_contents
+        chest_contents = getattr(self, 'chest_contents', {})
+        if chest_id in chest_contents:
+            contents = chest_contents.pop(chest_id)
+            for item_name, count in contents.items():
+                if count > 0:
+                    self.inventory.add_item(item_name, count)
+                    item_label = ITEMS.get(item_name, {}).get('name', item_name)
+                    items_found.append(f"{count}x {item_label}")
+            # Flip NPC-placed CHEST to OPEN_CHEST after looting
+            if not self.player['in_structure']:
+                self.current_screen['grid'][chest_y][chest_x] = 'OPEN_CHEST'
+            self.opened_chests.add(chest_id)
+            self.sound.on_pickup()
+            return
+
+        # Structure/loot-table chests
         if self.player['in_structure']:
             current_structure = self.structures.get(self.player['structure_key'])
             loot_table_name = current_structure['chests'].get((chest_x, chest_y), 'HOUSE_CHEST')
         else:
-            loot_table_name = 'HOUSE_CHEST'  # Default
-        
+            loot_table_name = 'HOUSE_CHEST'
+
         # Generate loot
         loot_table = LOOT_TABLES.get(loot_table_name, [])
-        items_found = []
+
         
         for loot_entry in loot_table:
             if random.random() < loot_entry['chance']:
@@ -2605,20 +2938,17 @@ class GameCoreMixin:
                 self.inventory.add_item(item_name, amount)
                 items_found.append(f"{amount}x {ITEMS[item_name]['name']}")
         
-        # Mark chest as opened
+        # Mark chest as opened; NPC-placed overworld CHEST flips to OPEN_CHEST
         self.opened_chests.add(chest_id)
-        
-        # Chest stays as CHEST (doesn't convert to floor anymore)
-        # Player can see it was already looted from the "empty" message
-        
-        if items_found:
-            print(f"Found: {', '.join(items_found)}")
-        else:
-            print("The chest was empty...")
-    
+        if not self.player['in_structure'] and self.current_screen['grid'][chest_y][chest_x] == 'CHEST':
+            self.current_screen['grid'][chest_y][chest_x] = 'OPEN_CHEST'
+
     def new_game(self):
         """Start a new game"""
-        self.bug_catcher.clear()
+        if self.bug_catcher:
+            self.bug_catcher.clear()
+        if self.watchdog:
+            self.watchdog.snapshot_on_start(self.tick, self)
         self.player = {
             'x': 12, 'y': 9, 
             'screen_x': 0, 'screen_y': 0,
@@ -2631,6 +2961,8 @@ class GameCoreMixin:
             'max_energy': 100,
             'base_damage': 10,
             'blocking': False,
+            'block_locked': False,
+            'last_shift_press_tick': 0,
             'friendly_fire': False,      # OFF = cannot damage peaceful entities
             'last_attack_tick': 0,
             'in_structure': False,
@@ -2646,26 +2978,14 @@ class GameCoreMixin:
         self.screens = {}
         self.tick = 0
         self.inventory = Inventory()
-        self.inventory.add_item('axe', 1)
-        self.inventory.add_item('hoe', 1)
-        self.inventory.add_item('shovel', 1)
-        self.inventory.add_item('pickaxe', 1)
-        self.inventory.add_item('bucket', 1)
-        self.inventory.add_magic('star_spell', 1)
-        self.inventory.add_item('rain_spell', 1)
-        self.inventory.add_item('day_spell', 1)
-        # Dev spells: summon + transform for every NPC type
-        _dev_npc_types = ['sheep','wolf','deer','farmer','guard','warrior','commander','king',
-                          'trader','blacksmith','wizard','lumberjack','miner','bandit','goblin',
-                          'skeleton','termite','bat','red_bird','butterfly','chicken','black_spider']
-        for _t in _dev_npc_types:
-            self.inventory.add_item(f'summon_{_t}', 1)
-            self.inventory.add_item(f'transform_{_t}', 1)
-        self.inventory.add_item('shove', 1)
-        self.inventory.add_item('bone_sword', 1)
-        self.inventory.add_item('carrot', 5)
-        self.inventory.add_item('tree_sapling', 3)
-        self.inventory.add_item('magic_rune', 1)  # Testing sprite overlay
+        # Purge stale dynamic follower entries injected into ITEMS by previous sessions
+        for _stale in [k for k, v in list(ITEMS.items()) if v.get('is_follower')]:
+            del ITEMS[_stale]
+        # Main-branch starter set: star_spell + action items only
+        self.inventory.add_item('star_spell', 1)
+        for _action in ['attack', 'block', 'inspect', 'dig', 'sneak', 'talk']:
+            if _action in ITEMS:
+                self.inventory.add_item(_action, 1)
         self.dropped_items = {}
         self.buried_items = {}
         self.enchanted_cells = {}
@@ -2690,7 +3010,7 @@ class GameCoreMixin:
         # Choose follower type now but defer actual spawning until after time pass.
         # Spawning immediately puts the entity in screen_entities where hostile NPCs
         # can kill it during the 150-250 year simulation before the player even loads.
-        self._pending_follower_type = random.choice(['SHEEP', 'DEER', 'WOLF', 'BAT', 'GOBLIN', 'SKELETON', 'TERMITE'])
+        self._pending_follower_type = random.choice(['SHEEP', 'DEER', 'RED_BIRD', 'BUTTERFLY', 'CHICKEN'])
         self._time_pass_spawned = False
 
         # Trigger initial time passage for world generation
@@ -2707,16 +3027,14 @@ class GameCoreMixin:
                         self.generate_screen(zone_x, zone_y)
             
             # Run minimal initialization to spawn entities
-            print("Initializing world...")
             for _ in range(3):  # Just 3 quick cycles to ensure spawns
                 self.probabilistic_zone_updates()
-            
+
             self.state = 'death'  # Trigger death sequence
             self.death_years = random.randint(150, 250)  # More years for better history
             self.death_start_tick = self.tick
             self.death_ticks_simulated = 0
             self.is_initial_generation = True  # Flag for time passage
-            print(f"World is generating... {self.death_years} years passing...")
         else:
             self.state = 'playing'
             # Autopilot grace period: don't engage for 15 seconds after starting
@@ -2737,24 +3055,26 @@ class GameCoreMixin:
         """Save, flush logs, and quit cleanly at end of AUTO_DEBUG session."""
         ts = _datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         print(f"[AutoDebug] Timer expired at tick {self.tick} ({ts}) — saving and quitting")
-        self.bug_catcher.log({
-            'tick': self.tick,
-            'category': 'auto_debug_shutdown',
-            'ts': ts,
-            'total_ticks': self.tick,
-            'is_night': getattr(self, 'is_night', False),
-            'entity_count': len(getattr(self, 'entities', {})),
-            'zone_count': len(getattr(self, 'screens', {})),
-            'structure_count': len(getattr(self, 'structures', {})),
-            'follower_count': len(getattr(self, 'followers', [])),
-            'player_zone': f"{self.player.get('screen_x',0)},{self.player.get('screen_y',0)}",
-            'player_health': self.player.get('health'),
-            'player_level': self.player.get('level'),
-        })
-        self.bug_catcher.flush()
+        if self.bug_catcher:
+            self.bug_catcher.log({
+                'tick': self.tick,
+                'category': 'auto_debug_shutdown',
+                'ts': ts,
+                'total_ticks': self.tick,
+                'is_night': getattr(self, 'is_night', False),
+                'entity_count': len(getattr(self, 'entities', {})),
+                'zone_count': len(getattr(self, 'screens', {})),
+                'structure_count': len(getattr(self, 'structures', {})),
+                'follower_count': len(getattr(self, 'followers', [])),
+                'player_zone': f"{self.player.get('screen_x',0)},{self.player.get('screen_y',0)}",
+                'player_health': self.player.get('health'),
+                'player_level': self.player.get('level'),
+            })
+            self.bug_catcher.flush()
         try:
             self.save_game(path='debug/auto_debug_save.json')
-            print("[AutoDebug] Save written to debug/auto_debug_save.json")
+            self.save_game(path='savegame.json')
+            print("[AutoDebug] Save written to debug/auto_debug_save.json and savegame.json")
         except Exception as exc:
             print(f"[AutoDebug] Save failed: {exc}")
         try:
@@ -2829,16 +3149,15 @@ class GameCoreMixin:
                     self.process_catchup_queue()
 
                 # Watchdog: periodic sample + integrity checks + flush
-                self.watchdog.update(self.tick, self)
+                if self.watchdog:
+                    self.watchdog.update(self.tick, self)
 
-                # AUTO_DEBUG: hard-stop when wall-clock timer expires
-                if hasattr(self, '_auto_debug_end_time') and _time.time() >= self._auto_debug_end_time:
-                    self._auto_debug_shutdown()
-                    break
+                # Autosave every 30 seconds
+                if self.autosave_enabled and self.tick > 0 and self.tick % (30 * FPS) == 0:
+                    self.save_game()
 
                 self.tick += 1
                 self.draw_game()
-                self.draw_dev_screen()
             elif self.state == 'death':
                 self.update_death_screen()
                 self.draw_death_screen()
@@ -2846,12 +3165,22 @@ class GameCoreMixin:
                 self.sound.update(self.tick, 'menu', False, False, None)
                 self.draw_menu()
             elif self.state == 'paused':
-                self.draw_paused()
-            
+                if self.showing_game_options:
+                    self.draw_game_options()
+                else:
+                    self.draw_paused()
+
+            # AUTO_DEBUG: hard-stop when wall-clock timer expires — runs every loop
+            # iteration regardless of state so death/menu/paused don't trap the session.
+            if hasattr(self, '_auto_debug_end_time') and _time.time() >= self._auto_debug_end_time:
+                self._auto_debug_shutdown()
+                break
+
             pygame.display.flip()
             self.clock.tick(FPS)
         
-        self.bug_catcher.flush()
+        if self.bug_catcher:
+            self.bug_catcher.flush()
         pygame.quit()
 
 if __name__ == "__main__":

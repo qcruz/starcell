@@ -35,6 +35,9 @@ import os
 pygame.mixer.pre_init(44100, -16, 2, 512)
 pygame.init()
 
+# Debug mode — off by default on main branch; AUTO_DEBUG path enables it at runtime
+DEBUG_MODE = False
+
 # Constants
 CELL_SIZE = 40
 GRID_WIDTH = 24
@@ -98,39 +101,80 @@ NIGHT_OVERLAY_ALPHA = 40  # Darkness overlay opacity (0-255, subtle at 40)
 QUEST_COOLDOWN = 300      # Ticks before new quest target assigned after completion (5 seconds)
 QUEST_XP_MULTIPLIER = 10  # XP reward = target_level × this value
 
-# ── Global CA base rate ────────────────────────────────────────────────────────
-# Central reference for all growth/decay probabilities per tick.
-# Future rules should be expressed as multiples of this (e.g. 0.5 * BASE_DECAY_RATE).
-# Existing rates will be migrated to use this reference incrementally.
-BASE_DECAY_RATE = 0.001         # ~0.1% per tick baseline; tune this to shift all derived rules
+# ═══════════════════════════════════════════════════════════════════════════════
+# CELLULAR AUTOMATA — RATE HIERARCHY
+# See docs/ca_rules.md for full rule descriptions and firing conditions.
+#
+# Structure:
+#   CA_BASE_RATE          — master knob, scales the entire CA system
+#   Tier 1 class rates    — CA_GROWTH_RATE, CA_DECAY_RATE, CA_SPREAD_RATE,
+#                           CA_WATER_EVAP_RATE — tune a whole class of rules
+#   Tier 1 named rules    — global rules expressed as N × class rate
+#   Tier 2 cross-biome    — rules that fire at biome-type boundaries
+#   Tier 3 biome-specific — rules that only apply inside one biome
+#   Constructed / Agri.   — placed-cell decay, crop drought tiers
+# ═══════════════════════════════════════════════════════════════════════════════
 
-# Cell Growth & Decay Rates (probability per tick) - SLOWED for subtle changes
-GRASS_TO_DIRT_RATE = 0.00001    # Grass decays to dirt without water (was 0.0001)
-DIRT_TO_SAND_RATE = 0.000005    # Dirt becomes sand in severe drought (was 0.00005)
-DIRT_TO_GRASS_RATE = 0.0001     # Dirt becomes grass with water (was 0.0005)
-TREE_GROWTH_RATE = 0.0001       # Grass becomes tree (increased to offset crowding decay)
-TREE_DECAY_RATE = 0.0005        # Trees decay when overcrowded (was 0.001)
-TREE_DROUGHT_RATE = 0.0003      # Trees die to grass during drought (drought_severity > 0.5, no water)
-SAND_RECLAIM_RATE = 0.05        # Sand → dirt when touching water (universal CA rule, all biomes)
-CACTUS_DROUGHT_RATE = 0.0003    # Cactus dies to sand during drought (mirrors TREE_DROUGHT_RATE)
-FLOWER_SPREAD_RATE = 0.0001     # Flowers spread to nearby grass (was 0.0005)
-FLOWER_DECAY_RATE = 0.0005      # Flowers die from overcrowding/drought (was 0.002)
-DEEP_WATER_FORM_RATE = 0.05     # Water becomes deep water (apply_cellular_automata)
-DEEP_WATER_EVAPORATE_RATE = 0.3  # Deep water → water when any cardinal neighbor isn't water (was 0.03)
-WATER_TO_DIRT_RATE = 0.02       # Water evaporates to dirt when isolated (was 0.005)
-FLOODING_RATE = 0.08            # Water spreads to dirt during rain only (apply_cellular_automata)
-BIOME_SPREAD_RATE = 0.004          # Chance per update a base cell copies a different NSEW neighbor type (4x increase)
-TREE_CROWD_DECAY_RATE = 0.001      # Trees thin when touching any adjacent tree (produces checkerboard spacing)
-GRASS_SAND_DECAY_RATE = 0.003      # Grass near sand erodes to dirt (desertification edge)
-DIRT_SAND_SPREAD_RATE = 0.008      # Dirt near sand becomes sand when dry (must overpower BIOME_SPREAD_RATE)
-GRASS_WATER_ABSORB_RATE = 0.02     # Grass adjacent to water floods during rain only
-DIRT_WATER_EXTRA_GRASS_RATE = 0.0002  # Dirt with even 1 water neighbor gets extra grass chance
+CA_BASE_RATE = 0.001            # master knob — tune to speed/slow all CA at once
+BASE_DECAY_RATE = CA_BASE_RATE  # legacy alias — do not use in new code
+
+# ── Tier 1 class rates ──────────────────────────────────────────────────────
+# Adjust these to shift a whole class of rules simultaneously.
+# CA_GROWTH_RATE and CA_DECAY_RATE should stay roughly equal;
+# set CA_DECAY_RATE slightly above CA_GROWTH_RATE to cause long-term natural
+# drift toward decay — combined with the rain boost to _growth this creates
+# zones that green up during rain and slowly dry without it.
+CA_GROWTH_RATE     = 0.1 * CA_BASE_RATE   # 0.0001 — base cell upgrade rate
+CA_DECAY_RATE      = 0.1 * CA_BASE_RATE   # 0.0001 — base cell downgrade rate
+CA_SPREAD_RATE     = 2   * CA_BASE_RATE   # 0.002  — natural neighbor-copy diffusion
+CA_WATER_EVAP_RATE = 8   * CA_BASE_RATE   # 0.008  — water → biome base cell baseline
+
+# ── Tier 1: Global growth rules (× CA_GROWTH_RATE) ──────────────────────────
+DIRT_TO_GRASS_RATE          = 20.0 * CA_GROWTH_RATE  # 0.002 — dirt → grass with 2+ water neighbors
+DIRT_TO_GRASS_WATER_RATE = 10.0 * CA_GROWTH_RATE  # 0.001 — dirt → grass with 1 water neighbor
+GRASS_TO_TREE_RATE       = 1.0 * CA_GROWTH_RATE  # 0.0001 — grass → tree (needs water + tree neighbor, not desert)
+GRASS_TO_FLOWER_RATE     = 1.0 * CA_GROWTH_RATE  # 0.0001 — flowers spread to grass near water
+GRASS_TO_FLOWER_PATTERN_RATE = 5.0 * CA_GROWTH_RATE  # 0.0005 — grass near water spontaneously grows flower patterns
+SAND_TO_DIRT_STONE_RATE  = 2.0 * CA_GROWTH_RATE  # 0.0002 — sand weathers to dirt near stone/cobblestone
+
+# ── Tier 1: Global decay rules (× CA_DECAY_RATE) ────────────────────────────
+GRASS_TO_DIRT_RATE         = 0.1  * CA_DECAY_RATE  # 0.00001  — grass withers to dirt without water
+DIRT_TO_SAND_DROUGHT_RATE  = 0.05 * CA_DECAY_RATE  # 0.000005 — dirt → sand in severe drought (no water, no grass)
+TREE_TO_GRASS_RATE         = 5.0  * CA_DECAY_RATE  # 0.0005   — tree → grass in crowded zones (zones.py)
+TREE_TO_GRASS_CROWD_RATE   = 10   * CA_DECAY_RATE  # 0.001    — tree thins when touching any adjacent tree
+TREE_TO_GRASS_DROUGHT_RATE = 3.0  * CA_DECAY_RATE  # 0.0003   — tree dies to grass in drought (severity > 0.5, no water)
+CACTUS_TO_SAND_DROUGHT_RATE = 3.0 * CA_DECAY_RATE  # 0.0003   — cactus dies to sand in drought (mirrors tree)
+FLOWER_TO_GRASS_RATE       = 5.0  * CA_DECAY_RATE  # 0.0005   — flowers die from overcrowding (4+) or no water
+
+# ── Tier 1: Water dynamics (× CA_WATER_EVAP_RATE) ───────────────────────────
+WATER_TO_BASE_ISOLATED_RATE = 2    * CA_BASE_RATE         # 0.002 — isolated water (≤1 neighbor) → biome base cell
+DEEP_WATER_TO_WATER_RATE    = 0.5  * CA_WATER_EVAP_RATE  # 0.004 — deep water recedes when edge exposed
+WATER_TO_DEEP_WATER_RATE    = 2.5  * CA_WATER_EVAP_RATE  # 0.02  — water deepens when all 4 cardinals are water
+SAND_TO_DIRT_WATER_RATE     = 10   * CA_WATER_EVAP_RATE  # 0.08  — sand → dirt near any water (universal)
+DIRT_TO_WATER_RAIN_RATE     = 0.75 * CA_WATER_EVAP_RATE  # 0.006 — rain floods dirt/sand near 3+ water cells
+GRASS_TO_WATER_RAIN_RATE    = 1.0  * CA_WATER_EVAP_RATE  # 0.008 — grass → water during rain near water
+DIRT_TO_FLOWER_WATER_RATE   = 0.4  * CA_WATER_EVAP_RATE  # 0.003 — dirt at water boundary → flower pattern
+
+# ── Tier 1: Spread (× CA_SPREAD_RATE) ───────────────────────────────────────
+BIOME_BORDER_SPREAD_RATE  = 2.0 * CA_SPREAD_RATE   # 0.004 — zone-edge cells copy adjacent zone's primary biome cell
+TERRAIN_DIFFUSION_RATE    = 1.0 * CA_GROWTH_RATE   # 0.0001 — slow catch-all: base terrain bleeds into unlike neighbors
+
+# ── Tier 2: Cross-biome — desert edge interactions ──────────────────────────
+# Fire when desert-type cells (SAND) are adjacent to non-desert terrain.
+GRASS_TO_DIRT_SAND_RATE  = 1.5 * CA_SPREAD_RATE  # 0.003 — grass erodes to dirt near sand
+DIRT_TO_SAND_SPREAD_RATE = 2.0 * CA_SPREAD_RATE  # 0.004 — dry dirt converts to sand near sand
+
+# ── Tier 1: Ambient erosion (very slow background decay, all biomes) ─────────
+DIRT_TO_SAND_AMBIENT_RATE        = 0.03 * CA_DECAY_RATE  # 0.000003 — global baseline dirt→sand erosion
+DIRT_TO_SAND_DESERT_AMBIENT_RATE = 0.10 * CA_DECAY_RATE  # 0.00001  — slightly faster in desert
+SAND_TO_STONE_AMBIENT_RATE       = 0.01 * CA_DECAY_RATE  # 0.000001 — very slow sand lithification (global)
+STONE_SAND_TO_DIRT_RATE          = 0.05 * CA_DECAY_RATE  # 0.000005 — sand adjacent to stone weathers to dirt
 
 # Entity Survival
 HUNGER_DECAY_RATE = 0.02        # Base hunger loss per decay call (humanoids get 6× this)
-THIRST_DECAY_RATE = 0.5         # Base thirst loss per decay call — drains in ~200 calls (~half max rain gap)
+THIRST_DECAY_RATE = 0.02        # Base thirst loss per decay call — matches hunger rate
 HUMANOID_DRAIN_MULTIPLIER = 6.0 # Humanoid hunger multiplier
-HUMANOID_THIRST_MULTIPLIER = 2.0 # Humanoid thirst multiplier (2× base — drain in ~100 calls)
+HUMANOID_THIRST_MULTIPLIER = 6.0 # Humanoid thirst multiplier — matches hunger (drain in ~833 calls)
 STARVATION_DAMAGE = 1.0         # HP loss per decay call when hunger==0
 DEHYDRATION_DAMAGE = 1.5        # HP loss per decay call when thirst==0
 BASE_HEALING_RATE = 1.5         # HP regen per tick when fed/hydrated
@@ -180,13 +224,14 @@ WIZARD_SPELL_RANGE = 6          # Maximum spell casting range
 # Action Success Rates
 FARMER_HARVEST_SUCCESS = 0.4    # 40% harvest success
 FARMER_TILL_SUCCESS = 0.25      # 25% till success
-FARMER_PLANT_SUCCESS = 0.3      # 30% plant success
+FARMER_PLANT_SUCCESS = 0.45     # 45% plant success (increased)
 LUMBERJACK_CHOP_SUCCESS = 0.85   # 85% chop success (increased for much faster work)
 LUMBERJACK_BUILD_SUCCESS = 0.35 # 35% build success
 MINER_MINE_SUCCESS = 0.5        # 50% mine success (increased for aggression)
 PEACEFUL_NPC_MIGRATE_RATE = 0.05 # Chance to migrate if duplicate type in zone (update_entity_ai)
 ZONE_CHANGE_COOLDOWN = 1800  # Ticks (30 seconds at 60 FPS) before entity can change zones again (seek_zone_exit path)
 NPC_SEAMLESS_CROSS_COOLDOWN = 30   # Ticks (0.5 s) anti-bounce cooldown for seamless zone crossing
+NPC_CROSS_RAMP_TICKS = 300         # Ticks over which crossing probability ramps from 0% to 100% after a zone change
 NPC_PEACEFUL_WANDER_CHANCE = 0.60  # Probability a peaceful NPC actually wanders when idle (was implicit 1.0)
 TARGET_STUCK_THRESHOLD = 180  # Ticks (3 seconds) before target is considered stuck and added to memory_lane
 NPC_TREE_CLEAR_RATE = 0.05  # Non-lumberjack NPCs can clear trees (no wood collected)
@@ -194,7 +239,7 @@ ENHANCED_SETTLEMENT_RATE = 0.25 # Settlement rate when zone needs specific role 
 
 # Trader Path Building (Cellular Automata)
 TRADER_PATH_BUILD_RATE = 0.6    # Chance to convert cell to dirt while walking (increased for traders/guards/miners)
-TRADER_COBBLE_RATE = 0.25       # Chance to upgrade dirt to cobblestone (increased for faster road building)
+TRADER_COBBLE_RATE = 0.35       # Chance to upgrade dirt to cobblestone
 TRADER_TRAVEL_MODE = True       # Traders prioritize traveling between zone exits
 
 # Entity Movement & Exploration
@@ -208,15 +253,12 @@ OLD_AGE_DAMAGE = 2.0                # Health loss per zone-update tick when age 
 
 # Entity Spawning
 SPAWN_CHANCE_MULTIPLIER = 1.0   # Global spawn rate multiplier (1.0 = normal) (spawn_entities_for_screen)
-FOREST_BIOME_CHANCE = 0.60      # 60% of zones are forest (generate_screen)
-PLAINS_BIOME_CHANCE = 0.20      # 20% of zones are plains (generate_screen)
-MOUNTAINS_BIOME_CHANCE = 0.15   # 15% of zones are mountains (generate_screen)
-DESERT_BIOME_CHANCE = 0.05      # 5% of zones are desert (generate_screen)
+# Note: biome distribution is equal (random.choice) — no per-biome chance constants needed
 
 # Raid Event System
-RAID_CHANCE_BASE = 0.02         # 2% base chance per zone update (scales with population)
+RAID_CHANCE_BASE = 0.025        # 2.5% base raid chance (halved; structures lower it further)
 RAID_POPULATION_THRESHOLD = 4   # Minimum entities in zone to trigger raid check
-HIDDEN_CAVE_SPAWN_CHANCE = 0.20 # 20% chance to spawn hidden cave during raid
+HIDDEN_CAVE_SPAWN_CHANCE = 0.50 # 50% chance to spawn hidden cave during raid (caves primary source)
 NATURAL_CAVE_ZONE_CHANCE = 0.08 # 8% chance a zone gets a natural cave on generation
 PLAYER_MINESHAFT_BASE_CHANCE = 0.05 # 5% base chance for player mining to create mineshaft
 MINESHAFT_DEPTH_DIVISOR = 2.0  # Each depth level halves the mineshaft creation chance
@@ -249,7 +291,52 @@ NPC_BASE_QUEST = {
 # Type 1 (guard): stands within 1 cell of target — door guard, escort
 # Type 2 (patrol): roams within 5 cells of target — area patrol
 # Type 3 (zone): anchored to zone but no specific target — full-zone roam (default)
-KEEPER_RANGE = {1: 1, 2: 5, 3: None}
+KEEPER_RANGE = {1: 5, 2: 15, 3: None}
+
+# ── NPC targeting priority scoring constants ─────────────────────────────────
+# See ai/targeting_overview.md for full design doc and rationale.
+KEEPER_BASE          = {1: 50, 2: 35, 3: 20, 4: 10}  # base score per keeper type
+KEEPER_URGENCY_SCALE = {1: 8,  2: 5,  3: 0,  4: 0}   # score added per cell of drift past range
+QUEST_BASE           = 100   # flat score for active assigned/lore quest target
+SHELTER_BASE         = 95    # flat score for night shelter-seeking (humanoid, peaceful, non-nocturnal)
+ROLE_BASE            = 70    # flat score for archetype work (farming, mining, etc.)
+SPECIAL_BASE         = 35    # flat score per eligible special-pool candidate
+SPECIAL_LOCK_TICKS   = 60    # ticks a chosen special type stays locked within the special pool
+TARGET_LOCK_TICKS    = 300   # ticks a chosen target type is held before re-rolling
+RESOURCE_BASE        = 20    # base resource score — kept low; hp_mult provides the real urgency
+VISIT_BASE           = 8     # flat score for casual daytime house visits (peaceful humanoids only)
+VISIT_DURATION_MIN   = 300   # minimum ticks a visiting NPC stays inside
+VISIT_DURATION_MAX   = 600   # maximum ticks a visiting NPC stays inside
+MIN_RESOURCE_URGENCY = 0.30  # stat must be below 70% full before food/water enters candidates
+TRADE_BASE           = 12    # flat score for NPC-to-NPC trade (special pool candidate)
+TRADER_GOLD_REPLENISH = 50   # gold TRADERs gain per zone crossing (capped at 200 * level)
+NPC_TRADE_SEARCH_RADIUS = 8  # max Manhattan dist to find a trade partner
+
+# Maps quest focus type → list of eligible target cell/entity/item strings.
+# Used by _evaluate_role_tier and find_closest_eligible_target.
+ROLE_CELL_TARGETS = {
+    'FARM':   ['SAND', 'DIRT', 'SOIL', 'GRASS', 'CARROT1', 'CARROT2', 'CARROT3'],
+    'LUMBER': ['TREE1', 'TREE2', 'TREE3'],
+    'MINE':   ['STONE', 'IRON_ORE', 'CAVE', 'MINESHAFT'],
+    'GATHER': ['STONE', 'TREE1', 'TREE2', 'IRON_ORE'],
+}
+
+# Priority order for ROLE targeting — tried one type at a time, first found wins.
+# MINE: prefer to excavate raw CAVE → IRON_ORE → STONE → enter MINESHAFT to go deeper.
+ROLE_CELL_PRIORITY = {
+    'MINE': ['CAVE', 'IRON_ORE', 'STONE', 'MINESHAFT'],
+}
+
+# Cells that clearing_action will NOT attack (structures, furniture, terrain walls).
+CLEARING_EXEMPT = frozenset({
+    'WALL', 'HOUSE', 'STONE_HOUSE', 'FORT', 'CAVE', 'CLIFF',
+    'GRAVESTONE', 'BROKEN_GRAVESTONE',
+    'LOCKED_CHEST', 'CHEST', 'OPEN_CHEST',
+    'BOOKSHELF', 'WOOD_CHAIR', 'WOOD_TABLE', 'BED_BLUE', 'BED_WHITE',
+    'WATER_TROUGH', 'SMALL_POTTED_PLANT',
+    'WELL', 'DESERT_WELL',
+    'WATER', 'DEEP_WATER',
+})
 
 # Maps entity type → keeper patrol type.  Defaults to 3 for anything not listed.
 # Type 1: cell guard — stays within 1 tile of anchor
@@ -299,9 +386,9 @@ KEEPER_ENTITY_TYPE = {
 # Miner & Structure Systems
 MINER_CAVE_CREATE_CHANCE = 0.10 # 10% chance to create cave when mining at zone corners
 CAMP_UPGRADE_CHANCE = 0.001     # 0.1% chance per update for camp to upgrade to house
-CAVE_HOSTILE_SPAWN_CHANCE = 0.005 # 0.5% chance per cave per update to spawn hostile
+CAVE_HOSTILE_SPAWN_CHANCE = 0.007 # 0.7% chance per cave per update to spawn hostile
 TERMITE_SPAWN_CHANCE = 0.001      # 0.1% chance per zone per update to spawn termite (near trees) - reduced spawn rate
-NIGHT_SKELETON_SPAWN_CHANCE = 0.01 # 1% chance per zone at night to spawn skeleton (higher near dropped items)
+NIGHT_SKELETON_SPAWN_CHANCE = 0.007 # 0.7% chance per zone at night to spawn skeleton
 SKELETON_DAYLIGHT_DAMAGE = 1       # HP damage per update to skeletons during daytime
 HOUSE_DECAY_RATE = 0.0001       # 0.01% chance per update for house to decay naturally
 WARRIOR_HOME_RETURN_INTERVAL = 600 # Ticks (10 seconds) between warrior home zone checks
@@ -360,12 +447,28 @@ COLORS = {
     'FLOWER': (255, 100, 200),
     'IRON_ORE': (139, 90, 43),
     'WELL': (100, 80, 60),
+    'GRAVESTONE': (130, 125, 135),
+    'BED_BLUE': (70, 130, 180),
+    'DESERT_WELL': (180, 140, 80),
     'CACTUS': (50, 120, 50),
     'BARREL': (120, 80, 40),
     'STONE_HOUSE': (110, 110, 120),
     'RUINED_SANDSTONE_COLUMN': (200, 160, 90),
     'CLIFF': (90, 80, 75),
     'BUSH': (34, 100, 34),
+    'EMPTY_CRATE': (100, 65, 25),
+    # New cells
+    'BROKEN_GRAVESTONE': (105, 100, 108),
+    'LOCKED_CHEST':      (100, 50, 10),
+    'OPEN_CHEST':        (160, 100, 40),
+    'BOOKSHELF':         (130, 90, 50),
+    'WOOD_CHAIR':        (150, 100, 55),
+    'WOOD_TABLE':        (145, 95, 50),
+    'WATER_TROUGH':      (80, 110, 130),
+    'SMALL_POTTED_PLANT':(60, 120, 60),
+    'BED_WHITE':         (230, 225, 215),
+    'BLUE_MUSHROOM':     (60, 90, 180),
+    'APPLE_CRATE':       (180, 80, 30),
 }
 
 # Cell type properties with drop probabilities
@@ -404,10 +507,10 @@ CELL_TYPES = {
                 'harvest': {'item': 'carrot', 'amount': 1}},
     'CARROT2': {'color': COLORS['CARROT2'], 'label': 'Crt2', 'solid': False,
                 'grows_to': 'CARROT3', 'growth_rate': 0.015,  # 1.5% (was 0.8%, not 4%)
-                'degrades_to': 'GRASS', 'degrade_rate': 0.0001,  # Very slow decay
+                'degrades_to': 'CARROT1', 'degrade_rate': 0.0001,  # Step down, not straight to GRASS
                 'harvest': {'item': 'carrot', 'amount': 2}},
     'CARROT3': {'color': COLORS['CARROT3'], 'label': 'Crt3', 'solid': False,
-                'degrades_to': 'GRASS', 'degrade_rate': 0.00005,  # Very slow decay
+                'degrades_to': 'CARROT2', 'degrade_rate': 0.00005,  # Step down
                 'harvest': {'item': 'carrot', 'amount': 3}},
     'SAND': {'color': COLORS['SAND'], 'label': 'Snd', 'solid': False, 'grows_to': 'CACTUS', 'growth_rate': 0.0001},
     'COBBLESTONE': {'color': COLORS['COBBLESTONE'], 'label': 'Cob', 'solid': False, 'degrades_to': 'DIRT', 'degrade_rate': 0.00001},  # Very persistent
@@ -420,6 +523,9 @@ CELL_TYPES = {
     'CAMP': {'color': (200, 100, 50), 'label': 'Camp', 'solid': False, 'grows_to': 'HOUSE', 'growth_rate': 0.001},
     'SOIL': {'color': COLORS['SOIL'], 'label': 'Soil', 'solid': False},
     'FLOWER': {'color': COLORS['FLOWER'], 'label': 'Flwr', 'solid': False, 'degrades_to': 'GRASS', 'degrade_rate': 0.0001},  # Very slow decay
+    'FLOWER_PATTERN1': {'color': (255, 200, 50), 'label': 'Fp1', 'solid': True, 'degrades_to': 'GRASS', 'degrade_rate': 0.00015},
+    'FLOWER_PATTERN2': {'color': (180, 100, 220), 'label': 'Fp2', 'solid': True, 'degrades_to': 'GRASS', 'degrade_rate': 0.00015},
+    'FLOWER_PATTERN3': {'color': (255, 100, 100), 'label': 'Fp3', 'solid': True, 'degrades_to': 'GRASS', 'degrade_rate': 0.00015},
     # Placeable item cells
     'WOOD': {'color': COLORS['WOOD'], 'label': 'Wood', 'solid': False},
     'PLANKS': {'color': COLORS['PLANKS'], 'label': 'Plnk', 'solid': False},
@@ -445,12 +551,88 @@ CELL_TYPES = {
         'solid': True,
         'interactable': True,
     },
+    'GRAVESTONE': {
+        'color': COLORS['GRAVESTONE'],
+        'label': 'GS',
+        'solid': True,
+        'degrades_to': 'BROKEN_GRAVESTONE',
+        'degrade_rate': 0.000005,
+    },
+    'BROKEN_GRAVESTONE': {
+        'color': COLORS['BROKEN_GRAVESTONE'],
+        'label': 'BGS',
+        'solid': True,
+    },
+    'LOCKED_CHEST': {
+        'color': COLORS['LOCKED_CHEST'],
+        'label': 'LCh',
+        'solid': True,
+        'interactable': True,
+    },
+    'OPEN_CHEST': {
+        'color': COLORS['OPEN_CHEST'],
+        'label': 'Chst',
+        'solid': False,
+        'interactable': True,
+    },
+    'BOOKSHELF': {
+        'color': COLORS['BOOKSHELF'],
+        'label': 'Bkshlf',
+        'solid': True,
+    },
+    'WOOD_CHAIR': {
+        'color': COLORS['WOOD_CHAIR'],
+        'label': 'Chr',
+        'solid': True,
+    },
+    'WOOD_TABLE': {
+        'color': COLORS['WOOD_TABLE'],
+        'label': 'Tbl',
+        'solid': True,
+    },
+    'WATER_TROUGH': {
+        'color': COLORS['WATER_TROUGH'],
+        'label': 'WTrg',
+        'solid': True,
+        'interactable': True,
+    },
+    'SMALL_POTTED_PLANT': {
+        'color': COLORS['SMALL_POTTED_PLANT'],
+        'label': 'Plt',
+        'solid': True,
+    },
+    'BED_WHITE': {
+        'color': COLORS['BED_WHITE'],
+        'label': 'BedW',
+        'solid': True,
+    },
+    'BLUE_MUSHROOM': {
+        'color': COLORS['BLUE_MUSHROOM'],
+        'label': 'BMsh',
+        'solid': True,
+        'drops': [
+            {'item': 'blue_mushroom', 'amount': 1, 'chance': 1.0},
+            {'cell': 'CAVE_FLOOR', 'chance': 1.0},
+        ],
+    },
+    'BED_BLUE': {
+        'color': COLORS['BED_BLUE'],
+        'label': 'Bed',
+        'solid': True,
+    },
+    'DESERT_WELL': {
+        'color': COLORS['DESERT_WELL'],
+        'label': 'DWel',
+        'solid': True,
+        'interactable': True,
+    },
     'CACTUS': {
         'color': COLORS['CACTUS'],
         'label': 'Cct',
         'solid': True,
         'degrades_to': 'SAND',
         'degrade_rate': 0.00002,  # Very low — cacti persist in deserts
+        'drops': [{'cell': 'SAND', 'chance': 0.8}],
     },
     'BARREL': {
         'color': COLORS['BARREL'],
@@ -464,6 +646,12 @@ CELL_TYPES = {
         'solid': True,
         'enterable': True,
         'interior_type': 'HOUSE_INTERIOR',
+    },
+    'EMPTY_CRATE': {
+        'color': COLORS['EMPTY_CRATE'],
+        'label': 'ECrt',
+        'solid': True,
+        'interactable': True,
     },
     'RUINED_SANDSTONE_COLUMN': {
         'color': COLORS['RUINED_SANDSTONE_COLUMN'],
@@ -480,7 +668,15 @@ CELL_TYPES = {
         'label': 'Bush',
         'solid': True,
         'drops': [{'item': 'wood', 'amount': 1, 'chance': 0.6},
-                  {'cell': 'GRASS', 'chance': 0.4}],
+                  {'cell': 'GRASS', 'chance': 0.8}],
+    },
+    'APPLE_CRATE': {
+        'color': COLORS['APPLE_CRATE'],
+        'label': 'AplCrt',
+        'solid': True,
+        'interactable': True,
+        'infinite_food': True,
+        'food_value': 30,
     },
 }
 
@@ -510,8 +706,8 @@ ITEMS = {
     
     # Weapons
     'hilt': {'color': (139, 90, 43), 'name': 'Weapon Hilt'},
-    'bone_sword': {'color': (220, 220, 200), 'name': 'Bone Sword', 'is_tool': True, 'is_weapon': True, 'damage': 15},
-    'club': {'color': (101, 67, 33), 'name': 'Club', 'is_tool': True, 'is_weapon': True, 'damage': 8},
+    'bone_sword': {'color': (220, 220, 200), 'name': 'Bone Sword', 'is_tool': True, 'is_weapon': True, 'damage': 15, 'equipment_slot': 'weapon'},
+    'club': {'color': (101, 67, 33), 'name': 'Club', 'is_tool': True, 'is_weapon': True, 'damage': 8, 'equipment_slot': 'weapon'},
     
     # Magic items
     'star_spell': {'color': (255, 215, 0), 'name': 'Star Spell', 'is_spell': True,
@@ -520,6 +716,8 @@ ITEMS = {
                    'description': 'Toggles rain on and off'},
     'day_spell':  {'color': (255, 230, 100), 'name': 'Day Spell',  'is_spell': True,
                    'description': 'Toggles day and night'},
+    'keeper_spell': {'color': (100, 220, 180), 'name': 'Keeper Spell', 'is_spell': True,
+                     'spell_type': 'keeper', 'description': 'Assigns inspected NPC as zone keeper'},
     'magic_stone': {'color': (138, 43, 226), 'name': 'Magic Stone', 'is_spell': True, 'damage': 12},
     'magic_wand': {'color': (255, 140, 255), 'name': 'Magic Wand', 'is_spell': True, 'damage': 10},
 
@@ -571,13 +769,30 @@ ITEMS = {
     'transform_chicken':      {'color': (255, 220, 100), 'name': 'Transform: Chicken',      'is_spell': True, 'spell_type': 'transform', 'npc_type': 'CHICKEN'},
     'transform_black_spider': {'color': (20,  20,  20),  'name': 'Transform: Spider',       'is_spell': True, 'spell_type': 'transform', 'npc_type': 'BLACK_SPIDER'},
 
-    'enchanted_sword': {'color': (147, 112, 219), 'name': 'Enchanted Sword', 'is_tool': True, 'is_weapon': True, 'damage': 25},
+    'enchanted_sword': {'color': (147, 112, 219), 'name': 'Enchanted Sword', 'is_tool': True, 'is_weapon': True, 'damage': 25, 'equipment_slot': 'weapon'},
     'enchanted_axe': {'color': (148, 0, 211), 'name': 'Enchanted Axe', 'is_tool': True, 'damage': 20},
-    
+
+    # Weapons (ranged / polearm / blunt)
+    'bow':          {'color': (139, 90,  43),  'name': 'Bow',         'is_tool': True, 'is_weapon': True, 'damage': 12, 'equipment_slot': 'weapon'},
+    'bow_metal':    {'color': (150, 150, 150),  'name': 'Metal Bow',   'is_tool': True, 'is_weapon': True, 'damage': 15, 'equipment_slot': 'weapon'},
+    'staff_red':    {'color': (180,  50,  50),  'name': 'Red Staff',   'is_tool': True, 'is_weapon': True, 'damage': 14, 'equipment_slot': 'weapon'},
+    'spear':        {'color': (150, 120,  80),  'name': 'Spear',       'is_tool': True, 'is_weapon': True, 'damage': 16, 'equipment_slot': 'weapon'},
+    'warhammer':    {'color': ( 80,  80, 100),  'name': 'Warhammer',   'is_tool': True, 'is_weapon': True, 'damage': 22, 'equipment_slot': 'weapon'},
+
+    # Shields
+    'shield':        {'color': (150, 150, 160), 'name': 'Shield',        'is_tool': True, 'is_shield': True, 'equipment_slot': 'offhand'},
+    'shield_bronze': {'color': (180, 120,  50), 'name': 'Bronze Shield', 'is_tool': True, 'is_shield': True, 'equipment_slot': 'offhand'},
+
+    # Armour pieces
+    'armour_chest': {'color': (150, 150, 160), 'name': 'Chest Armour', 'is_armor': True, 'armor': 8,  'equipment_slot': 'armor'},
+    'armour_helm':  {'color': (150, 150, 160), 'name': 'Helm',         'is_armor': True, 'armor': 4,  'equipment_slot': 'armor'},
+    'armour_legs':  {'color': (150, 150, 160), 'name': 'Leg Armour',   'is_armor': True, 'armor': 5,  'equipment_slot': 'armor'},
+    'armour_shoes': {'color': (150, 150, 160), 'name': 'Armour Shoes', 'is_armor': True, 'armor': 2,  'equipment_slot': 'armor'},
+
     # Materials
     'rope': {'color': (139, 119, 101), 'name': 'Rope'},
     'leather': {'color': (139, 90, 43), 'name': 'Leather'},
-    'leather_armor': {'color': (160, 82, 45), 'name': 'Leather Armor', 'is_tool': True, 'armor': 5},
+    'leather_armor': {'color': (160, 82, 45), 'name': 'Leather Armor', 'is_tool': True, 'is_armor': True, 'armor': 5, 'equipment_slot': 'armor'},
     'chest': {'color': (139, 69, 19), 'name': 'Chest'},
     'seeds': {'color': (205, 133, 63), 'name': 'Seeds'},
     
@@ -592,7 +807,7 @@ ITEMS = {
     # Iron pipeline
     'iron_ore':   {'color': (139, 90, 43),   'name': 'Iron Ore'},
     'iron_ingot': {'color': (180, 140, 100),  'name': 'Iron Ingot'},
-    'iron_sword': {'color': (200, 200, 220),  'name': 'Iron Sword', 'is_tool': True, 'is_weapon': True, 'damage': 20, 'sprite_name': 'iron_sword'},
+    'iron_sword': {'color': (200, 200, 220),  'name': 'Iron Sword', 'is_tool': True, 'is_weapon': True, 'damage': 20, 'equipment_slot': 'weapon', 'sprite_name': 'iron_sword'},
 
     # World structures / placeable cells
     'well':                    {'color': (100, 80, 60),    'name': 'Well'},
@@ -603,8 +818,13 @@ ITEMS = {
     'forge':                   {'color': (180, 60, 20),    'name': 'Forge'},
 
     # Actions
-    'shove': {'color': (220, 120, 60), 'name': 'Shove', 'is_action': True,
-              'description': 'Push target back one cell'},
+    'attack':  {'color': (220, 80,  60),  'name': 'Attack',  'is_action': True, 'description': 'Strike the target'},
+    'block':   {'color': (80,  100, 220), 'name': 'Block',   'is_action': True, 'description': 'Raise guard to reduce damage'},
+    'sneak':   {'color': (60,  80,  60),  'name': 'Sneak',   'is_action': True, 'description': 'Move quietly'},
+    'dig':     {'color': (139, 90,  43),  'name': 'Dig',     'is_action': True, 'description': 'Dig soft cells'},
+    'talk':    {'color': (100, 180, 220), 'name': 'Talk',    'is_action': True, 'description': 'Speak with target NPC'},
+    'inspect': {'color': (200, 180, 100), 'name': 'Inspect', 'is_action': True, 'description': 'Examine target'},
+    'shove':   {'color': (220, 120, 60),  'name': 'Shove',   'is_action': True, 'description': 'Push target back one cell'},
 
     # Special
     'skeleton_bones': {'color': (240, 240, 230), 'name': 'Skeleton Bones', 'is_follower': True},
@@ -800,9 +1020,10 @@ ENTITY_TYPES = {
         'max_thirst': 100,
         'strength': 13,
         'speed': 1.0,
-        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3'],
-        'water_sources': ['WATER'],
+        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3', 'APPLE_CRATE', 'BLUE_MUSHROOM'],
+        'water_sources': ['WATER', 'WELL', 'WATER_TROUGH'],
         'hostile': False,
+        'humanoid': True,
         'edible': False,
         'can_trade': True,
         'inventory': {'carrot': 5, 'wood': 3},
@@ -815,9 +1036,9 @@ ENTITY_TYPES = {
             'wander_when_idle': True
         },
         'ai_params': {
-            'aggressiveness': 0.05,  # Very low - farmers flee from danger
-            'passiveness': 0.40,     # Somewhat passive - focus on work
-            'idleness': 0.15,        # Moderately idle - take breaks
+            'aggressiveness': 0.85,  # High — farmers actively seek crops/soil to work
+            'passiveness': 0.10,     # Rarely drops task to wander
+            'idleness': 0.05,        # Takes occasional breaks
             'flee_chance': 0.70,
             'combat_chance': 0.30,
             'target_types': ['food', 'water', 'resource']
@@ -831,9 +1052,10 @@ ENTITY_TYPES = {
         'max_thirst': 100,
         'strength': 31,
         'speed': 1.2,
-        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3'],
-        'water_sources': ['WATER'],
+        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3', 'APPLE_CRATE', 'BLUE_MUSHROOM'],
+        'water_sources': ['WATER', 'WELL', 'WATER_TROUGH'],
         'hostile': False,
+        'humanoid': True,
         'edible': False,
         'attacks_hostile': True,
         'drops': [
@@ -862,9 +1084,10 @@ ENTITY_TYPES = {
         'max_thirst': 100,
         'strength': 26,
         'speed': 1.2,
-        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3'],
-        'water_sources': ['WATER'],
+        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3', 'APPLE_CRATE', 'BLUE_MUSHROOM'],
+        'water_sources': ['WATER', 'WELL', 'WATER_TROUGH'],
         'hostile': False,
+        'humanoid': True,
         'edible': False,
         'attacks_hostile': True,
         'drops': [
@@ -893,9 +1116,10 @@ ENTITY_TYPES = {
         'max_thirst': 100,
         'strength': 31,
         'speed': 1.2,
-        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3'],
-        'water_sources': ['WATER'],
+        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3', 'APPLE_CRATE', 'BLUE_MUSHROOM'],
+        'water_sources': ['WATER', 'WELL', 'WATER_TROUGH'],
         'hostile': False,
+        'humanoid': True,
         'edible': False,
         'attacks_hostile': True,
         'drops': [
@@ -925,9 +1149,10 @@ ENTITY_TYPES = {
         'max_thirst': 100,
         'strength': 41,
         'speed': 1.0,
-        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3'],
-        'water_sources': ['WATER'],
+        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3', 'APPLE_CRATE', 'BLUE_MUSHROOM'],
+        'water_sources': ['WATER', 'WELL', 'WATER_TROUGH'],
         'hostile': False,
+        'humanoid': True,
         'edible': False,
         'attacks_hostile': True,
         'drops': [
@@ -957,9 +1182,10 @@ ENTITY_TYPES = {
         'max_thirst': 100,
         'strength': 11,
         'speed': 0.8,
-        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3'],
-        'water_sources': ['WATER'],
+        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3', 'APPLE_CRATE', 'BLUE_MUSHROOM'],
+        'water_sources': ['WATER', 'WELL', 'WATER_TROUGH'],
         'hostile': False,
+        'humanoid': True,
         'edible': False,
         'can_trade': True,
         'inventory': {'wood': 10, 'planks': 5, 'axe': 1},
@@ -988,9 +1214,10 @@ ENTITY_TYPES = {
         'max_thirst': 100,
         'strength': 25,
         'speed': 0.7,
-        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3'],
-        'water_sources': ['WATER'],
+        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3', 'APPLE_CRATE', 'BLUE_MUSHROOM'],
+        'water_sources': ['WATER', 'WELL', 'WATER_TROUGH'],
         'hostile': False,
+        'humanoid': True,
         'edible': False,
         'can_trade': True,
         'is_blacksmith': True,
@@ -1007,7 +1234,7 @@ ENTITY_TYPES = {
             'aggressiveness': 0.25,  # 25% - focused on crafting
             'passiveness': 0.25,     # 25% - takes breaks
             'idleness': 0.30,        # 30% - often at forge/idle
-            'target_types': ['food', 'water', 'structure']
+            'target_types': ['food', 'water', 'structure', 'resource']
         }
     },
     'WIZARD': {
@@ -1018,9 +1245,10 @@ ENTITY_TYPES = {
         'max_thirst': 100,
         'strength': 13,
         'speed': 1.0,
-        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3'],
-        'water_sources': ['WATER'],
+        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3', 'APPLE_CRATE', 'BLUE_MUSHROOM'],
+        'water_sources': ['WATER', 'WELL', 'WATER_TROUGH'],
         'hostile': False,
+        'humanoid': True,
         'edible': False,
         'attacks_hostile': True,
         'can_trade': True,
@@ -1050,9 +1278,10 @@ ENTITY_TYPES = {
         'max_thirst': 100,
         'strength': 19,
         'speed': 0.9,
-        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3'],
-        'water_sources': ['WATER'],
+        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3', 'APPLE_CRATE', 'BLUE_MUSHROOM'],
+        'water_sources': ['WATER', 'WELL', 'WATER_TROUGH'],
         'hostile': False,
+        'humanoid': True,
         'edible': False,
         'can_trade': False,
         'inventory': {'wood': 5, 'axe': 1},
@@ -1081,10 +1310,11 @@ ENTITY_TYPES = {
         'max_hunger': 100,
         'max_thirst': 100,
         'strength': 21,
-        'speed': 0.8,
-        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3'],
-        'water_sources': ['WATER'],
+        'speed': 1.0,
+        'food_sources': ['CARROT1', 'CARROT2', 'CARROT3', 'APPLE_CRATE', 'BLUE_MUSHROOM'],
+        'water_sources': ['WATER', 'WELL', 'WATER_TROUGH'],
         'hostile': False,
+        'humanoid': True,
         'edible': False,
         'can_trade': True,
         'inventory': {'stone': 5, 'pickaxe': 1},
@@ -1098,12 +1328,12 @@ ENTITY_TYPES = {
             'wander_when_idle': True  # Wander between mining
         },
         'ai_params': {
-            'aggressiveness': 0.10,  # Low but not fleeing
-            'passiveness': 0.35,     # Focused on mining
-            'idleness': 0.20,        # Take breaks between mining
+            'aggressiveness': 0.88,  # High — miners consistently seek rocks/ore/caves
+            'passiveness': 0.07,     # Rarely drops task
+            'idleness': 0.05,        # Rarely idles
             'flee_chance': 0.65,
             'combat_chance': 0.35,
-            'target_types': ['food', 'water', 'resource']
+            'target_types': ['food', 'water', 'stone', 'resource']
         }
     },
     # Enemies
@@ -1115,9 +1345,10 @@ ENTITY_TYPES = {
         'max_thirst': 100,
         'strength': 22,
         'speed': 1.3,
-        'food_sources': [],
+        'food_sources': ['BLUE_MUSHROOM'],
         'water_sources': ['WATER'],
         'hostile': True,
+        'humanoid': True,
         'edible': False,
         'attacks_structures': True,
         'drops': [
@@ -1142,9 +1373,10 @@ ENTITY_TYPES = {
         'max_thirst': 100,
         'strength': 13,
         'speed': 1.1,
-        'food_sources': [],
+        'food_sources': ['BLUE_MUSHROOM'],
         'water_sources': ['WATER'],
         'hostile': True,
+        'humanoid': True,
         'edible': False,
         'attacks_structures': True,
         'drops': [
@@ -1173,6 +1405,7 @@ ENTITY_TYPES = {
         'food_sources': [],
         'water_sources': [],
         'hostile': True,
+        'humanoid': True,
         'edible': False,
         'drops': [
             {'item': 'meat', 'amount': 1, 'chance': 0.5},  # Drop meat (rotten but edible)
@@ -1502,6 +1735,23 @@ ITEMS.update({
     'camp': {'color': (200, 100, 50), 'name': 'Camp'},
     'wall': {'color': COLORS['WALL'], 'name': 'Wall'},
     'flower': {'color': COLORS['FLOWER'], 'name': 'Flower'},
+    'flower_pattern1': {'color': (255, 200, 50),  'name': 'Yellow Flower'},
+    'flower_pattern2': {'color': (180, 100, 220), 'name': 'Purple Flower'},
+    'flower_pattern3': {'color': (255, 100, 100), 'name': 'Red Flower'},
+    'gravestone': {'color': COLORS['GRAVESTONE'], 'name': 'Gravestone'},
+    'broken_gravestone': {'color': COLORS['BROKEN_GRAVESTONE'], 'name': 'Broken Gravestone'},
+    'bed_blue': {'color': COLORS['BED_BLUE'], 'name': 'Bed (Blue)'},
+    'bed_white': {'color': COLORS['BED_WHITE'], 'name': 'Bed (White)'},
+    'desert_well': {'color': COLORS['DESERT_WELL'], 'name': 'Desert Well'},
+    'water_trough': {'color': COLORS['WATER_TROUGH'], 'name': 'Water Trough'},
+    'bookshelf': {'color': COLORS['BOOKSHELF'], 'name': 'Bookshelf'},
+    'wood_chair': {'color': COLORS['WOOD_CHAIR'], 'name': 'Wood Chair'},
+    'wood_table': {'color': COLORS['WOOD_TABLE'], 'name': 'Wood Table'},
+    'small_potted_plant': {'color': COLORS['SMALL_POTTED_PLANT'], 'name': 'Potted Plant'},
+    'blue_mushroom': {'color': COLORS['BLUE_MUSHROOM'], 'name': 'Blue Mushroom',
+                      'is_food': True, 'food_value': 15, 'description': 'A glowing cave fungus. Edible.'},
+    'bottle': {'color': (160, 200, 220), 'name': 'Bottle'},
+    'bottles': {'color': (140, 180, 200), 'name': 'Bottles'},
     'magic_rune': {'color': (180, 120, 255), 'name': 'Magic Rune', 'magic_damage': 'arcane', 'damage': 5, 'sprite_name': 'magic_rune'},
 })
 
@@ -1516,6 +1766,10 @@ CELL_PICKUP = {
     'TREE1': {'tool': None, 'item': 'tree_sapling', 'amount': 1},
     'TREE2': {'tool': None, 'item': 'tree_sapling', 'amount': 1},
     'BUSH': {'tool': None, 'item': 'bush', 'amount': 1},
+    'FLOWER_PATTERN1': {'tool': None, 'item': 'flower'},
+    'FLOWER_PATTERN2': {'tool': None, 'item': 'flower'},
+    'FLOWER_PATTERN3': {'tool': None, 'item': 'flower'},
+    'APPLE_CRATE':     {'tool': None, 'item': 'apple_crate'},
     'WALL': {'tool': None, 'item': 'wall'},
     'HOUSE': {'tool': None, 'item': 'house'},
     'CAVE': {'tool': None, 'item': 'cave'},
@@ -1579,7 +1833,13 @@ ITEM_TO_CELL = {
     'meat': 'MEAT',
     'fur': 'FUR',
     'bones': 'BONES',
-    'flower': 'FLOWER',
+    'flower': 'FLOWER_PATTERN1',
+    'flower_pattern1': 'FLOWER_PATTERN1',
+    'flower_pattern2': 'FLOWER_PATTERN2',
+    'flower_pattern3': 'FLOWER_PATTERN3',
+    'gravestone': 'GRAVESTONE',
+    'bed_blue': 'BED_BLUE',
+    'desert_well': 'DESERT_WELL',
     'iron_ore': 'IRON_ORE',
     'well': 'WELL',
     'cactus': 'CACTUS',

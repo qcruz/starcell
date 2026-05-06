@@ -1,24 +1,29 @@
 # StarCell — Next Up
 
-> Two tiers. Claude works Tier 1 top-to-bottom without asking. Tier 2 items require explicit user sign-off before any code is written — post the item in chat, wait for a clear "go ahead."
-> @qcruz manages additions and order.
->Always start by reviewing committ history for recent updates and changes from others. Reconcile project documentation (implemented features, bug report, roadmap, etc) at the begining and end of each session.
+> @qcruz manages additions and order. Always start by reviewing commit history for recent updates and changes. Reconcile project documentation (implemented features, bug report, roadmap, etc) at the beginning and end of each session.
+
 ---
 
-## Tier 1 — Autonomous
+- [ ] Enchanted cell interaction popup — when player interacts with an enchanted cell, show a small 2-option popup: left = Decay (shows target decay cell type as a sprite preview), right = Grow (shows target grow cell type as a sprite preview); clicking either transforms the cell to the target type, costs player magic equivalent to a spell cast, and leaves the cell enchanted so it can be interacted with again; cell order for decay/grow targets comes from the cell type masterlist entry for that cell type; lets players freeze and sculpt terrain at a magic cost without breaking the enchantment
+- [ ] Cell type masterlist — create `data/cell_order.md` listing every cell type in the game in ascending order of rarity/resource-cost/ecological complexity: raw terrain (CAVE_WALL, WALL, CLIFF, SAND, DIRT, STONE, COBBLESTONE, WATER, DEEP_WATER) → vegetation (GRASS, SOIL, CARROT1-3, FLOWER, FLOWER_PATTERN1-3, BUSH, CACTUS, TREE1-3) → water features (WELL, DESERT_WELL, WATER_TROUGH) → structures/furniture (CAMP, FLOOR_WOOD, CAVE_FLOOR, PLANKS, WOOD_TABLE, WOOD_CHAIR, BOOKSHELF, BED_BLUE, BED_WHITE, SMALL_POTTED_PLANT, BLUE_MUSHROOM, BARREL, EMPTY_CRATE, APPLE_CRATE, CHEST, OPEN_CHEST, LOCKED_CHEST, FORGE, WATER_TROUGH, WALL) → buildings (HOUSE, STONE_HOUSE) → underground (CAVE, MINESHAFT, STAIRS_DOWN, STAIRS_UP) → special/rare (GRAVESTONE, BROKEN_GRAVESTONE, RUINED_SANDSTONE_COLUMN, IRON_ORE, SOIL, BED variants). Include for each entry: label, decay target, grow target, harvest item (if any), notes on rarity/role. This list feeds loot tables, crafting tiers, quest rewards, shop inventories, and the enchanted-cell grow/decay system.
+- [ ] Resource and NPC behavior balancing pass — review hunger/thirst drain rates, food spawn density, carrot growth rates, passive adjacent consume thresholds; observe NPCs finding food in practice and tune so entities are rarely at critical hunger in a normal zone with carrots/grass present; also review water access near wells and WATER cells
 
-Small additions using existing systems and minimal changes to code.
+- [ ] Status effects as a first-class system — add `entity.status_effects = {effect: ticks_remaining}` dict and `tick_status_effects()` pass; wire poisoned/burning/cold/bleeding as entries; replaces per-site hacks and unlocks The Hunger poison water, fire cells, and bleed-on-hit as one-liners
+- [ ] Player reputation ripple effects — hostile NPCs in a zone flee when player reputation exceeds threshold; traders offer 10–20% discount at high rep; zone Keeper greets player by name once rep threshold crossed; no new UI, condition checks on existing paths only
+- [ ] Zone memory / history scars — after any zone with >10 entity deaths, leave persistent marks: scorched tile variants, non-decaying bone piles, zone name suffix ("the Blighted"); pipe LoreEngine zone-death counts into visible cell state
+- [ ] Item durability (extend) — base system implemented (weapon damage bonus 0.75→0, −0.01/attack; armor/spell XP; item_levels via gain_item_xp); next: add `broken_<item>` on durability=0; repair recipes; blacksmith repair interaction; UI badge showing item level and durability bar
+- [ ] Day/night NPC faction shift — at night guards patrol instead of idle, farmers shelter, bandits become aggressive even in neutral zones; one `self.is_night` condition check added to faction behavior dispatch
+- [ ] Wandering merchant caravan — TRADER NPC spawns at world edge once every N days, travels a path through several zones, despawns at far edge; carries rare items not in normal loot tables; wires existing travel behavior, trader inventory, and zone transition system
+- [ ] Boss concept: The Silence — a zone that has gone completely quiet (no spawns, no ambient, no growth); one ancient high-HP entity inside that ignores the player for ~60 ticks, then pursues zone-to-zone until killed; zero new systems, purely tuned pursuit AI and a suppressed spawn rate flag
+- [ ] Boss concept: The Sleeper — deep cave level that looks normal until any item is picked up; massive STONE_GIANT variant wakes and STAIRS_UP becomes blocked by cave-in (CAVE_WALL placed over stair cells); every 30 ticks adds more CAVE_WALL cells, shrinking playable space; player must kill it before the cave collapses; uses existing cave gen + timed cell placement tied to entity alive status
+- [ ] Monolith extraction pass — extract in-structure behavior block from npc_ai.py into ai/movement.py; target ~200-line reduction from monolith before status effects and boss zone work begins
+- [x] Remove handle_in_structure_npc — unify structure exit under existing special target system: add 'travel' as a special target sub-type in determine_target_type; 'travel' resolves by checking conditions (day/night × nocturnal, overcrowding, guard hostile detection, MINER night exit) and returns an exit/entry cell position if a condition is met, else None; structure exit navigation reuses targeting state + seek_zone_exit extended to handle entity.in_structure; remove handle_in_structure_npc call from update_entity_ai and delete the function; MINER cave behavior falls through via role targeting naturally
+- [ ] Review and formalize `dynamic_to_item_conversion` — audit all code paths that convert dynamic follower/entity state to inventory items; ensure consistent naming, cleanup on death, and no stale entries survive between sessions
+- [ ] NPC targeting priority function — replace ad-hoc target selection with a scored priority system; each candidate gets a score based on type (hostile, special, resource, quest target, water, food); NPC picks highest-scoring target; scores tunable per entity type via ai_params
+- [ ] NPC trader targeting and trade system — when NPC inventory is full, NPC seeks nearby chest (existing dump logic) or nearby TRADER; if TRADER is adjacent, NPC trades surplus inventory items for gold; if NPC gold exceeds threshold, buys a random item from the TRADER's inventory
 
-- [ ] Action inventory, equipment inventory, and favor system — one session
-- [ ] Add actions inventory tab (R key) — shove and other contextual action items. Start with Attack, Block, Sneak, Dig, and Talk placeholders. Actions not dropped on death, will be starting options for game actions before player has tools.
-- [ ] Make actions default on spawn - 'attack', 'block' - allow player to collect resources without tools (low success chance)(actions and spells not dropped on death)
-- [ ] Add NPC trait Favor: -100 to 100, default zero for peacful NPCs, default -50 for hostiles. Will increase or decrease for certain actions (we will discuss when implementing)
-- [ ] Add faction standing display when inspecting NPC — show NPC favor score and faction label
-- [ ] Add per-NPC favor system — -100 to 100 favorability score; reduces follower energy cost
-- [ ] Add gift giving — player offers item to NPC to increase favor;
-- [ ] Add energy cost for active followers — each follower reduces max energy by 30% of their max energy; recalculates on add/remove
+- [ ] NPC infection system: vampirism and lycanthropy — hostile bats can infect humanoid NPCs with vampirism (transforms to BAT at night, reverts at dawn); hostile wolves can infect with lycanthropy (transforms to WOLF at night, reverts at dawn); silver weapons prevent/cure infection
 - [ ] Add item level display in inventory UI — show level badge on leveled items in all tabs
-- [ ] Add equipment panel UI — Weapon, Off-hand, Armor, Ring ×2, Amulet slots; passive stat bonuses
 
 - [ ] Village and dungeon biome — required sprites: fence, stairs up/down
 - [ ] Create village biome — VILLAGE zone type; rare spawn; clustered housing with fence cells enclosing plots, market stall, well; higher NPC density (FARMER, GUARD, BLACKSMITH, TRADER, COMMANDER, KING); guard keepers protect zone perimeter. Required sprites: fence.
@@ -28,25 +33,20 @@ Small additions using existing systems and minimal changes to code.
 
 - [ ] More sprites, cells, NPCs, and biomes
 
-- [ ] Skeleton doubles (and all doubles) need to process the same as their single counterparts (skeelton doubles should take constant damage during the day while outside)
-- [ ] Double entities should have a chance to split back in to singles every update tick if NPC population is low enough. Split inventory, levels, quest, etc randomly for now.
+- [ ] Skeleton doubles (and all doubles) need to process the same as their single counterparts (skeleton doubles should take constant damage during the day while outside)
+- [ ] Double entities should have a chance to split back into singles every update tick if NPC population is low enough. Split inventory, levels, quest, etc randomly for now.
 - [ ] Hard cap on total number of same entity in zone - if more than 15 of the same entity type in zone, single or double, singles get 'absorbed' into doubles automatically - double entity gets level increase.
-- [ ] We need to make sure chest content are still picked up by the player on interaction (spacebar)
-- [ ] Add a few random items to barrels as well, picked up when interacted (same hadnling as chests, but lower quality loot table)
+- [ ] Add a few random items to barrels as well, picked up when interacted (same handling as chests, but lower quality loot table)
 - [ ] When player drops items on a chest cell, they should move to the chest inventory
-- [ ] When butterflys fly over base cells - high chance to grow the cell to next level - sand>dirt>grass>plant (will be adding bush and flowers, ect)(doesn't grow trees)
-- [ ] Complete NPC combat creature sound mapping — verify WOLF, GOBLIN, BAT, SKELETON, BANDIT route through _ENTITY_SOUND
-- [ ] Add wolf/goblin ambient presence sounds — WOLF growl every ~300 ticks within 6 cells; GOBLIN every ~200 ticks
+- [ ] When butterflies fly over base cells - high chance to grow the cell to next level - sand>dirt>grass>plant (will be adding bush and flowers, etc)(doesn't grow trees)
 - [ ] Add ambient rain sound during rain events — play rain_sound loop when is_raining; stop when false
-- [ ] Add do_shove() — push entity in facing direction one cell; blocked by solid cells
-- [ ] Add handle_npc_follow_interaction() — Shift+F on inspected NPC; 50% recruit chance - maybe an action instead? We will discuss.
 - [ ] Add buried treasure — shovel digs soft cells; chance to uncover cached items; Detect spell reveals locations, dig action works as well (low success chance - takes multiple tries)
 - [ ] Boost night-time hostile spawn rate slightly — BAT, GOBLIN, SKELETON have higher spawn weight at night
 - [ ] Add spell energy cost — spells draw from energy pool; drain health if insufficient
-- [ ] Rain affects crop growth — active rain reduces crop decay rate; speeds grass/tree spread
 - [ ] Add poisoned status effect — HP drain per tick; cured by antidote or milk
 - [ ] Add burning status effect — HP drain per tick; spreads to adjacent flammable cells
-- [ ] Add cold status effect — immobile for duration;
+- [ ] Add cold status effect — immobile for duration
+- [ ] Fix subscreen desync — `entity_not_in_subscreen_but_in_subscreen_entities` growing each session (178→280); entity `in_subscreen` flag is cleared but entity ID remains in `subscreen_entities` dict; audit all `npc_exit_structure` exit paths to ensure `subscreen_entities[key].remove(entity_id)` is called on every exit
 - [ ] Remove dead debug prints outside autopilot.py and debug/
 - [ ] Add named villains — LoreEngine occasionally designates a high-level hostile NPC with unique stat boost and artifact drop
 - [ ] Wire higher NPC level → reduced hostile raid chance in zone and reduced structure destruction probability
@@ -54,35 +54,21 @@ Small additions using existing systems and minimal changes to code.
 - [ ] Port Autopilot AI — keeper use quest-targeting and obstacle-clearing loop; goal matches NPC archetype
 - [ ] Add basic seasonal system — four seasons; season flag used by crop and weather rules
 - [ ] Audit monolith methods extracted to mixins — remove duplicates from game_core.py and npc_ai.py
-- [ ] Consolidate functionality — code cleanup pass
+- [ ] Consolidate functionality — code cleanup pass (see CLAUDE.md Architecture principle for concrete examples and strategy)
 
----
-
-## Tier 2 — Needs Explicit Approval
-
-Post the item in chat before starting. Wait for a clear "go ahead." These introduce new entity types, structure types, UI systems, or world generation systems that require design decisions.
-
-### New Entity Types
-
-
-### New Structure Types
-- [ ] chance for stone house to become fort or belltower - fort spawns traveling soldiers (agressive) of the local faction, belltower spawns guards (relaxed, protect zone)
-- [ ] Add Tavern structure — NPC gathering point; rest/time-skip; Tavernkeeper quests, spawn 1-2 'adventurer NPCs (start off with hogh player favorability, will follow player from level 1, low follower energy cost (~30 energy reduction while following)).
-- [ ] Add Blacksmith structure — dedicated smithing building; forge enables higher level weapons and echanted weapons.
+- [ ] chance for stone house to become fort or belltower - fort spawns traveling soldiers (aggressive) of the local faction, belltower spawns guards (relaxed, protect zone)
+- [ ] Add Tavern structure — NPC gathering point; rest/time-skip; Tavernkeeper quests, spawn 1-2 adventurer NPCs (start off with high player favorability, will follow player from level 1, low follower energy cost (~30 energy reduction while following))
+- [ ] Add Blacksmith structure — dedicated smithing building; forge enables higher level weapons and enchanted weapons
 - [ ] Add Crypt structure — sealed underground zone; undead spawns; Vampire or Lich boss room at depth
 - [ ] Add Temple/Shrine structure — visit grants buff; Identify curse; unique quest giver
-- [ ] Add Ancient Ruins structure type — crumbling zone; Golem and Mechanica guardians;
+- [ ] Add Ancient Ruins structure type — crumbling zone; Golem and Mechanica guardians
 - [ ] Add Library/Archive structure — Wizard Keeper; Tome items teach rare spells; ghost scholar guards
 - [ ] Add oasis structure to desert zones — water source cell cluster in desert; NPCs and animals seek it
 - [ ] Add waypoint stone structure — player teleports between owned waypoints; significant time passes on use
 - [ ] Add barn/pen structure — houses livestock; prevents animal wandering
-
-### New UI Systems
 - [ ] Add world map view — zoomed-out explored zone overlay with names and faction colors
 - [ ] Add achievement system — milestone tracking; HUD notification on unlock
-
-### New World and Game Systems
-- [ ] Expand Keeper system - keeper types include different distance ranges and ties to cell, NPC, or item.
+- [ ] Expand Keeper system - keeper types include different distance ranges and ties to cell, NPC, or item
 - [ ] Add quest assignment - some NPCs can be given quest from player quest inventory, will then pursue quest target
 - [ ] Add foraging spawns — wild mushrooms, berries, herbs in forest and cave zones; biome rules
 - [ ] Add NPC daily schedules — field at dawn, tavern at evening, temple on rest days

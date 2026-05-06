@@ -24,7 +24,7 @@ The project owner (@qcruz) handles creative direction: roadmap additions, system
 ## Development Loop
 
 ```
-1. Read next_up.md → pick the first unchecked Tier 1 item
+1. Read next_up.md → pick the first unchecked item
 2. Read relevant source files → understand current code
 3. Implement → commit to dev-q-updates
 4. @qcruz reviews dev-q-updates manually
@@ -33,29 +33,37 @@ The project owner (@qcruz) handles creative direction: roadmap additions, system
 7. Review debug/bug_report.md → fix confirmed bugs → commit to dev-q-updates
 8. Periodic: code cleanup session (see Code Cleanup below)
 9. @qcruz tests dev → pushes to main when satisfied
+10. End of session: pick one project doc at random and ensure it is up-to-date with
+    current game features. This means: fix stale descriptions, add entries for new
+    features, expand details, add or remove to-do items, note art/audio/design needs
+    introduced by recent work, or connect the doc's topic to systems added since it
+    was last touched. Any doc in the repo qualifies — code docs (docs/), design docs,
+    roadmap, art_direction, sound_design, etc. Commit and push the update.
 ```
 
 ---
 
-## Autonomous vs. Approval Rule
+## Work Rule
 
-`next_up.md` has two tiers. This rule governs which tier an item belongs to and what is required before starting.
+`next_up.md` is a single ordered list. Work items top to bottom. @qcruz controls order and additions.
 
-**Tier 1 — Build autonomously:**
-- Small additions to existing systems
-- No new entity types, structure types, or major UI systems
-- Examples: config value changes, wiring existing keys/calls, adding a status effect, porting a method between files, small data additions, code cleanup
-
-**Tier 2 — Requires explicit user approval:**
+**Post in chat before starting any item that introduces:**
 - New entity types (any new entry in ENTITY_TYPES)
 - New structure types (any new zone or subscreen layout)
 - New major UI panels or tabs
 - New world-generation systems
 - New game loops or economy systems (fishing, crafting stations, bounties, etc.)
 
-**Before starting a Tier 2 item:** post the item name in chat and wait for a clear "go ahead" before writing any code. Do not infer approval from roadmap entries or previous conversations.
+Wait for a clear "go ahead" before writing any code on those. Do not infer approval from roadmap entries or previous conversations.
 
-**When adding new items:** Tier 1 items go at the bottom of the Tier 1 list, ordered by scope (smallest first). Tier 2 items go in the appropriate subsection of the Tier 2 list. Far-future or speculative items belong in `roadmap.md` only — do not add them to `next_up.md` until prerequisite systems are in place.
+**Bug fixes also require confirmation before implementing.** When a bug is identified:
+1. Post the diagnosed root cause in chat — clearly state what you believe is causing it and why.
+2. Post the proposed fix — describe the change and which files it touches.
+3. Wait for explicit approval before writing any code.
+
+Do not implement a bug fix speculatively even if the cause seems obvious. Diagnosis and implementation are two separate steps, and @qcruz approves both.
+
+**When adding new items:** add at the position @qcruz specifies, or at the bottom if unspecified. Far-future or speculative items belong in `roadmap.md` only — do not add them to `next_up.md` until prerequisite systems are in place.
 
 ---
 
@@ -84,23 +92,38 @@ Issues in `held_back.md` are **not abandoned** — they get a clear symptom, sus
 
 **Purpose:** Stress-test new features by running the autopilot headlessly for 2–3 min sessions and reviewing the Watchdog log.
 
+**Game launch path:** The game is launched via `~/StarCell/launcher/StarCell.app`. It runs from `~/StarCell` (NOT the local dev copy at `~/Desktop/porn/starcell`). The Watchdog log is at `~/StarCell/debug/bugcatcher.log` and the save file is at `~/StarCell/savegame.json`.
+
+**Log analysis protocol — mandatory before any analysis:**
+1. Read `~/StarCell/savegame.json` and note the `"tick"` value (e.g. `431010`).
+2. Read `~/StarCell/debug/bugcatcher.log` and note the tick range of the entries.
+3. If the log tick range does NOT overlap the save file tick, the log is stale — flag this immediately and do not analyze stale data.
+4. All log analysis must reference `~/StarCell/debug/bugcatcher.log`, not the dev-copy at `~/Desktop/porn/starcell/debug/`.
+
 **To run a session:**
 ```bash
-# Enable AUTO_DEBUG locally (git-ignored, never committed):
-echo "True" > debug/auto_debug.cfg
-cd /path/to/starcell
-python3 main.py
-# After the session, disable it:
-echo "False" > debug/auto_debug.cfg
+# The auto_debug.cfg flag controls console debug prints only.
+# Watchdog ALWAYS logs on dev-q-updates branch regardless of this flag.
+echo "True" > ~/StarCell/debug/auto_debug.cfg   # optional: enable verbose prints
+# User launches ~/StarCell/launcher/StarCell.app
+# After the session:
+echo "False" > ~/StarCell/debug/auto_debug.cfg
 ```
-Session ends automatically (2–3 min timer). Review `debug/bug_catcher.log` and update `debug/bug_report.md` with findings. Commit `debug/bug_report.md` to `dev-q-updates` after each run. Document as `Session N` with CONFIRMED / OBSERVATION / BUG entries.
+Session ends automatically (2–3 min timer). Review `~/StarCell/debug/bugcatcher.log` and update `debug/bug_report.md` with findings.
+
+**REQUIRED after every single run — no exceptions:**
+- Add a `## Session N` entry to `debug/bug_report.md` immediately after the session ends
+- Include: fixes applied before the run, run stats (tick count, quest sequence, crashes), and at least one OBSERVATION/CONFIRMED/BUG entry
+- Commit and push `debug/bug_report.md` to `dev-q-updates` before starting the next session or doing anything else
+- Never batch multiple sessions into one entry — each run gets its own section
+- Even sessions killed early or with insufficient data must be documented with what was captured
 
 **Observation run process:**
 1. Choose 2–3 features from nextup randomly
 2. Update the Watchdog as needed to sample game data relevant to those features
 3. Set a run time limit long enough to observe those features
 4. Run a small number of sessions focused on observing those features
-5. After each run, record observed bugs and interesting game behaviors in `debug/bug_report.md`
+5. **After each individual run:** update `debug/bug_report.md`, commit, push — before running the next session
 6. After all runs complete, review the bug report, summarize improvements needed, and make changes
 7. Repeat 1–3 runs → check if bugs resolved → if not, make edits → repeat
 8. When issues appear addressed, start a new observation test session (new random features, new Watchdog focus)
@@ -136,6 +159,10 @@ Run a cleanup session every ~5 feature additions or when the codebase shows sign
 - Two methods doing the same thing with slight variations → merge into one with a parameter
 - Parallel data structures that could be one dict → merge
 - Any mixin that is now empty because all its methods were extracted → remove from Game MRO in `main.py`
+- Special-case dispatch blocks that duplicate existing mechanics → remove the special case and extend the general mechanic to cover the edge case
+
+**Architecture principle — unify under the simplest mechanic:**
+The goal is fewest code paths for the most behavior. When a special-case block handles something that a general system already handles almost correctly, the right fix is to extend the general system — not add another branch. Every duplicated code path is future debt: two places to update on each change, two sources of subtle divergence. Concrete example: `handle_in_structure_npc` (ai/movement.py) duplicated day/night exit logic and overcrowding logic that already existed in the state machine and `seek_zone_exit`. The correct fix is to extend `seek_zone_exit` to treat structure exits as zone exits, and add exit-intent conditions directly to `update_entity_ai_state` — then delete `handle_in_structure_npc` entirely. Structures are zones; zone exits are zone exits.
 
 **Do not remove:**
 - The legacy monolith files entirely (extraction is ongoing)
@@ -148,8 +175,9 @@ Run a cleanup session every ~5 feature additions or when the codebase shows sign
 
 | File / Dir | Role |
 |---|---|
+| `main_branch_prep.md` | **Pre-merge checklist for main.** Read before any merge to main. Contains all required code changes, value adjustments, and file removals. |
 | `roadmap.md` | Big-picture feature vision. Owner-maintained. Do not edit during development. |
-| `next_up.md` | Two-tier work list: Tier 1 (autonomous) and Tier 2 (needs approval). Claude reads Tier 1 top to bottom. Owner-maintained. |
+| `next_up.md` | Single ordered work list. Claude works top to bottom. Owner-maintained. |
 | `current_features.md` | Technical implementation notes for completed and in-progress features. No planned items — those belong in `roadmap.md`. |
 | `debug/bug_report.md` | Session-by-session autopilot observations and confirmed bug fixes |
 | `debug/held_back.md` | Issues held back from advancement: 3+ sessions unresolved, adverse impact, or pending code review |
@@ -164,8 +192,11 @@ Run a cleanup session every ~5 feature additions or when the codebase shows sign
 | `autopilot.py` | Possession-model autopilot. Also the proving ground for NPC AI before porting |
 | `game_core.py` | Legacy monolith: init, player, input handling, new_game |
 | `npc_ai.py` | Legacy monolith: entity state machine, combat, day/night shelter |
+| `docs/` | Contributor documentation: plain-language guides + pseudo-code references for each major file |
 
 **Dual-import rule:** When adding items, cell types, or recipes, update BOTH `constants.py` AND the relevant `data/` module.
+
+**Docs maintenance rule:** When a documented file changes significantly (new methods, renamed behavior, restructured logic), update the corresponding `docs/*_plain.md` and `docs/*_pseudo.md` files in the same commit. Files currently documented: `npc_ai.py`, `ai/movement.py`, `ai/actions.py`, `game_core.py`, `world/generation.py`, `world/zones.py`. Priority order for remaining files: `engine/entity.py` → `systems/` → `autopilot.py` → `ui/` → `data/`.
 
 ---
 
@@ -184,3 +215,17 @@ This keeps the autopilot as a thin dispatcher calling real game-system methods. 
 - When adding a feature that touches NPC behavior, add an autopilot test for it
 - Keep `autopilot.py` calling real game methods — no parallel pathfinding or resource logic
 - `debug/bug_catcher.log` is ephemeral (cleared on new game) — findings go in `debug/bug_report.md`
+
+---
+
+## ⚠ MAIN BRANCH MERGE — MANDATORY PRE-FLIGHT ⚠
+
+**Before any merge to `main`, you MUST:**
+
+1. **Read `main_branch_prep.md` in full** — this document lists every code change, value adjustment, and file removal required before main receives dev code. It is not optional.
+2. **Post the checklist to @qcruz** and wait for explicit sign-off on every open decision (inventory, follower cost, spell cost, E-button behavior, biome rates, etc.).
+3. **Make the required code changes** as specified in the checklist — main is not a straight copy of dev; values and behaviors differ.
+4. **Remove dev-only files** listed in `main_branch_prep.md` section 11 from the main worktree.
+5. **Only then push** — never push to main speculatively or to "test" the merge.
+
+If you are uncertain whether something qualifies as a main merge, assume it does not and ask @qcruz first. The cost of one extra confirmation is zero. The cost of shipping dev artifacts to main is real.

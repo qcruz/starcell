@@ -21,6 +21,122 @@ class NpcAiMixin:
         return entity_zone == player_zone
 
     # ══════════════════════════════════════════════════════════════════════
+    # WALK CELL EFFECTS — entities passively reshape the world as they move
+    # ══════════════════════════════════════════════════════════════════════
+
+    def _apply_walk_cell_effects(self, entity, screen_key):
+        """Passive terrain mutation triggered each AI tick for overworld entities.
+
+        Each entity type modifies the cell it currently stands on at low probability,
+        creating emergent biome pressure without any extra pathfinding or targeting.
+        """
+        grid = self.screens[screen_key]['grid']
+        cx, cy = entity.x, entity.y
+        if not (0 <= cx < GRID_WIDTH and 0 <= cy < GRID_HEIGHT):
+            return
+        cell = grid[cy][cx]
+        center_x = GRID_WIDTH // 2
+        center_y = GRID_HEIGHT // 2
+
+        # ── SKELETON — every step bleaches eligible cell to dirt ─────────
+        if entity.type == 'SKELETON':
+            if cell == 'GRASS':
+                grid[cy][cx] = 'DIRT'
+
+        # ── TERMITE — every 4th step: drops sand or aerates dirt ─────────
+        elif entity.type == 'TERMITE':
+            if random.random() < 0.25:
+                if cell in ('GRASS', 'DIRT'):
+                    grid[cy][cx] = 'SAND'
+                elif cell == 'DIRT':
+                    grid[cy][cx] = 'GRASS'
+
+        # ── FLYING ANIMALS — every ~4th step fertilise dirt into grass ───
+        elif entity.type == 'BUTTERFLY':
+            if cell == 'DIRT' and random.random() < 0.25:
+                grid[cy][cx] = 'GRASS'
+        elif entity.type == 'RED_BIRD':
+            if cell == 'DIRT' and random.random() < 0.25:
+                grid[cy][cx] = 'GRASS'
+        elif entity.type == 'BAT':
+            if cell == 'DIRT' and random.random() < 0.25:
+                grid[cy][cx] = 'GRASS'
+
+        # ── FARMER — every ~4th step reclaims/tills land; auto-plants ────
+        elif entity.type == 'FARMER':
+            if random.random() < 0.25:
+                if cell == 'SAND':
+                    grid[cy][cx] = 'DIRT'
+                elif cell == 'DIRT':
+                    grid[cy][cx] = 'SOIL'
+                elif cell == 'SOIL' and entity.inventory.get('carrot', 0) > 0:
+                    grid[cy][cx] = 'CARROT1'
+                    entity.inventory['carrot'] = entity.inventory['carrot'] - 1
+
+        # ── OTHER HUMANOIDS — every ~4th step pave center cross ──────────
+        elif entity.type in ('WARRIOR', 'COMMANDER', 'KING', 'BLACKSMITH',
+                             'WIZARD', 'LUMBERJACK', 'MINER'):
+            if random.random() < 0.25:
+                on_center = abs(cx - center_x) <= 1 or abs(cy - center_y) <= 1
+                if on_center:
+                    if cell in ('GRASS', 'SOIL'):
+                        grid[cy][cx] = 'DIRT'
+                    elif cell == 'DIRT':
+                        grid[cy][cx] = 'COBBLESTONE'
+
+    def _try_adjacent_consume(self, entity, screen_key):
+        """Auto-eat/drink when near a food or water cell.
+
+        Probability of eating = % of hunger bar missing, so a nearly-full entity
+        rarely snacks while a starving one almost always grabs food it walks over.
+        Checks own cell first, then the 8 adjacent cells.
+        Carrot cells decay one step when consumed (CARROT3→CARROT2→CARROT1→SOIL).
+        WATER cells have a small chance to evaporate on drink.
+        """
+        if screen_key not in self.screens:
+            return
+        grid = self.screens[screen_key]['grid']
+
+        hunger_pct_missing = max(0.0, 1.0 - entity.hunger / max(1, entity.max_hunger))
+        thirst_pct_missing = max(0.0, 1.0 - entity.thirst / max(1, entity.max_thirst))
+
+        # Probabilistic gate: chance = % missing, so full entities never eat
+        want_food  = hunger_pct_missing > 0 and random.random() < hunger_pct_missing
+        want_water = thirst_pct_missing > 0 and random.random() < thirst_pct_missing
+        if not want_food and not want_water:
+            return
+
+        food_sources = entity.props.get('food_sources', [])
+        water_sources = entity.props.get('water_sources', ['WATER'])
+        CARROT_DECAY = {'CARROT3': 'CARROT2', 'CARROT2': 'CARROT1', 'CARROT1': 'SOIL'}
+        _passive_grazer = (not entity.props.get('hostile', False) and
+                           'GRASS' in food_sources)
+
+        # Own cell first (entity walking directly over food), then adjacent
+        for dy in (0, -1, 1):
+            for dx in (0, -1, 1):
+                nx, ny = entity.x + dx, entity.y + dy
+                if not (0 <= nx < GRID_WIDTH and 0 <= ny < GRID_HEIGHT):
+                    continue
+                cell = grid[ny][nx]
+
+                if want_food and cell in food_sources:
+                    entity.hunger = entity.max_hunger
+                    if not _passive_grazer:
+                        if cell in CARROT_DECAY and random.random() < 0.5:
+                            grid[ny][nx] = CARROT_DECAY[cell]
+                    want_food = False
+
+                elif want_water and cell in water_sources:
+                    entity.thirst = entity.max_thirst
+                    if cell == 'WATER' and random.random() < 0.15:
+                        grid[ny][nx] = 'DIRT'
+                    want_water = False
+
+                if not want_food and not want_water:
+                    return
+
+    # ══════════════════════════════════════════════════════════════════════
     # ACTION PRIMITIVES — Reusable building blocks for NPC and player actions
     # ══════════════════════════════════════════════════════════════════════
 
@@ -101,7 +217,30 @@ class NpcAiMixin:
         # screen_key is always the entity's current zone — virtual coords for
         # structure zones, real coords for overworld zones.
         screen_key = f"{entity.screen_x},{entity.screen_y}"
-        
+
+        # Consistency guard: ensure in_structure/structure_key match the entity's zone.
+        # Entities spawned inside structures may inherit the correct virtual screen_x/y
+        # but not have in_structure set. Correct both directions cheaply each tick.
+        if screen_key in self.structures:
+            if not getattr(entity, 'in_structure', False):
+                entity.in_structure = True
+                entity.structure_key = screen_key
+        elif getattr(entity, 'in_structure', False):
+            old_structure_key = entity.structure_key
+            entity.in_structure = False
+            entity.structure_key = None
+            # Clean up screen_entities: entity's screen_x/y already points to overworld
+            # but it may still be listed under the old structure key — remove it and
+            # ensure it's registered in the correct overworld bucket.
+            if old_structure_key and old_structure_key in self.screen_entities:
+                if entity_id in self.screen_entities[old_structure_key]:
+                    self.screen_entities[old_structure_key].remove(entity_id)
+                overworld_key = screen_key  # screen_key is already the overworld zone
+                if overworld_key not in self.screen_entities:
+                    self.screen_entities[overworld_key] = []
+                if entity_id not in self.screen_entities[overworld_key]:
+                    self.screen_entities[overworld_key].append(entity_id)
+
         # EXECUTE BEHAVIOR BASED ON STATE
         if hasattr(entity, 'ai_state'):
             if entity.ai_state == 'combat':
@@ -126,6 +265,9 @@ class NpcAiMixin:
                                 if entity.props.get('hostile', False):
                                     damage *= 1.2
                                 self.player_take_damage(damage)
+                                if entity.props.get('hostile', False):
+                                    entity.hunger = min(entity.max_hunger, entity.hunger + random.randint(1, 2))
+                                    entity.thirst = min(entity.max_thirst, entity.thirst + random.randint(1, 2))
                                 self.show_attack_animation(self.player['x'], self.player['y'], entity=entity, magic_type=magic_type)
                                 # Bat disengage after hitting
                                 if entity.props.get('flying', False) and random.random() < 0.4:
@@ -256,14 +398,14 @@ class NpcAiMixin:
                             self._try_targeting_zone_cross(entity, entity_id)
 
                 # Stay in flee while any enemy is nearby or recently attacked
-                recently_attacked = (self.tick - getattr(entity, 'last_attacked_tick', 0)) < 60
+                recently_attacked = (self.tick - getattr(entity, 'last_attacked_tick', 0)) < 30
                 enemy_nearby = False
                 if not recently_attacked:
                     for _oid in self.screen_entities.get(screen_key, []):
                         if _oid not in self.entities:
                             continue
                         _o = self.entities[_oid]
-                        if abs(_o.x - entity.x) + abs(_o.y - entity.y) > 8:
+                        if abs(_o.x - entity.x) + abs(_o.y - entity.y) > 5:
                             continue
                         _hostile = _o.props.get('hostile', False)
                         _peaceful = not entity.props.get('hostile', False)
@@ -335,20 +477,70 @@ class NpcAiMixin:
                             tx, ty = entity.current_target[1], entity.current_target[2]
                             dist = abs(entity.x - tx) + abs(entity.y - ty)
                             if dist == 0:
-                                # Somehow walked onto the target cell — clear and wander
-                                entity.quest_target = None
-                                entity.current_target = None
-                                entity.ai_state = 'wandering'
-                                entity.ai_state_timer = 2
+                                cell_type = entity.current_target[3] if len(entity.current_target) >= 4 else ''
+                                if cell_type == 'EXIT':
+                                    # At structure exit — trigger actual exit via unified seek_zone_exit
+                                    self.seek_zone_exit(entity, entity_id)
+                                    entity.current_target = None
+                                    entity.target_type = None
+                                else:
+                                    _is_enterable = (
+                                        entity.target_type in ('shelter', 'visit')
+                                        or (entity.target_type == 'role'
+                                            and cell_type == 'MINESHAFT'
+                                            and getattr(entity, 'quest_focus', None) == 'MINE')
+                                    )
+                                    if _is_enterable:
+                                        if not cell_type:
+                                            cell_type = 'HOUSE'
+                                        self.npc_enter_structure(entity, screen_key, tx, ty, cell_type)
+                                        if entity.in_structure:
+                                            entity.current_target = None
+                                            entity.target_type = None
+                                    else:
+                                        # Walked onto a non-enterable target — clear and wander
+                                        entity.quest_target = None
+                                        entity.current_target = None
+                                        entity.ai_state = 'wandering'
+                                        entity.ai_state_timer = 2
                             elif dist > 1:
                                 self.move_toward_position(entity, tx, ty, screen_key)
                                 # If at exit, try to cross
                                 self._try_targeting_zone_cross(entity, entity_id)
-                            # dist == 1: adjacent, let state machine handle idle transition
+                            elif dist == 1 and len(entity.current_target) >= 4 and entity.current_target[3] == 'EXIT':
+                                # Adjacent to structure exit — trigger exit
+                                self.seek_zone_exit(entity, entity_id)
+                                entity.current_target = None
+                                entity.target_type = None
+                            elif dist == 1 and entity.target_type == 'stone' and len(entity.current_target) >= 4:
+                                # Verify the stone target cell still exists; clear if depleted
+                                _stone_cells = ('STONE', 'IRON_ORE', 'CAVE', 'MINESHAFT', 'CAVE_WALL')
+                                _scr = self.screens.get(screen_key, {})
+                                _actual = (_scr.get('grid', [[''] * GRID_WIDTH] * GRID_HEIGHT)[ty][tx]
+                                           if 0 <= tx < GRID_WIDTH and 0 <= ty < GRID_HEIGHT else '')
+                                if _actual not in _stone_cells:
+                                    entity.current_target = None  # Re-find next rock next tick
+                            elif dist == 1 and entity.target_type == 'role':
+                                # Miners enter MINESHAFT when adjacent; CAVE is mined by behavior_config
+                                cell_type = entity.current_target[3] if len(entity.current_target) >= 4 else ''
+                                if cell_type == 'MINESHAFT' and getattr(entity, 'quest_focus', None) == 'MINE':
+                                    self.npc_enter_structure(entity, screen_key, tx, ty, cell_type)
+                                    if entity.in_structure:
+                                        entity.current_target = None
+                                        entity.target_type = None
+                            elif dist == 1 and entity.target_type in ('shelter', 'visit'):
+                                # Adjacent to shelter/visit target — enter, clear targeting state
+                                cell_type = entity.current_target[3] if len(entity.current_target) >= 4 else 'HOUSE'
+                                self.npc_enter_structure(entity, screen_key, tx, ty, cell_type)
+                                if entity.in_structure:
+                                    entity.current_target = None
+                                    entity.target_type = None
+                            # else dist == 1: adjacent, let try_npc_enter_structure handle opportunistic entry
                         elif len(entity.current_target) >= 2 and isinstance(entity.current_target[0], (int, float)):
                             self.move_toward_position(entity, entity.current_target[0], entity.current_target[1], screen_key)
                             self._try_targeting_zone_cross(entity, entity_id)
-            
+
+
             elif entity.ai_state == 'wandering':
                 # Keeper type 1/2: return to anchor target if out of range
                 ktype = getattr(entity, 'keeper_type', None) or 3
@@ -422,25 +614,49 @@ class NpcAiMixin:
                             entity.ai_state_timer = 2
                             self._try_complete_assigned_quest(entity)
                         elif entity.target_type == 'food':
+                            # Check for infinite food source first (never consumed)
+                            if isinstance(entity.current_target, tuple) and len(entity.current_target) >= 4:
+                                cell_type = entity.current_target[3]
+                                cell_info = CELL_TYPES.get(cell_type, {})
+                                if cell_info.get('infinite_food'):
+                                    entity.eat(entity.max_hunger)
+                                    entity.current_target = None
+                                    entity.ai_state = 'wandering'
+                                    entity.ai_state_timer = 2
+                                    return
                             # Eat food — use behavior_config actions or direct consumption
                             behavior_config = entity.props.get('behavior_config')
                             if behavior_config:
                                 self.execute_entity_behavior(entity, behavior_config)
                             else:
                                 # Direct food consumption for entities without behavior_config
-                                food_sources = entity.props.get('food_sources', [])
                                 if isinstance(entity.current_target, tuple) and len(entity.current_target) >= 4:
                                     cell_type = entity.current_target[3]
-                                    food_value = 40 if 'CARROT' in cell_type else 20
-                                    entity.eat(food_value)
-                                    # Consume the food cell
+                                    entity.eat(entity.max_hunger)
                                     cx, cy = entity.current_target[1], entity.current_target[2]
                                     if screen_key in self.screens:
-                                        self.screens[screen_key]['grid'][cy][cx] = 'GRASS'
+                                        _grid = self.screens[screen_key]['grid']
+                                        _cur = _grid[cy][cx]
+                                        # Passive grazers: no cell decay when eating
+                                        _passive = not entity.props.get('hostile', False)
+                                        if not _passive:
+                                            _CDECAY = {'CARROT3': 'CARROT2', 'CARROT2': 'CARROT1', 'CARROT1': 'SOIL'}
+                                            if _cur in _CDECAY and random.random() < 0.5:
+                                                _grid[cy][cx] = _CDECAY[_cur]
+                                            elif _cur == 'GRASS' and random.random() < GRASS_DECAY_ON_EAT:
+                                                _grid[cy][cx] = 'DIRT'
                                     entity.current_target = None
                         elif entity.target_type == 'water':
-                            # Drink water
-                            entity.drink(40)
+                            # Drink water; deep water has high chance to leave cave floor
+                            entity.drink(entity.max_thirst)
+                            if isinstance(entity.current_target, tuple) and len(entity.current_target) >= 3:
+                                _wx, _wy = entity.current_target[1], entity.current_target[2]
+                                _wscr = self.screens.get(screen_key, {})
+                                _wcell = _wscr.get('grid', [])[_wy][_wx] if _wscr else None
+                                if _wcell == 'DEEP_WATER' and random.random() < 0.75:
+                                    _wscr['grid'][_wy][_wx] = 'CAVE_FLOOR'
+                                elif _wcell == 'WATER' and random.random() < 0.20:
+                                    _wscr['grid'][_wy][_wx] = 'CAVE_FLOOR'
                             entity.current_target = None  # Done drinking, find new goal
                         elif entity.target_type == 'resource':
                             # Harvest resource — use behavior_config
@@ -453,6 +669,40 @@ class NpcAiMixin:
                             behavior_config = entity.props.get('behavior_config')
                             if behavior_config:
                                 self.execute_entity_behavior(entity, behavior_config)
+                        elif entity.target_type == 'special' and entity._special_target_type == 'clearing_action':
+                            # Attack adjacent blocking cell — 15% destroy chance, no item drops
+                            ct = self._find_clearing_target(entity, screen_key)
+                            if ct:
+                                _, cx, cy, cell = ct
+                                if hasattr(entity, 'update_facing_toward'):
+                                    entity.update_facing_toward(cx, cy)
+                                    entity.trigger_action_animation()
+                                self.show_attack_animation(cx, cy, entity=entity)
+                                if random.random() < 0.15:
+                                    # Determine background cell: biome base or CAVE_FLOOR
+                                    _screen = self.screens.get(screen_key, {})
+                                    _biome  = _screen.get('biome', 'FOREST')
+                                    _base   = {'FOREST': 'GRASS', 'DESERT': 'SAND',
+                                               'SNOW': 'SNOW_GROUND', 'CAVE': 'CAVE_FLOOR'}.get(_biome, 'GRASS')
+                                    if screen_key in self.screens:
+                                        self.screens[screen_key]['grid'][cy][cx] = _base
+                            # Clear target whether or not we succeeded — try again next lock cycle
+                            entity.current_target = None
+                            entity._special_target_lock = 0
+                            entity._special_target_type = None
+                            entity.ai_state = 'wandering'
+                            entity.ai_state_timer = 2
+                        elif entity.target_type == 'special' and getattr(entity, '_special_target_type', None) == 'trade':
+                            # Adjacent to trade partner — execute exchange
+                            partner_id = entity.current_target if isinstance(entity.current_target, int) else None
+                            if partner_id and partner_id in self.entities:
+                                self._execute_npc_trade(entity, partner_id)
+                            else:
+                                entity.current_target       = None
+                                entity._special_target_lock = 0
+                                entity._special_target_type = None
+                                entity.ai_state             = 'wandering'
+                                entity.ai_state_timer       = 2
                         else:
                             # Generic target type — try behavior_config
                             behavior_config = entity.props.get('behavior_config')
@@ -471,78 +721,36 @@ class NpcAiMixin:
         if hasattr(entity, 'action_animation_timer') and entity.action_animation_timer > 0:
             entity.action_animation_timer -= 1
         
-        # Structure behavior - NPCs enter/exit houses and caves
-        if entity.in_structure:
-            # Daytime: non-nocturnal NPCs should actively try to exit structures
-            # Nighttime: nocturnal entities should actively try to exit
-            wants_to_exit = False
+        # Walk cell effects — fire on actual steps only
+        if not entity.in_structure and screen_key in self.screens and entity.moved_this_update:
+            self._apply_walk_cell_effects(entity, screen_key)
 
-            if not self.is_night and not entity.props.get('nocturnal', False):
-                # Daytime + not nocturnal = want to be outside working
-                wants_to_exit = True
-            elif self.is_night and entity.props.get('nocturnal', False):
-                # Nighttime + nocturnal = want to be outside hunting
-                wants_to_exit = True
+        # Passive adjacent eat/drink — overworld only, fires each step when hungry/thirsty
+        if not entity.in_structure and screen_key in self.screens and entity.moved_this_update:
+            self._try_adjacent_consume(entity, screen_key)
 
-            # Overcrowding: keepers never leave; everyone else may be pushed out
-            # when the structure is too full. Chance = local_pop * 10% per update.
-            if not getattr(entity, 'keeper', False):
-                zone_key = f"{entity.screen_x},{entity.screen_y}"
-                local_pop = len([
-                    eid for eid in self.screen_entities.get(zone_key, [])
-                    if eid in self.entities and self.entities[eid].is_alive()
-                ])
-                if local_pop > 3 and random.random() < local_pop * 0.10:
-                    wants_to_exit = True
+        # Automatic item pickup — runs for all entities (overworld and in-structure).
+        # Must sit before the in-structure return so cave/house NPCs can collect loot.
+        if screen_key in self.dropped_items:
+            pos_key_str = f"{entity.x},{entity.y}"
+            pos_key_tuple = (entity.x, entity.y)
+            for pos_key in (pos_key_str, pos_key_tuple):
+                if pos_key in self.dropped_items[screen_key]:
+                    items_at_pos = self.dropped_items[screen_key][pos_key]
+                    for item_name, count in list(items_at_pos.items()):
+                        entity.inventory[item_name] = entity.inventory.get(item_name, 0) + count
+                        player_adjacent = (
+                            entity.screen_x == self.player['screen_x'] and
+                            entity.screen_y == self.player['screen_y'] and
+                            abs(entity.x - self.player['x']) + abs(entity.y - self.player['y']) <= 1
+                        )
+                        if item_name == 'gold' and player_adjacent:
+                            self.process_npc_trade(entity, entity_id, count)
+                    del self.dropped_items[screen_key][pos_key]
+                    entity.gain_xp(1)  # XP for picking up items
 
-            # Combat-capable NPCs (guards/warriors) detect nearby hostiles outside and rush to defend
-            if not wants_to_exit and entity.type in ('GUARD', 'WARRIOR') \
-                    and entity.structure_key in self.structures:
-                sub = self.structures[entity.structure_key]
-                parent_screen = sub.get('parent_screen')
-                parent_cell = sub.get('parent_cell', (GRID_WIDTH // 2, GRID_HEIGHT // 2))
-                entrance_x, entrance_y = parent_cell
-                overworld_key = (f"{parent_screen[0]},{parent_screen[1]}"
-                                 if parent_screen else f"{entity.screen_x},{entity.screen_y}")
-                for oid in self.screen_entities.get(overworld_key, []):
-                    if oid in self.entities:
-                        other = self.entities[oid]
-                        # Skip player followers — they are friendly regardless of hostile prop
-                        if oid in getattr(self, 'followers', []):
-                            continue
-                        if other.props.get('hostile', False):
-                            if abs(other.x - entrance_x) + abs(other.y - entrance_y) <= 8:
-                                wants_to_exit = True
-                                break
-            
-            if wants_to_exit:
-                # Actively move toward exit and leave
-                self.try_npc_exit_structure(entity)
-                if entity.in_structure:
-                    # Still inside — keep trying to path toward exit
-                    self.move_npc_toward_structure_exit(entity)
-                    return  # Skip normal AI
-            else:
-                # Low chance to exit anyway (restless NPCs)
-                if random.random() < 0.05:
-                    self.try_npc_exit_structure(entity)
-            
-            # If still in structure after exit attempt, do structure behavior
-            if entity.in_structure:
-                # Miners mine in caves, peaceful NPCs rest in houses
-                zone_biome = self.screens.get(f"{entity.screen_x},{entity.screen_y}", {}).get('biome', '')
-                if entity.type == 'MINER' and zone_biome == 'CAVE':
-                    behavior_config = entity.props.get('behavior_config')
-                    if behavior_config:
-                        self.execute_entity_behavior(entity, behavior_config)
-                else:
-                    # Rest/wander in structure
-                    if random.random() < 0.1:
-                        self.wander_entity(entity)
-                return  # Skip normal overworld AI
-        else:
-            # In overworld - occasionally try to enter structures
-            self.try_npc_enter_structure(entity, screen_key)
+        # In overworld — opportunistic structure entry (state machine handles targeted navigation)
+        self.try_npc_enter_structure(entity, screen_key)
         
         # Warrior home zone return behavior
         if entity.type == 'WARRIOR' and hasattr(entity, 'home_zone'):
@@ -660,12 +868,6 @@ class NpcAiMixin:
                 if self.npc_seek_shelter(entity):
                     return  # Sheltered, don't wander or do work behaviors
 
-        # Daytime: peaceful NPCs in structures leave (keepers excluded — anchored to their zone)
-        if not self.is_night and entity.in_structure and not is_follower and not is_proxy and not is_keeper:
-            if random.random() < 0.02:  # 2% per update to leave
-                self.npc_exit_structure(entity)
-                return
-        
         # PEACEFUL NPC THREAT DETECTION - DISABLED
         # Now handled by the reactive hostile proximity check in update_entity_ai_state
         # which runs for ALL entity types, not just farmers/lumberjacks
@@ -697,10 +899,11 @@ class NpcAiMixin:
                 if random.random() < NPC_CAMP_PLACE_RATE:
                     self.npc_place_camp(entity)
             
-            # Miners may discover/create caves
+            # Miners mine existing caves first, then excavate new mineshafts
             if entity.type == 'MINER':
-                if random.random() < NPC_CAMP_PLACE_RATE:  # Same rate as camp placement
-                    self.miner_place_cave(entity)
+                if not self.miner_mine_cave(entity):
+                    if random.random() < NPC_CAMP_PLACE_RATE:
+                        self.miner_place_mineshaft(entity)
             
             # All humanoid NPCs (peaceful and hostile) can clear trees
             # Lumberjacks do this via their normal behavior and collect wood
@@ -737,63 +940,6 @@ class NpcAiMixin:
             entity.target_priority = priority
             entity.target = target
         
-        # Automatic item pickup for all entities
-        
-        # Check for dropped items at current position (both key formats)
-        if screen_key in self.dropped_items:
-                # Try string key format
-                pos_key_str = f"{entity.x},{entity.y}"
-                # Try tuple key format
-                pos_key_tuple = (entity.x, entity.y)
-                
-                items_picked_up = False
-                
-                # Check string format
-                if pos_key_str in self.dropped_items[screen_key]:
-                    items_at_pos = self.dropped_items[screen_key][pos_key_str]
-                    
-                    # Pick up all items at position
-                    for item_name, count in list(items_at_pos.items()):
-                        entity.inventory[item_name] = entity.inventory.get(item_name, 0) + count
-                        items_picked_up = True
-                        
-                        # Check if player is adjacent for trading
-                        player_adjacent = (
-                            entity.screen_x == self.player['screen_x'] and 
-                            entity.screen_y == self.player['screen_y'] and
-                            abs(entity.x - self.player['x']) + abs(entity.y - self.player['y']) <= 1
-                        )
-                        
-                        # TRADING: If gold picked up and player nearby, trigger trade
-                        if item_name == 'gold' and player_adjacent:
-                            self.process_npc_trade(entity, entity_id, count)
-                        
-                    # Clear dropped items at this position
-                    del self.dropped_items[screen_key][pos_key_str]
-                
-                # Check tuple format
-                if pos_key_tuple in self.dropped_items[screen_key]:
-                    items_at_pos = self.dropped_items[screen_key][pos_key_tuple]
-                    
-                    # Pick up all items at position
-                    for item_name, count in list(items_at_pos.items()):
-                        entity.inventory[item_name] = entity.inventory.get(item_name, 0) + count
-                        items_picked_up = True
-                        
-                        # Check if player is adjacent for trading
-                        player_adjacent = (
-                            entity.screen_x == self.player['screen_x'] and 
-                            entity.screen_y == self.player['screen_y'] and
-                            abs(entity.x - self.player['x']) + abs(entity.y - self.player['y']) <= 1
-                        )
-                        
-                        # TRADING: If gold picked up and player nearby, trigger trade
-                        if item_name == 'gold' and player_adjacent:
-                            self.process_npc_trade(entity, entity_id, count)
-                        
-                    # Clear dropped items at this position
-                    del self.dropped_items[screen_key][pos_key_tuple]
-
         # Flying entities occasionally drop one inventory item over ground cells
         if entity.props.get('flying', False):
             self._try_flying_item_drop(entity, screen_key)
@@ -860,6 +1006,9 @@ class NpcAiMixin:
                                     damage *= 1.2
 
                                 self.player_take_damage(damage)
+                                if entity.props.get('hostile', False):
+                                    entity.hunger = min(entity.max_hunger, entity.hunger + random.randint(1, 2))
+                                    entity.thirst = min(entity.max_thirst, entity.thirst + random.randint(1, 2))
                                 self.show_attack_animation(self.player['x'], self.player['y'], entity=entity, magic_type=magic_type)
                             else:
                                 # Move toward player
@@ -890,6 +1039,9 @@ class NpcAiMixin:
                                 if attacker.combat_state == 'blocking':
                                     damage *= (1 - attacker.block_reduction)
                                 attacker.take_damage(damage, entity_id)
+                                if entity.props.get('hostile', False):
+                                    entity.hunger = min(entity.max_hunger, entity.hunger + random.randint(1, 2))
+                                    entity.thirst = min(entity.max_thirst, entity.thirst + random.randint(1, 2))
                                 self.show_attack_animation(attacker.x, attacker.y, entity=entity, target_entity=attacker, magic_type=magic_type)
                             else:
                                 # Move toward attacker
@@ -990,45 +1142,38 @@ class NpcAiMixin:
             at_exit, _ = self.is_at_exit(entity.x, entity.y)
             
             if at_exit:
-                # Check cooldown - prevent rapid zone hopping
+                # Ramp-up: probability of crossing scales up over time since last zone change
                 ticks_since_last_change = self.tick - entity.last_zone_change_tick
-                if ticks_since_last_change < ZONE_CHANGE_COOLDOWN:
-                    # Still on cooldown - can't change zones yet
-                    pass
-                else:
-                    # Cooldown expired - can travel
-                    can_travel = True
-                    
-                    # Transition rate: 30% for normal NPCs, 100% for autopilot proxy
-                    is_proxy_entity = entity.props.get('is_autopilot_proxy', False)
-                    travel_rate = 1.0 if is_proxy_entity else 0.3
+                ramp = min(1.0, ticks_since_last_change / NPC_CROSS_RAMP_TICKS)
 
-                    # Wolves are natural explorers — higher zone-crossing drive
-                    if entity.type in ('WOLF', 'WOLF_double'):
-                        travel_rate = max(travel_rate, 0.6)
+                # Transition rate: 30% for normal NPCs, 100% for autopilot proxy
+                is_proxy_entity = entity.props.get('is_autopilot_proxy', False)
+                travel_rate = 1.0 if is_proxy_entity else 0.3
 
-                    # Entities in targeting state with cross-zone target also always cross
-                    if entity.ai_state == 'targeting' and entity.current_target:
-                        travel_rate = 1.0
-                    
-                    if can_travel and random.random() < travel_rate:
-                        old_zone = f"{entity.screen_x},{entity.screen_y}"
-                        self.try_entity_zone_transition(entity_id, entity)
-                        new_zone = f"{entity.screen_x},{entity.screen_y}"
-                        
-                        # If successfully traveled
-                        if old_zone != new_zone:
-                            # Update cooldown timer
-                            entity.last_zone_change_tick = self.tick
-                            
-                            # Reset stuck target tracking on zone change
-                            entity.target_stuck_counter = 0
-                            entity.last_target_position = None
-                            
-                            # Chance to level up from traveling
-                            entity.level_up_from_activity('travel', self)
-                            
-                            # Entity traveled to new zone (silent)
+                # Wolves are natural explorers — higher zone-crossing drive
+                if entity.type in ('WOLF', 'WOLF_double'):
+                    travel_rate = max(travel_rate, 0.6)
+
+                # Entities in targeting state with cross-zone target also always cross
+                if entity.ai_state == 'targeting' and entity.current_target:
+                    travel_rate = 1.0
+
+                if random.random() < ramp * travel_rate:
+                    old_zone = f"{entity.screen_x},{entity.screen_y}"
+                    self.try_entity_zone_transition(entity_id, entity)
+                    new_zone = f"{entity.screen_x},{entity.screen_y}"
+
+                    # If successfully traveled
+                    if old_zone != new_zone:
+                        # Update cooldown timer
+                        entity.last_zone_change_tick = self.tick
+
+                        # Reset stuck target tracking on zone change
+                        entity.target_stuck_counter = 0
+                        entity.last_target_position = None
+
+                        # Chance to level up from traveling
+                        entity.level_up_from_activity('travel', self)
         
         # SAFETY CHECK: Validate entity position after all AI logic
         player_zone = f"{self.player['screen_x']},{self.player['screen_y']}"
@@ -1334,6 +1479,15 @@ class NpcAiMixin:
                 else:
                     if debug and entity.type == 'WARRIOR':
                         print(f"  -> [{entity.type}] NO target found for type={entity.target_type}, switching to wandering")
+                    # Critical survival: if food/water can't be found here, exit zone
+                    _ttype = entity.target_type
+                    if _ttype in ('food', 'water'):
+                        _level = entity.hunger if _ttype == 'food' else entity.thirst
+                        _maxv  = entity.max_hunger if _ttype == 'food' else entity.max_thirst
+                        _urgency = max(0.0, 1.0 - _level / max(1, _maxv))
+                        if _urgency >= 0.4:
+                            self.seek_zone_exit(entity, entity_id)
+                            return
                     entity.ai_state = 'wandering'
                     entity.current_target = None
                     entity.target_type = None
@@ -1436,34 +1590,78 @@ class NpcAiMixin:
         # If a keeper NPC is outside its target range, immediately enter targeting.
         # Handles cross-zone chasing: routes to zone exit when target is in another zone.
         # =====================================================================
-        if (getattr(entity, 'keeper', False) and
-                entity.ai_state not in ('combat', 'flee')):
-            ktype = getattr(entity, 'keeper_type', 3)
-            ktarget = getattr(entity, 'keeper_target_pos', None)
-            krange = KEEPER_RANGE.get(ktype)
-            kt_ref = getattr(entity, 'keeper_target', None)
-            if ktype < 3 and ktarget and krange is not None:
-                # Cross-zone: target is in a different zone — head toward exit
-                if kt_ref and kt_ref.get('type') == 'entity':
-                    target_screen = kt_ref.get('screen')
-                    my_screen = (entity.screen_x, entity.screen_y)
-                    if target_screen and target_screen != my_screen:
-                        ex, ey = self._get_exit_toward_zone(
-                            my_screen[0], my_screen[1],
-                            target_screen[0], target_screen[1])
-                        entity.ai_state = 'targeting'
-                        entity.target_type = 'keeper_target'
-                        entity.current_target = (ex, ey)
-                        entity.ai_state_timer = 1
-                        return
-                # Same zone: check distance
-                dist = abs(entity.x - ktarget[0]) + abs(entity.y - ktarget[1])
-                if dist > krange:
+        # QUEST NAV TARGET — highest navigation priority
+        # Set by the quest system (loreEngine / autopilot nudge) when the NPC
+        # must reach a specific cell.  Always overrides other keeper state so
+        # no internal reset (e.g. _try_complete_assigned_quest) can interrupt
+        # navigation.  NPC can still combat/flee; behaviour fires when adjacent.
+        # Format: (screen_x, screen_y, grid_x, grid_y)
+        # =====================================================================
+        quest_nav = getattr(entity, 'quest_nav_target', None)
+        if quest_nav and entity.ai_state not in ('combat', 'flee'):
+            tsx, tsy, tx, ty = quest_nav
+            my_sk = f"{entity.screen_x},{entity.screen_y}"
+            target_sk = f"{tsx},{tsy}"
+            if target_sk == my_sk:
+                dist = abs(entity.x - tx) + abs(entity.y - ty)
+                if dist > 1:
+                    # Not yet adjacent — force keeper navigation toward cell
+                    entity.keeper = True
+                    entity.keeper_type = 1
+                    entity.keeper_target_pos = (tx, ty)
                     entity.ai_state = 'targeting'
                     entity.target_type = 'keeper_target'
-                    entity.current_target = (ktarget[0], ktarget[1])
+                    entity.current_target = (tx, ty)
                     entity.ai_state_timer = 1
                     return
+                # dist <= 1: adjacent — fall through so NPC executes its action
+            else:
+                # Different zone: steer toward the exit corridor
+                ex, ey = self._get_exit_toward_zone(
+                    entity.screen_x, entity.screen_y, tsx, tsy)
+                entity.keeper = True
+                entity.ai_state = 'targeting'
+                entity.target_type = 'keeper_target'
+                entity.current_target = (ex, ey)
+                entity.ai_state_timer = 1
+                return
+
+        # =====================================================================
+        if (getattr(entity, 'keeper', False) and
+                entity.ai_state not in ('combat', 'flee')):
+            # Survival emergency: skip keeper forcing so the score queue can
+            # prioritise food/water instead.  20% threshold means truly starving.
+            _critical_survival = (
+                entity.hunger < entity.max_hunger * 0.20 or
+                entity.thirst < entity.max_thirst * 0.20
+            )
+            if not _critical_survival:
+                ktype = getattr(entity, 'keeper_type', 3)
+                ktarget = getattr(entity, 'keeper_target_pos', None)
+                krange = KEEPER_RANGE.get(ktype)
+                kt_ref = getattr(entity, 'keeper_target', None)
+                if ktype < 3 and ktarget and krange is not None:
+                    # Cross-zone: target is in a different zone — head toward exit
+                    if kt_ref and kt_ref.get('type') == 'entity':
+                        target_screen = kt_ref.get('screen')
+                        my_screen = (entity.screen_x, entity.screen_y)
+                        if target_screen and target_screen != my_screen:
+                            ex, ey = self._get_exit_toward_zone(
+                                my_screen[0], my_screen[1],
+                                target_screen[0], target_screen[1])
+                            entity.ai_state = 'targeting'
+                            entity.target_type = 'keeper_target'
+                            entity.current_target = (ex, ey)
+                            entity.ai_state_timer = 1
+                            return
+                    # Same zone: check distance
+                    dist = abs(entity.x - ktarget[0]) + abs(entity.y - ktarget[1])
+                    if dist > krange:
+                        entity.ai_state = 'targeting'
+                        entity.target_type = 'keeper_target'
+                        entity.current_target = (ktarget[0], ktarget[1])
+                        entity.ai_state_timer = 1
+                        return
 
         # =====================================================================
         # TIMER-BASED STATE TRANSITIONS (only when timer expired)
@@ -1471,41 +1669,86 @@ class NpcAiMixin:
         if entity.ai_state_timer > 0:
             return
         
+        # Survival urgency: low food+water boosts chance to enter targeting
+        _h_missing = 1.0 - entity.hunger / max(1, entity.max_hunger)
+        _t_missing = 1.0 - entity.thirst / max(1, entity.max_thirst)
+        _survival_urgency = (_h_missing + _t_missing) / 2.0
+        _eff_aggr = min(1.0, aggressiveness + _survival_urgency)
+        # Night boost: peaceful overworld NPCs are more likely to pick up shelter target
+        if (self.is_night and not entity.props.get('hostile', False)
+                and not getattr(entity, 'in_structure', False)):
+            _eff_aggr = min(1.0, _eff_aggr + 0.4)
+
+        def _resolve_current_target(ttype):
+            """Translate a target-type string into a concrete current_target value."""
+            if ttype == 'quest_target':
+                return self._quest_target_as_current(entity)
+            if ttype in ('food', 'water', 'resource'):
+                return self.find_closest_target_by_type(entity, ttype, screen_key)
+            if ttype == 'role':
+                quest_focus = getattr(entity, 'quest_focus', None)
+                priority_list = ROLE_CELL_PRIORITY.get(quest_focus, [])
+                if priority_list:
+                    for _cell_type in priority_list:
+                        _result = self.find_closest_eligible_target(entity, screen_key, [_cell_type])
+                        if _result:
+                            return _result
+                    return None
+                target_list = ROLE_CELL_TARGETS.get(quest_focus, [])
+                if target_list:
+                    return self.find_closest_eligible_target(entity, screen_key, target_list)
+                return None
+            if ttype == 'shelter':
+                return self._find_closest_shelter(entity, screen_key)
+            if ttype == 'visit':
+                # Set a timed duration so update_structure_npc_behavior knows when to exit
+                entity.visit_end_tick = self.tick + random.randint(VISIT_DURATION_MIN, VISIT_DURATION_MAX)
+                return self._find_closest_shelter(entity, screen_key)
+            if ttype == 'special':
+                subtype = getattr(entity, '_special_target_type', None)
+                if subtype:
+                    return self.find_closest_target_by_type(entity, subtype, screen_key)
+                return None
+            return None
+
         if entity.ai_state == 'idle':
+            entity.current_target = None  # always clear target while idle
             roll = random.random()
-            if roll < aggressiveness:
+            if roll < _eff_aggr:
                 target_type = self.determine_target_type(entity)
                 if target_type:
                     entity.ai_state = 'targeting'
                     entity.target_type = target_type
-                    entity.current_target = self._quest_target_as_current(entity) if target_type == 'quest_target' else None
+                    entity.current_target = _resolve_current_target(target_type)
                     entity.ai_state_timer = 2
+                    entity._target_lock_used = True  # mark lock consumed so next idle re-rolls
                 else:
                     # Nothing to target — wander instead
                     entity.ai_state = 'wandering'
-                    entity.current_target = None
                     entity.ai_state_timer = 3
-            elif roll < aggressiveness + passiveness:
+            elif roll < _eff_aggr + passiveness:
                 entity.ai_state = 'wandering'
-                entity.current_target = None
                 entity.ai_state_timer = 2
             else:
                 entity.ai_state_timer = random.randint(2, 4)  # Stay idle with variable duration
 
         elif entity.ai_state == 'wandering':
+            entity.current_target = None  # always clear target while wandering
+            entity.target_type = None     # clear stale target_type from prior targeting
             roll = random.random()
-            if roll < aggressiveness:
+            if roll < _eff_aggr:
                 # Try to find something to target
                 target_type = self.determine_target_type(entity)
                 if target_type:
                     entity.ai_state = 'targeting'
                     entity.target_type = target_type
-                    entity.current_target = self._quest_target_as_current(entity) if target_type == 'quest_target' else None
+                    entity.current_target = _resolve_current_target(target_type)
                     entity.ai_state_timer = 2
+                    entity._target_lock_used = True  # mark lock consumed so next idle re-rolls
                 else:
                     # Nothing to target — keep wandering longer
                     entity.ai_state_timer = 3
-            elif roll < aggressiveness + idleness:
+            elif roll < _eff_aggr + idleness:
                 entity.ai_state = 'idle'
                 entity.ai_state_timer = random.randint(2, 4)  # Variable idle duration
             else:
@@ -1513,6 +1756,7 @@ class NpcAiMixin:
         
         elif entity.ai_state == 'flee':
             # Exit is handled inside the flee state block (proximity + recently_attacked check)
+            entity.target_type = None  # clear stale resource target_type while fleeing
             entity.ai_state_timer = 2
     
     def evaluate_entity_priorities(self, entity, entity_id):
@@ -1985,6 +2229,10 @@ class NpcAiMixin:
                         damage *= _tp
 
                         self.player_take_damage(damage)
+                        if entity.props.get('hostile', False):
+                            entity.hunger = min(entity.max_hunger, entity.hunger + random.randint(1, 2))
+                            entity.thirst = min(entity.max_thirst, entity.thirst + random.randint(1, 2))
+                            entity.health = min(entity.max_health, entity.health + random.randint(1, 2))
                         self.show_attack_animation(self.player['x'], self.player['y'], entity=entity, magic_type=magic_type)
                         entity.energy = max(0, getattr(entity, 'energy', 1) - 2)
                     else:
@@ -1992,6 +2240,15 @@ class NpcAiMixin:
 
                         # Add weapon bonus from inventory
                         damage += self.calculate_weapon_bonus(entity.inventory)
+
+                        # Add weapon durability bonus and track best weapon for XP/decay
+                        _best_weapon = None
+                        for _wn, _wc in entity.inventory.items():
+                            if _wc > 0 and ITEMS.get(_wn, {}).get('is_weapon'):
+                                _best_weapon = _wn
+                                break
+                        if _best_weapon:
+                            damage += getattr(entity, 'item_durability', {}).get(_best_weapon, 0.75)
 
                         # Add magic damage from runestones
                         magic_damage, magic_type = self.calculate_magic_damage(entity.inventory)
@@ -2008,15 +2265,28 @@ class NpcAiMixin:
                         if closest_enemy.combat_state == 'blocking':
                             damage *= (1 - closest_enemy.block_reduction)
                         closest_enemy.take_damage(damage, entity_id)
+                        if entity.props.get('hostile', False):
+                            entity.hunger = min(entity.max_hunger, entity.hunger + random.randint(1, 2))
+                            entity.thirst = min(entity.max_thirst, entity.thirst + random.randint(1, 2))
+                            entity.health = min(entity.max_health, entity.health + random.randint(1, 2))
                         closest_enemy.last_attacked_tick = self.tick
                         entity.energy = max(0, getattr(entity, 'energy', 1) - 2)
                         self.show_attack_animation(closest_enemy.x, closest_enemy.y, entity=entity, target_entity=closest_enemy, magic_type=magic_type)
 
-                        # Grant XP from hit: only target's level (scaled by time pass speed)
-                        xp_gain = int(closest_enemy.level * _tp)
-                        entity.xp += xp_gain
-                        if entity.xp >= entity.xp_to_level:
-                            entity.level_up()
+                        # Grant XP from hit (chance-based, one roll per hit)
+                        entity.gain_xp(1)
+
+                        # Award item XP to weapon (degrade durability) and armor of defender
+                        if _best_weapon and hasattr(entity, 'gain_item_xp'):
+                            entity.gain_item_xp(_best_weapon)
+                            _idur = getattr(entity, 'item_durability', {})
+                            _cur_dur = _idur.get(_best_weapon, 0.75)
+                            _idur[_best_weapon] = max(0.0, round(_cur_dur - 0.01, 4))
+                            entity.item_durability = _idur
+                        if hasattr(closest_enemy, 'gain_item_xp'):
+                            for _an, _ac in closest_enemy.inventory.items():
+                                if _ac > 0 and ITEMS.get(_an, {}).get('is_armor'):
+                                    closest_enemy.gain_item_xp(_an)
 
                         # Auto meat consumption for combat entities (Warriors/Guards/Commanders/Kings)
                         if entity.type in ['WARRIOR', 'COMMANDER', 'KING', 'GUARD']:
@@ -2027,6 +2297,7 @@ class NpcAiMixin:
                                 # Consume meat to restore hunger only (health regens naturally when full)
                                 entity.inventory['meat'] -= 1
                                 entity.hunger = min(entity.max_hunger, entity.hunger + 50)
+                                entity.gain_xp(1)  # XP for eating
 
                         # Check if enemy died and handle king promotion
                         if not closest_enemy.is_alive():
@@ -2105,11 +2376,17 @@ class NpcAiMixin:
                     # Target died — quest complete
                     entity.keeper_target = None
                     entity.keeper_target_pos = None
+                    if getattr(entity, 'keeper_type', 0) == 2:
+                        entity.keeper = False
+                        entity.keeper_type = 0
                     self._try_complete_assigned_quest(entity)
             else:
                 # Entity ID no longer in entities dict — treat as gone
                 entity.keeper_target = None
                 entity.keeper_target_pos = None
+                if getattr(entity, 'keeper_type', 0) == 2:
+                    entity.keeper = False
+                    entity.keeper_type = 0
                 self._try_complete_assigned_quest(entity)
 
         elif kt['type'] == 'item':
@@ -2160,14 +2437,20 @@ class NpcAiMixin:
         entity.keeper_type = 1
 
     def _try_complete_assigned_quest(self, entity):
-        """Remove the front non-base quest from entity.quest_queue and award player 1 XP.
+        """Complete the front quest from entity.quest_queue.
 
-        No-op if the queue is empty, has only the base quest, or the entity type
-        doesn't use the queue system.
+        For non-base quests: removes from queue and awards player 1 XP.
+        For base quests (only item in queue): counts as a task cycle completion —
+        increments entity.tasks_completed and awards entity XP, but does not
+        remove the base quest (it repeats indefinitely).
         """
         queue = getattr(entity, 'quest_queue', None)
+
+        # Base quest cycle — count the completion but keep the quest
         if not queue or queue[0].get('base', True):
-            return  # Only base quest remaining — nothing to complete
+            entity.tasks_completed = getattr(entity, 'tasks_completed', 0) + 1
+            entity.gain_xp(1)
+            return
 
         completed = queue.pop(0)
         q_name = QUEST_TYPES.get(completed['type'], {}).get('name', completed['type'])
@@ -2181,9 +2464,10 @@ class NpcAiMixin:
         entity.keeper_target_pos = None
         entity._quest_update_counter = 0
 
-        # If back to base quest only, release keeper anchor so NPC roams freely
+        # If back to base quest only, release keeper anchor so NPC roams freely.
+        # Skip if quest_nav_target is active — it holds the keeper anchor.
         has_non_base = any(not e.get('base') for e in queue)
-        if not has_non_base:
+        if not has_non_base and not getattr(entity, 'quest_nav_target', None):
             entity.keeper = False
             entity.keeper_type = getattr(entity, '_base_keeper_type', 3)
 
@@ -2197,7 +2481,6 @@ class NpcAiMixin:
 
         # Award player XP
         self.gain_xp(1)
-        print(f"{npc_name} completed [{q_name}]! Player +1 XP.")
 
     def _assign_specific_quest_target(self, entity, screen_key):
         """Pick a specific quest target cell/entity for a 'specific' quest cycle.
@@ -2210,21 +2493,21 @@ class NpcAiMixin:
         target = None
 
         if focus in ('farming', 'FARM'):
-            target = self._find_closest_crop(entity, screen_key)
+            target = self.find_closest_eligible_target(entity, screen_key, ROLE_CELL_TARGETS.get('FARM', []))
             if target is None and entity.level >= 5:
                 for dsx, dsy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
                     adj = f"{entity.screen_x + dsx},{entity.screen_y + dsy}"
-                    target = self._find_closest_crop(entity, adj)
+                    target = self.find_closest_eligible_target(entity, adj, ROLE_CELL_TARGETS.get('FARM', []))
                     if target:
                         break
 
         elif focus in ('building', 'LUMBER'):
-            target = self._find_closest_tree(entity, screen_key)
+            target = self.find_closest_eligible_target(entity, screen_key, ROLE_CELL_TARGETS.get('LUMBER', []))
             if target is None:
                 target = self.find_closest_structure(entity, screen_key)
 
         elif focus in ('mining', 'MINE'):
-            target = self._find_closest_stone(entity, screen_key)
+            target = self.find_closest_eligible_target(entity, screen_key, ROLE_CELL_TARGETS.get('MINE', []))
 
         elif focus == 'crafting':
             target = self.find_closest_structure(entity, screen_key)
@@ -2356,127 +2639,519 @@ class NpcAiMixin:
             entity.last_state_change = self.tick
 
     def determine_target_type(self, entity):
-        """Determine what to target based on needs and available targets in zone"""
-        low_hunger = entity.hunger < entity.max_hunger * 0.3
-        low_thirst = entity.thirst < entity.max_thirst * 0.3
-        low_health = entity.health < entity.max_health * 0.5
-        
+        """Scored priority stack — returns the highest-scoring target type string.
+
+        Tier order (highest → lowest base priority):
+          1. HOSTILE      — distance-weighted combat score
+          2. KEEPER       — inverse-distance anchor urgency
+          3. QUEST        — flat score for active assigned/lore quest target
+          4. SPECIAL      — sticky opportunistic pool (clearing, chest_dump, trade stub)
+          5. ROLE         — archetype work (farming, mining, lumberjacking, etc.)
+          6. RESOURCE     — food/water with quadratic urgency as levels drop
+
+        See ai/targeting_overview.md for full design doc.
+        """
         screen_key = f"{entity.screen_x},{entity.screen_y}"
 
-        # ── Quest-focus system ────────────────────────────────────────────────
-        # Two modes:
-        #   SPECIFIC  — entity.quest_target is a cell tuple; navigate to it,
-        #               complete on proximity (dist ≤ 2), then switch to general.
-        #   GENERAL   — entity.quest_target is None; fall through to default NPC
-        #               behavior (action_harvest_cell / wander etc. as normal).
-        #               Every ~10 AI updates, 20% chance to assign a specific target.
-        #               Survival needs (extreme hunger/thirst) preempt both modes.
-        # ─────────────────────────────────────────────────────────────────────
-        # Initialize quest queue for NPCs that have a base quest (FARMER etc.)
+        # ── Quest state init (always runs — side effects must fire every call) ─
         if entity.type in NPC_BASE_QUEST and not hasattr(entity, 'quest_queue'):
             base_qt = NPC_BASE_QUEST[entity.type]
             entity.quest_queue = [{'type': base_qt, 'base': True, 'slot': None}]
             if not getattr(entity, 'quest_focus', None):
                 entity.quest_focus = base_qt
-
-        # Sync quest_focus from queue head (queue-managed NPCs only)
         queue = getattr(entity, 'quest_queue', None)
         if queue:
             entity.quest_focus = queue[0]['type']
 
+        candidates = {}  # {target_type_string: score}
+
+        # ── Tier 1: Hostile ───────────────────────────────────────────────────
+        if 'hostile' in entity.target_types:
+            closest_h = self.find_closest_hostile_entity(entity, screen_key)
+            if closest_h:
+                dist = self.get_target_distance(entity, closest_h)
+                h_score = (120.0
+                           * entity.props.get('ai_params', {}).get('combat_chance', 0.5)
+                           * (1.0 / (dist + 1))
+                           * entity.aggressiveness)
+                candidates['hostile'] = h_score
+
+        # ── Tier 2: Keeper ────────────────────────────────────────────────────
+        # Skip entirely when inside a structure — subscreen coords ≠ overworld coords,
+        # so kdist would be meaningless and could force wasteful navigation.
+        if getattr(entity, 'keeper', False) and getattr(entity, 'keeper_target_pos', None) \
+                and not getattr(entity, 'in_structure', False):
+            ktype  = getattr(entity, 'keeper_type', None) or 3
+            kbase  = KEEPER_BASE.get(ktype, 20)
+            krange = KEEPER_RANGE.get(ktype)
+            kscale = KEEPER_URGENCY_SCALE.get(ktype, 0)
+            kpos   = entity.keeper_target_pos
+            kdist  = abs(entity.x - kpos[0]) + abs(entity.y - kpos[1])
+            # For types with an explicit range: zero score when inside range.
+            # For zone keepers (type 3/4, krange=None): treat within 5 cells as "at target".
+            _effective_range = krange if krange is not None else 5
+            if kdist <= _effective_range:
+                pass  # at target — no keeper urgency; food/water/quest take over
+            else:
+                drift = max(0, kdist - _effective_range)
+                candidates['keeper_target'] = kbase + drift * kscale
+
+        # ── Tier 3: Quest (assigned/lore only — not base role quests) ─────────
+        quest_score = self._evaluate_quest_tier(entity, screen_key)
+        if quest_score is not None:
+            candidates['quest_target'] = quest_score
+
+        # ── Tier 4: Special (sticky opportunistic pool) ───────────────────────
+        special = self._evaluate_special_tier(entity, screen_key)
+        if special:
+            candidates['special'] = SPECIAL_BASE
+
+        # ── Tier 4b: Shelter ──────────────────────────────────────────────────────
+        if (not entity.props.get('hostile', False)
+                and entity.props.get('humanoid', False)
+                and not getattr(entity, 'in_structure', False)):
+            _shelter = self._find_closest_shelter(entity, screen_key)
+            if _shelter:
+                # Combat/labour types have a weaker night shelter drive
+                _LOW_SHELTER = frozenset({'MINER', 'GUARD', 'WARRIOR', 'COMMANDER'})
+                _shelter_mult = 0.25 if entity.type in _LOW_SHELTER else 1.0
+                if (self.is_night and not entity.props.get('nocturnal', False)):
+                    # Night: high-priority shelter (reduced for combat/labour types)
+                    candidates['shelter'] = SHELTER_BASE * _shelter_mult
+                else:
+                    # Day: low-priority fallback when resources or health are low
+                    _hp_frac = entity.health / max(1, entity.max_health)
+                    _food_urg = max(0.0, 1.0 - entity.hunger / max(1, entity.max_hunger))
+                    _water_urg = max(0.0, 1.0 - entity.thirst / max(1, entity.max_thirst))
+                    _max_urg = max(_food_urg, _water_urg)
+                    if _max_urg > 0.5 or _hp_frac < 0.5:
+                        _day_shelter = _max_urg * 10.0 * max(0.5, 2.0 - _hp_frac)
+                        candidates['shelter'] = _day_shelter
+
+        # ── Tier 4c: Visit (casual house visit, peaceful humanoids, any time) ──
+        # Very low score (VISIT_BASE=8) — only wins when nothing urgent is queued.
+        # Separate from 'shelter' so exit logic differs (timed stay, not health-based).
+        if (not entity.props.get('hostile', False)
+                and entity.props.get('humanoid', False)
+                and not getattr(entity, 'in_structure', False)
+                and not self.is_night):
+            if self._find_closest_shelter(entity, screen_key):
+                candidates['visit'] = VISIT_BASE
+
+        # ── Tier 5: Role (archetype work targets) ─────────────────────────────
+        role_type = self._evaluate_role_tier(entity, screen_key)
+        if role_type:
+            candidates['role'] = ROLE_BASE
+
+        # ── Tier 6: Resource (urgency + proximity + explosive HP scaling) ───────────
+        # RESOURCE_BASE is kept very low (20). At full HP even an empty stat produces
+        # a weak score (~60 max) that rarely beats role/quest. The hp_mult is quadratic
+        # and grows explosively as HP drops — once starvation/dehydration damage starts,
+        # resource rapidly dominates all other tiers.
+        # hp_mult: 1.0 at full HP → ~3.5 at 50% → ~7.4 at 20% → 11.0 at 0%
+        _hp_deficit = max(0.0, 1.0 - entity.health / max(1, entity.max_health))
+        _hp_mult = 1.0 + _hp_deficit ** 2 * 10.0
+        for res_type, level, maxv in (
+            ('water', entity.thirst,  entity.max_thirst),
+            ('food',  entity.hunger,  entity.max_hunger),
+        ):
+            if res_type in entity.target_types:
+                urgency = max(0.0, 1.0 - level / max(1, maxv))
+                if urgency < MIN_RESOURCE_URGENCY:
+                    continue  # Stat above threshold — skip until meaningfully depleted
+                _res_target = self.find_closest_target_by_type(entity, res_type, screen_key)
+                if _res_target:
+                    candidates[res_type] = RESOURCE_BASE * urgency * _hp_mult
+
+        if not candidates:
+            return None
+
+        # If a previous roll is still locked, the type is still a valid candidate,
+        # and the NPC hasn't yet acted on it, keep the locked choice
+        if self.tick < getattr(entity, '_target_type_lock_until', 0):
+            if not getattr(entity, '_target_lock_used', False):
+                locked = getattr(entity, '_target_type_chosen', None)
+                if locked and locked in candidates:
+                    return locked
+
+        # Weighted random roll — filter zero-weight entries before choosing
+        types   = [t for t, w in candidates.items() if w > 0]
+        weights = [w for w in candidates.values() if w > 0]
+        if not types:
+            return None
+        chosen = random.choices(types, weights=weights, k=1)[0]
+
+        entity._target_type_chosen = chosen
+        entity._target_type_lock_until = self.tick + TARGET_LOCK_TICKS
+        entity._target_lock_used = False
+
+        return chosen
+
+    # ── Targeting tier helpers ────────────────────────────────────────────────
+
+    def _evaluate_quest_tier(self, entity, screen_key):
+        """Handle assigned/lore quest navigation. Returns QUEST_BASE or None.
+
+        Manages SPECIFIC mode (navigate to quest_target, complete on proximity)
+        and GENERAL mode (periodically assign a specific target from quest_focus).
+        Base role quests (FARM/LUMBER/MINE) are handled by _evaluate_role_tier.
+        """
         quest_focus = getattr(entity, 'quest_focus', None)
-        if quest_focus and not low_hunger and not low_thirst:
+        if not quest_focus:
+            return None
 
-            # Initialise update counter
-            if not hasattr(entity, '_quest_update_counter'):
-                entity._quest_update_counter = 0
-            entity._quest_update_counter += 1
+        low_hunger = entity.hunger < entity.max_hunger * 0.3
+        low_thirst = entity.thirst < entity.max_thirst * 0.3
+        if low_hunger or low_thirst:
+            return None  # Survival crisis overrides quest — resource tier takes over
 
-            # Seed quest_target from a transferred special quest on first evaluation
-            assigned = getattr(entity, 'assigned_quest', None)
-            if assigned and getattr(entity, 'quest_target', None) is None:
-                q = assigned.quest
-                if q.target_entity_id is not None:
-                    entity.quest_target = q.target_entity_id
-                elif q.target_cell is not None:
-                    # target_cell is (screen_x, screen_y, x, y)
-                    entity.quest_target = ('cell', q.target_cell[2], q.target_cell[3])
-                elif q.target_location is not None:
-                    entity.quest_target = ('cell', q.target_location[0], q.target_location[1])
+        if not hasattr(entity, '_quest_update_counter'):
+            entity._quest_update_counter = 0
+        entity._quest_update_counter += 1
 
-            specific = getattr(entity, 'quest_target', None)
+        # Seed quest_target from a transferred assigned quest on first evaluation
+        assigned = getattr(entity, 'assigned_quest', None)
+        if assigned and getattr(entity, 'quest_target', None) is None:
+            q = assigned.quest
+            if q.target_entity_id is not None:
+                entity.quest_target = q.target_entity_id
+            elif q.target_cell is not None:
+                entity.quest_target = ('cell', q.target_cell[2], q.target_cell[3])
+            elif q.target_location is not None:
+                entity.quest_target = ('cell', q.target_location[0], q.target_location[1])
 
-            if specific is not None:
-                # SPECIFIC MODE — check proximity; complete early if within 2 cells
-                if isinstance(specific, tuple) and len(specific) >= 3 and specific[0] == 'cell':
-                    tx, ty = specific[1], specific[2]
-                    dist = abs(entity.x - tx) + abs(entity.y - ty)
+        specific = getattr(entity, 'quest_target', None)
+
+        if specific is not None:
+            # SPECIFIC MODE — check proximity; complete if within 2 cells
+            if isinstance(specific, tuple) and len(specific) >= 3 and specific[0] == 'cell':
+                tx, ty = specific[1], specific[2]
+                dist = abs(entity.x - tx) + abs(entity.y - ty)
+                if dist <= 2:
+                    entity.quest_target = None
+                    entity._quest_update_counter = 0
+                    self._try_complete_assigned_quest(entity)
+                else:
+                    return QUEST_BASE
+            elif isinstance(specific, int):
+                if specific in self.entities and self.entities[specific].is_alive():
+                    dist = self.get_target_distance(entity, specific)
                     if dist <= 2:
-                        # Close enough — treat as completed, drop back to general
                         entity.quest_target = None
                         entity._quest_update_counter = 0
                         self._try_complete_assigned_quest(entity)
                     else:
-                        # Still heading there
-                        return 'quest_target'
-                elif isinstance(specific, int):
-                    # Entity target — still alive and reachable?
-                    if specific in self.entities and self.entities[specific].is_alive():
-                        dist = self.get_target_distance(entity, specific)
-                        if dist <= 2:
-                            entity.quest_target = None
-                            entity._quest_update_counter = 0
-                            self._try_complete_assigned_quest(entity)
-                        else:
-                            return 'quest_target'
-                    else:
-                        entity.quest_target = None
-                        entity._quest_update_counter = 0
-                        self._try_complete_assigned_quest(entity)
+                        return QUEST_BASE
+                else:
+                    entity.quest_target = None
+                    entity._quest_update_counter = 0
+                    self._try_complete_assigned_quest(entity)
 
-            # GENERAL MODE — every ~10 updates, 20% chance to assign a specific target
-            if entity.quest_target is None and entity._quest_update_counter >= 10:
-                entity._quest_update_counter = 0
-                if random.random() < 0.20:
+        # GENERAL MODE — only for non-role quest types (FARM/LUMBER/MINE/GATHER handled by role tier)
+        if entity.quest_target is None and entity._quest_update_counter >= 10:
+            entity._quest_update_counter = 0
+            if quest_focus not in ROLE_CELL_TARGETS:
+                if random.random() < 0.60:
                     self._assign_specific_quest_target(entity, screen_key)
                     if entity.quest_target is not None:
-                        return 'quest_target'   # new specific target just assigned
+                        return QUEST_BASE
 
-            # Still in general mode — return None so the entity wanders and lets
-            # the tick%60 execute_npc_behavior handle the actual work actions.
-            if entity.quest_target is None:
-                return None
-        # ─────────────────────────────────────────────────────────────────────
-        
-        # Priority: survival needs (only if target exists in zone)
-        if low_thirst and 'water' in entity.target_types:
-            if self.find_closest_target_by_type(entity, 'water', screen_key):
-                return 'water'
-        if low_hunger and 'food' in entity.target_types:
-            if self.find_closest_target_by_type(entity, 'food', screen_key):
-                return 'food'
-        if low_health and 'structure' in entity.target_types:
-            if self.find_closest_target_by_type(entity, 'structure', screen_key):
-                return 'structure'
-        
-        # Specialty targets — pick randomly but verify existence
-        specialty = [t for t in entity.target_types if t not in ['food', 'water', 'structure']]
-        if specialty:
-            random.shuffle(specialty)
-            for t in specialty:
-                if self.find_closest_target_by_type(entity, t, screen_key):
-                    return t
-        
-        # Fall back to any available target type
-        all_types = list(entity.target_types)
-        random.shuffle(all_types)
-        for t in all_types:
-            if self.find_closest_target_by_type(entity, t, screen_key):
-                return t
-        
-        # Nothing available at all
+        # No specific target active — role tier handles general archetype work
         return None
-    
+
+    def _evaluate_role_tier(self, entity, screen_key):
+        """Return 'role' if the entity's archetype has a reachable role target, or None."""
+        quest_focus = getattr(entity, 'quest_focus', None)
+        target_list = ROLE_CELL_TARGETS.get(quest_focus)
+        if target_list and self.find_closest_eligible_target(entity, screen_key, target_list):
+            return 'role'
+        return None
+
+    def _should_travel_exit(self, entity, screen_key):
+        """Return True if entity currently in a structure should exit.
+
+        Evaluated once per special-tier roll; becomes the condition for the
+        'travel' special sub-type lock.
+        """
+        if not getattr(entity, 'in_structure', False):
+            return False
+        if getattr(entity, 'keeper', False):
+            return False
+
+        is_nocturnal = entity.props.get('nocturnal', False)
+        is_hostile   = entity.props.get('hostile', False)
+        biome = self.screens.get(screen_key, {}).get('biome', '')
+
+        # Day/night × nocturnal
+        if not is_nocturnal and not self.is_night:
+            # Non-nocturnal during day: wants to be outside — except miners in caves
+            if not (entity.type == 'MINER' and biome == 'CAVE'):
+                return True
+        if is_nocturnal and self.is_night:
+            return True
+
+        # Miners exit caves at night
+        if entity.type == 'MINER' and biome == 'CAVE' and self.is_night:
+            return True
+
+        # Hostile cave entities: exit at night
+        if is_hostile and biome == 'CAVE' and self.is_night:
+            return True
+
+        # Overcrowding
+        local_pop = len([
+            eid for eid in self.screen_entities.get(screen_key, [])
+            if eid in self.entities and self.entities[eid].is_alive()
+        ])
+        if local_pop > 3 and random.random() < local_pop * 0.10:
+            return True
+
+        # Guards/warriors: rush out when hostiles are near the parent entrance
+        if entity.type in ('GUARD', 'WARRIOR') and getattr(entity, 'structure_key', None) in self.structures:
+            sub = self.structures[entity.structure_key]
+            parent_screen = sub.get('parent_screen')
+            parent_cell   = sub.get('parent_cell', (GRID_WIDTH // 2, GRID_HEIGHT // 2))
+            entrance_x, entrance_y = parent_cell
+            ow_key = (f"{parent_screen[0]},{parent_screen[1]}"
+                      if parent_screen else screen_key)
+            for oid in self.screen_entities.get(ow_key, []):
+                if oid not in self.entities:
+                    continue
+                if oid in getattr(self, 'followers', []):
+                    continue
+                other = self.entities[oid]
+                if other.props.get('hostile', False):
+                    if abs(other.x - entrance_x) + abs(other.y - entrance_y) <= 8:
+                        return True
+
+        return False
+
+    def _evaluate_special_tier(self, entity, screen_key):
+        """Sticky special-pool evaluation. Returns (type_string, SPECIAL_BASE) or None.
+
+        Once a special type is chosen it locks for SPECIAL_LOCK_TICKS to prevent
+        rapid switching. Lock clears early if the condition is no longer met.
+        """
+        if not hasattr(entity, '_special_target_lock'):
+            entity._special_target_lock = 0
+            entity._special_target_type = None
+
+        # Honour existing lock if condition still holds
+        if entity._special_target_lock > 0:
+            entity._special_target_lock -= 1
+            stype = entity._special_target_type
+            if stype and self._special_condition_met(entity, stype, screen_key):
+                return (stype, SPECIAL_BASE)
+            # Condition dropped — clear lock early
+            entity._special_target_lock = 0
+            entity._special_target_type = None
+
+        # Only humanoids participate in the special pool
+        if not entity.props.get('humanoid', False):
+            return None
+
+        # Build eligible candidate list
+        candidates = []
+
+        # chest_dump: overburdened + chest nearby (not hostile loot — that's separate)
+        inv_count = sum(entity.inventory.values()) if entity.inventory else 0
+        if inv_count >= 20 and not entity.props.get('hostile', False):
+            if self._find_chest_in_zone(entity, screen_key):
+                candidates.append('chest_dump')
+
+        # trade: peaceful humanoid with a nearby partner that has items
+        if (not entity.props.get('hostile', False)
+                and entity.props.get('humanoid', False)):
+            _partner = self._find_trade_partner(entity, screen_key)
+            if _partner is not None:
+                # TRADERs get 3× weight so they trade far more often
+                _trade_weight = 3 if entity.type == 'TRADER' else 1
+                candidates.extend(['trade'] * _trade_weight)
+
+        # clearing_action: adjacent solid non-structure cell exists
+        if self._find_clearing_target(entity, screen_key):
+            candidates.append('clearing_action')
+
+        # travel: entity in structure should exit based on day/night/overcrowd/defense
+        if self._should_travel_exit(entity, screen_key):
+            candidates.append('travel')
+
+        # shelter: at night, peaceful humanoids seek the nearest house to enter
+        if (self.is_night and not entity.props.get('hostile', False)
+                and not getattr(entity, 'in_structure', False)):
+            if self._find_nearest_shelter(entity, screen_key):
+                candidates.append('shelter')
+
+        if not candidates:
+            return None
+
+        chosen = random.choice(candidates)
+        entity._special_target_type = chosen
+        entity._special_target_lock = SPECIAL_LOCK_TICKS
+        # Shelter at night gets a boosted score so it beats role/resource competition
+        return (chosen, SPECIAL_BASE)
+
+    def _special_condition_met(self, entity, stype, screen_key):
+        """Return True if the condition that triggered a special lock is still valid."""
+        if stype == 'chest_dump':
+            inv_count = sum(entity.inventory.values()) if entity.inventory else 0
+            return inv_count >= 20 and bool(self._find_chest_in_zone(entity, screen_key))
+        if stype == 'clearing_action':
+            return bool(self._find_clearing_target(entity, screen_key))
+        if stype == 'shelter':
+            return (self.is_night
+                    and not entity.props.get('hostile', False)
+                    and not getattr(entity, 'in_structure', False)
+                    and bool(self._find_nearest_shelter(entity, screen_key)))
+        if stype == 'travel':
+            return self._should_travel_exit(entity, screen_key)
+        if stype == 'trade':
+            return (not entity.props.get('hostile', False)
+                    and bool(self._find_trade_partner(entity, screen_key)))
+        return False
+
+    def _find_trade_partner(self, entity, screen_key):
+        """Return entity ID of a nearby tradeable partner, or None.
+
+        Alignment rules:
+          - Peaceful humanoids trade only with other peaceful humanoids.
+          - Goblins trade only with other goblins.
+          - Bandits trade only with other bandits.
+        At least one side must have inventory items.
+        """
+        if entity.props.get('hostile', False):
+            return None
+        _is_goblin = entity.type == 'GOBLIN'
+        _is_bandit = entity.type == 'BANDIT'
+        best_id, best_dist = None, float('inf')
+        for oid in self.screen_entities.get(screen_key, []):
+            if oid not in self.entities:
+                continue
+            other = self.entities[oid]
+            if not other.is_alive() or other is entity:
+                continue
+            if not other.props.get('humanoid', False):
+                continue
+            # Alignment grouping
+            other_is_goblin = other.type == 'GOBLIN'
+            other_is_bandit = other.type == 'BANDIT'
+            other_hostile   = other.props.get('hostile', False)
+            if _is_goblin and not other_is_goblin:
+                continue
+            if _is_bandit and not other_is_bandit:
+                continue
+            if not _is_goblin and not _is_bandit and other_hostile:
+                continue
+            # At least one side must have something to give
+            e_items  = sum(entity.inventory.values()) if entity.inventory else 0
+            o_items  = sum(other.inventory.values())  if other.inventory  else 0
+            if not (e_items > 0 or o_items > 0):
+                continue
+            dist = abs(other.x - entity.x) + abs(other.y - entity.y)
+            if dist <= NPC_TRADE_SEARCH_RADIUS and dist < best_dist:
+                best_dist = dist
+                best_id   = oid
+        return best_id
+
+    def _execute_npc_trade(self, entity, partner_id):
+        """Execute a one-step item exchange between entity and partner.
+
+        Gold is preferred as currency (gives 1 coin).  If neither side has gold,
+        each gives half a random stack (min 1).  The '+' animation fires at both
+        positions so the player can observe trades happening nearby.
+        """
+        if partner_id not in self.entities:
+            return
+        partner = self.entities[partner_id]
+        if not partner.is_alive():
+            return
+
+        def _pick_give(inv):
+            """Return (item_name, count) to give, or None."""
+            if inv.get('gold', 0) > 0:
+                return ('gold', 1)
+            options = [(k, v) for k, v in inv.items() if v > 0]
+            if not options:
+                return None
+            item, count = random.choice(options)
+            return (item, max(1, count // 2))
+
+        entity_gives  = _pick_give(entity.inventory  if entity.inventory  else {})
+        partner_gives = _pick_give(partner.inventory if partner.inventory else {})
+
+        if not entity_gives and not partner_gives:
+            # Nothing to trade — bail and clear lock
+            entity.current_target       = None
+            entity._special_target_lock = 0
+            entity._special_target_type = None
+            entity.ai_state             = 'wandering'
+            entity.ai_state_timer       = 2
+            return
+
+        if entity_gives:
+            item, count = entity_gives
+            entity.inventory[item]  = max(0, entity.inventory.get(item, 0) - count)
+            if entity.inventory[item] == 0:
+                del entity.inventory[item]
+            partner.inventory[item] = partner.inventory.get(item, 0) + count
+            self.show_attack_animation(partner.x, partner.y, entity=entity, magic_type='trade')
+
+        if partner_gives:
+            item, count = partner_gives
+            partner.inventory[item] = max(0, partner.inventory.get(item, 0) - count)
+            if partner.inventory[item] == 0:
+                del partner.inventory[item]
+            entity.inventory[item]  = entity.inventory.get(item, 0) + count
+            self.show_attack_animation(entity.x, entity.y, entity=partner, magic_type='trade')
+
+        self.trades_completed = getattr(self, 'trades_completed', 0) + 1
+
+        # Clear trade state so entity re-evaluates on next idle cycle
+        entity.current_target       = None
+        entity._special_target_lock = 0
+        entity._special_target_type = None
+        entity.ai_state             = 'wandering'
+        entity.ai_state_timer       = 3
+
+    def _find_chest_in_zone(self, entity, screen_key):
+        """Return True if any CHEST or EMPTY_CRATE cell exists within 8 cells of entity."""
+        if screen_key not in self.screens:
+            return False
+        g = self.screens[screen_key]['grid']
+        for dy in range(-8, 9):
+            for dx in range(-8, 9):
+                cx, cy = entity.x + dx, entity.y + dy
+                if 0 <= cx < GRID_WIDTH and 0 <= cy < GRID_HEIGHT:
+                    if g[cy][cx] in ('CHEST', 'EMPTY_CRATE'):
+                        return True
+        return False
+
+    def _find_clearing_target(self, entity, screen_key):
+        """Return ('cell', cx, cy, cell_type) for an adjacent clearable blocking cell, or None.
+
+        Clearable = solid cell not in CLEARING_EXEMPT.  Only cardinal neighbours checked.
+        """
+        grid_key = screen_key if screen_key in self.screens else None
+        struct_key = entity.structure_key if getattr(entity, 'in_structure', False) else None
+        sk = struct_key or grid_key
+        if not sk:
+            return None
+        g = (self.structures if struct_key else self.screens)[sk].get('grid')
+        if not g:
+            return None
+        for dx, dy in ((0, -1), (0, 1), (-1, 0), (1, 0)):
+            cx, cy = entity.x + dx, entity.y + dy
+            if not (0 <= cx < GRID_WIDTH and 0 <= cy < GRID_HEIGHT):
+                continue
+            cell = g[cy][cx]
+            if cell in CLEARING_EXEMPT:
+                continue
+            props = CELL_TYPES.get(cell, {})
+            if props.get('solid', False):
+                return ('cell', cx, cy, cell)
+        return None
+
+
     def execute_entity_behavior(self, entity, behavior_config):
         """Consolidated behavior system - executes actions based on behavior_config"""
         actions = behavior_config.get('actions', [])
@@ -2572,7 +3247,7 @@ class NpcAiMixin:
                 cx, cy = entity.x + dx, entity.y + dy
                 if not (0 <= cx < GRID_WIDTH and 0 <= cy < GRID_HEIGHT):
                     continue
-                if screen['grid'][cy][cx] != 'CHEST':
+                if screen['grid'][cy][cx] not in ('CHEST', 'EMPTY_CRATE'):
                     continue
                 ck = f"{screen_key}:{cx},{cy}"
                 found_chest = True
@@ -2582,6 +3257,8 @@ class NpcAiMixin:
                     contents = self.chest_contents.pop(ck, {})
                     for item, amt in contents.items():
                         entity.inventory[item] = entity.inventory.get(item, 0) + amt
+                    if contents:
+                        entity.gain_xp(1)  # XP for looting chest
                     bg = getattr(self, 'chest_backgrounds', {}).pop(ck, None) or 'GRASS'
                     screen['grid'][cy][cx] = bg
                 else:
@@ -2600,16 +3277,11 @@ class NpcAiMixin:
                             inv[item] -= amt
                             if inv[item] <= 0:
                                 del inv[item]
+                        entity.gain_xp(1)  # XP for depositing into chest
                         # Clear delivery quest if carried one
                         if getattr(entity, 'quest_focus', None) == 'DELIVER_ITEMS':
                             entity.quest_focus = None
                             entity.quest_target = None
-                    elif inv_count < 20 and self.chest_contents.get(ck):
-                        # Below limit: withdraw one item stack from chest
-                        chest_inv = self.chest_contents[ck]
-                        item = random.choice(list(chest_inv.keys()))
-                        amt = chest_inv.pop(item)
-                        entity.inventory[item] = entity.inventory.get(item, 0) + amt
                 break  # Only one chest per update
 
         # If overburdened and no chest within 8 cells, small chance to place one
@@ -2620,7 +3292,7 @@ class NpcAiMixin:
                 g = self.screens[screen_key]['grid']
                 for sy in range(max(0, entity.y - 8), min(GRID_HEIGHT, entity.y + 9)):
                     for sx in range(max(0, entity.x - 8), min(GRID_WIDTH, entity.x + 9)):
-                        if g[sy][sx] == 'CHEST':
+                        if g[sy][sx] in ('CHEST', 'EMPTY_CRATE'):
                             nearby_chest = True
                             break
                     if nearby_chest:
@@ -2730,6 +3402,7 @@ class NpcAiMixin:
                                 
                                 # Clear the drop
                                 del self.dropped_items[screen_key][pos_key]
+                                entity.gain_xp(1)  # XP for picking up items
                                 did_action = True
                                 
                                 # Move toward this position if not already there
@@ -2774,11 +3447,8 @@ class NpcAiMixin:
                         entity.trigger_action_animation()
                         self.show_attack_animation(check_x, check_y, entity=entity)
                         screen['grid'][check_y][check_x] = 'GRASS'
-                        if random.random() < 0.2:
-                            name_str = entity.name if entity.name else entity.type
-                            print(f"{name_str} destroyed a camp at [{screen_key}]")
                         return
-                    
+
                     # Attack houses - very low chance
                     elif cell == 'HOUSE' and random.random() < 0.01:  # 1% chance
                         entity.update_facing_toward(check_x, check_y)
@@ -2788,8 +3458,6 @@ class NpcAiMixin:
                         # Scatter wood debris so destruction looks visible
                         for _ in range(random.randint(1, 3)):
                             self.drop_item('wood', check_x, check_y)
-                        name_str = entity.name if entity.name else entity.type
-                        print(f"{name_str} destroyed a house at [{screen_key}]!")
                         return
 
                     # Attack stone houses - very rare (goblins chip at stone slowly)
@@ -2798,8 +3466,6 @@ class NpcAiMixin:
                         entity.trigger_action_animation()
                         self.show_attack_animation(check_x, check_y, entity=entity)
                         screen['grid'][check_y][check_x] = 'GRASS'
-                        name_str = entity.name if entity.name else entity.type
-                        print(f"{name_str} destroyed a stone house at [{screen_key}]!")
                         return
 
         # PRIORITY 4: Move toward nearest structure if found
@@ -2854,31 +3520,19 @@ class NpcAiMixin:
                             # Chance to level up from harvesting
                             entity.level_up_from_activity('harvest', self)
                             
-                            # 5% chance to log action
-                            if random.random() < 0.05:
-                                name_str = entity.name if entity.name else "Farmer"
-                                print(f"{name_str} harvested {amount} {item}(s) at [{screen_key}]")
                             return
-                    
+
                     # Till grass or dirt to soil
                     if cell in ['GRASS', 'DIRT'] and random.random() < FARMER_TILL_RATE:
                         screen['grid'][check_y][check_x] = 'SOIL'
-                        
-                        # 5% chance to log action
-                        if random.random() < 0.05:
-                            print(f"Farmer tilled soil at [{screen_key}]")
                         return
-                    
+
                     # Plant crops on soil
                     if cell == 'SOIL' and random.random() < FARMER_PLANT_RATE:
                         # Check if has carrot in inventory
                         if entity.inventory.get('carrot', 0) > 0:
                             entity.inventory['carrot'] -= 1
                             screen['grid'][check_y][check_x] = 'CARROT1'
-                            
-                            # 5% chance to log action
-                            if random.random() < 0.05:
-                                print(f"Farmer planted crops at [{screen_key}]")
                             return
     
     def lumberjack_behavior(self, entity):
@@ -2965,26 +3619,20 @@ class NpcAiMixin:
                     
                     # Chance to level up from building
                     entity.level_up_from_activity('build', self)
-                    
-                    name_str = entity.name if entity.name else "Lumberjack"
-                    print(f"{name_str} built a house at [{screen_key}] ({build_x}, {build_y})")
                     return
-            
+
             # Otherwise, build anywhere suitable
             for _ in range(20):
                 build_x = random.randint(2, GRID_WIDTH - 3)
                 build_y = random.randint(2, GRID_HEIGHT - 3)
-                
+
                 cell = screen['grid'][build_y][build_x]
                 if cell in ['GRASS', 'DIRT']:
                     entity.inventory['wood'] -= 10
                     screen['grid'][build_y][build_x] = 'HOUSE'
-                    
+
                     # Chance to level up from building
                     entity.level_up_from_activity('build', self)
-                    
-                    name_str = entity.name if entity.name else "Lumberjack"
-                    print(f"{name_str} built a house at [{screen_key}] ({build_x}, {build_y})")
                     return
     
     def guard_behavior(self, entity):
@@ -3012,9 +3660,9 @@ class NpcAiMixin:
             
             # Upgrade dirt to cobblestone (guards help establish safe roads)
             elif current_cell == 'DIRT' and random.random() < TRADER_COBBLE_RATE:
-                on_horizontal_center = abs(entity.y - center_y) <= 2
-                on_vertical_center = abs(entity.x - center_x) <= 2
-                
+                on_horizontal_center = abs(entity.y - center_y) <= 1
+                on_vertical_center = abs(entity.x - center_x) <= 1
+
                 if on_horizontal_center or on_vertical_center:
                     screen['grid'][entity.y][entity.x] = 'COBBLESTONE'
         
@@ -3034,11 +3682,6 @@ class NpcAiMixin:
             
             # If hostile found, move to attack
             if hostile_found:
-                # 5% chance to log engagement
-                if min_dist <= 10 and random.random() < 0.05:
-                    name_str = entity.name if entity.name else "Guard"
-                    print(f"{name_str} engaging {hostile_found.type} at [{screen_key}]")
-                
                 self.move_entity_towards(entity, hostile_found.x, hostile_found.y)
                 return  # Don't patrol while in combat
         
@@ -3102,13 +3745,11 @@ class NpcAiMixin:
             if current_cell in ['GRASS', 'SOIL'] and random.random() < TRADER_PATH_BUILD_RATE:
                 screen['grid'][entity.y][entity.x] = 'DIRT'
             
-            # Upgrade dirt to cobblestone - ONLY in exact center lanes (±2 cells)
+            # Upgrade dirt to cobblestone - ONLY in exact center lanes (±1 cell)
             elif current_cell == 'DIRT' and random.random() < TRADER_COBBLE_RATE:
-                # Stricter alignment check for cobblestone (±2 instead of ±3)
-                on_horizontal_center = abs(entity.y - center_y) <= 2
-                on_vertical_center = abs(entity.x - center_x) <= 2
-                
-                # Only create cobblestone if on one of the main center lanes
+                on_horizontal_center = abs(entity.y - center_y) <= 1
+                on_vertical_center = abs(entity.x - center_x) <= 1
+
                 if on_horizontal_center or on_vertical_center:
                     screen['grid'][entity.y][entity.x] = 'COBBLESTONE'
         
@@ -3146,87 +3787,6 @@ class NpcAiMixin:
         transformation = self.check_npc_transformation(entity_id, entity)
         if transformation:
             return  # NPC transformed, skip normal behavior this tick
-    
-    def npc_seek_shelter(self, entity):
-        """NPCs seek shelter (house/camp) at night and enter idle state when there"""
-        # Already inside a structure — don't scan overworld grid or re-enter
-        if entity.in_structure:
-            return False
-        screen_key = f"{entity.screen_x},{entity.screen_y}"
-        if screen_key not in self.screens:
-            return False
-        
-        screen = self.screens[screen_key]
-        
-        # Initialize idle state if not present
-        if not hasattr(entity, 'is_idle'):
-            entity.is_idle = False
-        
-        # Check for threats - break idle state
-        if entity.is_idle:
-            # Check for hostiles nearby
-            has_threat = False
-            if screen_key in self.screen_entities:
-                for eid in self.screen_entities[screen_key]:
-                    if eid in self.entities:
-                        other = self.entities[eid]
-                        if other.props.get('hostile'):
-                            dist = abs(entity.x - other.x) + abs(entity.y - other.y)
-                            if dist <= 5:  # Threat within 5 cells
-                                has_threat = True
-                                break
-            
-            # Break idle if threatened or low resources (nighttime check disabled)
-            if has_threat or entity.hunger < 30 or entity.thirst < 30:
-                entity.is_idle = False
-                return False
-            
-            # Stay idle - don't move
-            return True
-        
-        # Find nearest shelter (HOUSE preferred, then CAMP)
-        nearest_house = None
-        nearest_camp = None
-        min_house_dist = float('inf')
-        min_camp_dist = float('inf')
-        
-        for y in range(GRID_HEIGHT):
-            for x in range(GRID_WIDTH):
-                cell = screen['grid'][y][x]
-                dist = abs(entity.x - x) + abs(entity.y - y)
-                
-                if cell == 'HOUSE' and dist < min_house_dist:
-                    min_house_dist = dist
-                    nearest_house = (x, y)
-                elif cell == 'CAMP' and dist < min_camp_dist:
-                    min_camp_dist = dist
-                    nearest_camp = (x, y)
-        
-        # Move toward nearest shelter (prefer house)
-        if nearest_house and min_house_dist <= 15:
-            if min_house_dist <= 1:
-                # Adjacent to house — enter it
-                hx, hy = nearest_house
-                self.npc_enter_structure(entity, screen_key, hx, hy, 'HOUSE')
-                entity.is_idle = True
-                return True
-            else:
-                entity.is_idle = False
-                self.move_entity_towards(entity, nearest_house[0], nearest_house[1])
-                return True
-        
-        elif nearest_camp and min_camp_dist <= 15:
-            if min_camp_dist <= 2:
-                entity.is_idle = True
-                return True
-            else:
-                entity.is_idle = False
-                self.move_entity_towards(entity, nearest_camp[0], nearest_camp[1])
-                return True
-        
-        # No shelter nearby - not idle
-        entity.is_idle = False
-        return False  # No shelter found or too far
     
     def check_npc_transformation(self, entity_id, entity):
         """General function to check if NPC should transform to new type
@@ -3323,7 +3883,6 @@ class NpcAiMixin:
             entity.idleness = ai_params.get('idleness', 0.15)
             entity.target_types = ai_params.get('target_types', ['water', 'food'])
             
-            print(f"{old_name} has settled as a {new_type} in [{screen_key}]!")
             return True
         
         # Add other logic types here as needed (e.g., 'promotion', 'corruption', etc.)
@@ -3443,15 +4002,19 @@ class NpcAiMixin:
         """Cast a wizard spell on target"""
         spell_name = caster.spell
         spell_data = WIZARD_SPELLS[spell_name]
-        
+
         if spell_data['type'] == 'heal':
             target.heal(spell_data['amount'])
         elif spell_data['type'] == 'damage':
             caster_id = next((eid for eid, e in self.entities.items() if e is caster), None)
             target.take_damage(spell_data['amount'], caster_id)
             if target.health <= 0 and hasattr(caster, 'xp'):
-                caster.xp += target.level * 10
+                caster.gain_xp()
         elif spell_data['type'] == 'enchant':
             cell_key = (target.screen_x, target.screen_y, target.x, target.y)
             self.enchanted_cells[cell_key] = True  # Just mark as enchanted, no duration
+
+        # Award XP to the spell on use
+        if hasattr(caster, 'gain_item_xp'):
+            caster.gain_item_xp(spell_name)
     
