@@ -199,24 +199,36 @@ if __name__ == "__main__":
         input("Press Enter to close…")
         sys.exit(1)
 
-    # Auto-select dev-q-updates when auto_debug.cfg is active — skip dialog
-    _auto_cfg = GAME_DIR / "debug" / "auto_debug.cfg"
-    _auto_active = False
-    try:
-        _auto_active = _auto_cfg.read_text().strip().lower() in ('true', '1', 'yes')
-    except Exception:
-        pass
+    _relaunched = "--relaunched" in sys.argv
 
-    if _auto_active:
-        branch = "dev-q-updates"
-        info("auto_debug.cfg active — skipping branch dialog, using dev-q-updates")
+    if _relaunched:
+        # We were re-exec'd after a git pull — branch was passed as an arg.
+        branch = next((a.split("=", 1)[1] for a in sys.argv if a.startswith("--branch=")), "main")
     else:
-        branch = choose_branch()
+        # Auto-select dev-q-updates when auto_debug.cfg is active — skip dialog
+        _auto_cfg = GAME_DIR / "debug" / "auto_debug.cfg"
+        _auto_active = False
+        try:
+            _auto_active = _auto_cfg.read_text().strip().lower() in ('true', '1', 'yes')
+        except Exception:
+            pass
+
+        if _auto_active:
+            branch = "dev-q-updates"
+            info("auto_debug.cfg active — skipping branch dialog, using dev-q-updates")
+        else:
+            branch = choose_branch()
+
     info(f"Branch: {branch}")
 
-    if not update_or_clone(branch):
-        input("Press Enter to close…")
-        sys.exit(1)
+    if not _relaunched:
+        if not update_or_clone(branch):
+            input("Press Enter to close…")
+            sys.exit(1)
+
+        # Re-exec so any updates pulled above (including to launch.py itself)
+        # take effect immediately rather than on the next launch.
+        os.execv(sys.executable, [sys.executable, __file__, "--relaunched", f"--branch={branch}"])
 
     python_exe = ensure_pygame()
     if not python_exe:
