@@ -132,25 +132,54 @@ def update_or_clone(branch="main"):
 
 
 def ensure_pygame():
+    """Return the Python executable to use for launching the game, or None on failure."""
+    # 1. Current interpreter already has pygame — use it as-is.
     try:
-        import pygame  # noqa: F401 — just checking presence
+        import pygame  # noqa: F401
         ok("pygame-ce ready.")
-        return True
+        return sys.executable
     except ImportError:
-        info("pygame-ce not found — installing…")
+        pass
+
+    venv_dir    = GAME_DIR / ".venv"
+    venv_python = venv_dir / "bin" / "python3"
+    venv_pip    = venv_dir / "bin" / "pip"
+
+    # 2. Venv exists — check whether pygame is already installed there.
+    if venv_python.exists():
         result = subprocess.run(
-            [sys.executable, "-m", "pip", "install", "--quiet", "pygame-ce"],
+            [str(venv_python), "-c", "import pygame"],
             capture_output=True, text=True,
         )
         if result.returncode == 0:
-            ok("pygame-ce installed.")
-            return True
-        err("pip install failed:")
+            ok("pygame-ce ready (venv).")
+            return str(venv_python)
+
+    # 3. Create (or recreate) the venv and install pygame-ce.
+    info("pygame-ce not found — setting up virtual environment…")
+    result = subprocess.run(
+        [sys.executable, "-m", "venv", str(venv_dir)],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        err("Failed to create virtual environment:")
         info(result.stderr.strip())
-        return False
+        return None
+
+    result = subprocess.run(
+        [str(venv_pip), "install", "--quiet", "pygame-ce"],
+        capture_output=True, text=True,
+    )
+    if result.returncode == 0:
+        ok("pygame-ce installed.")
+        return str(venv_python)
+
+    err("pip install failed:")
+    info(result.stderr.strip())
+    return None
 
 
-def launch():
+def launch(python_exe):
     main_py = GAME_DIR / "main.py"
     if not main_py.exists():
         err(f"main.py not found at {main_py}")
@@ -158,7 +187,7 @@ def launch():
     ok(f"Starting StarCell…\n")
     os.chdir(GAME_DIR)
     # Replace this process with the game — Terminal window stays open for logs
-    os.execv(sys.executable, [sys.executable, str(main_py)])
+    os.execv(python_exe, [python_exe, str(main_py)])
 
 
 # ── Entry point ──────────────────────────────────────────────────────────────
@@ -189,8 +218,9 @@ if __name__ == "__main__":
         input("Press Enter to close…")
         sys.exit(1)
 
-    if not ensure_pygame():
+    python_exe = ensure_pygame()
+    if not python_exe:
         input("Press Enter to close…")
         sys.exit(1)
 
-    launch()
+    launch(python_exe)
